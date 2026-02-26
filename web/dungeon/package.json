@@ -1,0 +1,23 @@
+{
+  "name": "locked-in-dungeon",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@babylonjs/core": "^7.52.2",
+    "@babylonjs/inspector": "^7.54.3",
+    "@babylonjs/loaders": "^7.52.2",
+    "@babylonjs/materials": "^7.52.2",
+    "gsap": "^3.12.7"
+  },
+  "devDependencies": {
+    "typescript": "~5.7.2",
+    "vite": "^6.3.5",
+    "vite-plugin-singlefile": "^2.0.3"
+  }
+}

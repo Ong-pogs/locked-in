@@ -36,6 +36,10 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# Babylon.js web build
+web/dungeon/node_modules/
+web/dungeon/dist/
+
 # generated native folders
 /ios
 /android
