@@ -1,129 +1,200 @@
 import { Scene } from '@babylonjs/core/scene';
-import '@babylonjs/loaders/glTF';
-import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
-import { Mesh } from '@babylonjs/core/Meshes/mesh';
-import { makeMovable } from './makeMovable';
-import { setFlamePosition } from '../effects/flameParticles';
-import { setEmberPosition } from '../effects/embers';
+import { Texture } from '@babylonjs/core/Materials/Textures/texture';
 
-const TILE_PATH = '/assets/models/dungeon_tiles/';
-const TILE_MODEL = 'base_basic_pbr.glb';
 const GRID_SIZE = 7;
-const FLOOR_DEPTH = 8; // deeper room
+const FLOOR_DEPTH = 8;
 const WALL_HEIGHT = 5;
-const TILE_SCALE = 1;
+const TILE_SIZE = 2;
 
-export async function createDungeonGeometry(scene: Scene) {
-  const result = await SceneLoader.ImportMeshAsync('', TILE_PATH, TILE_MODEL, scene);
-  const root = result.meshes[0];
+const ROOM_WIDTH = GRID_SIZE * TILE_SIZE;   // 14
+const ROOM_DEPTH = FLOOR_DEPTH * TILE_SIZE; // 16
+const ROOM_HEIGHT = WALL_HEIGHT * TILE_SIZE; // 10
 
-  const wrapper = new TransformNode('tileWrapper', scene);
-  root.parent = wrapper;
-  wrapper.rotation.x = -Math.PI / 2;
-  wrapper.scaling = new Vector3(TILE_SCALE, TILE_SCALE, TILE_SCALE);
+const TILE_TEXTURE_PATH = '/assets/textures/tile_texture.png';
 
-  wrapper.computeWorldMatrix(true);
-  for (const mesh of result.meshes) {
-    mesh.computeWorldMatrix(true);
-  }
-
-  const childMeshes = result.meshes.filter(m => m.getTotalVertices() > 0);
-  let min = new Vector3(Infinity, Infinity, Infinity);
-  let max = new Vector3(-Infinity, -Infinity, -Infinity);
-  for (const mesh of childMeshes) {
-    const bounds = mesh.getBoundingInfo().boundingBox;
-    min = Vector3.Minimize(min, bounds.minimumWorld);
-    max = Vector3.Maximize(max, bounds.maximumWorld);
-  }
-
-  const sizeX = max.x - min.x;
-  const sizeZ = max.z - min.z;
-  console.log(`Tile size: ${sizeX.toFixed(2)} x ${sizeZ.toFixed(2)}`);
-
-  const tileWidth = sizeX;
-  const tileDepth = sizeZ;
-
-  wrapper.setEnabled(false);
-
-  const offsetX = ((GRID_SIZE - 1) * tileWidth) / 2;
-  const offsetZ = ((GRID_SIZE - 1) * tileDepth) / 2;
-
-  // --- Floor (extra depth to reach back wall) ---
-  const floorOffsetZ = ((FLOOR_DEPTH - 1) * tileDepth) / 2;
-  for (let row = 0; row < FLOOR_DEPTH; row++) {
-    for (let col = 0; col < GRID_SIZE; col++) {
-      const clone = wrapper.clone(`floor_${row}_${col}`, null)!;
-      clone.position = new Vector3(col * tileWidth - offsetX, 0, row * tileDepth - floorOffsetZ);
-      clone.rotation = new Vector3(-Math.PI / 2, 0, 0);
-      clone.setEnabled(true);
-    }
-  }
-
-  // --- Right wall (depth matches floor) ---
-  for (let row = 0; row < WALL_HEIGHT; row++) {
-    for (let col = 0; col < FLOOR_DEPTH; col++) {
-      const clone = wrapper.clone(`rightWall_${row}_${col}`, null)!;
-      clone.position = new Vector3(offsetX + tileWidth / 2, row * tileDepth, col * tileDepth - floorOffsetZ);
-      clone.rotation = new Vector3(0, -Math.PI / 2, 0);
-      clone.setEnabled(true);
-    }
-  }
-
-  // --- Left wall (depth matches floor) ---
-  for (let row = 0; row < WALL_HEIGHT; row++) {
-    for (let col = 0; col < FLOOR_DEPTH; col++) {
-      const clone = wrapper.clone(`leftWall_${row}_${col}`, null)!;
-      clone.position = new Vector3(-offsetX - tileWidth / 2, row * tileDepth, col * tileDepth - floorOffsetZ);
-      clone.rotation = new Vector3(0, Math.PI / 2, 0);
-      clone.setEnabled(true);
-    }
-  }
-
-  // --- Back wall (positioned at back edge of floor) ---
-  for (let row = 0; row < WALL_HEIGHT; row++) {
-    for (let col = 0; col < GRID_SIZE; col++) {
-      const clone = wrapper.clone(`backWall_${row}_${col}`, null)!;
-      clone.position = new Vector3(col * tileWidth - offsetX, row * tileDepth, floorOffsetZ + tileDepth / 2);
-      clone.rotation = new Vector3(0, 0, 0);
-      clone.setEnabled(true);
-    }
-  }
-
-  // --- Bookshelf (against left wall) ---
-  const bookshelfResult = await SceneLoader.ImportMeshAsync(
-    '', '/assets/models/bookshelf/', 'base_basic_pbr.glb', scene,
-  );
-  const bookshelf = bookshelfResult.meshes[0];
-  bookshelf.position = new Vector3(-5.5, 0, 1);
-  bookshelf.scaling = new Vector3(1, 1, 1);
-  bookshelf.metadata = { interactable: true, objectId: 'bookshelf' };
-  for (const mesh of bookshelfResult.meshes) {
-    if (mesh !== bookshelf) {
-      mesh.metadata = { interactable: true, objectId: 'bookshelf' };
-    }
-  }
-  makeMovable(bookshelf, 'bookshelf', scene);
-
-  // ========================
-  //  Placeholder Props
-  // ========================
-
-  createFireplace(scene);
-  createAlchemyTable(scene);
-  createChest(scene);
-  createNoticeBoard(scene);
-  createBookshelfDecorations(scene, bookshelf.position);
-  createSingleBook(scene, bookshelf.position);
+export interface TextureSet {
+  diffuse: string;
+  normal?: string;    // pre-made normal map (use as-is)
+  bump?: string;      // height/displacement map — converted to normal map at runtime
+  specular?: string;
+  bumpLevel?: number; // normal map intensity (default 1.5)
 }
 
-// ---------------------------------------------------------------------------
-// Helper: create a material with a given color
-// ---------------------------------------------------------------------------
+// Track room materials so we can hot-swap textures
+const roomMaterials: { mat: StandardMaterial; uScale: number; vScale: number }[] = [];
+let activeScene: Scene;
+
+export async function setRoomTexture(set: TextureSet) {
+  // Resolve normal map: use pre-made normal, or generate from height map
+  let normalSrc: string | undefined;
+  if (set.normal) {
+    normalSrc = set.normal;
+  } else if (set.bump) {
+    normalSrc = await heightToNormalMap(set.bump);
+  }
+
+  const level = set.bumpLevel ?? 1.5;
+
+  for (const entry of roomMaterials) {
+    // Diffuse
+    entry.mat.diffuseTexture?.dispose();
+    const diffTex = new Texture(set.diffuse, activeScene);
+    diffTex.uScale = entry.uScale;
+    diffTex.vScale = entry.vScale;
+    entry.mat.diffuseTexture = diffTex;
+
+    // Normal / bump
+    entry.mat.bumpTexture?.dispose();
+    if (normalSrc) {
+      const bumpTex = new Texture(normalSrc, activeScene);
+      bumpTex.uScale = entry.uScale;
+      bumpTex.vScale = entry.vScale;
+      bumpTex.level = level;
+      entry.mat.bumpTexture = bumpTex;
+    } else {
+      entry.mat.bumpTexture = null;
+    }
+
+    // Specular
+    entry.mat.specularTexture?.dispose();
+    if (set.specular) {
+      const specTex = new Texture(set.specular, activeScene);
+      specTex.uScale = entry.uScale;
+      specTex.vScale = entry.vScale;
+      entry.mat.specularTexture = specTex;
+      entry.mat.specularColor = new Color3(0.4, 0.4, 0.4);
+    } else {
+      entry.mat.specularTexture = null;
+      entry.mat.specularColor = new Color3(0.1, 0.1, 0.1);
+    }
+  }
+}
+
+export async function createDungeonGeometry(scene: Scene) {
+  activeScene = scene;
+  // Floor
+  createFloor(scene);
+
+  // Walls (back, left, right) — normals face inward
+  createWall(scene, 'backWall', ROOM_WIDTH, ROOM_HEIGHT,
+    new Vector3(0, ROOM_HEIGHT / 2, ROOM_DEPTH / 2),
+    0, 4, 3);
+  createWall(scene, 'leftWall', ROOM_DEPTH, ROOM_HEIGHT,
+    new Vector3(-ROOM_WIDTH / 2, ROOM_HEIGHT / 2, 0),
+    -Math.PI / 2, 5, 3);
+  createWall(scene, 'rightWall', ROOM_DEPTH, ROOM_HEIGHT,
+    new Vector3(ROOM_WIDTH / 2, ROOM_HEIGHT / 2, 0),
+    Math.PI / 2, 5, 3);
+
+  // Bookshelf + red book (unchanged)
+  const bookshelfPos = new Vector3(-5.5, 0, 1);
+  createBookshelf(scene, bookshelfPos);
+  createSingleBook(scene, bookshelfPos);
+}
+
+/* ---------- Room geometry helpers ---------- */
+
+function createFloor(scene: Scene) {
+  const floor = MeshBuilder.CreateGround('floor', {
+    width: ROOM_WIDTH,
+    height: ROOM_DEPTH,
+  }, scene);
+  floor.material = createTiledMaterial('floorMat', 4, 4, scene);
+}
+
+function createWall(
+  scene: Scene, name: string, width: number, height: number,
+  position: Vector3, rotationY: number,
+  uScale: number, vScale: number,
+) {
+  const wall = MeshBuilder.CreatePlane(name, { width, height }, scene);
+  wall.position = position;
+  wall.rotation.y = rotationY;
+  wall.material = createTiledMaterial(`${name}Mat`, uScale, vScale, scene);
+}
+
+function createTiledMaterial(
+  name: string, uScale: number, vScale: number, scene: Scene,
+): StandardMaterial {
+  const m = new StandardMaterial(name, scene);
+  const tex = new Texture(TILE_TEXTURE_PATH, scene);
+  tex.uScale = uScale;
+  tex.vScale = vScale;
+  m.diffuseTexture = tex;
+  m.specularColor = new Color3(0.1, 0.1, 0.1);
+  m.backFaceCulling = false;
+  m.maxSimultaneousLights = 8;
+  roomMaterials.push({ mat: m, uScale, vScale });
+  return m;
+}
+
+/* ---------- Height → Normal map converter ---------- */
+
+function loadImage(path: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = path;
+  });
+}
+
+async function heightToNormalMap(imagePath: string, maxRes = 1024, strength = 2): Promise<string> {
+  const img = await loadImage(imagePath);
+
+  // Cap resolution so processing stays fast (~200ms at 1024²)
+  const scale = Math.min(1, maxRes / Math.max(img.width, img.height));
+  const w = Math.round(img.width * scale);
+  const h = Math.round(img.height * scale);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d')!;
+  ctx.drawImage(img, 0, 0, w, h);
+
+  const src = ctx.getImageData(0, 0, w, h);
+  const dst = ctx.createImageData(w, h);
+
+  const getHeight = (x: number, y: number) => {
+    const i = (y * w + x) * 4;
+    return (src.data[i] + src.data[i + 1] + src.data[i + 2]) / (3 * 255);
+  };
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const l = getHeight((x - 1 + w) % w, y);
+      const r = getHeight((x + 1) % w, y);
+      const u = getHeight(x, (y - 1 + h) % h);
+      const d = getHeight(x, (y + 1) % h);
+
+      let nx = (l - r) * strength;
+      let ny = (u - d) * strength;
+      const nz = 1.0;
+      const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+      nx /= len;
+      ny /= len;
+      const nzn = nz / len;
+
+      const i = (y * w + x) * 4;
+      dst.data[i]     = (nx * 0.5 + 0.5) * 255;
+      dst.data[i + 1] = (ny * 0.5 + 0.5) * 255;
+      dst.data[i + 2] = (nzn * 0.5 + 0.5) * 255;
+      dst.data[i + 3] = 255;
+    }
+  }
+
+  ctx.putImageData(dst, 0, 0);
+  return canvas.toDataURL();
+}
+
+/* ---------- Bookshelf & Book (unchanged) ---------- */
+
 function mat(name: string, color: Color3, scene: Scene, alpha = 1): StandardMaterial {
   const m = new StandardMaterial(name, scene);
   m.diffuseColor = color;
@@ -131,214 +202,77 @@ function mat(name: string, color: Color3, scene: Scene, alpha = 1): StandardMate
   return m;
 }
 
-// ---------------------------------------------------------------------------
-// 1. Fireplace
-// ---------------------------------------------------------------------------
-function createFireplace(scene: Scene) {
-  const parent = new TransformNode('fireplace_root', scene);
+function createBookshelf(scene: Scene, pos: Vector3) {
+  const parent = new TransformNode('bookshelf_root', scene);
+  const wood = mat('shelf_wood', new Color3(0.3, 0.18, 0.08), scene);
+  const darkWood = mat('shelf_darkWood', new Color3(0.2, 0.12, 0.05), scene);
 
-  // Stone base
-  const base = MeshBuilder.CreateBox('fp_base', { width: 2.5, height: 1.5, depth: 1.5 }, scene);
-  base.position = new Vector3(0, 0.75, 0);
-  base.material = mat('fp_baseMat', new Color3(0.35, 0.3, 0.28), scene);
-  base.parent = parent;
+  // Back panel
+  const back = MeshBuilder.CreateBox('shelf_back', { width: 1.8, height: 3, depth: 0.08 }, scene);
+  back.position = new Vector3(0, 1.5, 0.35);
+  back.material = darkWood;
+  back.parent = parent;
 
-  // Chimney
-  const chimney = MeshBuilder.CreateBox('fp_chimney', { width: 1.8, height: 3, depth: 1 }, scene);
-  chimney.position = new Vector3(0, 3, 0);
-  chimney.material = mat('fp_chimneyMat', new Color3(0.3, 0.25, 0.22), scene);
-  chimney.parent = parent;
+  // Left side
+  const left = MeshBuilder.CreateBox('shelf_left', { width: 0.08, height: 3, depth: 0.7 }, scene);
+  left.position = new Vector3(-0.86, 1.5, 0);
+  left.material = wood;
+  left.parent = parent;
 
-  // Dark opening (recessed)
-  const opening = MeshBuilder.CreateBox('fp_opening', { width: 1.6, height: 1, depth: 0.8 }, scene);
-  opening.position = new Vector3(0, 0.6, -0.4);
-  opening.material = mat('fp_openingMat', new Color3(0.05, 0.03, 0.02), scene);
-  opening.parent = parent;
+  // Right side
+  const right = MeshBuilder.CreateBox('shelf_right', { width: 0.08, height: 3, depth: 0.7 }, scene);
+  right.position = new Vector3(0.86, 1.5, 0);
+  right.material = wood;
+  right.parent = parent;
 
-  parent.position = new Vector3(0, 0, 5);
-
-  // Tag the parent mesh (base) as interactable
-  const rootMesh = base as Mesh;
-  rootMesh.metadata = { interactable: true, objectId: 'fireplace' };
-  chimney.metadata = { interactable: true, objectId: 'fireplace' };
-  opening.metadata = { interactable: true, objectId: 'fireplace' };
-
-  makeMovable(rootMesh, 'fireplace', scene);
-
-  // Reposition flame & embers inside the hearth
-  const flamePos = new Vector3(0, 1.1, 4.6);
-  setFlamePosition(flamePos);
-  setEmberPosition(new Vector3(0, 1.5, 4.5));
-}
-
-// ---------------------------------------------------------------------------
-// 2. Alchemy Table
-// ---------------------------------------------------------------------------
-function createAlchemyTable(scene: Scene) {
-  const parent = new TransformNode('alchemy_root', scene);
-  const woodColor = new Color3(0.45, 0.3, 0.15);
-  const metalColor = new Color3(0.5, 0.5, 0.55);
-  const glassColor = new Color3(0.6, 0.8, 0.9);
-
-  // Table top
-  const top = MeshBuilder.CreateBox('alch_top', { width: 2, height: 0.1, depth: 1 }, scene);
-  top.position = new Vector3(0, 1, 0);
-  top.material = mat('alch_topMat', woodColor, scene);
-  top.parent = parent;
-
-  // 4 legs
-  const legPositions = [
-    new Vector3(-0.85, 0.5, -0.4),
-    new Vector3(0.85, 0.5, -0.4),
-    new Vector3(-0.85, 0.5, 0.4),
-    new Vector3(0.85, 0.5, 0.4),
-  ];
-  legPositions.forEach((pos, i) => {
-    const leg = MeshBuilder.CreateBox(`alch_leg${i}`, { width: 0.1, height: 1, depth: 0.1 }, scene);
-    leg.position = pos;
-    leg.material = mat(`alch_legMat${i}`, woodColor, scene);
-    leg.parent = parent;
+  // 4 shelves (horizontal planks)
+  const shelfHeights = [0.05, 0.75, 1.5, 2.25, 3.0];
+  shelfHeights.forEach((y, i) => {
+    const shelf = MeshBuilder.CreateBox(`shelf_plank_${i}`, { width: 1.8, height: 0.06, depth: 0.7 }, scene);
+    shelf.position = new Vector3(0, y, 0);
+    shelf.material = wood;
+    shelf.parent = parent;
   });
 
-  // Conical flask (inverted cone — narrow top, wide bottom)
-  const flask = MeshBuilder.CreateCylinder('alch_flask', {
-    diameterTop: 0.1, diameterBottom: 0.35, height: 0.5, tessellation: 12,
-  }, scene);
-  flask.position = new Vector3(-0.4, 1.3, 0);
-  flask.material = mat('alch_flaskMat', glassColor, scene, 0.5);
-  flask.parent = parent;
-
-  // Bunsen burner (cylinder + emissive sphere)
-  const burner = MeshBuilder.CreateCylinder('alch_burner', {
-    diameter: 0.15, height: 0.4, tessellation: 8,
-  }, scene);
-  burner.position = new Vector3(0.4, 1.25, 0);
-  burner.material = mat('alch_burnerMat', metalColor, scene);
-  burner.parent = parent;
-
-  const flame = MeshBuilder.CreateSphere('alch_flame', { diameter: 0.12 }, scene);
-  flame.position = new Vector3(0.4, 1.5, 0);
-  const flameMat = mat('alch_flameMat', new Color3(0.2, 0.4, 1), scene);
-  flameMat.emissiveColor = new Color3(0.2, 0.4, 1);
-  flame.material = flameMat;
-  flame.parent = parent;
-
-  // Glass tube connecting flask to burner
-  const tube = MeshBuilder.CreateCylinder('alch_tube', {
-    diameter: 0.04, height: 0.8, tessellation: 6,
-  }, scene);
-  tube.position = new Vector3(0, 1.35, 0);
-  tube.rotation.z = Math.PI / 2;
-  tube.material = mat('alch_tubeMat', glassColor, scene, 0.4);
-  tube.parent = parent;
-
-  parent.position = new Vector3(5.5, 0, 1);
-
-  // Tag all children as interactable
-  const meta = { interactable: true, objectId: 'alchemy' };
-  top.metadata = meta;
-  flask.metadata = meta;
-  burner.metadata = meta;
-  flame.metadata = meta;
-  tube.metadata = meta;
-
-  makeMovable(top, 'alchemy', scene);
-}
-
-// ---------------------------------------------------------------------------
-// 3. Chest (visual only, no objectId)
-// ---------------------------------------------------------------------------
-function createChest(scene: Scene) {
-  const parent = new TransformNode('chest_root', scene);
-  const woodColor = new Color3(0.5, 0.35, 0.15);
-  const metalBand = new Color3(0.3, 0.3, 0.32);
-
-  // Body
-  const body = MeshBuilder.CreateBox('chest_body', { width: 1.2, height: 0.8, depth: 0.8 }, scene);
-  body.position = new Vector3(0, 0.4, 0);
-  body.material = mat('chest_bodyMat', woodColor, scene);
-  body.parent = parent;
-
-  // Lid (angled slightly open)
-  const lid = MeshBuilder.CreateBox('chest_lid', { width: 1.2, height: 0.15, depth: 0.8 }, scene);
-  lid.position = new Vector3(0, 0.88, -0.1);
-  lid.rotation.x = -0.2;
-  lid.material = mat('chest_lidMat', woodColor.scale(0.85), scene);
-  lid.parent = parent;
-
-  // Metal bands
-  for (let i = 0; i < 3; i++) {
-    const band = MeshBuilder.CreateBox(`chest_band${i}`, { width: 1.22, height: 0.05, depth: 0.82 }, scene);
-    band.position = new Vector3(0, 0.15 + i * 0.3, 0);
-    band.material = mat(`chest_bandMat${i}`, metalBand, scene);
-    band.parent = parent;
+  // Some book blocks on shelves (simple colored boxes)
+  const bookColors = [
+    new Color3(0.55, 0.12, 0.1),
+    new Color3(0.12, 0.22, 0.45),
+    new Color3(0.15, 0.35, 0.15),
+    new Color3(0.5, 0.35, 0.1),
+    new Color3(0.35, 0.1, 0.35),
+  ];
+  const shelfSlots = [0.12, 0.82, 1.57, 2.32]; // Y positions just above each shelf
+  let bi = 0;
+  for (const sy of shelfSlots) {
+    let x = -0.65;
+    const count = 3 + (bi % 2);
+    for (let b = 0; b < count; b++) {
+      const w = 0.12 + (bi % 3) * 0.04;
+      const h = 0.45 + (bi % 4) * 0.05;
+      const book = MeshBuilder.CreateBox(`shelfbook_${bi}`, { width: w, height: h, depth: 0.25 }, scene);
+      book.position = new Vector3(x + w / 2, sy + h / 2, 0.05);
+      book.material = mat(`shelfbook_mat_${bi}`, bookColors[bi % bookColors.length], scene);
+      book.parent = parent;
+      x += w + 0.06;
+      bi++;
+    }
   }
 
-  // Lock
-  const lock = MeshBuilder.CreateBox('chest_lock', { width: 0.12, height: 0.12, depth: 0.1 }, scene);
-  lock.position = new Vector3(0, 0.5, -0.45);
-  lock.material = mat('chest_lockMat', new Color3(0.6, 0.55, 0.2), scene);
-  lock.parent = parent;
+  parent.position = pos;
 
-  parent.position = new Vector3(4, 0, -2);
-
-  makeMovable(body, 'chest', scene);
+  // Tag everything as interactable
+  for (const child of parent.getChildMeshes()) {
+    child.metadata = { interactable: true, objectId: 'bookshelf' };
+  }
 }
 
-// ---------------------------------------------------------------------------
-// 4. Notice Board
-// ---------------------------------------------------------------------------
-function createNoticeBoard(scene: Scene) {
-  const parent = new TransformNode('noticeboard_root', scene);
-  const boardColor = new Color3(0.4, 0.3, 0.18);
-  const frameColor = new Color3(0.3, 0.2, 0.1);
-  const paperColor = new Color3(0.9, 0.85, 0.7);
-
-  // Frame (slightly larger)
-  const frame = MeshBuilder.CreateBox('nb_frame', { width: 1.6, height: 2.1, depth: 0.2 }, scene);
-  frame.position = new Vector3(0, 1.2, 0);
-  frame.material = mat('nb_frameMat', frameColor, scene);
-  frame.parent = parent;
-
-  // Board
-  const board = MeshBuilder.CreateBox('nb_board', { width: 1.5, height: 2, depth: 0.15 }, scene);
-  board.position = new Vector3(0, 1.2, -0.02);
-  board.material = mat('nb_boardMat', boardColor, scene);
-  board.parent = parent;
-
-  // 3 paper notes at angles
-  const noteOffsets = [
-    { x: -0.3, y: 1.5, rz: 0.1 },
-    { x: 0.2, y: 1.2, rz: -0.08 },
-    { x: -0.1, y: 0.85, rz: 0.15 },
-  ];
-  noteOffsets.forEach((n, i) => {
-    const note = MeshBuilder.CreateBox(`nb_note${i}`, { width: 0.4, height: 0.5, depth: 0.02 }, scene);
-    note.position = new Vector3(n.x, n.y, -0.12);
-    note.rotation.z = n.rz;
-    note.material = mat(`nb_noteMat${i}`, paperColor, scene);
-    note.parent = parent;
-  });
-
-  parent.position = new Vector3(-3, 0, 5);
-
-  // Tag as interactable
-  const meta = { interactable: true, objectId: 'noticeboard' };
-  frame.metadata = meta;
-  board.metadata = meta;
-
-  makeMovable(frame, 'noticeboard', scene);
-}
-
-// ---------------------------------------------------------------------------
-// 5. Single interactive book (in front of bookshelf, clearly tappable)
-// ---------------------------------------------------------------------------
 function createSingleBook(scene: Scene, bookshelfPos: Vector3) {
   const book = MeshBuilder.CreateBox('book_main', {
     width: 0.4, height: 0.9, depth: 0.45,
   }, scene);
 
-  // Place clearly in front of the bookshelf so it's never occluded
+  // Placed in front of the bookshelf so it's clearly visible and clickable
   book.position = bookshelfPos.add(new Vector3(0, 0.5, -1.2));
   book.rotation.y = 0.15;
   book.rotation.z = 0.05;
@@ -349,48 +283,4 @@ function createSingleBook(scene: Scene, bookshelfPos: Vector3) {
   book.material = bookMat;
 
   book.metadata = { interactable: true, objectId: 'book' };
-  // No makeMovable — drag behavior eats tap events
-}
-
-// ---------------------------------------------------------------------------
-// 6. Bookshelf Decorations (non-interactable)
-// ---------------------------------------------------------------------------
-function createBookshelfDecorations(scene: Scene, bookshelfPos: Vector3) {
-  const parent = new TransformNode('bookdeco_root', scene);
-  const parchment = new Color3(0.85, 0.78, 0.6);
-
-  // 3 scroll cylinders (lying sideways near bookshelf)
-  const scrollOffsets = [
-    new Vector3(0.5, 1.8, 0.3),
-    new Vector3(-0.3, 2.5, -0.2),
-    new Vector3(0.1, 0.6, 0.4),
-  ];
-  scrollOffsets.forEach((offset, i) => {
-    const scroll = MeshBuilder.CreateCylinder(`deco_scroll${i}`, {
-      diameter: 0.08, height: 0.4, tessellation: 8,
-    }, scene);
-    scroll.position = bookshelfPos.add(offset);
-    scroll.rotation.z = Math.PI / 2;
-    scroll.rotation.y = 0.3 * i;
-    scroll.material = mat(`deco_scrollMat${i}`, parchment, scene);
-    scroll.parent = parent;
-  });
-
-  // 2 potion bottles (colored semi-transparent cones)
-  const potionColors = [
-    new Color3(0.2, 0.8, 0.3),  // green
-    new Color3(0.6, 0.15, 0.7), // purple
-  ];
-  const potionOffsets = [
-    new Vector3(0.7, 1.2, 0),
-    new Vector3(-0.5, 1.2, 0.1),
-  ];
-  potionOffsets.forEach((offset, i) => {
-    const bottle = MeshBuilder.CreateCylinder(`deco_potion${i}`, {
-      diameterTop: 0.06, diameterBottom: 0.15, height: 0.3, tessellation: 8,
-    }, scene);
-    bottle.position = bookshelfPos.add(offset);
-    bottle.material = mat(`deco_potionMat${i}`, potionColors[i], scene, 0.6);
-    bottle.parent = parent;
-  });
 }

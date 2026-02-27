@@ -41,9 +41,9 @@ export async function createScene(engine: Engine): Promise<Scene> {
 
   sendToRN({ type: 'loadProgress', payload: { progress: 0.8 } });
 
-  // Particles
-  createFlameParticles(scene);
-  createEmbers(scene);
+  // Particles (disabled — no fireplace yet)
+  // createFlameParticles(scene);
+  // createEmbers(scene);
 
   sendToRN({ type: 'loadProgress', payload: { progress: 0.9 } });
 
