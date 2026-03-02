@@ -9,7 +9,8 @@ import { setEmitterMultiplier } from './effects/candleFlames';
 import { applyPhase } from './scene/environment';
 import { setRoomTexture, setGizmoMode, onModelSelect, setModelTransform, getSelectedModel, type GizmoMode } from './objects/loadModels';
 import { toggleOrb, cycleOrbColor, getOrbColorName, toggleSunMode, setLightMultiplier } from './scene/lighting';
-import { logCameraPosition, toggleCameraLock, nextViewpoint, prevViewpoint, goBack } from './camera/cameraController';
+import { logCameraPosition, toggleCameraLock, nextViewpoint, prevViewpoint, goBack, getCamera } from './camera/cameraController';
+import { startRecording, addKeyframe, saveRecording, clearRecording, getRecordingState, playPath, hasPath } from './camera/cameraPaths';
 import type { Viewpoint } from './camera/viewpoints';
 import type { FlameState } from './effects/flameStates';
 import type { RoomPhase } from './scene/environment';
@@ -30,6 +31,9 @@ async function main() {
   }
 
   const scene = await createScene(engine);
+
+  // Force resize after init (catches DevTools viewport edge cases)
+  engine.resize(true);
 
   // Register bridge message handler
   onBridgeMessage((msg) => {
@@ -207,6 +211,114 @@ async function main() {
     cameraPanel.appendChild(logBtn);
   }
 
+  // Path Recording dev panel
+  const pathPanel = document.getElementById('pathPanelBody');
+  if (pathPanel) {
+    const btnStyle = `
+      background: #1c1c1e; color: #999; border: 1px solid #333;
+      border-radius: 6px; padding: 6px 10px; cursor: pointer;
+      font-family: monospace; font-size: 12px;
+    `;
+
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.placeholder = 'path name (e.g. bookshelf)';
+    nameInput.style.cssText = `
+      background: #1a1a1a; color: #ccc; border: 1px solid #333;
+      border-radius: 6px; padding: 6px 10px; width: 100%;
+      font-family: monospace; font-size: 12px; box-sizing: border-box;
+    `;
+
+    const row1 = document.createElement('div');
+    row1.style.cssText = 'display: flex; gap: 6px;';
+
+    const startBtn = document.createElement('button');
+    startBtn.textContent = 'Start';
+    startBtn.style.cssText = btnStyle;
+
+    const addKfBtn = document.createElement('button');
+    addKfBtn.textContent = 'Add Keyframe';
+    addKfBtn.style.cssText = btnStyle;
+
+    row1.appendChild(startBtn);
+    row1.appendChild(addKfBtn);
+
+    const row2 = document.createElement('div');
+    row2.style.cssText = 'display: flex; gap: 6px;';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.textContent = 'Save JSON';
+    saveBtn.style.cssText = btnStyle;
+
+    const clearBtn = document.createElement('button');
+    clearBtn.textContent = 'Clear';
+    clearBtn.style.cssText = btnStyle;
+
+    const playBtn = document.createElement('button');
+    playBtn.textContent = 'Play';
+    playBtn.style.cssText = btnStyle;
+
+    row2.appendChild(saveBtn);
+    row2.appendChild(clearBtn);
+    row2.appendChild(playBtn);
+
+    const status = document.createElement('span');
+    status.textContent = 'Status: idle';
+    status.style.cssText = 'color: #555; font-family: monospace; font-size: 11px;';
+
+    const updateStatus = () => {
+      const state = getRecordingState();
+      if (state) {
+        status.textContent = `Recording "${state.name}" — ${state.count} keyframes`;
+        status.style.color = '#f59e0b';
+      } else {
+        status.textContent = 'Status: idle';
+        status.style.color = '#555';
+      }
+    };
+
+    startBtn.addEventListener('click', () => {
+      const name = nameInput.value.trim();
+      if (!name) { status.textContent = 'Enter a name first'; status.style.color = '#ef4444'; return; }
+      startRecording(name);
+      updateStatus();
+    });
+
+    addKfBtn.addEventListener('click', () => {
+      addKeyframe(getCamera());
+      updateStatus();
+    });
+
+    saveBtn.addEventListener('click', () => {
+      const result = saveRecording();
+      if (result) {
+        status.textContent = `Saved "${result.name}" — check console`;
+        status.style.color = '#22c55e';
+      }
+    });
+
+    clearBtn.addEventListener('click', () => {
+      clearRecording();
+      updateStatus();
+    });
+
+    playBtn.addEventListener('click', () => {
+      const name = nameInput.value.trim();
+      if (!name) { status.textContent = 'Enter a name first'; status.style.color = '#ef4444'; return; }
+      if (!hasPath(name)) { status.textContent = `No path "${name}"`; status.style.color = '#ef4444'; return; }
+      status.textContent = `Playing "${name}"...`;
+      status.style.color = '#3b82f6';
+      playPath(name, getCamera(), {
+        onComplete: () => { status.textContent = `Played "${name}"`; status.style.color = '#22c55e'; },
+      });
+    });
+
+    pathPanel.appendChild(nameInput);
+    pathPanel.appendChild(row1);
+    pathPanel.appendChild(row2);
+    pathPanel.appendChild(status);
+  }
+
   // Arrow navigation buttons
   const arrowLeft = document.getElementById('arrowLeft');
   const arrowRight = document.getElementById('arrowRight');
@@ -359,13 +471,27 @@ async function main() {
     }
   });
 
-  // Resize
+  // Resize — ResizeObserver catches DevTools viewport changes that window.resize misses
+  const resizeObserver = new ResizeObserver(() => {
+    engine.resize();
+  });
+  resizeObserver.observe(canvas);
   window.addEventListener('resize', () => {
     engine.resize();
   });
 
-  // Open inspector for live tuning (dev only)
-  scene.debugLayer.show({ embedMode: true });
+  // Inspector toggle — press 'I' to open/close (don't auto-show, it steals viewport on small screens)
+  let inspectorOpen = false;
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'i' || e.key === 'I') {
+      if (inspectorOpen) {
+        scene.debugLayer.hide();
+      } else {
+        scene.debugLayer.show({ embedMode: true });
+      }
+      inspectorOpen = !inspectorOpen;
+    }
+  });
 
   // Notify RN we're ready
   sendToRN({ type: 'sceneReady', payload: {} });

@@ -11,7 +11,7 @@ import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { GizmoManager } from '@babylonjs/core/Gizmos/gizmoManager';
 import '@babylonjs/loaders/glTF';
-import { addCandleLight, addChandelierGlow, addSaverLampGlow } from '../effects/candleFlames';
+import { addCandleLight, addChandelierGlow, addSaverLampGlow, addPotionGlow } from '../effects/candleFlames';
 
 const GRID_SIZE = 7;
 const FLOOR_DEPTH = 8;
@@ -274,6 +274,34 @@ await loadModel(scene, '/assets/models/', 'alchemy_shelf.glb',
     'alchemy_shelf', new Vector3(6.48, 0.92, 0.00));
   await loadModel(scene, '/assets/models/', 'alchemy_table_-_game_model.glb',
     'alchemy_table', new Vector3(6.22, -3.03, 1.56), new Vector3(0.03, 0.03, 0.03), new Vector3(0, 3.14, 0));
+
+  // Alchemy yield setup — on the table (PBR variant for proper lighting)
+  const yieldResult = await loadModel(scene, '/assets/models/alchemy_yield/', 'base_basic_pbr.glb',
+    'alchemy_yield', new Vector3(6.22, -1.50, 1.56), new Vector3(2.00, 2.00, 2.00), new Vector3(0, 1.79, 0));
+
+  // Apply glass material — translucent, refractive, reflective
+  for (const mesh of yieldResult.meshes) {
+    if (mesh.material && mesh.material instanceof PBRMaterial) {
+      const mat = mesh.material;
+      mat.alpha = 0.35;
+      mat.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND;
+      mat.metallic = 0.1;
+      mat.roughness = 0.05;
+      mat.indexOfRefraction = 1.5;
+      mat.subSurface.isRefractionEnabled = true;
+      mat.subSurface.refractionIntensity = 0.8;
+      mat.subSurface.tintColor = new Color3(0.85, 0.95, 1.0);
+      mat.environmentIntensity = 1.2;
+      mat.backFaceCulling = false;
+    }
+  }
+
+  // Magic fire potion — on the alchemy table with green glow
+  const potionPos = new Vector3(5.50, -1.40, -0.50);
+  await loadModel(scene, '/assets/models/', 'a_slightly_different_magic_fire_potion.glb',
+    'fire_potion', potionPos, new Vector3(0.50, 0.50, 0.50), new Vector3(0, 3.14, 0));
+  addPotionGlow(scene, potionPos, 'fire_potion');
+
 const candlePositions: { name: string; pos: Vector3; scale?: Vector3; rot?: Vector3 }[] = [
     { name: 'candles_set',  pos: new Vector3(3.30, -2.95, 6.58), scale: new Vector3(3.00, 3.00, 3.00) },
     { name: 'candles_set2', pos: new Vector3(5.45, -2.95, 4.45), scale: new Vector3(3.00, 3.00, 3.00), rot: new Vector3(0, 0.75, 0) },
@@ -591,6 +619,35 @@ async function loadModel(
       if ('maxSimultaneousLights' in mat) {
         mat.maxSimultaneousLights = 16;
       }
+      // Fix unlit / emissive-only GLB models so they respond to scene lights.
+      // Sketchfab "basic shaded" exports bake the texture into emissive,
+      // and some use KHR_materials_unlit. Handle both.
+      if (mat instanceof PBRMaterial) {
+        if (mat.unlit) {
+          mat.unlit = false;
+          mat.metallic = 0;
+          mat.roughness = 0.9;
+        }
+        // Emissive texture present but no albedo → move to albedo
+        if (mat.emissiveTexture && !mat.albedoTexture) {
+          console.log(`[loadModel] ${name}: moving emissiveTexture → albedoTexture`);
+          mat.albedoTexture = mat.emissiveTexture;
+          mat.emissiveTexture = null;
+          mat.emissiveColor = new Color3(0, 0, 0);
+          mat.metallic = 0;
+          mat.roughness = 0.9;
+        }
+        // Emissive color bright but albedo black → swap
+        const eLen = mat.emissiveColor.r + mat.emissiveColor.g + mat.emissiveColor.b;
+        const aLen = mat.albedoColor.r + mat.albedoColor.g + mat.albedoColor.b;
+        if (eLen > 0.5 && aLen < 0.1 && !mat.albedoTexture) {
+          console.log(`[loadModel] ${name}: moving emissiveColor → albedoColor`);
+          mat.albedoColor = mat.emissiveColor.clone();
+          mat.emissiveColor = new Color3(0, 0, 0);
+          mat.metallic = 0;
+          mat.roughness = 0.9;
+        }
+      }
     }
   }
 
@@ -618,4 +675,6 @@ async function loadModel(
       }
     }
   }
+
+  return result;
 }

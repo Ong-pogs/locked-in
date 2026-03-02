@@ -3,12 +3,14 @@ import { Scene } from '@babylonjs/core/scene';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import gsap from 'gsap';
 import { VIEWPOINTS, VIEWPOINT_ORDER, type Viewpoint } from './viewpoints';
+import { hasPath, playPath } from './cameraPaths';
 
 let camera: ArcRotateCamera;
 let currentIndex = 0;
 let isTransitioning = false;
 let zoomedIn = false;
 let lastViewpointIndex = 0;
+let activeTimeline: gsap.core.Timeline | null = null;
 
 export function createCamera(scene: Scene): ArcRotateCamera {
   const overview = VIEWPOINTS['overview'];
@@ -22,6 +24,9 @@ export function createCamera(scene: Scene): ArcRotateCamera {
     overview.target.clone(),
     scene,
   );
+
+  // No collisions — camera can pass through walls freely during transitions
+  camera.checkCollisions = false;
 
   // Temporarily enable controls so we can debug the view
   camera.attachControl(scene.getEngine().getRenderingCanvas()!, true);
@@ -97,6 +102,44 @@ export function focusOn(target: Vector3, distance = 4) {
   });
 }
 
+/** Zoom via recorded path if one exists, otherwise fall back to simple focusOn */
+export function playPathOrFocusOn(objectId: string, target: Vector3, distance = 4) {
+  if (isTransitioning) return;
+
+  lastViewpointIndex = currentIndex;
+  zoomedIn = true;
+  isTransitioning = true;
+
+  if (hasPath(objectId)) {
+    activeTimeline = playPath(objectId, camera, {
+      onComplete: () => {
+        isTransitioning = false;
+        activeTimeline = null;
+      },
+    });
+  } else {
+    // Existing simple zoom (same as focusOn)
+    gsap.to(camera, {
+      radius: distance,
+      duration: 1.2,
+      ease: 'power2.inOut',
+      onComplete: () => { isTransitioning = false; },
+    });
+
+    const proxy = { x: camera.target.x, y: camera.target.y, z: camera.target.z };
+    gsap.to(proxy, {
+      x: target.x,
+      y: target.y,
+      z: target.z,
+      duration: 1.2,
+      ease: 'power2.inOut',
+      onUpdate: () => {
+        camera.target.set(proxy.x, proxy.y, proxy.z);
+      },
+    });
+  }
+}
+
 /** Cycle to the next viewpoint */
 export function nextViewpoint() {
   if (isTransitioning || zoomedIn) return;
@@ -113,7 +156,14 @@ export function prevViewpoint() {
 
 /** Return camera to the last viewpoint after a zoom */
 export function goBack() {
-  if (isTransitioning || !zoomedIn) return;
+  if (!zoomedIn) return;
+  // Kill any in-progress path timeline
+  if (activeTimeline) {
+    activeTimeline.kill();
+    activeTimeline = null;
+    isTransitioning = false;
+  }
+  if (isTransitioning) return;
   const viewpoint = VIEWPOINT_ORDER[lastViewpointIndex];
   transitionTo(viewpoint);
   window.dispatchEvent(new CustomEvent('camera-zoom-back'));

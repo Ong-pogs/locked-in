@@ -5,7 +5,7 @@ import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { sendToRN } from '../bridge';
-import { focusOn, isZoomedIn } from '../camera/cameraController';
+import { playPathOrFocusOn, isZoomedIn } from '../camera/cameraController';
 
 /**
  * Sets up tap detection on interactable meshes.
@@ -32,7 +32,7 @@ export function setupInteractables(scene: Scene) {
         // Get bounding center of the model
         const bounds = target.getBoundingInfo();
         const center = bounds.boundingBox.centerWorld;
-        focusOn(center, 4);
+        playPathOrFocusOn(objectId, center, 4);
 
         sendToRN({ type: 'objectTapped', payload: { objectId } });
         flashMesh(target, scene);

@@ -91,6 +91,58 @@ export function addSaverLampGlow(scene: Scene, position: Vector3, name: string) 
   particles.start();
 }
 
+/** Green fire glow for the magic potion — point light + flame particles */
+export function addPotionGlow(scene: Scene, position: Vector3, name: string) {
+  const lightPos = position.add(new Vector3(0, 0.4, 0));
+
+  // Green point light
+  const light = new PointLight(`${name}_light`, lightPos, scene);
+  light.diffuse = new Color3(0.15, 1.0, 0.3);
+  light.specular = new Color3(0.1, 0.8, 0.2);
+  light.intensity = 5.0;
+  light.range = 8;
+
+  let flickerTime = Math.random() * 100;
+  scene.onBeforeRenderObservable.add(() => {
+    flickerTime += 0.07 + Math.random() * 0.03;
+    const flicker = 4.0 + Math.sin(flickerTime * 4.0) * 1.2 + Math.sin(flickerTime * 9.5) * 0.5;
+    light.intensity = flicker * emitterMultiplier;
+  });
+
+  // Green flame particles rising from the potion
+  const particles = new ParticleSystem(`${name}_flame`, 25, scene);
+  particles.particleTexture = new Texture(createFlameDataURL(), scene);
+
+  particles.emitter = lightPos;
+  particles.minEmitBox = new Vector3(-0.03, 0, -0.03);
+  particles.maxEmitBox = new Vector3(0.03, 0, 0.03);
+
+  particles.direction1 = new Vector3(-0.015, 0.12, -0.015);
+  particles.direction2 = new Vector3(0.015, 0.25, 0.015);
+
+  particles.gravity = new Vector3(0, 0.03, 0);
+
+  particles.minEmitPower = 0.08;
+  particles.maxEmitPower = 0.2;
+
+  particles.emitRate = 10;
+
+  particles.minLifeTime = 0.3;
+  particles.maxLifeTime = 0.6;
+
+  particles.minSize = 0.04;
+  particles.maxSize = 0.12;
+
+  // Green → dark green → fade
+  particles.color1 = new Color4(0.2, 1.0, 0.3, 0.9);
+  particles.color2 = new Color4(0.1, 0.7, 0.15, 0.7);
+  particles.colorDead = new Color4(0.0, 0.2, 0.0, 0.0);
+
+  particles.blendMode = ParticleSystem.BLENDMODE_ADD;
+
+  particles.start();
+}
+
 /** Canvas-generated 16x16 soft flame texture (white radial gradient). */
 function createFlameDataURL(): string {
   const size = 16;
