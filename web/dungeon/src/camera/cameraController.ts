@@ -110,11 +110,16 @@ export function playPathOrFocusOn(objectId: string, target: Vector3, distance = 
   zoomedIn = true;
   isTransitioning = true;
 
+  const fireArrived = () => {
+    window.dispatchEvent(new CustomEvent('camera-arrived', { detail: { objectId } }));
+  };
+
   if (hasPath(objectId)) {
     activeTimeline = playPath(objectId, camera, {
       onComplete: () => {
         isTransitioning = false;
         activeTimeline = null;
+        fireArrived();
       },
     });
   } else {
@@ -123,7 +128,10 @@ export function playPathOrFocusOn(objectId: string, target: Vector3, distance = 
       radius: distance,
       duration: 1.2,
       ease: 'power2.inOut',
-      onComplete: () => { isTransitioning = false; },
+      onComplete: () => {
+        isTransitioning = false;
+        fireArrived();
+      },
     });
 
     const proxy = { x: camera.target.x, y: camera.target.y, z: camera.target.z };

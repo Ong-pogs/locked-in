@@ -268,32 +268,32 @@ export async function createDungeonGeometry(scene: Scene) {
   // Models
   await loadModel(scene, '/assets/models/', 'bookshelf.glb',
     'bookshelf', new Vector3(0.86, -1.20, 7.15), new Vector3(3.20, -1.73, 2.07), new Vector3(0, -2.99, 0));
-await loadModel(scene, '/assets/models/', 'pillar.glb',
+  await loadModel(scene, '/assets/models/', 'pillar.glb',
     'pillar', new Vector3(7.08, -2.95, -4.68), new Vector3(2.00, 2.00, 2.00));
-await loadModel(scene, '/assets/models/', 'alchemy_shelf.glb',
+  await loadModel(scene, '/assets/models/', 'alchemy_shelf.glb',
     'alchemy_shelf', new Vector3(6.48, 0.92, 0.00));
   await loadModel(scene, '/assets/models/', 'alchemy_table_-_game_model.glb',
     'alchemy_table', new Vector3(6.22, -3.03, 1.56), new Vector3(0.03, 0.03, 0.03), new Vector3(0, 3.14, 0));
 
-  // Alchemy yield setup — on the table (PBR variant for proper lighting)
-  const yieldResult = await loadModel(scene, '/assets/models/alchemy_yield/', 'base_basic_pbr.glb',
+  // Alchemy yield setup — shaded variant (lighter), glass transparency
+  const yieldResult = await loadModel(scene, '/assets/models/alchemy_yield/', 'base_basic_shaded.glb',
     'alchemy_yield', new Vector3(6.22, -1.50, 1.56), new Vector3(2.00, 2.00, 2.00), new Vector3(0, 1.79, 0));
 
-  // Apply glass material — translucent, refractive, reflective
+  // Glass — use the model's own baked emissive texture for color
   for (const mesh of yieldResult.meshes) {
-    if (mesh.material && mesh.material instanceof PBRMaterial) {
-      const mat = mesh.material;
-      mat.alpha = 0.35;
-      mat.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND;
-      mat.metallic = 0.1;
-      mat.roughness = 0.05;
-      mat.indexOfRefraction = 1.5;
-      mat.subSurface.isRefractionEnabled = true;
-      mat.subSurface.refractionIntensity = 0.8;
-      mat.subSurface.tintColor = new Color3(0.85, 0.95, 1.0);
-      mat.environmentIntensity = 1.2;
-      mat.backFaceCulling = false;
+    if (!mesh.material) continue;
+    const mat = mesh.material as PBRMaterial;
+    if (!(mat instanceof PBRMaterial)) continue;
+    if (mat.emissiveTexture) {
+      mat.albedoTexture = mat.emissiveTexture;
     }
+    mat.albedoColor = new Color3(0.7, 0.85, 0.9);
+    mat.emissiveColor = new Color3(0.08, 0.1, 0.12);
+    mat.alpha = 0.55;
+    mat.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND;
+    mat.metallic = 0.9;
+    mat.roughness = 0.05;
+    mat.backFaceCulling = false;
   }
 
   // Magic fire potion — on the alchemy table with green glow
@@ -302,8 +302,8 @@ await loadModel(scene, '/assets/models/', 'alchemy_shelf.glb',
     'fire_potion', potionPos, new Vector3(0.50, 0.50, 0.50), new Vector3(0, 3.14, 0));
   addPotionGlow(scene, potionPos, 'fire_potion');
 
-const candlePositions: { name: string; pos: Vector3; scale?: Vector3; rot?: Vector3 }[] = [
-    { name: 'candles_set',  pos: new Vector3(3.30, -2.95, 6.58), scale: new Vector3(3.00, 3.00, 3.00) },
+  const candlePositions: { name: string; pos: Vector3; scale?: Vector3; rot?: Vector3 }[] = [
+    { name: 'candles_set', pos: new Vector3(3.30, -2.95, 6.58), scale: new Vector3(3.00, 3.00, 3.00) },
     { name: 'candles_set2', pos: new Vector3(5.45, -2.95, 4.45), scale: new Vector3(3.00, 3.00, 3.00), rot: new Vector3(0, 0.75, 0) },
     { name: 'candles_set3', pos: new Vector3(6.59, -2.95, -1.31), scale: new Vector3(3.00, 3.00, 3.00) },
     { name: 'candles_set4', pos: new Vector3(-0.69, 0.53, 7.53), scale: new Vector3(3.00, 3.00, 3.00) },
@@ -313,9 +313,9 @@ const candlePositions: { name: string; pos: Vector3; scale?: Vector3; rot?: Vect
     addCandleLight(scene, c.pos, c.name);
   }
   // Chandelier — hanging from ceiling with green glow
-  const chandelierPos = new Vector3(0.00, 3.23, 1.48);
-  await loadModel(scene, '/assets/models/', 'medieval_chandelier.glb',
-    'chandelier', chandelierPos, new Vector3(0.10, 0.10, 0.10));
+  const chandelierPos = new Vector3(0.00, 5.40, 1.48);
+  await loadModel(scene, '/assets/models/', 'medieval_chandelier3.glb',
+    'chandelier', chandelierPos, new Vector3(0.10, 0.10, 0.10), new Vector3(0, 3.14, 0));
   addChandelierGlow(scene, chandelierPos, 'chandelier');
 
   // Old chest
@@ -324,9 +324,9 @@ const candlePositions: { name: string; pos: Vector3; scale?: Vector3; rot?: Vect
 
   // Streak saver lamps — 3 oil lamps on the bookshelf with purple glow
   const saverLampPositions: { name: string; pos: Vector3; scale: Vector3; rot: Vector3 }[] = [
-    { name: 'oil_lamp_left',   pos: new Vector3(1.64, 0.48, 7.06), scale: new Vector3(3.00, 3.00, 3.00), rot: new Vector3(0, 3.14, 0) },
+    { name: 'oil_lamp_left', pos: new Vector3(1.64, 0.48, 7.06), scale: new Vector3(3.00, 3.00, 3.00), rot: new Vector3(0, 3.14, 0) },
     { name: 'oil_lamp_center', pos: new Vector3(2.07, 0.48, 7.04), scale: new Vector3(3.00, 3.00, 3.00), rot: new Vector3(0, 3.14, 0) },
-    { name: 'oil_lamp_right',  pos: new Vector3(2.50, 0.48, 6.90), scale: new Vector3(3.00, 3.00, 3.00), rot: new Vector3(0, 3.14, 0) },
+    { name: 'oil_lamp_right', pos: new Vector3(2.50, 0.48, 6.90), scale: new Vector3(3.00, 3.00, 3.00), rot: new Vector3(0, 3.14, 0) },
   ];
   for (const lamp of saverLampPositions) {
     try {
@@ -577,7 +577,7 @@ async function heightToNormalMap(imagePath: string, maxRes = 1024, strength = 2)
       const nzn = nz / len;
 
       const i = (y * w + x) * 4;
-      dst.data[i]     = (nx * 0.5 + 0.5) * 255;
+      dst.data[i] = (nx * 0.5 + 0.5) * 255;
       dst.data[i + 1] = (ny * 0.5 + 0.5) * 255;
       dst.data[i + 2] = (nzn * 0.5 + 0.5) * 255;
       dst.data[i + 3] = 255;
@@ -620,9 +620,8 @@ async function loadModel(
         mat.maxSimultaneousLights = 16;
       }
       // Fix unlit / emissive-only GLB models so they respond to scene lights.
-      // Sketchfab "basic shaded" exports bake the texture into emissive,
-      // and some use KHR_materials_unlit. Handle both.
-      if (mat instanceof PBRMaterial) {
+      // Skip for alchemy_yield — its baked emissive texture IS the visual.
+      if (mat instanceof PBRMaterial && name !== 'alchemy_yield') {
         if (mat.unlit) {
           mat.unlit = false;
           mat.metallic = 0;
@@ -661,8 +660,17 @@ async function loadModel(
     root.scaling = new Vector3(s, s, s);
   }
 
+  // Count triangles and vertices per model
+  let totalTris = 0;
+  let totalVerts = 0;
+  for (const mesh of result.meshes) {
+    totalTris += (mesh.getTotalIndices() / 3) | 0;
+    totalVerts += mesh.getTotalVertices();
+  }
+
   console.log(
-    `${name} raw: ${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}` +
+    `[model] ${name}: ${totalTris.toLocaleString()} tris, ${totalVerts.toLocaleString()} verts` +
+    ` | raw: ${size.x.toFixed(2)}×${size.y.toFixed(2)}×${size.z.toFixed(2)}` +
     ` → scale: (${root.scaling.x.toFixed(2)}, ${root.scaling.y.toFixed(2)}, ${root.scaling.z.toFixed(2)})`
   );
 

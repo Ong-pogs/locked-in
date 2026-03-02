@@ -96,6 +96,195 @@
       opacity: 1;
       pointer-events: auto;
     }
+
+    /* ── Shared Overlay System ── */
+    .overlay-backdrop {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.75);
+      z-index: 100;
+      justify-content: flex-end;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    .overlay-backdrop.visible {
+      display: flex;
+      animation: fadeIn 0.25s ease-out;
+    }
+    .overlay-panel {
+      background: #141416;
+      border-top: 1px solid #2a2a2e;
+      border-radius: 24px 24px 0 0;
+      padding: 28px 24px 40px;
+      max-height: 80vh;
+      overflow-y: auto;
+      width: 100%;
+      animation: slideUp 0.35s ease-out;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to   { transform: translateY(0); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    .ov-card {
+      background: #1c1c1e;
+      border: 1px solid #2a2a2e;
+      border-radius: 14px;
+      padding: 16px;
+      margin-top: 16px;
+    }
+    .ov-label {
+      color: #999;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .ov-title {
+      color: #fff;
+      font-size: 22px;
+      font-weight: 700;
+      margin: 0;
+    }
+    .ov-subtitle {
+      color: #888;
+      font-size: 14px;
+      margin: 4px 0 0;
+    }
+    .ov-progress-bar {
+      height: 6px;
+      background: #2a2a2e;
+      border-radius: 3px;
+      margin-top: 10px;
+      overflow: hidden;
+    }
+    .ov-progress-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+    .ov-btn-primary {
+      width: 100%;
+      background: #7c3aed;
+      border: none;
+      border-radius: 14px;
+      padding: 16px;
+      cursor: pointer;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .ov-btn-secondary {
+      width: 100%;
+      background: transparent;
+      border: 1px solid #2a2a2e;
+      border-radius: 14px;
+      padding: 14px;
+      cursor: pointer;
+      color: #999;
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .ov-close-btn {
+      position: absolute;
+      top: 16px;
+      right: 20px;
+      background: rgba(255,255,255,0.08);
+      border: none;
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      color: #999;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .ov-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .ov-icon {
+      font-size: 28px;
+    }
+    .ov-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .ov-row > * {
+      flex: 1;
+    }
+    .ov-big-number {
+      font-size: 36px;
+      font-weight: 800;
+      margin: 8px 0 2px;
+    }
+    .ov-tag {
+      display: inline-block;
+      background: #2a2a2e;
+      color: #aaa;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      margin: 4px 4px 0 0;
+    }
+    .ov-grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .ov-grid-slot {
+      aspect-ratio: 1;
+      background: #1c1c1e;
+      border: 1px solid #2a2a2e;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+    }
+    .ov-grid-slot.locked {
+      background: #111;
+      border-color: #1a1a1a;
+      opacity: 0.4;
+    }
+    .ov-hero-card {
+      background: linear-gradient(135deg, #1c1c1e 0%, #1a1a2e 100%);
+      border: 1px solid #2a2a2e;
+      border-radius: 14px;
+      padding: 20px;
+      margin-top: 16px;
+      position: relative;
+    }
+    .ov-apy {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      color: #22c55e;
+      font-size: 20px;
+      font-weight: 700;
+    }
+    .ov-warning {
+      background: rgba(245, 158, 11, 0.08);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      border-radius: 14px;
+      padding: 14px 16px;
+      margin-top: 16px;
+      display: none;
+    }
+    .ov-disclaimer {
+      color: #555;
+      font-size: 11px;
+      text-align: center;
+      margin-top: 16px;
+      line-height: 1.5;
+    }
   </style>
 </head>
 <body>
@@ -115,23 +304,9 @@
     pointer-events: none;
   ">loading...</div>
 
-  <!-- Book popup overlay (shown when tapping the book in standalone web mode) -->
-  <div id="bookOverlay" style="
-    display: none;
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,0.75);
-    z-index: 100;
-    justify-content: flex-end;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  ">
-    <div id="bookPanel" style="
-      background: #141416;
-      border-top: 1px solid #2a2a2e;
-      border-radius: 24px 24px 0 0;
-      padding: 28px 24px 40px;
-      max-height: 80vh;
-      overflow-y: auto;
-    ">
+  <!-- Book popup overlay -->
+  <div id="bookOverlay" class="overlay-backdrop">
+    <div class="overlay-panel">
       <h2 style="color:#fff; font-size:22px; margin:0;">Solana Fundamentals</h2>
       <p style="color:#888; font-size:14px; margin:6px 0 0; line-height:1.5;">
         Learn the core concepts of the Solana blockchain — accounts, transactions, programs, and the runtime.
@@ -178,6 +353,184 @@
         padding:16px; margin-top:20px; cursor:pointer;
         color:#fff; font-size:16px; font-weight:700;
       ">Start Lesson 1: What is Solana?</button>
+    </div>
+  </div>
+
+  <!-- Chest / Inventory overlay -->
+  <div id="chestOverlay" class="overlay-backdrop">
+    <div class="overlay-panel" style="position:relative;">
+      <button id="chestCloseBtn" class="ov-close-btn">&times;</button>
+
+      <div class="ov-header">
+        <span class="ov-icon">&#x1F6E1;</span>
+        <div>
+          <h2 class="ov-title">Inventory</h2>
+          <p class="ov-subtitle">M-Token Wallet &amp; Items</p>
+        </div>
+      </div>
+
+      <!-- M-Token Balance -->
+      <div class="ov-card">
+        <span class="ov-label">M-Token Balance</span>
+        <div style="display:flex; align-items:baseline; gap:6px;">
+          <span class="ov-big-number" style="color:#f59e0b;" id="mTokenBalance">3</span>
+          <span style="color:#666; font-size:16px;">/ <span id="mTokenCap">14</span></span>
+        </div>
+        <div class="ov-progress-bar">
+          <div class="ov-progress-fill" style="width:21%; background:#f59e0b;" id="mTokenProgressFill"></div>
+        </div>
+        <span style="color:#666; font-size:12px; margin-top:6px; display:block;">Wallet cap resets weekly</span>
+      </div>
+
+      <!-- Today's Fragments -->
+      <div class="ov-card">
+        <span class="ov-label">Today's Fragments</span>
+        <div style="display:flex; align-items:baseline; gap:6px;">
+          <span class="ov-big-number" style="color:#a855f7; font-size:28px;" id="fragCount">0.6</span>
+          <span style="color:#666; font-size:14px;">/ 1.0</span>
+        </div>
+        <div class="ov-progress-bar">
+          <div class="ov-progress-fill" style="width:60%; background:#a855f7;" id="fragProgressFill"></div>
+        </div>
+        <div style="margin-top:10px;">
+          <span class="ov-tag">Lesson +0.3</span>
+          <span class="ov-tag">Quiz +0.2</span>
+          <span class="ov-tag">Practice +0.1</span>
+        </div>
+      </div>
+
+      <!-- Streak Savers -->
+      <div class="ov-card">
+        <span class="ov-label">Streak Savers</span>
+        <div class="ov-row" style="margin-top:10px;">
+          <div style="background:#2a2a2e; border-radius:10px; padding:12px; text-align:center;">
+            <div style="font-size:20px;">&#x1F6E1;</div>
+            <div style="color:#22c55e; font-size:11px; font-weight:600; margin-top:4px;">Ready</div>
+            <div style="color:#555; font-size:10px;">10% yield</div>
+          </div>
+          <div style="background:#2a2a2e; border-radius:10px; padding:12px; text-align:center;">
+            <div style="font-size:20px;">&#x1F6E1;</div>
+            <div style="color:#22c55e; font-size:11px; font-weight:600; margin-top:4px;">Ready</div>
+            <div style="color:#555; font-size:10px;">20% yield</div>
+          </div>
+          <div style="background:#1a1a1a; border:1px solid #222; border-radius:10px; padding:12px; text-align:center; opacity:0.5;">
+            <div style="font-size:20px;">&#x1F512;</div>
+            <div style="color:#666; font-size:11px; font-weight:600; margin-top:4px;">Locked</div>
+            <div style="color:#444; font-size:10px;">Day 8+</div>
+          </div>
+        </div>
+        <p style="color:#666; font-size:11px; margin-top:10px; line-height:1.4;">
+          Using a saver redirects a % of your yield to the community pool. Penalties escalate: 10% &#x2192; 20% &#x2192; 20% &#x2192; 100%.
+        </p>
+      </div>
+
+      <!-- Inventory Grid -->
+      <div class="ov-card">
+        <span class="ov-label">Items</span>
+        <div class="ov-grid-4">
+          <div class="ov-grid-slot">&#x1F9EA;</div>
+          <div class="ov-grid-slot">&#x1F4DC;</div>
+          <div class="ov-grid-slot" style="border-style:dashed; color:#444;">+</div>
+          <div class="ov-grid-slot" style="border-style:dashed; color:#444;">+</div>
+          <div class="ov-grid-slot locked">&#x1F512;</div>
+          <div class="ov-grid-slot locked">&#x1F512;</div>
+          <div class="ov-grid-slot locked">&#x1F512;</div>
+          <div class="ov-grid-slot locked">&#x1F512;</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alchemy / Yield Forge overlay -->
+  <div id="alchemyOverlay" class="overlay-backdrop">
+    <div class="overlay-panel" style="position:relative;">
+      <button id="alchemyCloseBtn" class="ov-close-btn">&times;</button>
+
+      <div class="ov-header">
+        <span class="ov-icon">&#x2697;</span>
+        <div>
+          <h2 class="ov-title">Yield Forge</h2>
+          <p class="ov-subtitle">Stake, earn, and forge your yield</p>
+        </div>
+      </div>
+
+      <!-- Hero card: locked balance + APY -->
+      <div class="ov-hero-card">
+        <span class="ov-label">Locked Balance</span>
+        <div style="display:flex; align-items:baseline; gap:8px;">
+          <span class="ov-big-number" style="color:#fff;" id="lockedBalance">250.00</span>
+          <span style="color:#888; font-size:16px;">USDC</span>
+        </div>
+        <span class="ov-apy" id="apyDisplay">4.2% APY</span>
+      </div>
+
+      <!-- Flame + Streak row -->
+      <div class="ov-row">
+        <div class="ov-card" style="text-align:center; margin-top:0;">
+          <span class="ov-label">Flame</span>
+          <div style="font-size:32px; margin:8px 0 4px; filter:drop-shadow(0 0 8px rgba(245,158,11,0.5));" id="flameIcon">&#x1F525;</div>
+          <span style="color:#f59e0b; font-size:13px; font-weight:600;" id="flameStatus">Active</span>
+        </div>
+        <div class="ov-card" style="text-align:center; margin-top:0;">
+          <span class="ov-label">Streak</span>
+          <div class="ov-big-number" style="color:#a855f7; font-size:32px;" id="streakCount">5</div>
+          <span style="color:#888; font-size:13px;">days</span>
+        </div>
+      </div>
+
+      <!-- Yield Earned -->
+      <div class="ov-card">
+        <span class="ov-label">Yield Earned</span>
+        <div style="display:flex; align-items:baseline; gap:6px;">
+          <span class="ov-big-number" style="color:#22c55e; font-size:28px;" id="totalYield">1.47</span>
+          <span style="color:#666; font-size:14px;">USDC</span>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;">
+          <div style="display:flex; justify-content:space-between;">
+            <span style="color:#666; font-size:12px;">Today</span>
+            <span style="color:#aaa; font-size:12px;" id="yieldToday">+0.03</span>
+          </div>
+          <div style="display:flex; justify-content:space-between;">
+            <span style="color:#666; font-size:12px;">Week</span>
+            <span style="color:#aaa; font-size:12px;" id="yieldWeek">+0.18</span>
+          </div>
+          <div style="display:flex; justify-content:space-between;">
+            <span style="color:#666; font-size:12px;">Month</span>
+            <span style="color:#aaa; font-size:12px;" id="yieldMonth">+0.87</span>
+          </div>
+          <div style="display:flex; justify-content:space-between;">
+            <span style="color:#666; font-size:12px;">All Time</span>
+            <span style="color:#aaa; font-size:12px;" id="yieldAllTime">1.47</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Saver Penalty Warning (hidden by default) -->
+      <div class="ov-warning" id="saverWarning">
+        <span style="color:#f59e0b; font-size:13px; font-weight:600;">&#x26A0; Saver Penalty Active</span>
+        <p style="color:#999; font-size:12px; margin:6px 0 0; line-height:1.4;">
+          10% of your yield is being redirected to the community pool. Complete today's lesson to remove the penalty.
+        </p>
+      </div>
+
+      <!-- Lock Status -->
+      <div class="ov-card">
+        <span class="ov-label">Lock Status</span>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+          <span style="color:#22c55e; font-size:14px; font-weight:600;" id="lockStatus">&#x2713; Active</span>
+          <span style="color:#666; font-size:12px;" id="lockDate">Locked since Feb 15, 2026</span>
+        </div>
+      </div>
+
+      <!-- Deposit / Withdraw buttons -->
+      <div style="display:flex; flex-direction:column; gap:10px; margin-top:20px;">
+        <button class="ov-btn-primary" id="alchemyDepositBtn">Deposit USDC</button>
+        <button class="ov-btn-secondary" id="alchemyWithdrawBtn">Withdraw</button>
+      </div>
+
+      <p class="ov-disclaimer">
+        Yield is earned only while your flame is active. Withdrawals are subject to lock period terms. Not financial advice.
+      </p>
     </div>
   </div>
 

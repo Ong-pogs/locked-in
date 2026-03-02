@@ -328,8 +328,8 @@ async function main() {
   if (arrowRight) arrowRight.addEventListener('click', () => nextViewpoint());
   if (backBtn) backBtn.addEventListener('click', () => goBack());
 
-  // When camera zooms into an object — hide arrows, show back button
-  window.addEventListener('camera-zoomed-in', () => {
+  // When an object is tapped — immediately hide arrows, show back button
+  window.addEventListener('camera-tap', () => {
     arrowLeft?.classList.add('hidden');
     arrowRight?.classList.add('hidden');
     backBtn?.classList.add('visible');

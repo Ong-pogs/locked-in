@@ -1,5 +1,6 @@
 import { useRef, useCallback, useEffect, useState } from 'react';
 import { View, StyleSheet, ActivityIndicator, Text, Pressable, Modal, ScrollView } from 'react-native';
+import Constants from 'expo-constants';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -10,10 +11,25 @@ import { useCourseStore } from '@/stores/courseStore';
 type HubNav = NativeStackNavigationProp<MainStackParamList, 'UndergroundHub'>;
 
 /**
+ * Bundled dungeon asset (from web/dungeon/dist/index.html).
+ * Note: Metro config must allow .html assets.
+ */
+const DUNGEON_ASSET = require('../../../web/dungeon/dist/index.html');
+
+/**
+ * Dynamically get the Mac's IP address so physical phones can connect to the Vite server.
+ */
+let hostIp = 'localhost';
+if (Constants.experienceUrl) {
+  const match = Constants.experienceUrl.match(/\/\/([^:]+)/);
+  if (match) hostIp = match[1];
+}
+
+/**
  * Dev mode: load from Vite dev server.
  * Prod: load the inlined single-file HTML built by vite-plugin-singlefile.
  */
-const DEV_URI = 'http://localhost:5173';
+const DEV_URI = `http://${hostIp}:5173`;
 const IS_DEV = __DEV__;
 
 export function UndergroundHubScreen() {
@@ -127,7 +143,7 @@ export function UndergroundHubScreen() {
       <WebView
         ref={webViewRef}
         style={[styles.webview, !sceneReady && styles.hidden]}
-        source={IS_DEV ? { uri: DEV_URI } : { uri: DEV_URI }} // TODO: swap prod to { html: inlinedHtml }
+        source={IS_DEV ? { uri: DEV_URI } : DUNGEON_ASSET}
         originWhitelist={['*']}
         javaScriptEnabled
         domStorageEnabled
@@ -204,7 +220,7 @@ function BookModal({
       onRequestClose={onClose}
     >
       <Pressable style={styles.modalBackdrop} onPress={onClose}>
-        <Pressable style={styles.modalContent} onPress={() => {}}>
+        <Pressable style={styles.modalContent} onPress={() => { }}>
           <ScrollView showsVerticalScrollIndicator={false}>
             {/* Header */}
             <Text style={styles.modalTitle}>
@@ -251,15 +267,15 @@ function BookModal({
 
             {/* Action grid */}
             <View style={styles.actionGrid}>
-              <Pressable style={styles.actionBtn} onPress={() => {}}>
+              <Pressable style={styles.actionBtn} onPress={() => { }}>
                 <Text style={styles.actionIcon}>{'🏋️'}</Text>
                 <Text style={styles.actionLabel}>Practice</Text>
               </Pressable>
-              <Pressable style={styles.actionBtn} onPress={() => {}}>
+              <Pressable style={styles.actionBtn} onPress={() => { }}>
                 <Text style={styles.actionIcon}>{'🧩'}</Text>
                 <Text style={styles.actionLabel}>Puzzle</Text>
               </Pressable>
-              <Pressable style={styles.actionBtn} onPress={() => {}}>
+              <Pressable style={styles.actionBtn} onPress={() => { }}>
                 <Text style={styles.actionIcon}>{'📖'}</Text>
                 <Text style={styles.actionLabel}>Dictionary</Text>
               </Pressable>

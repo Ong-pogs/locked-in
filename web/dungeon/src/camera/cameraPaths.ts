@@ -39,6 +39,14 @@ const BUILT_IN_PATHS: CameraPath[] = [
     ],
   },
   {
+    name: 'alchemy_yield',
+    duration: 2.4,
+    keyframes: [
+      { alpha: 3.987, beta: 1.32, radius: 11.97, target: { x: 0, y: 1.5, z: 1 } },
+      { alpha: 3.2092, beta: 1.2579, radius: 7.869, target: { x: 0, y: 1.5, z: 1 } },
+    ],
+  },
+  {
     name: 'bookshelf',
     duration: 2.4,
     keyframes: [

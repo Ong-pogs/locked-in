@@ -37,8 +37,8 @@ export function setupInteractables(scene: Scene) {
         sendToRN({ type: 'objectTapped', payload: { objectId } });
         flashMesh(target, scene);
 
-        // Notify UI layer to show back button and hide arrows
-        window.dispatchEvent(new CustomEvent('camera-zoomed-in'));
+        // Immediately hide arrows + show back (before camera finishes moving)
+        window.dispatchEvent(new CustomEvent('camera-tap', { detail: { objectId } }));
         return;
       }
       target = target.parent as AbstractMesh | null;
