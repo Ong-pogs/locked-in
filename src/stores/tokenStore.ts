@@ -7,6 +7,7 @@ interface TokenStore extends TokenData {
   awardFragment: (amount: number, source: string) => boolean;
   canEarn: () => boolean;
   consolidateFragments: () => void;
+  spendTokens: (amount: number) => boolean;
   reset: () => void;
 }
 
@@ -54,6 +55,13 @@ export const useTokenStore = create<TokenStore>()(
           state.dailyEarned < DAILY_CAP &&
           state.fullTokens < state.walletCap
         );
+      },
+
+      spendTokens: (amount) => {
+        const state = get();
+        if (state.fullTokens < amount) return false;
+        set({ fullTokens: state.fullTokens - amount });
+        return true;
       },
 
       consolidateFragments: () => {

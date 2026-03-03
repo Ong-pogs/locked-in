@@ -9,6 +9,7 @@ interface CourseStore {
   lessons: Record<string, Lesson[]>;
   activeCourseId: string | null;
   lessonProgress: Record<string, LessonProgress>;
+  enrolledCourseIds: string[];
   setCourses: (courses: Course[]) => void;
   setLessons: (lessons: Record<string, Lesson[]>) => void;
   setActiveCourse: (courseId: string) => void;
@@ -17,6 +18,10 @@ interface CourseStore {
   getLessonsForCourse: (courseId: string) => Lesson[];
   getLesson: (lessonId: string) => Lesson | null;
   getActiveCourse: () => Course | null;
+  enrollCourse: (courseId: string) => void;
+  unenrollCourse: (courseId: string) => void;
+  isEnrolled: (courseId: string) => boolean;
+  getEnrolledCourses: () => Course[];
   initializeMockData: () => void;
   reset: () => void;
 }
@@ -26,6 +31,7 @@ const initialState = {
   lessons: {} as Record<string, Lesson[]>,
   activeCourseId: null as string | null,
   lessonProgress: {} as Record<string, LessonProgress>,
+  enrolledCourseIds: [] as string[],
 };
 
 export const useCourseStore = create<CourseStore>()(
@@ -98,6 +104,25 @@ export const useCourseStore = create<CourseStore>()(
         return (
           state.courses.find((c) => c.id === state.activeCourseId) ?? null
         );
+      },
+
+      enrollCourse: (courseId) => {
+        const state = get();
+        if (!state.enrolledCourseIds.includes(courseId)) {
+          set({ enrolledCourseIds: [...state.enrolledCourseIds, courseId] });
+        }
+      },
+
+      unenrollCourse: (courseId) => {
+        const state = get();
+        set({ enrolledCourseIds: state.enrolledCourseIds.filter((id) => id !== courseId) });
+      },
+
+      isEnrolled: (courseId) => get().enrolledCourseIds.includes(courseId),
+
+      getEnrolledCourses: () => {
+        const state = get();
+        return state.courses.filter((c) => state.enrolledCourseIds.includes(c.id));
       },
 
       initializeMockData: () => {

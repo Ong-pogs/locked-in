@@ -1,5 +1,5 @@
 export type CourseDifficulty = 'beginner' | 'intermediate' | 'advanced';
-export type CourseCategory = 'solana' | 'web3' | 'defi' | 'security';
+export type CourseCategory = 'solana' | 'web3' | 'defi' | 'security' | 'rust';
 
 export interface Course {
   id: string;

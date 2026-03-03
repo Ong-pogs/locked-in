@@ -4,7 +4,6 @@ import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { sendToRN } from '../bridge';
 import { playPathOrFocusOn, isZoomedIn } from '../camera/cameraController';
 
 /**
@@ -34,7 +33,7 @@ export function setupInteractables(scene: Scene) {
         const center = bounds.boundingBox.centerWorld;
         playPathOrFocusOn(objectId, center, 4);
 
-        sendToRN({ type: 'objectTapped', payload: { objectId } });
+        // Don't sendToRN here — wait for camera-arrived (bridge.ts handles it)
         flashMesh(target, scene);
 
         // Immediately hide arrows + show back (before camera finishes moving)

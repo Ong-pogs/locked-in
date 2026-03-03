@@ -12,6 +12,39 @@ export const MOCK_COURSES: Course[] = [
     category: 'solana',
     imageUrl: null,
   },
+  {
+    id: 'anchor-dev',
+    title: 'Anchor Development',
+    description:
+      'Build Solana programs using the Anchor framework — IDLs, accounts, instructions, and testing your on-chain code.',
+    totalLessons: 3,
+    completedLessons: 0,
+    difficulty: 'intermediate',
+    category: 'solana',
+    imageUrl: null,
+  },
+  {
+    id: 'rust-solana',
+    title: 'Rust for Solana',
+    description:
+      'Learn the Rust fundamentals needed for Solana development — ownership, borrowing, structs, enums, and error handling.',
+    totalLessons: 3,
+    completedLessons: 0,
+    difficulty: 'beginner',
+    category: 'rust',
+    imageUrl: null,
+  },
+  {
+    id: 'defi-protocols',
+    title: 'DeFi Protocols',
+    description:
+      'Understand decentralized finance protocols — AMMs, lending, yield farming, and how they work on Solana.',
+    totalLessons: 3,
+    completedLessons: 0,
+    difficulty: 'intermediate',
+    category: 'defi',
+    imageUrl: null,
+  },
 ];
 
 export const MOCK_LESSONS: Record<string, Lesson[]> = {
@@ -171,6 +204,247 @@ export const MOCK_LESSONS: Record<string, Lesson[]> = {
           prompt: 'Which of these is NOT a popular Solana wallet?',
           options: ['Phantom', 'MetaMask', 'Solflare', 'Backpack'],
           correctAnswer: 'MetaMask',
+        },
+      ],
+    },
+  ],
+
+  'anchor-dev': [
+    {
+      id: 'ad-1',
+      courseId: 'anchor-dev',
+      title: 'What is Anchor?',
+      order: 1,
+      content:
+        'Anchor is a framework for Solana program development that provides a set of developer tools for writing, testing, and deploying programs. It abstracts away much of the boilerplate required for raw Solana development using the Rust-based Solana SDK.\n\nAnchor uses an Interface Definition Language (IDL) to describe your program\'s instructions and accounts. The IDL is auto-generated from your Rust code and used by clients to interact with the program. Think of it like an ABI in Ethereum.\n\nThe framework provides macros like #[program], #[derive(Accounts)], and #[account] that generate the serialization, deserialization, and validation code you would otherwise write by hand.',
+      questions: [
+        {
+          id: 'ad-1-q1',
+          type: 'mcq',
+          prompt: 'What does Anchor use to describe a program\'s interface?',
+          options: [
+            'ABI (Application Binary Interface)',
+            'IDL (Interface Definition Language)',
+            'JSON Schema',
+            'Protocol Buffers',
+          ],
+          correctAnswer: 'IDL (Interface Definition Language)',
+        },
+        {
+          id: 'ad-1-q2',
+          type: 'short_text',
+          prompt: 'What Rust attribute macro marks the main module of an Anchor program?',
+          correctAnswer: '#[program]',
+        },
+      ],
+    },
+    {
+      id: 'ad-2',
+      courseId: 'anchor-dev',
+      title: 'Accounts & Constraints',
+      order: 2,
+      content:
+        'In Anchor, every instruction handler receives a context (Context<T>) where T is a struct that derives the Accounts trait. Each field in this struct represents an account the instruction needs to read or write.\n\nAnchor provides constraint attributes like #[account(init, payer = user, space = 8 + 32)] to declare how accounts should be validated. The init constraint creates and initializes a new account, mut marks an account as mutable, and has_one checks ownership relationships.\n\nProgram Derived Addresses (PDAs) are commonly used as accounts with deterministic addresses. Anchor makes creating PDAs easy with seeds and bump constraints: #[account(seeds = [b"vault", user.key().as_ref()], bump)].',
+      questions: [
+        {
+          id: 'ad-2-q1',
+          type: 'mcq',
+          prompt: 'What does the #[account(init)] constraint do?',
+          options: [
+            'Initializes a variable in memory',
+            'Creates and initializes a new on-chain account',
+            'Imports an existing account',
+            'Deletes an account',
+          ],
+          correctAnswer: 'Creates and initializes a new on-chain account',
+        },
+        {
+          id: 'ad-2-q2',
+          type: 'short_text',
+          prompt: 'What type wraps the accounts struct in an Anchor instruction handler?',
+          correctAnswer: 'Context',
+        },
+      ],
+    },
+    {
+      id: 'ad-3',
+      courseId: 'anchor-dev',
+      title: 'Testing with Anchor',
+      order: 3,
+      content:
+        'Anchor includes a built-in testing framework that lets you write integration tests in TypeScript. Tests run against a local Solana validator (solana-test-validator) or Anchor\'s built-in BankRun environment.\n\nThe anchor test command compiles your program, deploys it to localnet, and runs your TypeScript test suite. Tests use the @coral-xyz/anchor library to create a Provider (connection + wallet) and a Program instance that maps to your IDL.\n\nYou call program methods like: await program.methods.initialize().accounts({ myAccount: pda }).rpc(). Anchor auto-serializes arguments and deserializes return values based on the IDL. You can also use program.account.myAccount.fetch(pda) to read account data.',
+      questions: [
+        {
+          id: 'ad-3-q1',
+          type: 'mcq',
+          prompt: 'What command compiles, deploys, and runs Anchor tests?',
+          options: [
+            'anchor build',
+            'anchor deploy',
+            'anchor test',
+            'anchor run',
+          ],
+          correctAnswer: 'anchor test',
+        },
+        {
+          id: 'ad-3-q2',
+          type: 'short_text',
+          prompt: 'What method on a Program instance sends a transaction for an instruction?',
+          correctAnswer: 'rpc',
+        },
+      ],
+    },
+  ],
+
+  'rust-solana': [
+    {
+      id: 'rs-1',
+      courseId: 'rust-solana',
+      title: 'Ownership & Borrowing',
+      order: 1,
+      content:
+        'Rust\'s ownership system is its most distinctive feature. Every value in Rust has a single owner, and when the owner goes out of scope the value is dropped (freed). This eliminates the need for a garbage collector.\n\nBorrowing lets you reference a value without taking ownership. There are two types: immutable references (&T) and mutable references (&mut T). You can have either one mutable reference OR any number of immutable references at a time — never both.\n\nThis system prevents data races at compile time and is key to writing safe, concurrent Solana programs. When you see errors like "value moved here" or "cannot borrow as mutable", the compiler is enforcing these ownership rules.',
+      questions: [
+        {
+          id: 'rs-1-q1',
+          type: 'mcq',
+          prompt: 'How many mutable references to a value can exist at the same time?',
+          options: ['Zero', 'One', 'Two', 'Unlimited'],
+          correctAnswer: 'One',
+        },
+        {
+          id: 'rs-1-q2',
+          type: 'short_text',
+          prompt: 'What symbol denotes an immutable reference in Rust?',
+          correctAnswer: '&',
+        },
+      ],
+    },
+    {
+      id: 'rs-2',
+      courseId: 'rust-solana',
+      title: 'Structs & Enums',
+      order: 2,
+      content:
+        'Structs are Rust\'s way of creating custom data types by grouping related fields together. They are heavily used in Solana programs to define account data. You define a struct with the struct keyword and can add methods using impl blocks.\n\nEnums in Rust are more powerful than in most languages — each variant can hold different data. This makes them perfect for modeling instruction types or state machines in Solana programs. The match keyword lets you exhaustively handle every variant.\n\nDeriving traits like Clone, Debug, and BorshSerialize/BorshDeserialize is essential for Solana. Borsh (Binary Object Representation Serializer for Hashing) is the serialization format used by Solana programs to encode/decode account data.',
+      questions: [
+        {
+          id: 'rs-2-q1',
+          type: 'mcq',
+          prompt: 'What serialization format does Solana use for account data?',
+          options: ['JSON', 'MessagePack', 'Borsh', 'Protobuf'],
+          correctAnswer: 'Borsh',
+        },
+        {
+          id: 'rs-2-q2',
+          type: 'short_text',
+          prompt: 'What keyword is used to add methods to a struct in Rust?',
+          correctAnswer: 'impl',
+        },
+      ],
+    },
+    {
+      id: 'rs-3',
+      courseId: 'rust-solana',
+      title: 'Error Handling',
+      order: 3,
+      content:
+        'Rust uses the Result<T, E> type for error handling instead of exceptions. A Result is either Ok(value) on success or Err(error) on failure. The ? operator propagates errors up the call stack automatically.\n\nIn Solana programs, errors are returned as ProgramError or custom error enums. Anchor provides the #[error_code] macro to define custom errors with messages: #[error_code] enum MyError { #[msg("Insufficient funds")] InsufficientFunds }.\n\nThe require! macro in Anchor is a convenient way to validate conditions: require!(amount > 0, MyError::InsufficientFunds). This replaces verbose if/else error returns and makes your code more readable.',
+      questions: [
+        {
+          id: 'rs-3-q1',
+          type: 'mcq',
+          prompt: 'What operator propagates errors automatically in Rust?',
+          options: ['!', '?', '&', '::'],
+          correctAnswer: '?',
+        },
+        {
+          id: 'rs-3-q2',
+          type: 'short_text',
+          prompt: 'What Anchor macro is used to validate a condition and return an error?',
+          correctAnswer: 'require!',
+        },
+      ],
+    },
+  ],
+
+  'defi-protocols': [
+    {
+      id: 'dp-1',
+      courseId: 'defi-protocols',
+      title: 'Automated Market Makers',
+      order: 1,
+      content:
+        'Automated Market Makers (AMMs) are the backbone of decentralized exchanges. Instead of matching buy and sell orders like a traditional exchange, AMMs use liquidity pools and mathematical formulas to determine token prices.\n\nThe most common formula is the constant product formula: x * y = k, where x and y are the reserves of two tokens. When you swap token A for token B, you add A to the pool and remove B, maintaining the constant k. This creates a price curve.\n\nOn Solana, major AMMs include Raydium (which combines AMM with an order book), Orca (known for concentrated liquidity), and Jupiter (a DEX aggregator that routes across multiple AMMs for the best price).',
+      questions: [
+        {
+          id: 'dp-1-q1',
+          type: 'mcq',
+          prompt: 'What is the constant product formula used by AMMs?',
+          options: ['x + y = k', 'x * y = k', 'x / y = k', 'x ^ y = k'],
+          correctAnswer: 'x * y = k',
+        },
+        {
+          id: 'dp-1-q2',
+          type: 'short_text',
+          prompt: 'What Solana protocol is known as a DEX aggregator?',
+          correctAnswer: 'Jupiter',
+        },
+      ],
+    },
+    {
+      id: 'dp-2',
+      courseId: 'defi-protocols',
+      title: 'Lending & Borrowing',
+      order: 2,
+      content:
+        'Lending protocols allow users to deposit assets and earn interest, while borrowers can take loans against their collateral. The interest rates are typically determined algorithmically based on supply and demand (utilization rate).\n\nOver-collateralization is key: borrowers must deposit more value than they borrow. If the collateral value drops below a threshold (the liquidation ratio), anyone can liquidate the position by repaying the loan and claiming the discounted collateral.\n\nOn Solana, major lending protocols include Solend, MarginFi, and Kamino. These protocols use oracle price feeds (like Pyth or Switchboard) to track real-time asset prices for collateral valuation and liquidation triggers.',
+      questions: [
+        {
+          id: 'dp-2-q1',
+          type: 'mcq',
+          prompt: 'What happens when a borrower\'s collateral drops below the liquidation ratio?',
+          options: [
+            'Nothing, the loan continues',
+            'The protocol automatically adds more collateral',
+            'Anyone can liquidate the position',
+            'The interest rate is reduced',
+          ],
+          correctAnswer: 'Anyone can liquidate the position',
+        },
+        {
+          id: 'dp-2-q2',
+          type: 'short_text',
+          prompt: 'What Solana oracle provides real-time price feeds for DeFi protocols?',
+          correctAnswer: 'Pyth',
+        },
+      ],
+    },
+    {
+      id: 'dp-3',
+      courseId: 'defi-protocols',
+      title: 'Yield Farming & Staking',
+      order: 3,
+      content:
+        'Yield farming is the practice of moving assets between different DeFi protocols to maximize returns. Users provide liquidity to pools and earn trading fees plus additional token rewards (liquidity mining). The combined return is expressed as APY (Annual Percentage Yield).\n\nLiquid staking lets you stake SOL while maintaining liquidity. Protocols like Marinade (mSOL) and Jito (jitoSOL) give you a derivative token that represents your staked SOL plus accumulated rewards. You can use these tokens in other DeFi protocols.\n\nImpermanent loss is a key risk in yield farming. It occurs when the price ratio of your deposited tokens changes compared to when you entered the pool. The larger the price divergence, the greater the impermanent loss relative to simply holding the tokens.',
+      questions: [
+        {
+          id: 'dp-3-q1',
+          type: 'mcq',
+          prompt: 'What is impermanent loss?',
+          options: [
+            'A permanent reduction in token supply',
+            'Loss from price divergence of pooled tokens vs holding',
+            'Transaction fees paid to validators',
+            'Loss from failed transactions',
+          ],
+          correctAnswer: 'Loss from price divergence of pooled tokens vs holding',
+        },
+        {
+          id: 'dp-3-q2',
+          type: 'short_text',
+          prompt: 'What does APY stand for?',
+          correctAnswer: 'Annual Percentage Yield',
         },
       ],
     },

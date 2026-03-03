@@ -57,7 +57,7 @@ export function LessonResultScreen() {
         {/* Return button */}
         <Pressable
           className="mt-8 w-full rounded-xl bg-purple-600 px-6 py-4 active:bg-purple-700"
-          onPress={() => navigation.navigate('UndergroundHub')}
+          onPress={() => navigation.navigate('MainTabs', { screen: 'Home' })}
         >
           <Text className="text-center text-lg font-semibold text-white">
             Return to Hub

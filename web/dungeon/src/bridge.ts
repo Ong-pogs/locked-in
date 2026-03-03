@@ -5,6 +5,8 @@
  * We send messages back via `window.ReactNativeWebView.postMessage(...)`.
  */
 
+import { goBack } from './camera/cameraController';
+
 export interface BridgeMessage {
   type: string;
   payload: Record<string, any>;
@@ -58,6 +60,8 @@ const OVERLAY_MAP: Record<string, string> = {
   alchemy_yield: 'alchemyOverlay',
 };
 
+const OVERLAY_IDS = ['bookOverlay', 'chestOverlay', 'alchemyOverlay'];
+
 /** Show the overlay matching the objectId */
 function showOverlay(objectId: string) {
   const overlayId = OVERLAY_MAP[objectId];
@@ -66,36 +70,53 @@ function showOverlay(objectId: string) {
   if (el) el.classList.add('visible');
 }
 
-/** Hide an overlay element */
-function hideOverlay(el: HTMLElement) {
-  el.classList.remove('visible');
+/** Hide all overlays and return camera to viewpoint */
+function closeAndGoBack() {
+  for (const id of OVERLAY_IDS) {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('visible');
+  }
+  goBack();
 }
 
-// Listen for camera-arrived — show overlay only after camera finishes moving
+// Listen for camera-arrived — show overlay + notify RN only after camera finishes moving
 window.addEventListener('camera-arrived', ((e: CustomEvent) => {
   const objectId = e.detail?.objectId as string;
-  if (objectId) showOverlay(objectId);
+  if (!objectId) return;
+  showOverlay(objectId);
+  sendToRN({ type: 'objectTapped', payload: { objectId } });
 }) as EventListener);
+
+// Hide all overlays when camera zooms back (triggered by goBack)
+window.addEventListener('camera-zoom-back', () => {
+  for (const id of OVERLAY_IDS) {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('visible');
+  }
+});
 
 // Wire up backdrop-close + buttons for all overlay panels
 document.addEventListener('DOMContentLoaded', () => {
-  // Generic backdrop click to close
-  const overlayIds = ['bookOverlay', 'chestOverlay', 'alchemyOverlay'];
-  for (const id of overlayIds) {
+  // Backdrop click → close + return camera
+  for (const id of OVERLAY_IDS) {
     const el = document.getElementById(id);
     if (el) {
       el.addEventListener('click', (e) => {
-        if (e.target === el) hideOverlay(el);
+        if (e.target === el) closeAndGoBack();
       });
     }
   }
 
-  // Book panel — start lesson button
+  // Book panel — close + start lesson buttons
+  const bookCloseBtn = document.getElementById('bookCloseBtn');
+  if (bookCloseBtn) {
+    bookCloseBtn.addEventListener('click', () => closeAndGoBack());
+  }
+
   const startBtn = document.getElementById('startLessonBtn');
   if (startBtn) {
     startBtn.addEventListener('click', () => {
-      const overlay = document.getElementById('bookOverlay');
-      if (overlay) hideOverlay(overlay);
+      closeAndGoBack();
       console.log('[web] Start lesson clicked — navigate to Lesson screen in RN app');
     });
   }
@@ -103,44 +124,47 @@ document.addEventListener('DOMContentLoaded', () => {
   // Chest panel — close button
   const chestCloseBtn = document.getElementById('chestCloseBtn');
   if (chestCloseBtn) {
-    chestCloseBtn.addEventListener('click', () => {
-      const overlay = document.getElementById('chestOverlay');
-      if (overlay) hideOverlay(overlay);
-    });
+    chestCloseBtn.addEventListener('click', () => closeAndGoBack());
   }
 
   // Alchemy panel — close, deposit, withdraw buttons
   const alchemyCloseBtn = document.getElementById('alchemyCloseBtn');
   if (alchemyCloseBtn) {
-    alchemyCloseBtn.addEventListener('click', () => {
-      const overlay = document.getElementById('alchemyOverlay');
-      if (overlay) hideOverlay(overlay);
-    });
+    alchemyCloseBtn.addEventListener('click', () => closeAndGoBack());
   }
 
-  const alchemyDepositBtn = document.getElementById('alchemyDepositBtn');
-  if (alchemyDepositBtn) {
-    alchemyDepositBtn.addEventListener('click', () => {
-      console.log('[web] Deposit clicked — connect wallet / deposit flow');
-      sendToRN({ type: 'depositClicked', payload: {} });
+  // Brew mode card selection
+  let selectedBrewMode = 'slow';
+  const modeCards = document.querySelectorAll('.brew-mode-card');
+  modeCards.forEach((card) => {
+    card.addEventListener('click', () => {
+      const mode = card.getAttribute('data-mode');
+      if (!mode) return;
+      selectedBrewMode = mode;
+      modeCards.forEach((c) => c.classList.remove('selected'));
+      card.classList.add('selected');
     });
-  }
-
-  const alchemyWithdrawBtn = document.getElementById('alchemyWithdrawBtn');
-  if (alchemyWithdrawBtn) {
-    alchemyWithdrawBtn.addEventListener('click', () => {
-      console.log('[web] Withdraw clicked — withdraw flow');
-      sendToRN({ type: 'withdrawClicked', payload: {} });
-    });
-  }
-
-  // Hide all overlays when camera zooms back
-  window.addEventListener('camera-zoom-back', () => {
-    for (const id of overlayIds) {
-      const el = document.getElementById(id);
-      if (el) hideOverlay(el);
-    }
   });
+
+  // Confirm Brew button
+  const confirmBrewBtn = document.getElementById('confirmBrewBtn');
+  if (confirmBrewBtn) {
+    confirmBrewBtn.addEventListener('click', () => {
+      console.log('[web] Confirm brew clicked — mode:', selectedBrewMode);
+      sendToRN({ type: 'brewConfirmed', payload: { modeId: selectedBrewMode } });
+      closeAndGoBack();
+    });
+  }
+
+  // Cancel Brew button
+  const brewCancelBtn = document.getElementById('brewCancelBtn');
+  if (brewCancelBtn) {
+    brewCancelBtn.addEventListener('click', () => {
+      console.log('[web] Cancel brew clicked');
+      sendToRN({ type: 'brewCancelled', payload: {} });
+      closeAndGoBack();
+    });
+  }
 });
 
 // Expose on window so RN can call it

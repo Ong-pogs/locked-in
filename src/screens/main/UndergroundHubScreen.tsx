@@ -5,10 +5,10 @@ import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { MainStackParamList } from '@/navigation/types';
-import { useFlameStore, useSceneStore, useStreakStore } from '@/stores';
+import { useFlameStore, useSceneStore, useStreakStore, useTokenStore, useBrewStore } from '@/stores';
 import { useCourseStore } from '@/stores/courseStore';
 
-type HubNav = NativeStackNavigationProp<MainStackParamList, 'UndergroundHub'>;
+type HubNav = NativeStackNavigationProp<MainStackParamList>;
 
 /**
  * Bundled dungeon asset (from web/dungeon/dist/index.html).
@@ -17,19 +17,30 @@ type HubNav = NativeStackNavigationProp<MainStackParamList, 'UndergroundHub'>;
 const DUNGEON_ASSET = require('../../../web/dungeon/dist/index.html');
 
 /**
- * Dynamically get the Mac's IP address so physical phones can connect to the Vite server.
+ * Dynamically extract the dev server host IP from Expo's manifest.
+ * This is the IP your phone used to connect to Metro — so Vite on the same
+ * machine is guaranteed reachable at this IP too.
  */
-let hostIp = 'localhost';
-if (Constants.experienceUrl) {
-  const match = Constants.experienceUrl.match(/\/\/([^:]+)/);
-  if (match) hostIp = match[1];
+function getDevHost(): string {
+  try {
+    // Expo SDK 54+ — debuggerHost is "ip:port"
+    const debuggerHost =
+      Constants.expoConfig?.hostUri ??
+      (Constants.manifest2 as any)?.extra?.expoGo?.debuggerHost ??
+      (Constants.manifest as any)?.debuggerHost;
+    if (debuggerHost) {
+      const ip = debuggerHost.split(':')[0];
+      if (ip) return ip;
+    }
+  } catch {}
+  return '192.168.1.103'; // fallback
 }
 
 /**
  * Dev mode: load from Vite dev server.
  * Prod: load the inlined single-file HTML built by vite-plugin-singlefile.
  */
-const DEV_URI = `http://${hostIp}:5173`;
+const DEV_URI = `http://${getDevHost()}:5173`;
 const IS_DEV = __DEV__;
 
 export function UndergroundHubScreen() {
@@ -94,6 +105,11 @@ export function UndergroundHubScreen() {
         const data = JSON.parse(event.nativeEvent.data);
 
         switch (data.type) {
+          case 'console':
+            // Forward WebView console to RN logs
+            console.log(`[WebView ${data.payload?.level}]`, data.payload?.message);
+            break;
+
           case 'sceneReady':
             setSceneReady(true);
             break;
@@ -119,11 +135,30 @@ export function UndergroundHubScreen() {
                 navigation.navigate('Leaderboard');
                 break;
               case 'character':
-                navigation.navigate('Profile');
+                navigation.navigate('MainTabs', { screen: 'Profile' });
                 break;
             }
             break;
           }
+
+          case 'brewConfirmed': {
+            const modeId = data.payload?.modeId;
+            if (modeId) {
+              const spent = useTokenStore.getState().spendTokens(1);
+              if (spent) {
+                useBrewStore.getState().startBrew(modeId);
+                console.log('[Hub] Brew started:', modeId);
+              } else {
+                console.log('[Hub] Not enough M tokens to brew');
+              }
+            }
+            break;
+          }
+
+          case 'brewCancelled':
+            useBrewStore.getState().cancelBrew();
+            console.log('[Hub] Brew cancelled');
+            break;
 
           case 'viewpointChanged':
             if (data.payload?.viewpoint) {
@@ -138,20 +173,57 @@ export function UndergroundHubScreen() {
     [navigation],
   );
 
+  const webviewSource = IS_DEV ? { uri: DEV_URI } : DUNGEON_ASSET;
+  const [webviewError, setWebviewError] = useState<string | null>(null);
+  console.log('[Hub] WebView source:', IS_DEV ? DEV_URI : 'bundled HTML');
+
   return (
     <View style={styles.container}>
       <WebView
         ref={webViewRef}
-        style={[styles.webview, !sceneReady && styles.hidden]}
-        source={IS_DEV ? { uri: DEV_URI } : DUNGEON_ASSET}
+        style={styles.webview}
+        source={webviewSource}
         originWhitelist={['*']}
         javaScriptEnabled
         domStorageEnabled
         allowFileAccess
+        allowUniversalAccessFromFileURLs
         mediaPlaybackRequiresUserAction={false}
         onMessage={handleMessage}
-        onError={(e) => console.warn('WebView error:', e.nativeEvent)}
+        onError={(e) => {
+          const msg = `${e.nativeEvent.description} (code ${e.nativeEvent.code})`;
+          console.warn('[Hub] WebView error:', msg);
+          setWebviewError(msg);
+        }}
+        onHttpError={(e) => console.warn('[Hub] WebView HTTP error:', e.nativeEvent.statusCode, e.nativeEvent.url)}
+        onLoadStart={() => console.log('[Hub] WebView loadStart')}
+        onLoadEnd={() => console.log('[Hub] WebView loadEnd')}
         mixedContentMode="always"
+        // Pipe console.log from WebView → RN logs for debugging
+        injectedJavaScript={`
+          (function() {
+            var origLog = console.log;
+            var origErr = console.error;
+            var origWarn = console.warn;
+            function post(level, args) {
+              try {
+                window.ReactNativeWebView && window.ReactNativeWebView.postMessage(
+                  JSON.stringify({ type: 'console', payload: { level: level, message: Array.from(args).map(String).join(' ') } })
+                );
+              } catch(e) {}
+            }
+            console.log = function() { post('log', arguments); origLog.apply(console, arguments); };
+            console.error = function() { post('error', arguments); origErr.apply(console, arguments); };
+            console.warn = function() { post('warn', arguments); origWarn.apply(console, arguments); };
+            window.onerror = function(msg, url, line) {
+              post('error', ['UNCAUGHT: ' + msg + ' at ' + url + ':' + line]);
+            };
+            window.addEventListener('unhandledrejection', function(e) {
+              post('error', ['UNHANDLED REJECTION: ' + (e.reason && e.reason.message || e.reason)]);
+            });
+          })();
+          true;
+        `}
       />
 
       {/* Loading overlay */}
@@ -161,6 +233,9 @@ export function UndergroundHubScreen() {
           <Text style={styles.loadingText}>
             Loading dungeon... {Math.round(loadProgress * 100)}%
           </Text>
+          {webviewError && (
+            <Text style={styles.errorText}>{webviewError}</Text>
+          )}
         </View>
       )}
 
@@ -174,7 +249,7 @@ export function UndergroundHubScreen() {
         }}
         onBrowseCourses={() => {
           setBookModalVisible(false);
-          navigation.navigate('CourseBrowser');
+          navigation.navigate('MainTabs', { screen: 'Courses' });
         }}
       />
     </View>
@@ -329,6 +404,13 @@ const styles = StyleSheet.create({
     color: '#888',
     fontSize: 14,
     marginTop: 12,
+  },
+  errorText: {
+    color: '#f44',
+    fontSize: 12,
+    marginTop: 8,
+    textAlign: 'center' as const,
+    paddingHorizontal: 20,
   },
 
   // Modal

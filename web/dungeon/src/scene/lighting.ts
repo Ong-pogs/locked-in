@@ -12,7 +12,7 @@ let ambientLight: HemisphericLight;
 let fireLight: PointLight;
 let accentLight: PointLight;
 let overheadLight: PointLight;
-let sunMode = true;
+let sunMode = false;
 
 // Draggable light orb
 let orbMesh: Mesh;
@@ -46,8 +46,8 @@ export function setupLighting(scene: Scene) {
   overheadLight.diffuse = new Color3(0.4, 0.35, 0.3);
   overheadLight.range = 18;
 
-  // Start in sun mode
-  applySunMode();
+  // Start in dungeon mode (dark atmospheric lighting)
+  applyDungeonMode();
 
   // --- Draggable light orb (off by default) ---
   createDraggableOrb(scene);
