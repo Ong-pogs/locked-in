@@ -1,41 +1,22 @@
-import { useRef, useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { View, StyleSheet, ActivityIndicator, Text, Pressable, Modal, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Constants from 'expo-constants';
-import { WebView, type WebViewMessageEvent } from 'react-native-webview';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { MainStackParamList } from '@/navigation/types';
-import { useFlameStore, useSceneStore, useStreakStore, useTokenStore, useBrewStore, useUserStore } from '@/stores';
+import { useFlameStore, useSceneStore, useStreakStore, useTokenStore, useBrewStore } from '@/stores';
 import { useCourseStore } from '@/stores/courseStore';
+import { useDungeon } from '@/components/DungeonProvider';
 
 type HubNav = NativeStackNavigationProp<MainStackParamList>;
-
-const DUNGEON_ASSET = require('../../../web/dungeon/dist/index.html');
-
-function getDevHost(): string {
-  try {
-    const debuggerHost =
-      Constants.expoConfig?.hostUri ??
-      (Constants.manifest2 as any)?.extra?.expoGo?.debuggerHost ??
-      (Constants.manifest as any)?.debuggerHost;
-    if (debuggerHost) {
-      const ip = debuggerHost.split(':')[0];
-      if (ip) return ip;
-    }
-  } catch {}
-  return '192.168.1.103';
-}
-
-const DEV_URI = `http://${getDevHost()}:5173`;
-const IS_DEV = __DEV__;
 
 export function UndergroundHubScreen() {
   const navigation = useNavigation<HubNav>();
   const insets = useSafeAreaInsets();
-  const webViewRef = useRef<WebView>(null);
-  const [sceneReady, setSceneReady] = useState(false);
-  const [loadProgress, setLoadProgress] = useState(0);
+  const {
+    show, hide, sendMessage, onMessage, setOverlay,
+    sceneReady, loadProgress, webviewError,
+  } = useDungeon();
   const [bookModalVisible, setBookModalVisible] = useState(false);
 
   // Store subscriptions
@@ -44,33 +25,89 @@ export function UndergroundHubScreen() {
   const currentViewpoint = useSceneStore((s) => s.currentViewpoint);
   const roomPhase = useSceneStore((s) => s.roomPhase);
   const currentStreak = useStreakStore((s) => s.currentStreak);
-
-  // Course store subscriptions
-  const activeCourseId = useCourseStore((s) => s.activeCourseId);
   const activeCourseIds = useCourseStore((s) => s.activeCourseIds);
 
   // Initialize mock data
   useCourseStore.getState().initializeMockData();
 
-  // Guard: if no active courses, redirect to CourseBrowser
+  // Guard: no active courses → CourseBrowser
   useEffect(() => {
     if (activeCourseIds.length === 0) {
       navigation.replace('CourseBrowser');
     }
   }, [activeCourseIds.length, navigation]);
 
-  // Helper: send message to WebView
-  const sendToWebView = useCallback((type: string, payload: Record<string, any>) => {
-    const msg = JSON.stringify({ type, payload });
-    webViewRef.current?.injectJavaScript(
-      `window.dispatchBridgeMessage('${msg.replace(/'/g, "\\'")}'); true;`
-    );
-  }, []);
+  // Show/hide WebView on screen focus/blur
+  useFocusEffect(
+    useCallback(() => {
+      show();
+      return () => {
+        setOverlay(null);
+        hide();
+      };
+    }, [show, hide, setOverlay]),
+  );
+
+  // Register message handlers
+  useEffect(() => {
+    return onMessage((data) => {
+      switch (data.type) {
+        case 'objectTapped': {
+          const objectId = data.payload?.objectId;
+          switch (objectId) {
+            case 'book':
+            case 'bookshelf':
+              setBookModalVisible(true);
+              break;
+            case 'alchemy':
+            case 'alchemy_table':
+            case 'alchemy_shelf':
+            case 'alchemy_yield':
+              navigation.navigate('Alchemy');
+              break;
+            case 'noticeboard':
+              navigation.navigate('Leaderboard');
+              break;
+            case 'old_chest':
+              navigation.navigate('Inventory');
+              break;
+            case 'oil_lamp_left':
+            case 'oil_lamp_center':
+            case 'oil_lamp_right':
+              navigation.navigate('StreakStatus');
+              break;
+          }
+          break;
+        }
+
+        case 'brewConfirmed': {
+          const modeId = data.payload?.modeId;
+          if (modeId) {
+            const spent = useTokenStore.getState().spendTokens(1);
+            if (spent) {
+              useBrewStore.getState().startBrew(modeId);
+            }
+          }
+          break;
+        }
+
+        case 'brewCancelled':
+          useBrewStore.getState().cancelBrew();
+          break;
+
+        case 'viewpointChanged':
+          if (data.payload?.viewpoint) {
+            useSceneStore.getState().setViewpoint(data.payload.viewpoint);
+          }
+          break;
+      }
+    });
+  }, [onMessage, navigation]);
 
   // Send initial state once scene is ready
   useEffect(() => {
     if (!sceneReady) return;
-    sendToWebView('initState', {
+    sendMessage('initState', {
       flameState,
       lightIntensity,
       viewpoint: currentViewpoint,
@@ -82,192 +119,69 @@ export function UndergroundHubScreen() {
   // Sync flame state changes
   useEffect(() => {
     if (!sceneReady) return;
-    sendToWebView('flameState', { state: flameState, intensity: lightIntensity });
-  }, [flameState, lightIntensity, sceneReady, sendToWebView]);
+    sendMessage('flameState', { state: flameState, intensity: lightIntensity });
+  }, [flameState, lightIntensity, sceneReady, sendMessage]);
 
   // Sync viewpoint
   useEffect(() => {
     if (!sceneReady) return;
-    sendToWebView('setViewpoint', { viewpoint: currentViewpoint });
-  }, [currentViewpoint, sceneReady, sendToWebView]);
+    sendMessage('setViewpoint', { viewpoint: currentViewpoint });
+  }, [currentViewpoint, sceneReady, sendMessage]);
 
   // Sync room phase
   useEffect(() => {
     if (!sceneReady) return;
-    sendToWebView('setRoomPhase', { phase: roomPhase });
-  }, [roomPhase, sceneReady, sendToWebView]);
+    sendMessage('setRoomPhase', { phase: roomPhase });
+  }, [roomPhase, sceneReady, sendMessage]);
 
-  // Handle messages from WebView
-  const handleMessage = useCallback(
-    (event: WebViewMessageEvent) => {
-      try {
-        const data = JSON.parse(event.nativeEvent.data);
+  // Update overlay content (profile button, loading, book modal)
+  useEffect(() => {
+    setOverlay(
+      <>
+        {/* Loading overlay */}
+        {!sceneReady && (
+          <View style={overlayStyles.loadingOverlay}>
+            <ActivityIndicator size="large" color="#ff8c42" />
+            <Text style={overlayStyles.loadingText}>
+              Loading dungeon... {Math.round(loadProgress * 100)}%
+            </Text>
+            {webviewError && (
+              <Text style={overlayStyles.errorText}>{webviewError}</Text>
+            )}
+          </View>
+        )}
 
-        switch (data.type) {
-          case 'console':
-            console.log(`[WebView ${data.payload?.level}]`, data.payload?.message);
-            break;
+        {/* Profile button (top-right) */}
+        {sceneReady && (
+          <View style={[overlayStyles.topBar, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
+            <Pressable
+              style={overlayStyles.profileBtn}
+              onPress={() => navigation.navigate('Profile')}
+            >
+              <Text style={overlayStyles.profileBtnText}>{'\u2666'}</Text>
+            </Pressable>
+          </View>
+        )}
 
-          case 'sceneReady':
-            setSceneReady(true);
-            break;
+        {/* Book modal */}
+        <BookModal
+          visible={bookModalVisible}
+          onClose={() => setBookModalVisible(false)}
+          onStartLesson={(lessonId, courseId) => {
+            setBookModalVisible(false);
+            navigation.navigate('Lesson', { lessonId, courseId });
+          }}
+          onBrowseCourses={() => {
+            setBookModalVisible(false);
+            navigation.navigate('CourseBrowser');
+          }}
+        />
+      </>,
+    );
+  }, [sceneReady, loadProgress, webviewError, bookModalVisible, insets.top, navigation, setOverlay]);
 
-          case 'loadProgress':
-            setLoadProgress(data.payload?.progress ?? 0);
-            break;
-
-          case 'objectTapped': {
-            const objectId = data.payload?.objectId;
-            switch (objectId) {
-              case 'book':
-              case 'bookshelf':
-                setBookModalVisible(true);
-                break;
-              case 'alchemy':
-              case 'alchemy_table':
-              case 'alchemy_shelf':
-              case 'alchemy_yield':
-                navigation.navigate('Alchemy');
-                break;
-              case 'noticeboard':
-                navigation.navigate('Leaderboard');
-                break;
-              case 'old_chest':
-                navigation.navigate('Inventory');
-                break;
-              case 'oil_lamp_left':
-              case 'oil_lamp_center':
-              case 'oil_lamp_right':
-                navigation.navigate('StreakStatus');
-                break;
-            }
-            break;
-          }
-
-          case 'brewConfirmed': {
-            const modeId = data.payload?.modeId;
-            if (modeId) {
-              const spent = useTokenStore.getState().spendTokens(1);
-              if (spent) {
-                useBrewStore.getState().startBrew(modeId);
-                console.log('[Hub] Brew started:', modeId);
-              } else {
-                console.log('[Hub] Not enough M tokens to brew');
-              }
-            }
-            break;
-          }
-
-          case 'brewCancelled':
-            useBrewStore.getState().cancelBrew();
-            console.log('[Hub] Brew cancelled');
-            break;
-
-          case 'viewpointChanged':
-            if (data.payload?.viewpoint) {
-              useSceneStore.getState().setViewpoint(data.payload.viewpoint);
-            }
-            break;
-        }
-      } catch {
-        // ignore malformed messages
-      }
-    },
-    [navigation],
-  );
-
-  const webviewSource = IS_DEV ? { uri: DEV_URI } : DUNGEON_ASSET;
-  const [webviewError, setWebviewError] = useState<string | null>(null);
-  console.log('[Hub] WebView source:', IS_DEV ? DEV_URI : 'bundled HTML');
-
-  return (
-    <View style={styles.container}>
-      <WebView
-        ref={webViewRef}
-        style={styles.webview}
-        source={webviewSource}
-        originWhitelist={['*']}
-        javaScriptEnabled
-        domStorageEnabled
-        allowFileAccess
-        allowUniversalAccessFromFileURLs
-        mediaPlaybackRequiresUserAction={false}
-        onMessage={handleMessage}
-        onError={(e) => {
-          const msg = `${e.nativeEvent.description} (code ${e.nativeEvent.code})`;
-          console.warn('[Hub] WebView error:', msg);
-          setWebviewError(msg);
-        }}
-        onHttpError={(e) => console.warn('[Hub] WebView HTTP error:', e.nativeEvent.statusCode, e.nativeEvent.url)}
-        onLoadStart={() => console.log('[Hub] WebView loadStart')}
-        onLoadEnd={() => console.log('[Hub] WebView loadEnd')}
-        mixedContentMode="always"
-        injectedJavaScript={`
-          (function() {
-            var origLog = console.log;
-            var origErr = console.error;
-            var origWarn = console.warn;
-            function post(level, args) {
-              try {
-                window.ReactNativeWebView && window.ReactNativeWebView.postMessage(
-                  JSON.stringify({ type: 'console', payload: { level: level, message: Array.from(args).map(String).join(' ') } })
-                );
-              } catch(e) {}
-            }
-            console.log = function() { post('log', arguments); origLog.apply(console, arguments); };
-            console.error = function() { post('error', arguments); origErr.apply(console, arguments); };
-            console.warn = function() { post('warn', arguments); origWarn.apply(console, arguments); };
-            window.onerror = function(msg, url, line) {
-              post('error', ['UNCAUGHT: ' + msg + ' at ' + url + ':' + line]);
-            };
-            window.addEventListener('unhandledrejection', function(e) {
-              post('error', ['UNHANDLED REJECTION: ' + (e.reason && e.reason.message || e.reason)]);
-            });
-          })();
-          true;
-        `}
-      />
-
-      {/* Loading overlay */}
-      {!sceneReady && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#ff8c42" />
-          <Text style={styles.loadingText}>
-            Loading dungeon... {Math.round(loadProgress * 100)}%
-          </Text>
-          {webviewError && (
-            <Text style={styles.errorText}>{webviewError}</Text>
-          )}
-        </View>
-      )}
-
-      {/* Profile button (top-right) */}
-      {sceneReady && (
-        <View style={[styles.topBar, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
-          <Pressable
-            style={styles.profileBtn}
-            onPress={() => navigation.navigate('Profile')}
-          >
-            <Text style={styles.profileBtnText}>{'\u2666'}</Text>
-          </Pressable>
-        </View>
-      )}
-
-      {/* Book modal */}
-      <BookModal
-        visible={bookModalVisible}
-        onClose={() => setBookModalVisible(false)}
-        onStartLesson={(lessonId, courseId) => {
-          setBookModalVisible(false);
-          navigation.navigate('Lesson', { lessonId, courseId });
-        }}
-        onBrowseCourses={() => {
-          setBookModalVisible(false);
-          navigation.navigate('CourseBrowser');
-        }}
-      />
-    </View>
-  );
+  // Screen renders nothing — all UI is via the overlay portal
+  return <View style={{ flex: 1, backgroundColor: 'transparent' }} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -310,22 +224,22 @@ function BookModal({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <Pressable style={styles.modalBackdrop} onPress={onClose}>
-        <Pressable style={styles.modalContent} onPress={() => {}}>
+      <Pressable style={overlayStyles.modalBackdrop} onPress={onClose}>
+        <Pressable style={overlayStyles.modalContent} onPress={() => {}}>
           <ScrollView showsVerticalScrollIndicator={false}>
-            <Text style={styles.modalTitle}>
+            <Text style={overlayStyles.modalTitle}>
               {course?.title ?? 'No Course'}
             </Text>
-            <Text style={styles.modalSubtitle}>
+            <Text style={overlayStyles.modalSubtitle}>
               {course?.description ?? ''}
             </Text>
 
-            <View style={styles.modalCard}>
-              <Text style={styles.cardLabel}>Progress</Text>
-              <View style={styles.progressTrack}>
+            <View style={overlayStyles.modalCard}>
+              <Text style={overlayStyles.cardLabel}>Progress</Text>
+              <View style={overlayStyles.progressTrack}>
                 <View
                   style={[
-                    styles.progressFill,
+                    overlayStyles.progressFill,
                     {
                       width: course
                         ? `${(course.completedLessons / course.totalLessons) * 100}%`
@@ -334,56 +248,56 @@ function BookModal({
                   ]}
                 />
               </View>
-              <Text style={styles.cardMuted}>
+              <Text style={overlayStyles.cardMuted}>
                 {course?.completedLessons ?? 0}/{course?.totalLessons ?? 0} lessons
               </Text>
             </View>
 
-            <View style={styles.modalCard}>
-              <Text style={styles.cardLabel}>Last Learned</Text>
+            <View style={overlayStyles.modalCard}>
+              <Text style={overlayStyles.cardLabel}>Last Learned</Text>
               {lastCompleted ? (
                 <>
-                  <Text style={styles.cardValue}>{lastCompleted.title}</Text>
-                  <Text style={styles.cardMuted}>
+                  <Text style={overlayStyles.cardValue}>{lastCompleted.title}</Text>
+                  <Text style={overlayStyles.cardMuted}>
                     Score: {lastScore ?? 0}%
                   </Text>
                 </>
               ) : (
-                <Text style={styles.cardMuted}>No lessons completed yet</Text>
+                <Text style={overlayStyles.cardMuted}>No lessons completed yet</Text>
               )}
             </View>
 
-            <View style={styles.actionGrid}>
-              <Pressable style={styles.actionBtn} onPress={() => {}}>
-                <Text style={styles.actionIcon}>{'\u{1F3CB}\uFE0F'}</Text>
-                <Text style={styles.actionLabel}>Practice</Text>
+            <View style={overlayStyles.actionGrid}>
+              <Pressable style={overlayStyles.actionBtn} onPress={() => {}}>
+                <Text style={overlayStyles.actionIcon}>{'\u{1F3CB}\uFE0F'}</Text>
+                <Text style={overlayStyles.actionLabel}>Practice</Text>
               </Pressable>
-              <Pressable style={styles.actionBtn} onPress={() => {}}>
-                <Text style={styles.actionIcon}>{'\u{1F9E9}'}</Text>
-                <Text style={styles.actionLabel}>Puzzle</Text>
+              <Pressable style={overlayStyles.actionBtn} onPress={() => {}}>
+                <Text style={overlayStyles.actionIcon}>{'\u{1F9E9}'}</Text>
+                <Text style={overlayStyles.actionLabel}>Puzzle</Text>
               </Pressable>
-              <Pressable style={styles.actionBtn} onPress={() => {}}>
-                <Text style={styles.actionIcon}>{'\u{1F4D6}'}</Text>
-                <Text style={styles.actionLabel}>Dictionary</Text>
+              <Pressable style={overlayStyles.actionBtn} onPress={() => {}}>
+                <Text style={overlayStyles.actionIcon}>{'\u{1F4D6}'}</Text>
+                <Text style={overlayStyles.actionLabel}>Dictionary</Text>
               </Pressable>
-              <Pressable style={styles.actionBtn} onPress={onBrowseCourses}>
-                <Text style={styles.actionIcon}>{'\u{1F4DA}'}</Text>
-                <Text style={styles.actionLabel}>All Courses</Text>
+              <Pressable style={overlayStyles.actionBtn} onPress={onBrowseCourses}>
+                <Text style={overlayStyles.actionIcon}>{'\u{1F4DA}'}</Text>
+                <Text style={overlayStyles.actionLabel}>All Courses</Text>
               </Pressable>
             </View>
 
             {nextLesson ? (
               <Pressable
-                style={styles.startBtn}
+                style={overlayStyles.startBtn}
                 onPress={() => onStartLesson(nextLesson.id, nextLesson.courseId)}
               >
-                <Text style={styles.startBtnText}>
+                <Text style={overlayStyles.startBtnText}>
                   Start Lesson {nextLesson.order}: {nextLesson.title}
                 </Text>
               </Pressable>
             ) : (
-              <View style={[styles.startBtn, styles.startBtnDone]}>
-                <Text style={styles.startBtnText}>All Lessons Complete!</Text>
+              <View style={[overlayStyles.startBtn, overlayStyles.startBtnDone]}>
+                <Text style={overlayStyles.startBtnText}>All Lessons Complete!</Text>
               </View>
             )}
           </ScrollView>
@@ -393,15 +307,7 @@ function BookModal({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#050508',
-  },
-  webview: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
+const overlayStyles = StyleSheet.create({
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#050508',

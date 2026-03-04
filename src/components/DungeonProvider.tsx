@@ -7,22 +7,16 @@ import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 // Types
 // ---------------------------------------------------------------------------
 export interface DungeonContextType {
-  /** Whether the WebView has been mounted at least once */
   isLoaded: boolean;
-  /** Whether the 3D scene has signalled ready */
   sceneReady: boolean;
-  /** Loading progress 0-1 */
   loadProgress: number;
-  /** WebView error string if any */
   webviewError: string | null;
-  /** Show the dungeon layer (call when entering DungeonHome) */
   show: () => void;
-  /** Hide the dungeon layer (call when leaving DungeonHome) */
   hide: () => void;
-  /** Send a typed message to the WebView */
   sendMessage: (type: string, payload: Record<string, any>) => void;
-  /** Register handler for messages from WebView — returns cleanup fn */
   onMessage: (handler: (data: any) => void) => () => void;
+  /** Set overlay content rendered above the WebView */
+  setOverlay: (content: ReactNode) => void;
 }
 
 const DungeonContext = createContext<DungeonContextType | null>(null);
@@ -64,6 +58,7 @@ export function DungeonProvider({ children }: { children: ReactNode }) {
   const [sceneReady, setSceneReady] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
   const [webviewError, setWebviewError] = useState<string | null>(null);
+  const [overlayContent, setOverlayContent] = useState<ReactNode>(null);
 
   // Message handlers registered by consumers
   const handlersRef = useRef<Set<(data: any) => void>>(new Set());
@@ -87,6 +82,10 @@ export function DungeonProvider({ children }: { children: ReactNode }) {
   const onMessage = useCallback((handler: (data: any) => void) => {
     handlersRef.current.add(handler);
     return () => { handlersRef.current.delete(handler); };
+  }, []);
+
+  const setOverlay = useCallback((content: ReactNode) => {
+    setOverlayContent(content);
   }, []);
 
   const handleWebViewMessage = useCallback((event: WebViewMessageEvent) => {
@@ -122,6 +121,7 @@ export function DungeonProvider({ children }: { children: ReactNode }) {
     hide,
     sendMessage,
     onMessage,
+    setOverlay,
   };
 
   return (
@@ -177,6 +177,13 @@ export function DungeonProvider({ children }: { children: ReactNode }) {
               true;
             `}
           />
+        </View>
+      )}
+
+      {/* Overlay portal — content set by the active screen, rendered above the WebView */}
+      {visible && overlayContent != null && (
+        <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+          {overlayContent}
         </View>
       )}
     </DungeonContext.Provider>

@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppNavigator } from '@/navigation';
+import { DungeonProvider } from '@/components/DungeonProvider';
 
 const theme = {
   ...DarkTheme,
@@ -20,7 +21,9 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <NavigationContainer theme={theme}>
-        <AppNavigator />
+        <DungeonProvider>
+          <AppNavigator />
+        </DungeonProvider>
         <StatusBar style="light" />
       </NavigationContainer>
     </SafeAreaProvider>
