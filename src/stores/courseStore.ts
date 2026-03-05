@@ -2,16 +2,29 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { asyncStorageAdapter } from './storage';
 import { MOCK_COURSES, MOCK_LESSONS } from '@/data/mockCourses';
-import type { Course, Lesson, LessonProgress, FlameState } from '@/types';
+import type {
+  Course,
+  CourseModule,
+  Lesson,
+  LessonProgress,
+  FlameState,
+} from '@/types';
 import { DEFAULT_COURSE_STATE } from '@/types/courseState';
 import type { CourseGameState } from '@/types/courseState';
+import { loadHydratedContentSnapshot } from '@/services/repositories';
 
 interface CourseStore {
   // Existing
   courses: Course[];
+  modules: Record<string, CourseModule[]>;
   lessons: Record<string, Lesson[]>;
   lessonProgress: Record<string, LessonProgress>;
   enrolledCourseIds: string[];
+  contentReleaseId: string | null;
+  contentPublishedAt: string | null;
+  contentLoading: boolean;
+  contentError: string | null;
+  contentInitialized: boolean;
 
   // Per-course game state
   activeCourseId: string | null;
@@ -41,8 +54,10 @@ interface CourseStore {
 
   // Existing helpers
   setCourses: (courses: Course[]) => void;
+  setModules: (modules: Record<string, CourseModule[]>) => void;
   setLessons: (lessons: Record<string, Lesson[]>) => void;
   getLessonProgress: (lessonId: string) => LessonProgress | null;
+  getModulesForCourse: (courseId: string) => CourseModule[];
   getLessonsForCourse: (courseId: string) => Lesson[];
   getLesson: (lessonId: string) => Lesson | null;
   getActiveCourse: () => Course | null;
@@ -50,19 +65,45 @@ interface CourseStore {
   unenrollCourse: (courseId: string) => void;
   isEnrolled: (courseId: string) => boolean;
   getEnrolledCourses: () => Course[];
+  initializeContent: (force?: boolean) => Promise<void>;
   initializeMockData: () => void;
   reset: () => void;
 }
 
 const initialState = {
   courses: [] as Course[],
+  modules: {} as Record<string, CourseModule[]>,
   lessons: {} as Record<string, Lesson[]>,
   activeCourseId: null as string | null,
   activeCourseIds: [] as string[],
   lessonProgress: {} as Record<string, LessonProgress>,
   enrolledCourseIds: [] as string[],
   courseStates: {} as Record<string, CourseGameState>,
+  contentReleaseId: null as string | null,
+  contentPublishedAt: null as string | null,
+  contentLoading: false,
+  contentError: null as string | null,
+  contentInitialized: false,
 };
+
+function buildFallbackModules(): Record<string, CourseModule[]> {
+  return MOCK_COURSES.reduce<Record<string, CourseModule[]>>((acc, course) => {
+    acc[course.id] = [
+      {
+        id: `${course.id}-module-core`,
+        courseId: course.id,
+        slug: 'core',
+        title: `${course.title} Core`,
+        description: 'Core lesson track for this course.',
+        order: 1,
+        difficulty: course.difficulty,
+        totalLessons: (MOCK_LESSONS[course.id] ?? []).length,
+        estimatedMinutes: (MOCK_LESSONS[course.id] ?? []).length * 12,
+      },
+    ];
+    return acc;
+  }, {});
+}
 
 export const useCourseStore = create<CourseStore>()(
   persist(
@@ -260,6 +301,8 @@ export const useCourseStore = create<CourseStore>()(
       // --- Existing methods ---
       setCourses: (courses) => set({ courses }),
 
+      setModules: (modules) => set({ modules }),
+
       setLessons: (lessons) => set({ lessons }),
 
       completeLesson: (lessonId, courseId, score) => {
@@ -304,6 +347,8 @@ export const useCourseStore = create<CourseStore>()(
       },
 
       getLessonProgress: (lessonId) => get().lessonProgress[lessonId] ?? null,
+
+      getModulesForCourse: (courseId) => get().modules[courseId] ?? [],
 
       getLessonsForCourse: (courseId) => get().lessons[courseId] ?? [],
 
@@ -365,10 +410,52 @@ export const useCourseStore = create<CourseStore>()(
         return state.courses.filter((c) => state.enrolledCourseIds.includes(c.id));
       },
 
+      initializeContent: async (force = false) => {
+        const state = get();
+        if (!force && (state.contentInitialized || state.contentLoading)) return;
+
+        set({ contentLoading: true, contentError: null });
+
+        try {
+          const snapshot = await loadHydratedContentSnapshot();
+          set({
+            courses: snapshot.courses,
+            modules: snapshot.modulesByCourse,
+            lessons: snapshot.lessonsByCourse,
+            contentReleaseId: snapshot.releaseId,
+            contentPublishedAt: snapshot.publishedAt,
+            contentLoading: false,
+            contentError: null,
+            contentInitialized: true,
+          });
+        } catch (error) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : 'Unable to load lesson catalog';
+          set({
+            contentLoading: false,
+            contentError: message,
+            contentInitialized: false,
+          });
+
+          // Keep the app usable while backend wiring is in progress.
+          get().initializeMockData();
+        }
+      },
+
       initializeMockData: () => {
         const state = get();
         if (state.courses.length > 0) return;
-        set({ courses: MOCK_COURSES, lessons: MOCK_LESSONS });
+        set({
+          courses: MOCK_COURSES,
+          modules: buildFallbackModules(),
+          lessons: MOCK_LESSONS,
+          contentReleaseId: 'local-mock-release',
+          contentPublishedAt: new Date().toISOString(),
+          contentError: null,
+          contentInitialized: true,
+        });
       },
 
       reset: () => set(initialState),
@@ -376,6 +463,12 @@ export const useCourseStore = create<CourseStore>()(
     {
       name: 'locked-in-courses',
       storage: createJSONStorage(() => asyncStorageAdapter),
+      partialize: (state) => {
+        const { contentLoading, contentError, ...persisted } = state;
+        void contentLoading;
+        void contentError;
+        return persisted;
+      },
     },
   ),
 );

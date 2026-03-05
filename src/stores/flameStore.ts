@@ -6,6 +6,7 @@ import type { FlameState, FlameData } from '@/types';
 interface FlameStore extends FlameData {
   /** Derive flame state from current streak count */
   updateFromStreak: (streak: number) => void;
+  feedFlame: (fuel: number) => void;
   getLightIntensity: () => number;
   reset: () => void;
 }
@@ -41,6 +42,20 @@ export const useFlameStore = create<FlameStore>()(
           flameState: newState,
           lightIntensity: INTENSITY_MAP[newState],
           fuelRemaining: streak, // store streak as "fuel" for backwards compat
+        });
+      },
+
+      feedFlame: (fuel) => {
+        const state = get();
+        const nextFuel = Math.max(0, state.fuelRemaining + fuel);
+        const nextFlameState =
+          nextFuel >= 3 ? 'BURNING' : nextFuel >= 1 ? 'LIT' : 'COLD';
+
+        set({
+          fuelRemaining: nextFuel,
+          flameState: nextFlameState,
+          lightIntensity: INTENSITY_MAP[nextFlameState],
+          lastTickAt: new Date().toISOString(),
         });
       },
 

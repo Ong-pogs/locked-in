@@ -1,4 +1,5 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useEffect } from 'react';
 import type { MainStackParamList } from './types';
 import { UndergroundHubScreen } from '@/screens/main/UndergroundHubScreen';
 import { CourseBrowserScreen } from '@/screens/main/CourseBrowserScreen';
@@ -16,8 +17,13 @@ import { useCourseStore } from '@/stores/courseStore';
 const Stack = createNativeStackNavigator<MainStackParamList>();
 
 export function MainStack() {
-  // Ensure mock data is loaded before rendering
-  useCourseStore.getState().initializeMockData();
+  const initializeContent = useCourseStore((s) => s.initializeContent);
+
+  useEffect(() => {
+    initializeContent().catch(() => {
+      // Course store handles fallback and error state.
+    });
+  }, [initializeContent]);
 
   return (
     <Stack.Navigator

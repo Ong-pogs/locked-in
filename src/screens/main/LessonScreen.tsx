@@ -8,7 +8,10 @@ import type { MainStackParamList } from '@/navigation/types';
 import { useCourseStore } from '@/stores/courseStore';
 import { useStreakStore } from '@/stores/streakStore';
 import { useTokenStore } from '@/stores/tokenStore';
+import { useUserStore } from '@/stores/userStore';
 import type { Question } from '@/types';
+import { getLessonReadableContent } from '@/utils/lessonContent';
+import { hasRemoteLessonApi, submitLesson } from '@/services/api';
 
 type Nav = NativeStackNavigationProp<MainStackParamList, 'Lesson'>;
 type Route = RouteProp<MainStackParamList, 'Lesson'>;
@@ -22,6 +25,7 @@ export function LessonScreen() {
 
   const lesson = useCourseStore((s) => s.getLesson(lessonId));
   const lessons = useCourseStore((s) => s.getLessonsForCourse(courseId));
+  const authToken = useUserStore((s) => s.authToken);
 
   const [phase, setPhase] = useState<Phase>('reading');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -68,6 +72,20 @@ export function LessonScreen() {
       useStreakStore.getState().completeDay();
       useTokenStore.getState().awardFragment(fragmentReward, 'lesson');
 
+      if (hasRemoteLessonApi() && authToken) {
+        submitLesson(
+          lessonId,
+          {
+            score,
+            totalQuestions,
+            completedAt: new Date().toISOString(),
+          },
+          authToken,
+        ).catch(() => {
+          // Local progress is source-of-truth until backend sync is fully enforced.
+        });
+      }
+
       navigation.navigate('LessonResult', {
         lessonId,
         courseId,
@@ -87,6 +105,7 @@ export function LessonScreen() {
     totalQuestions,
     lessonId,
     courseId,
+    authToken,
     navigation,
   ]);
 
@@ -118,7 +137,7 @@ export function LessonScreen() {
           </Text>
 
           <Text className="mt-4 text-base leading-6 text-neutral-300">
-            {lesson.content}
+            {getLessonReadableContent(lesson)}
           </Text>
 
           <Pressable

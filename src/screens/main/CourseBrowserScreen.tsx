@@ -27,11 +27,11 @@ export function CourseBrowserScreen() {
   const navigation = useNavigation<Nav>();
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
 
-  // Initialize mock data (synchronous, idempotent)
-  useCourseStore.getState().initializeMockData();
-
   const courses = useCourseStore((s) => s.courses);
   const lessons = useCourseStore((s) => s.lessons);
+  const contentLoading = useCourseStore((s) => s.contentLoading);
+  const contentError = useCourseStore((s) => s.contentError);
+  const initializeContent = useCourseStore((s) => s.initializeContent);
   const lessonProgress = useCourseStore((s) => s.lessonProgress);
   const activeCourseIds = useCourseStore((s) => s.activeCourseIds);
   const courseStates = useCourseStore((s) => s.courseStates);
@@ -129,6 +129,10 @@ export function CourseBrowserScreen() {
               {selectedCourse.completedLessons}/{selectedCourse.totalLessons}{' '}
               lessons completed
             </Text>
+            <Text className="mt-1 text-xs text-neutral-500">
+              {selectedCourse.totalModules ?? 1} module
+              {(selectedCourse.totalModules ?? 1) !== 1 ? 's' : ''}
+            </Text>
             {isActive && state && (
               <View className="mt-2 flex-row gap-4">
                 <Text className="text-xs text-amber-400">
@@ -216,6 +220,34 @@ export function CourseBrowserScreen() {
             </Pressable>
             <Text className="mt-4 text-2xl font-bold text-white">Courses</Text>
           </>
+        )}
+
+        {contentLoading && courses.length === 0 && (
+          <View className="mt-4 rounded-xl border border-neutral-700 bg-neutral-900 p-4">
+            <Text className="text-sm text-neutral-400">
+              Syncing lesson modules...
+            </Text>
+          </View>
+        )}
+
+        {contentError && (
+          <View className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4">
+            <Text className="text-sm text-red-300">
+              {contentError}
+            </Text>
+            <Pressable
+              className="mt-3 self-start rounded-lg bg-red-600 px-3 py-2 active:opacity-80"
+              onPress={() => {
+                initializeContent(true).catch(() => {
+                  // Course store keeps fallback data active.
+                });
+              }}
+            >
+              <Text className="text-xs font-semibold text-white">
+                Retry Sync
+              </Text>
+            </Pressable>
+          </View>
         )}
 
         {/* Active Courses Section */}
@@ -320,6 +352,10 @@ function CourseCard({
       <Text className="mt-3 text-lg font-bold text-white">{course.title}</Text>
       <Text className="mt-1 text-sm text-neutral-400" numberOfLines={2}>
         {course.description}
+      </Text>
+      <Text className="mt-1 text-xs text-neutral-500">
+        {course.totalModules ?? 1} module
+        {(course.totalModules ?? 1) !== 1 ? 's' : ''} · {course.totalLessons} lessons
       </Text>
 
       {/* Progress bar */}
