@@ -6,7 +6,7 @@ The entry point to the app. Users connect a Solana wallet (Phantom, Solflare, or
 
 ## Current State
 
-Implemented on native (Android/iOS) using MWA `transact()` API. Web platform uses a mock wallet for development. The flow goes: connect wallet → course selection → deposit → gauntlet. Auto-reconnect on app launch uses cached MWA auth tokens persisted in AsyncStorage. Cluster: devnet.
+Implemented with MWA `transact()` integration on native flows, with real connection currently enabled on Android native builds. Web platform uses a mock wallet for development. The flow goes: connect wallet → course selection → deposit → gauntlet. Auto-reconnect on app launch uses cached MWA auth tokens persisted in AsyncStorage. Cluster: devnet.
 
 As of March 5, 2026, this repo only enables real MWA connection on Android native builds where the `SolanaMobileWalletAdapter` native module is present. On Expo Go or iOS runtime, wallet connect now exits early with a clear unsupported-runtime error instead of crashing.
 
