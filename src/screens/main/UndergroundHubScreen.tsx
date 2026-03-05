@@ -41,11 +41,13 @@ export function UndergroundHubScreen() {
   useFocusEffect(
     useCallback(() => {
       show();
+      // Zoom camera back to default viewpoint when returning to dungeon
+      sendMessage('cameraGoBack', {});
       return () => {
         setOverlay(null);
         hide();
       };
-    }, [show, hide, setOverlay]),
+    }, [show, hide, setOverlay, sendMessage]),
   );
 
   // Register message handlers
@@ -166,7 +168,10 @@ export function UndergroundHubScreen() {
         {/* Book modal */}
         <BookModal
           visible={bookModalVisible}
-          onClose={() => setBookModalVisible(false)}
+          onClose={() => {
+            setBookModalVisible(false);
+            sendMessage('cameraGoBack', {});
+          }}
           onStartLesson={(lessonId, courseId) => {
             setBookModalVisible(false);
             navigation.navigate('Lesson', { lessonId, courseId });

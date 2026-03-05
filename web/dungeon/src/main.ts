@@ -1,9 +1,7 @@
 import { Engine } from '@babylonjs/core/Engines/engine';
-import '@babylonjs/core/Debug/debugLayer';
-import '@babylonjs/inspector';
 import { createScene } from './scene/createScene';
 import { onBridgeMessage, sendToRN } from './bridge';
-import { transitionTo, logCameraPosition, toggleCameraLock } from './camera/cameraController';
+import { transitionTo, logCameraPosition, toggleCameraLock, goBack } from './camera/cameraController';
 import { setFlameState } from './effects/flameParticles';
 import { applyPhase } from './scene/environment';
 import { setRoomTexture, modelStats, setGizmoMode, onModelSelect, setModelTransform, getSelectedModel } from './objects/loadModels';
@@ -60,6 +58,10 @@ async function main() {
       case 'setRoomPhase': {
         const { phase } = msg.payload;
         if (phase) applyPhase(scene, phase as RoomPhase);
+        break;
+      }
+      case 'cameraGoBack': {
+        goBack();
         break;
       }
     }

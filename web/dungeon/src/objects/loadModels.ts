@@ -286,48 +286,55 @@ export async function createDungeonGeometry(scene: Scene) {
     { name: 'oil_lamp_right', pos: new Vector3(2.50, 0.48, 6.90), scale: new Vector3(3.00, 3.00, 3.00), rot: new Vector3(0, 3.14, 0) },
   ];
 
-  // ── Load ALL models in one parallel batch ──
+  // ── Load ALL models in one parallel batch (resilient — failed models are skipped) ──
+  const safeLoad = (...args: Parameters<typeof loadModel>) =>
+    loadModel(...args).catch(e => {
+      console.warn(`[model] Failed to load ${args[3]}:`, e);
+      return null;
+    });
+
   const results = await Promise.all([
-    /* 0 */ loadModel(scene, M, 'bookshelf.glb',
+    /* 0 */ safeLoad(scene, M, 'bookshelf.glb',
     'bookshelf', new Vector3(0.86, -1.20, 7.15), new Vector3(3.20, -1.73, 2.07), new Vector3(0, -2.99, 0)),
-    /* 1 */ loadModel(scene, M, 'alchemy_shelf.glb',
+    /* 1 */ safeLoad(scene, M, 'alchemy_shelf.glb',
         'alchemy_shelf', new Vector3(6.48, 0.92, 0.00)),
-    /* 2 */ loadModel(scene, M, 'alchemy_table_-_game_model.glb',
+    /* 2 */ safeLoad(scene, M, 'alchemy_table_-_game_model.glb',
           'alchemy_table', new Vector3(6.22, -3.03, 1.56), new Vector3(0.03, 0.03, 0.03), new Vector3(0, 3.14, 0)),
-    /* 3 */ loadModel(scene, M + 'alchemy_yield/', 'base_basic_shaded.glb',
+    /* 3 */ safeLoad(scene, M + 'alchemy_yield/', 'base_basic_shaded.glb',
             'alchemy_yield', new Vector3(6.22, -1.50, 1.56), new Vector3(2.00, 2.00, 2.00), new Vector3(0, 1.79, 0)),
-    /* 4 */ loadModel(scene, M, 'a_slightly_different_magic_fire_potion.glb',
+    /* 4 */ safeLoad(scene, M, 'a_slightly_different_magic_fire_potion.glb',
               'fire_potion', potionPos, new Vector3(0.50, 0.50, 0.50), new Vector3(0, 3.14, 0)),
-    /* 5 */ loadModel(scene, M, 'medieval_chandelier3.glb',
+    /* 5 */ safeLoad(scene, M, 'medieval_chandelier3.glb',
                 'chandelier', chandelierPos, new Vector3(0.10, 0.10, 0.10), new Vector3(0, 3.14, 0)),
-    /* 6 */ loadModel(scene, M, 'old_chest.glb',
+    /* 6 */ safeLoad(scene, M, 'old_chest.glb',
                   'old_chest', new Vector3(3.19, -1.13, 7.62), new Vector3(3.50, 2.80, 3.00), new Vector3(0, -2.41, 0)),
     // Candles (4)
     ...candlePositions.map(c =>
-      loadModel(scene, M, 'candles_set.glb', c.name, c.pos, c.scale, c.rot)),
+      safeLoad(scene, M, 'candles_set.glb', c.name, c.pos, c.scale, c.rot)),
     // Saver lamps (3)
     ...saverLampPositions.map(lamp =>
-      loadModel(scene, M, 'old_gas_lamp.glb', lamp.name, lamp.pos, lamp.scale, lamp.rot)
-        .catch(e => { console.warn(`Failed to load ${lamp.name}:`, e); return null; })),
+      safeLoad(scene, M, 'old_gas_lamp.glb', lamp.name, lamp.pos, lamp.scale, lamp.rot)),
   ]);
 
   // Post-load setup: alchemy yield glass
   const yieldResult = results[3];
-  for (const mesh of yieldResult.meshes) {
-    if (!mesh.material) continue;
-    const mat = mesh.material as PBRMaterial;
-    if (!(mat instanceof PBRMaterial)) continue;
-    if (mat.emissiveTexture) mat.albedoTexture = mat.emissiveTexture;
-    mat.albedoColor = new Color3(0.7, 0.85, 0.9);
-    mat.emissiveColor = new Color3(0.08, 0.1, 0.12);
-    mat.alpha = 0.55;
-    mat.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND;
-    mat.metallic = 0.9;
-    mat.roughness = 0.05;
-    mat.backFaceCulling = false;
+  if (yieldResult) {
+    for (const mesh of yieldResult.meshes) {
+      if (!mesh.material) continue;
+      const mat = mesh.material as PBRMaterial;
+      if (!(mat instanceof PBRMaterial)) continue;
+      if (mat.emissiveTexture) mat.albedoTexture = mat.emissiveTexture;
+      mat.albedoColor = new Color3(0.7, 0.85, 0.9);
+      mat.emissiveColor = new Color3(0.08, 0.1, 0.12);
+      mat.alpha = 0.55;
+      mat.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND;
+      mat.metallic = 0.9;
+      mat.roughness = 0.05;
+      mat.backFaceCulling = false;
+    }
   }
 
-  // Add all glow/light effects
+  // Add all glow/light effects (safe — effects work even if their model failed)
   addPotionGlow(scene, potionPos, 'fire_potion');
   addChandelierGlow(scene, chandelierPos, 'chandelier');
   for (const c of candlePositions) addCandleLight(scene, c.pos, c.name);

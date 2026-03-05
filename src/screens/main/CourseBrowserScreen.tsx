@@ -207,7 +207,7 @@ export function CourseBrowserScreen() {
     <SafeAreaView className="flex-1 bg-neutral-950">
       <ScrollView className="flex-1 px-6 pt-4">
         {/* Header: mode-dependent */}
-        {isMainMenu ? (
+        {isMainMenu || !navigation.canGoBack() ? (
           <Text className="text-2xl font-bold text-white">Locked In</Text>
         ) : (
           <>
