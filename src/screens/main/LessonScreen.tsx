@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { View, Text, Pressable, ScrollView, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { fromByteArray } from 'base64-js';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
@@ -11,8 +12,10 @@ import { useTokenStore } from '@/stores/tokenStore';
 import { useUserStore } from '@/stores/userStore';
 import type { Question } from '@/types';
 import { getLessonReadableContent } from '@/utils/lessonContent';
-import { hasRemoteLessonApi, submitLesson } from '@/services/api';
-import { issueBackendAccessToken } from '@/services/api/auth/backendAuth';
+import { hasRemoteLessonApi, startLesson, submitLesson } from '@/services/api';
+import { refreshAuthSession } from '@/services/api/auth/authApi';
+import { issueBackendSession } from '@/services/api/auth/backendAuth';
+import { signAuthChallengeMessage } from '@/services/solana';
 
 type Nav = NativeStackNavigationProp<MainStackParamList, 'Lesson'>;
 type Route = RouteProp<MainStackParamList, 'Lesson'>;
@@ -27,10 +30,14 @@ export function LessonScreen() {
   const lesson = useCourseStore((s) => s.getLesson(lessonId));
   const lessons = useCourseStore((s) => s.getLessonsForCourse(courseId));
   const walletAddress = useUserStore((s) => s.walletAddress);
+  const walletAuthToken = useUserStore((s) => s.walletAuthToken);
   const authToken = useUserStore((s) => s.authToken);
-  const setAuthToken = useUserStore((s) => s.setAuthToken);
+  const refreshToken = useUserStore((s) => s.refreshToken);
+  const setAuthSession = useUserStore((s) => s.setAuthSession);
+  const disconnect = useUserStore((s) => s.disconnect);
 
   const [phase, setPhase] = useState<Phase>('reading');
+  const [startSynced, setStartSynced] = useState(false);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [textAnswer, setTextAnswer] = useState('');
@@ -44,6 +51,84 @@ export function LessonScreen() {
   const isLastQuestion = currentQuestionIndex === totalQuestions - 1;
   const lessonOrder = lesson?.order ?? 0;
   const totalLessonsInCourse = lessons.length;
+
+  const ensureBackendAccessToken = useCallback(async (): Promise<string | null> => {
+    if (!hasRemoteLessonApi() || !walletAddress) {
+      return null;
+    }
+
+    if (authToken) {
+      return authToken;
+    }
+
+    if (refreshToken) {
+      try {
+        const refreshed = await refreshAuthSession({ refreshToken });
+        setAuthSession(refreshed.accessToken, refreshed.refreshToken);
+        return refreshed.accessToken;
+      } catch (error) {
+        if (__DEV__) {
+          console.warn(
+            '[lesson-api] refresh session failed, falling back to wallet challenge:',
+            error,
+          );
+        }
+      }
+    }
+
+    let session = null;
+    try {
+      session = await issueBackendSession(walletAddress, async (message) => {
+        const signatureBytes = await signAuthChallengeMessage(
+          walletAddress,
+          message,
+          walletAuthToken,
+        );
+        return fromByteArray(signatureBytes);
+      });
+    } catch (error: any) {
+      const code = error?.code;
+      if (
+        code === 'ERROR_AUTHORIZATION_FAILED' ||
+        code === 'ERROR_WALLET_MESSAGE_SIGNING_UNAVAILABLE' ||
+        code === 'ERROR_WALLET_ADAPTER_UNAVAILABLE'
+      ) {
+        // Session is no longer valid on wallet side; route user back to Connect Wallet.
+        disconnect();
+      }
+      throw error;
+    }
+
+    if (session) {
+      setAuthSession(session.accessToken, session.refreshToken);
+    }
+
+    return session?.accessToken ?? null;
+  }, [walletAddress, walletAuthToken, authToken, refreshToken, setAuthSession, disconnect]);
+
+  const syncLessonStart = useCallback(() => {
+    if (startSynced || !hasRemoteLessonApi()) {
+      return;
+    }
+
+    setStartSynced(true);
+
+    (async () => {
+      const token = await ensureBackendAccessToken();
+      if (!token) return;
+
+      await startLesson(
+        lessonId,
+        { startedAt: new Date().toISOString() },
+        token,
+      );
+    })().catch((error) => {
+      if (__DEV__) {
+        console.warn('[lesson-api] start lesson sync failed:', error);
+      }
+      // Keep local flow active even if remote start sync fails.
+    });
+  }, [startSynced, ensureBackendAccessToken, lessonId]);
 
   const handleCheck = useCallback(() => {
     if (!currentQuestion) return;
@@ -77,15 +162,7 @@ export function LessonScreen() {
 
       if (hasRemoteLessonApi() && walletAddress) {
         (async () => {
-          let token = authToken;
-
-          if (!token) {
-            token = await issueBackendAccessToken(walletAddress);
-            if (token) {
-              setAuthToken(token);
-            }
-          }
-
+          const token = await ensureBackendAccessToken();
           if (!token) return;
 
           await submitLesson(
@@ -97,7 +174,10 @@ export function LessonScreen() {
             },
             token,
           );
-        })().catch(() => {
+        })().catch((error) => {
+          if (__DEV__) {
+            console.warn('[lesson-api] submit lesson sync failed:', error);
+          }
           // Local progress is source-of-truth until backend sync is fully enforced.
         });
       }
@@ -122,10 +202,14 @@ export function LessonScreen() {
     lessonId,
     courseId,
     walletAddress,
-    authToken,
-    setAuthToken,
+    ensureBackendAccessToken,
     navigation,
   ]);
+
+  const handleStartQuestions = useCallback(() => {
+    setPhase('questions');
+    syncLessonStart();
+  }, [syncLessonStart]);
 
   if (!lesson) {
     return (
@@ -160,7 +244,7 @@ export function LessonScreen() {
 
           <Pressable
             className="mb-8 mt-8 rounded-xl bg-amber-600 px-6 py-4 active:bg-amber-700"
-            onPress={() => setPhase('questions')}
+            onPress={handleStartQuestions}
           >
             <Text className="text-center text-lg font-semibold text-white">
               Start Questions

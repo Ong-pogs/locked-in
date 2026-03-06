@@ -20,18 +20,28 @@ const theme = {
   },
 };
 
-/** Attempt silent MWA reauthorize on app launch using cached auth token */
+const ENABLE_WALLET_AUTO_REAUTHORIZE =
+  process.env.EXPO_PUBLIC_ENABLE_WALLET_AUTO_REAUTHORIZE === '1';
+
+/** Optional MWA reauthorize on app launch using cached wallet auth token. */
 function useAutoReconnect() {
-  const authToken = useUserStore((s) => s.authToken);
+  const walletAuthToken = useUserStore((s) => s.walletAuthToken);
   const walletAddress = useUserStore((s) => s.walletAddress);
   const setWallet = useUserStore((s) => s.setWallet);
   const disconnect = useUserStore((s) => s.disconnect);
 
   useEffect(() => {
-    // Only attempt if we have a cached session
-    if (!authToken || !walletAddress) return;
+    if (!ENABLE_WALLET_AUTO_REAUTHORIZE) {
+      if (__DEV__) {
+        console.info('[wallet] auto reauthorize disabled');
+      }
+      return;
+    }
 
-    reconnectWallet(authToken)
+    // Only attempt if we have a cached session
+    if (!walletAuthToken || !walletAddress) return;
+
+    reconnectWallet(walletAuthToken)
       .then((session) => {
         // Refresh the stored token (it may have rotated)
         setWallet(session.publicKey, session.authToken);

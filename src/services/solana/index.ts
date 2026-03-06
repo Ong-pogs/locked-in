@@ -4,5 +4,6 @@ export {
   connectWallet,
   reconnectWallet,
   disconnectWallet,
+  signAuthChallengeMessage,
   type WalletSession,
 } from './walletService';

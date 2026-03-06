@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { View, Text, Pressable, Alert, Linking, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { fromByteArray } from 'base64-js';
 import { useUserStore } from '@/stores';
-import { connectWallet } from '@/services/solana';
-import { issueBackendAccessToken } from '@/services/api/auth/backendAuth';
+import { connectWallet, signAuthChallengeMessage } from '@/services/solana';
+import { issueBackendSession } from '@/services/api/auth/backendAuth';
 
 export function WalletConnectScreen() {
   const setWallet = useUserStore((s) => s.setWallet);
@@ -14,15 +15,30 @@ export function WalletConnectScreen() {
     try {
       const session = await connectWallet();
 
-      let backendAccessToken: string | null = null;
+      let backendSession: { accessToken: string; refreshToken: string } | null = null;
       try {
-        backendAccessToken = await issueBackendAccessToken(session.publicKey);
+        backendSession = await issueBackendSession(
+          session.publicKey,
+          async (message) => {
+            const signatureBytes = await signAuthChallengeMessage(
+              session.publicKey,
+              message,
+              session.authToken,
+            );
+            return fromByteArray(signatureBytes);
+          },
+        );
       } catch (error) {
         // Keep onboarding usable even when backend session bootstrap fails.
         console.warn('Backend auth bootstrap failed:', error);
       }
 
-      setWallet(session.publicKey, backendAccessToken ?? undefined);
+      setWallet(
+        session.publicKey,
+        session.authToken,
+        backendSession?.accessToken ?? undefined,
+        backendSession?.refreshToken ?? undefined,
+      );
     } catch (error: any) {
       const code = error?.code;
       if (code === 'ERROR_WALLET_NOT_FOUND') {

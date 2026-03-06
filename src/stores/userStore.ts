@@ -4,8 +4,15 @@ import { asyncStorageAdapter } from './storage';
 import type { OnboardingPhase, UserProfile } from '@/types';
 
 interface UserStore extends UserProfile {
-  setWallet: (address: string, authToken?: string) => void;
+  setWallet: (
+    address: string,
+    walletAuthToken?: string,
+    authToken?: string,
+    refreshToken?: string,
+  ) => void;
   setAuthToken: (authToken: string | null) => void;
+  setRefreshToken: (refreshToken: string | null) => void;
+  setAuthSession: (authToken: string | null, refreshToken: string | null) => void;
   disconnect: () => void;
   setOnboardingPhase: (phase: OnboardingPhase) => void;
   setDisplayName: (name: string) => void;
@@ -14,6 +21,7 @@ interface UserStore extends UserProfile {
 
 const initialState: UserProfile = {
   walletAddress: null,
+  walletAuthToken: null,
   displayName: null,
   avatarUrl: null,
   onboardingPhase: 'auth',
@@ -21,6 +29,7 @@ const initialState: UserProfile = {
   gauntletStartDate: null,
   gauntletCompleted: false,
   authToken: null,
+  refreshToken: null,
 };
 
 export const useUserStore = create<UserStore>()(
@@ -28,15 +37,21 @@ export const useUserStore = create<UserStore>()(
     (set) => ({
       ...initialState,
 
-      setWallet: (address, authToken) =>
-        set({
+      setWallet: (address, walletAuthToken, authToken, refreshToken) =>
+        set((state) => ({
           walletAddress: address,
-          authToken: authToken ?? null,
-          onboardingPhase: 'onboarding',
-          createdAt: new Date().toISOString(),
-        }),
+          walletAuthToken: walletAuthToken ?? state.walletAuthToken ?? null,
+          authToken: authToken ?? state.authToken ?? null,
+          refreshToken: refreshToken ?? state.refreshToken ?? null,
+          // Preserve existing phase for returning users.
+          onboardingPhase:
+            state.walletAddress == null ? 'onboarding' : state.onboardingPhase,
+          createdAt: state.createdAt ?? new Date().toISOString(),
+        })),
 
       setAuthToken: (authToken) => set({ authToken }),
+      setRefreshToken: (refreshToken) => set({ refreshToken }),
+      setAuthSession: (authToken, refreshToken) => set({ authToken, refreshToken }),
 
       disconnect: () => set(initialState),
 
