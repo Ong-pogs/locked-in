@@ -132,6 +132,7 @@ export interface ProgressSubmitLessonResponse {
   totalQuestions: number;
   correctAnswers: number;
   completedAt: string;
+  completionEventId?: string;
 }
 
 export interface CourseProgressSnapshot {

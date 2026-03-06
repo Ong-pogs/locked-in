@@ -21,6 +21,9 @@ export function ProfileScreen() {
   const courses = useCourseStore((s) => s.courses);
   const setActiveCourse = useCourseStore((s) => s.setActiveCourse);
   const deactivateCourse = useCourseStore((s) => s.deactivateCourse);
+  const resetLessonProgressForCourse = useCourseStore(
+    (s) => s.resetLessonProgressForCourse,
+  );
 
   const activeState = activeCourseId ? courseStates[activeCourseId] : null;
   const activeCourse = activeCourseId
@@ -144,6 +147,32 @@ export function ProfileScreen() {
 
         {/* Danger zone */}
         <View className="mt-6 gap-3 pb-8">
+          {__DEV__ && activeCourseId && (
+            <Pressable
+              className="rounded-xl border border-amber-500/30 bg-amber-500/10 py-3 active:opacity-80"
+              onPress={() => {
+                Alert.alert(
+                  'Reset Lesson Progress',
+                  'This clears local lesson completion for the active course so you can retake it.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Reset',
+                      style: 'destructive',
+                      onPress: () => {
+                        resetLessonProgressForCourse(activeCourseId);
+                        navigation.goBack();
+                      },
+                    },
+                  ],
+                );
+              }}
+            >
+              <Text className="text-center text-sm font-semibold text-amber-300">
+                Reset Lesson Progress
+              </Text>
+            </Pressable>
+          )}
           <Pressable
             className="rounded-xl border border-neutral-700 bg-neutral-900 py-3 active:opacity-80"
             onPress={() => {

@@ -11,6 +11,7 @@ This folder now includes a runnable starter backend for step 1:
 
 - `sql/0001_lesson_platform.sql`
 - `sql/0003_auth_progress_hardening.sql`
+- `sql/0004_verified_completion_events.sql`
 - `openapi/lesson-api-v1.yaml`
 - `src/server.mjs`
 - `src/modules/content/routes.mjs`
@@ -79,6 +80,7 @@ Server default: `http://localhost:3001`
 - Progress endpoints now use client-generated attempt UUIDs and grade submitted answers on the server.
 - Public lesson payloads expose `contentHash` and omit `correctAnswer` so clients cannot self-grade.
 - Refresh sessions rotate one-time tokens and use Postgres persistence when `DATABASE_URL` is configured.
+- Accepted lesson submits now enqueue a `lesson.verified_completion_events` record for downstream workers.
 
 ## Next Hardening Tasks
 

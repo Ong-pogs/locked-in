@@ -405,6 +405,9 @@ components:
         completedAt:
           type: string
           format: date-time
+        completionEventId:
+          type: string
+          format: uuid
     CourseProgressSnapshot:
       type: object
       required: [courseId, completedLessons, totalLessons, completionRate]

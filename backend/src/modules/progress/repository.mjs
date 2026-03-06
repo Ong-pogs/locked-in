@@ -175,6 +175,25 @@ async function listLessonQuestions(client, lessonVersionId) {
   return result.rows;
 }
 
+async function getCourseIdForPublishedLesson(client, lessonId, lessonVersionId) {
+  const result = await client.query(
+    `
+      select (payload->>'courseId') as "courseId"
+      from lesson.published_lessons
+      where lesson_id = $1
+        and lesson_version_id = $2::uuid
+      limit 1
+    `,
+    [lessonId, lessonVersionId],
+  );
+
+  if (result.rowCount === 0 || !result.rows[0].courseId) {
+    throw notFound('Published lesson context not found', 'LESSON_CONTEXT_NOT_FOUND');
+  }
+
+  return result.rows[0].courseId;
+}
+
 function gradeAnswers(questions, submittedAnswers) {
   const questionIds = new Set(questions.map((question) => question.id));
   for (const questionId of submittedAnswers.keys()) {
@@ -271,6 +290,120 @@ async function persistLessonProgress(
   );
 }
 
+function toCompletionDay(timestamp) {
+  return new Date(timestamp).toISOString().slice(0, 10);
+}
+
+async function persistVerifiedCompletionEvent(
+  client,
+  walletAddress,
+  lessonId,
+  lessonVersionId,
+  lessonAttemptId,
+  grading,
+  completedAt,
+) {
+  const courseId = await getCourseIdForPublishedLesson(
+    client,
+    lessonId,
+    lessonVersionId,
+  );
+  const completionDay = toCompletionDay(completedAt);
+  const rewardUnits = grading.score > 0 ? 100 : 0;
+  const payload = {
+    eventType: 'verified_completion.accepted',
+    walletAddress,
+    courseId,
+    lessonId,
+    lessonVersionId,
+    lessonAttemptId,
+    completionDay,
+    rewardUnits,
+    score: grading.score,
+    correctAnswers: grading.correctAnswers,
+    totalQuestions: grading.totalQuestions,
+    completedAt,
+  };
+
+  await client.query(
+    `
+      insert into lesson.verified_completion_events (
+        event_id,
+        wallet_address,
+        course_id,
+        lesson_id,
+        lesson_version_id,
+        lesson_attempt_id,
+        completion_day,
+        reward_units,
+        score,
+        correct_answers,
+        total_questions,
+        payload
+      )
+      values (
+        $1::uuid,
+        $2,
+        $3,
+        $4,
+        $5::uuid,
+        $6::uuid,
+        $7::date,
+        $8,
+        $9,
+        $10,
+        $11,
+        $12::jsonb
+      )
+      on conflict (event_id) do update set
+        payload = excluded.payload,
+        reward_units = excluded.reward_units,
+        score = excluded.score,
+        correct_answers = excluded.correct_answers,
+        total_questions = excluded.total_questions
+    `,
+    [
+      lessonAttemptId,
+      walletAddress,
+      courseId,
+      lessonId,
+      lessonVersionId,
+      lessonAttemptId,
+      completionDay,
+      rewardUnits,
+      grading.score,
+      grading.correctAnswers,
+      grading.totalQuestions,
+      JSON.stringify(payload),
+    ],
+  );
+
+  return {
+    eventId: lessonAttemptId,
+    courseId,
+    completionDay,
+    rewardUnits,
+  };
+}
+
+async function readVerifiedCompletionEvent(client, lessonAttemptId) {
+  const result = await client.query(
+    `
+      select
+        event_id::text as "eventId",
+        course_id as "courseId",
+        completion_day::text as "completionDay",
+        reward_units as "rewardUnits"
+      from lesson.verified_completion_events
+      where lesson_attempt_id = $1::uuid
+      limit 1
+    `,
+    [lessonAttemptId],
+  );
+
+  return result.rows[0] ?? null;
+}
+
 export async function startLessonAttempt(
   walletAddress,
   lessonId,
@@ -329,6 +462,7 @@ export async function submitLessonAttempt(
       correctAnswers: totalQuestions,
       totalQuestions,
       completedAt: timestamp,
+      completionEventId: normalizedAttemptId,
     };
   }
 
@@ -349,6 +483,10 @@ export async function submitLessonAttempt(
       const correctAnswers = Math.round(
         ((attempt.score ?? 0) / 100) * Math.max(totalQuestions, 0),
       );
+      const completionEvent = await readVerifiedCompletionEvent(
+        client,
+        attempt.attemptId,
+      );
 
       return {
         lessonId,
@@ -358,6 +496,7 @@ export async function submitLessonAttempt(
         correctAnswers,
         totalQuestions,
         completedAt: attempt.submittedAt,
+        completionEventId: completionEvent?.eventId ?? attempt.attemptId,
       };
     }
 
@@ -385,6 +524,16 @@ export async function submitLessonAttempt(
       timestamp,
     );
 
+    const completionEvent = await persistVerifiedCompletionEvent(
+      client,
+      walletAddress,
+      lessonId,
+      attempt.lessonVersionId,
+      normalizedAttemptId,
+      grading,
+      timestamp,
+    );
+
     return {
       lessonId,
       attemptId: normalizedAttemptId,
@@ -393,6 +542,7 @@ export async function submitLessonAttempt(
       correctAnswers: grading.correctAnswers,
       totalQuestions: grading.totalQuestions,
       completedAt: timestamp,
+      completionEventId: completionEvent.eventId,
     };
   });
 }

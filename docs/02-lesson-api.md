@@ -69,6 +69,11 @@ After lesson submission is accepted:
 2. Backend emits a signed, idempotent completion event.
 3. Authorized worker submits the corresponding on-chain instruction to update course lock state.
 
+Current implementation checkpoint:
+
+- accepted lesson submit now writes one verified completion event record keyed by attempt id
+- downstream worker consumption remains the next step
+
 Canonical rule coupling:
 
 - Fuel credit is never client-trusted.

@@ -115,6 +115,18 @@ export async function rotateRefreshSession(
 ) {
   if (hasDatabase()) {
     return withTransaction(async (client) => {
+      await client.query(
+        `
+          insert into lesson_auth.refresh_sessions (
+            token_id,
+            wallet_address,
+            expires_at
+          )
+          values ($1::uuid, $2, $3::timestamptz)
+        `,
+        [nextTokenId, walletAddress, nextExpiresAt.toISOString()],
+      );
+
       const result = await client.query(
         `
           update lesson_auth.refresh_sessions
@@ -131,20 +143,15 @@ export async function rotateRefreshSession(
       );
 
       if (result.rowCount === 0) {
+        await client.query(
+          `
+            delete from lesson_auth.refresh_sessions
+            where token_id = $1::uuid
+          `,
+          [nextTokenId],
+        );
         return false;
       }
-
-      await client.query(
-        `
-          insert into lesson_auth.refresh_sessions (
-            token_id,
-            wallet_address,
-            expires_at
-          )
-          values ($1::uuid, $2, $3::timestamptz)
-        `,
-        [nextTokenId, walletAddress, nextExpiresAt.toISOString()],
-      );
 
       return true;
     });

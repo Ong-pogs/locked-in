@@ -66,6 +66,7 @@ interface CourseStore {
   unenrollCourse: (courseId: string) => void;
   isEnrolled: (courseId: string) => boolean;
   getEnrolledCourses: () => Course[];
+  resetLessonProgressForCourse: (courseId: string) => void;
   initializeContent: (force?: boolean) => Promise<void>;
   initializeMockData: (errorMessage?: string | null) => void;
   reset: () => void;
@@ -409,6 +410,43 @@ export const useCourseStore = create<CourseStore>()(
       getEnrolledCourses: () => {
         const state = get();
         return state.courses.filter((c) => state.enrolledCourseIds.includes(c.id));
+      },
+
+      resetLessonProgressForCourse: (courseId) => {
+        const state = get();
+        const lessonIdsForCourse = new Set(
+          (state.lessons[courseId] ?? []).map((lesson) => lesson.id),
+        );
+
+        if (lessonIdsForCourse.size === 0) {
+          return;
+        }
+
+        const nextLessonProgress = Object.fromEntries(
+          Object.entries(state.lessonProgress).filter(
+            ([lessonId, progress]) =>
+              !lessonIdsForCourse.has(lessonId) && progress.courseId !== courseId,
+          ),
+        );
+
+        const completedCounts = Object.values(nextLessonProgress).reduce<
+          Record<string, number>
+        >((acc, progress) => {
+          if (!progress.completed) {
+            return acc;
+          }
+
+          acc[progress.courseId] = (acc[progress.courseId] ?? 0) + 1;
+          return acc;
+        }, {});
+
+        set({
+          lessonProgress: nextLessonProgress,
+          courses: state.courses.map((course) => ({
+            ...course,
+            completedLessons: completedCounts[course.id] ?? 0,
+          })),
+        });
       },
 
       initializeContent: async (force = false) => {
