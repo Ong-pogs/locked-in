@@ -12,12 +12,18 @@ export interface LessonBlock {
   imageUrl?: string;
 }
 
+export interface QuestionOption {
+  id: string;
+  text: string;
+}
+
 export interface Question {
   id: string;
   type: QuestionType;
   prompt: string;
-  options?: string[];
-  correctAnswer: string;
+  options?: Array<QuestionOption | string>;
+  // Mock/offline lessons can still carry a local answer key.
+  correctAnswer?: string;
 }
 
 export interface Lesson {
@@ -31,6 +37,7 @@ export interface Lesson {
   questions: Question[];
   version?: number;
   releaseId?: string;
+  contentHash?: string;
 }
 
 export interface LessonProgress {

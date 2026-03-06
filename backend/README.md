@@ -10,6 +10,7 @@ This folder now includes a runnable starter backend for step 1:
 ## Files
 
 - `sql/0001_lesson_platform.sql`
+- `sql/0003_auth_progress_hardening.sql`
 - `openapi/lesson-api-v1.yaml`
 - `src/server.mjs`
 - `src/modules/content/routes.mjs`
@@ -75,11 +76,13 @@ Server default: `http://localhost:3001`
 - If `DATABASE_URL` is missing, content/progress endpoints run in safe starter mode (empty reads, in-memory auth challenges).
 - `POST /v1/auth/verify` now verifies Ed25519 signatures for the issued challenge message.
   Accepts detached signatures (64-byte base58/base64/base64url/hex) and MWA signed-payload format (`message || signature`).
-- Progress endpoints are wired for idempotent lesson completion upsert when DB is configured.
+- Progress endpoints now use client-generated attempt UUIDs and grade submitted answers on the server.
+- Public lesson payloads expose `contentHash` and omit `correctAnswer` so clients cannot self-grade.
+- Refresh sessions rotate one-time tokens and use Postgres persistence when `DATABASE_URL` is configured.
 
 ## Next Hardening Tasks
 
 1. Add SIWS-style challenge constraints (domain, URI, chain, nonce replay window).
-2. Persist auth challenges and refresh tokens in Postgres.
-3. Add schema validation (Zod) and structured response typing from OpenAPI.
-4. Add tests for each route module.
+2. Add schema validation (Zod) and structured response typing from OpenAPI.
+3. Add tests for each route module.
+4. Emit signed completion events for the on-chain reward/consequence worker.

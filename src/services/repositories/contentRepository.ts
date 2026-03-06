@@ -1,10 +1,10 @@
 import { getContentProvider } from '@/services/api';
-import type { Course, CourseModule, Lesson } from '@/types';
+import type { Course, CourseModule, Lesson, QuestionOption } from '@/types';
 import type {
   ApiCourseCard,
   ApiLessonBlock,
   ApiLessonPayload,
-  ApiQuestion,
+  ApiQuestionOption,
 } from '@/services/api/types';
 
 export interface HydratedContentSnapshot {
@@ -43,8 +43,13 @@ function toCourse(course: ApiCourseCard): Course {
   };
 }
 
-function toQuestionOptions(question: ApiQuestion): string[] | undefined {
-  return question.options?.map((option) => option.text);
+function toQuestionOptions(
+  options?: ApiQuestionOption[],
+): QuestionOption[] | undefined {
+  return options?.map((option) => ({
+    id: option.id,
+    text: option.text,
+  }));
 }
 
 function toLesson(lesson: ApiLessonPayload): Lesson {
@@ -69,11 +74,12 @@ function toLesson(lesson: ApiLessonPayload): Lesson {
       id: question.id,
       type: question.type,
       prompt: question.prompt,
-      options: toQuestionOptions(question),
+      options: toQuestionOptions(question.options),
       correctAnswer: question.correctAnswer,
     })),
     version: lesson.version,
     releaseId: lesson.releaseId,
+    contentHash: lesson.contentHash,
   };
 }
 

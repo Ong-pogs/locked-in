@@ -52,6 +52,14 @@ Each published lesson payload includes:
 - `releaseId`
 - `version`
 - immutable content hash
+- no client-visible answer key in public payloads
+
+Canonical attempt flow:
+
+1. client creates a per-attempt UUID
+2. client calls `POST /v1/progress/lessons/:lessonId/start` with that attempt id
+3. client calls `POST /v1/progress/lessons/:lessonId/submit` with the same attempt id plus raw answers
+4. backend grades answers server-side and records a single immutable attempt row
 
 ## Verification to On-chain Bridge
 

@@ -1,11 +1,19 @@
+import { randomUUID } from 'node:crypto';
 import { badRequest, unauthorized } from '../../lib/errors.mjs';
 import {
+  getAccessTokenExpiryDate,
+  getRefreshTokenExpiryDate,
   signAccessToken,
   signRefreshToken,
   verifyToken,
 } from '../../lib/jwt.mjs';
 import { verifySolanaChallengeSignature } from '../../lib/solanaAuth.mjs';
-import { consumeChallenge, createChallenge } from './state.mjs';
+import {
+  consumeChallenge,
+  createChallenge,
+  issueRefreshSession,
+  rotateRefreshSession,
+} from './state.mjs';
 
 function assertWalletAddress(value) {
   if (!value || typeof value !== 'string') {
@@ -22,14 +30,23 @@ function assertSignature(value) {
 }
 
 async function buildSession(walletAddress) {
-  const accessToken = await signAccessToken(walletAddress);
-  const refreshToken = await signRefreshToken(walletAddress);
+  const accessExpiresAt = getAccessTokenExpiryDate();
+  const refreshExpiresAt = getRefreshTokenExpiryDate();
+  const refreshTokenId = randomUUID();
+
+  const accessToken = await signAccessToken(walletAddress, accessExpiresAt);
+  const refreshToken = await signRefreshToken(
+    walletAddress,
+    refreshTokenId,
+    refreshExpiresAt,
+  );
+
+  await issueRefreshSession(walletAddress, refreshTokenId, refreshExpiresAt);
 
   return {
     accessToken,
     refreshToken,
-    // Mirror 15m default from config for mobile scheduling hints.
-    expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+    expiresAt: accessExpiresAt.toISOString(),
   };
 }
 
@@ -48,7 +65,7 @@ export async function authRoutes(app) {
       throw badRequest('challengeId is required', 'MISSING_CHALLENGE_ID');
     }
 
-    const challenge = consumeChallenge(challengeId, walletAddress);
+    const challenge = await consumeChallenge(challengeId, walletAddress);
     if (!challenge) {
       throw unauthorized('Invalid or expired challenge', 'INVALID_CHALLENGE');
     }
@@ -78,6 +95,35 @@ export async function authRoutes(app) {
     }
 
     const decoded = await verifyToken(refreshToken, 'refresh');
-    return buildSession(decoded.walletAddress);
+    if (!decoded.tokenId) {
+      throw unauthorized('Refresh token is missing a session id', 'INVALID_TOKEN_PAYLOAD');
+    }
+
+    const nextRefreshExpiresAt = getRefreshTokenExpiryDate();
+    const nextRefreshTokenId = randomUUID();
+    const rotated = await rotateRefreshSession(
+      decoded.walletAddress,
+      decoded.tokenId,
+      nextRefreshTokenId,
+      nextRefreshExpiresAt,
+    );
+
+    if (!rotated) {
+      throw unauthorized('Refresh token has been used or revoked', 'REFRESH_TOKEN_REUSED');
+    }
+
+    const accessExpiresAt = getAccessTokenExpiryDate();
+    const accessToken = await signAccessToken(decoded.walletAddress, accessExpiresAt);
+    const nextRefreshToken = await signRefreshToken(
+      decoded.walletAddress,
+      nextRefreshTokenId,
+      nextRefreshExpiresAt,
+    );
+
+    return {
+      accessToken,
+      refreshToken: nextRefreshToken,
+      expiresAt: accessExpiresAt.toISOString(),
+    };
   });
 }

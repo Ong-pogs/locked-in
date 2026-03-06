@@ -24,10 +24,7 @@ const theme = {
   },
 };
 
-const ENABLE_WALLET_AUTO_REAUTHORIZE =
-  process.env.EXPO_PUBLIC_ENABLE_WALLET_AUTO_REAUTHORIZE === '1';
-
-/** Optional MWA reauthorize on app launch using cached wallet auth token. */
+/** Reauthorize the cached MWA session on app launch. */
 function useAutoReconnect() {
   const walletAuthToken = useUserStore((s) => s.walletAuthToken);
   const walletAddress = useUserStore((s) => s.walletAddress);
@@ -35,23 +32,15 @@ function useAutoReconnect() {
   const disconnect = useUserStore((s) => s.disconnect);
 
   useEffect(() => {
-    if (!ENABLE_WALLET_AUTO_REAUTHORIZE) {
-      if (__DEV__) {
-        console.info('[wallet] auto reauthorize disabled');
-      }
+    if (!walletAuthToken || !walletAddress) {
       return;
     }
 
-    // Only attempt if we have a cached session
-    if (!walletAuthToken || !walletAddress) return;
-
     reconnectWallet(walletAuthToken)
       .then((session) => {
-        // Refresh the stored token (it may have rotated)
         setWallet(session.publicKey, session.authToken);
       })
       .catch(() => {
-        // Token expired or invalid — send back to connect screen
         disconnect();
       });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -78,6 +67,35 @@ function useBackendSessionBootstrap() {
     if (attemptedKeyRef.current === attemptKey) return;
     attemptedKeyRef.current = attemptKey;
 
+    const bootstrapWithWalletSignature = () =>
+      issueBackendSession(walletAddress, async (message) => {
+        const signatureBytes = await signAuthChallengeMessage(
+          walletAddress,
+          message,
+          walletAuthToken,
+        );
+        return fromByteArray(signatureBytes);
+      })
+        .then((session) => {
+          if (!session) {
+            setAuthSession(null, null);
+            return;
+          }
+          setAuthSession(session.accessToken, session.refreshToken);
+          if (__DEV__) {
+            console.info('[lesson-api] backend auth bootstrap succeeded');
+          }
+        })
+        .catch((error) => {
+          if (__DEV__) {
+            console.warn(
+              '[lesson-api] backend auth bootstrap failed; backend sync disabled until reconnect',
+              error,
+            );
+          }
+          setAuthSession(null, null);
+        });
+
     if (refreshToken) {
       refreshAuthSession({ refreshToken })
         .then((session) => {
@@ -85,9 +103,9 @@ function useBackendSessionBootstrap() {
         })
         .catch((error) => {
           if (__DEV__) {
-            console.warn('[lesson-api] startup refresh failed; backend sync disabled until next auth', error);
+            console.warn('[lesson-api] startup refresh failed; retrying wallet challenge', error);
           }
-          setAuthSession(null, null);
+          void bootstrapWithWalletSignature();
         });
       return;
     }
@@ -96,30 +114,7 @@ function useBackendSessionBootstrap() {
       console.info('[lesson-api] missing refresh token; bootstrapping backend auth challenge');
     }
 
-    issueBackendSession(walletAddress, async (message) => {
-      const signatureBytes = await signAuthChallengeMessage(
-        walletAddress,
-        message,
-        walletAuthToken,
-      );
-      return fromByteArray(signatureBytes);
-    })
-      .then((session) => {
-        if (!session) {
-          setAuthSession(null, null);
-          return;
-        }
-        setAuthSession(session.accessToken, session.refreshToken);
-        if (__DEV__) {
-          console.info('[lesson-api] backend auth bootstrap succeeded');
-        }
-      })
-      .catch((error) => {
-        if (__DEV__) {
-          console.warn('[lesson-api] backend auth bootstrap failed; backend sync disabled until next auth', error);
-        }
-        setAuthSession(null, null);
-      });
+    void bootstrapWithWalletSignature();
   }, [walletAddress, walletAuthToken, authToken, refreshToken, setAuthSession]);
 }
 

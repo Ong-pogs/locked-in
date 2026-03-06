@@ -40,9 +40,10 @@ Primary user wallets:
 Required behavior:
 
 - cache wallet auth token for silent reauthorization
+- always attempt silent wallet reauthorization on app launch when a cached wallet auth token exists
 - cache backend access/refresh token pair
 - rotate backend access token using refresh endpoint
-- clear all auth state on disconnect/deauth
+- deauthorize the wallet session on explicit disconnect, then clear all local auth state
 - fail closed if signature verification fails
 
 ## Security Requirements

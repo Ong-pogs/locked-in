@@ -1,8 +1,9 @@
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { Alert, View, Text, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { MainStackParamList } from '@/navigation/types';
+import { disconnectWallet } from '@/services/solana';
 import { useTokenStore, useUserStore } from '@/stores';
 import { useCourseStore } from '@/stores/courseStore';
 
@@ -25,6 +26,8 @@ export function ProfileScreen() {
   const activeCourse = activeCourseId
     ? courses.find((c) => c.id === activeCourseId)
     : null;
+  const walletAuthToken = useUserStore((s) => s.walletAuthToken);
+  const disconnect = useUserStore((s) => s.disconnect);
 
   const streak = activeState?.currentStreak ?? 0;
   const ichor = activeState?.ichorBalance ?? 0;
@@ -161,7 +164,22 @@ export function ProfileScreen() {
           <Pressable
             className="rounded-xl border border-red-500/30 bg-red-500/10 py-3 active:opacity-80"
             onPress={() => {
-              useUserStore.getState().disconnect();
+              Alert.alert(
+                'Disconnect Wallet',
+                'This clears the cached wallet session on the device and in the wallet app.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Disconnect',
+                    style: 'destructive',
+                    onPress: () => {
+                      void disconnectWallet(walletAuthToken ?? '').finally(() => {
+                        disconnect();
+                      });
+                    },
+                  },
+                ],
+              );
             }}
           >
             <Text className="text-center text-sm font-semibold text-red-400">

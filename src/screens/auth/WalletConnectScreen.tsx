@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { fromByteArray } from 'base64-js';
 import { useUserStore } from '@/stores';
 import { connectWallet, signAuthChallengeMessage } from '@/services/solana';
+import { hasRemoteLessonApi } from '@/services/api';
 import { issueBackendSession } from '@/services/api/auth/backendAuth';
 
 export function WalletConnectScreen() {
@@ -30,6 +31,13 @@ export function WalletConnectScreen() {
         );
       } catch (error) {
         console.warn('Backend auth bootstrap failed:', error);
+        if (hasRemoteLessonApi()) {
+          Alert.alert(
+            'Verification Failed',
+            'Wallet connection succeeded, but backend verification did not. Please try again.',
+          );
+          return;
+        }
         Alert.alert(
           'Wallet Connected',
           'Connected wallet, but backend sync was not authorized. You can continue; lesson sync stays local until backend auth succeeds.',

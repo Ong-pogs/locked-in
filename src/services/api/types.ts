@@ -47,7 +47,7 @@ export interface ApiQuestion {
   type: ApiQuestionType;
   prompt: string;
   options?: ApiQuestionOption[];
-  correctAnswer: string;
+  correctAnswer?: string;
 }
 
 export interface ApiLessonPayload {
@@ -58,6 +58,7 @@ export interface ApiLessonPayload {
   order: number;
   version: number;
   releaseId: string;
+  contentHash: string;
   blocks: ApiLessonBlock[];
   questions: ApiQuestion[];
 }
@@ -101,19 +102,35 @@ export interface AuthRefreshRequest {
 }
 
 export interface ProgressStartLessonRequest {
+  attemptId: string;
   startedAt?: string;
 }
 
+export interface ProgressStartLessonResponse {
+  lessonId: string;
+  attemptId: string;
+  startedAt: string;
+}
+
+export interface ProgressAnswerSubmission {
+  questionId: string;
+  answerText: string;
+}
+
 export interface ProgressSubmitLessonRequest {
-  score: number;
-  totalQuestions: number;
+  attemptId: string;
+  answers: ProgressAnswerSubmission[];
+  startedAt?: string;
   completedAt?: string;
 }
 
 export interface ProgressSubmitLessonResponse {
   lessonId: string;
+  attemptId: string;
   accepted: boolean;
   score: number;
+  totalQuestions: number;
+  correctAnswers: number;
   completedAt: string;
 }
 

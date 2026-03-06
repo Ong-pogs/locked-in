@@ -14,26 +14,35 @@ function assertPathParam(value, fieldName) {
   return value;
 }
 
-function assertScore(value) {
-  if (!Number.isFinite(value)) {
-    throw badRequest('score must be a number', 'INVALID_SCORE');
+function assertBodyField(value, fieldName) {
+  if (!value || typeof value !== 'string') {
+    throw badRequest(`Missing body field: ${fieldName}`, 'MISSING_BODY_FIELD');
   }
-  if (value < 0 || value > 100) {
-    throw badRequest('score must be between 0 and 100', 'INVALID_SCORE_RANGE');
+  return value;
+}
+
+function assertAnswers(value) {
+  if (!Array.isArray(value)) {
+    throw badRequest('answers must be an array', 'INVALID_ANSWERS');
   }
-  return Math.round(value);
+  return value;
 }
 
 export async function progressRoutes(app) {
   app.post(
     '/v1/progress/lessons/:lessonId/start',
     { preHandler: requireAccessAuth },
-    async (request, reply) => {
+    async (request) => {
       const lessonId = assertPathParam(request.params?.lessonId, 'lessonId');
+      const attemptId = assertBodyField(request.body?.attemptId, 'attemptId');
       const startedAt = request.body?.startedAt ?? null;
 
-      await startLessonAttempt(request.auth.walletAddress, lessonId, startedAt);
-      reply.status(204).send();
+      return startLessonAttempt(
+        request.auth.walletAddress,
+        lessonId,
+        attemptId,
+        startedAt,
+      );
     },
   );
 
@@ -42,13 +51,17 @@ export async function progressRoutes(app) {
     { preHandler: requireAccessAuth },
     async (request) => {
       const lessonId = assertPathParam(request.params?.lessonId, 'lessonId');
-      const score = assertScore(request.body?.score);
+      const attemptId = assertBodyField(request.body?.attemptId, 'attemptId');
+      const answers = request.body?.answers;
+      const startedAt = request.body?.startedAt ?? null;
       const completedAt = request.body?.completedAt ?? null;
 
       return submitLessonAttempt(
         request.auth.walletAddress,
         lessonId,
-        score,
+        attemptId,
+        assertAnswers(answers),
+        startedAt,
         completedAt,
       );
     },

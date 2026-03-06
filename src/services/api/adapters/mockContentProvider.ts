@@ -11,6 +11,17 @@ import type {
 
 const LOCAL_RELEASE_ID = 'local-mock-release';
 
+function createContentHash(value: unknown): string {
+  const source = JSON.stringify(value);
+  let hash = 0;
+
+  for (let i = 0; i < source.length; i += 1) {
+    hash = (hash * 31 + source.charCodeAt(i)) >>> 0;
+  }
+
+  return `mock-${hash.toString(16)}`;
+}
+
 function makeBlocks(content: string): ApiLessonBlock[] {
   const parts = content
     .split('\n\n')
@@ -62,26 +73,38 @@ function toApiLessons(modules: ApiModuleCard[]): ApiLessonPayload[] {
 
   return Object.values(MOCK_LESSONS)
     .flat()
-    .map((lesson) => ({
-      id: lesson.id,
-      courseId: lesson.courseId,
-      moduleId: moduleByCourse.get(lesson.courseId) ?? `${lesson.courseId}-module-core`,
-      title: lesson.title,
-      order: lesson.order,
-      version: 1,
-      releaseId: LOCAL_RELEASE_ID,
-      blocks: makeBlocks(lesson.content),
-      questions: lesson.questions.map((question) => ({
-        id: question.id,
-        type: question.type,
-        prompt: question.prompt,
-        options: question.options?.map((option, index) => ({
-          id: `option-${index + 1}`,
-          text: option,
+    .map((lesson) => {
+      const payload: ApiLessonPayload = {
+        id: lesson.id,
+        courseId: lesson.courseId,
+        moduleId:
+          moduleByCourse.get(lesson.courseId) ?? `${lesson.courseId}-module-core`,
+        title: lesson.title,
+        order: lesson.order,
+        version: 1,
+        releaseId: LOCAL_RELEASE_ID,
+        blocks: makeBlocks(lesson.content),
+        questions: lesson.questions.map((question) => ({
+          id: question.id,
+          type: question.type,
+          prompt: question.prompt,
+          options: question.options?.map((option, index) => ({
+            id: typeof option === 'string' ? `option-${index + 1}` : option.id,
+            text: typeof option === 'string' ? option : option.text,
+          })),
+          correctAnswer: question.correctAnswer,
         })),
-        correctAnswer: question.correctAnswer,
-      })),
-    }));
+        contentHash: '',
+      };
+
+      return {
+        ...payload,
+        contentHash: createContentHash({
+          ...payload,
+          contentHash: undefined,
+        }),
+      };
+    });
 }
 
 export class MockContentProvider implements ContentProvider {

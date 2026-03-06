@@ -1,4 +1,32 @@
+import { createHash } from 'node:crypto';
 import { hasDatabase, query } from '../../lib/db.mjs';
+
+function withContentHash(payload) {
+  const serialized = JSON.stringify(payload);
+  return {
+    ...payload,
+    contentHash: createHash('sha256').update(serialized).digest('hex'),
+  };
+}
+
+function sanitizeLessonPayload(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return payload;
+  }
+
+  const sanitizedQuestions = Array.isArray(payload.questions)
+    ? payload.questions.map((question) => {
+        const { correctAnswer, ...rest } = question;
+        void correctAnswer;
+        return rest;
+      })
+    : [];
+
+  return withContentHash({
+    ...payload,
+    questions: sanitizedQuestions,
+  });
+}
 
 export async function getLatestRelease() {
   if (!hasDatabase()) {
@@ -102,7 +130,7 @@ export async function listModuleLessons(moduleId, releaseId) {
     [moduleId, releaseId],
   );
 
-  return result.rows.map((row) => row.payload);
+  return result.rows.map((row) => sanitizeLessonPayload(row.payload));
 }
 
 export async function getLessonPayload(lessonId, releaseId) {
@@ -125,5 +153,5 @@ export async function getLessonPayload(lessonId, releaseId) {
     return null;
   }
 
-  return result.rows[0].payload;
+  return sanitizeLessonPayload(result.rows[0].payload);
 }

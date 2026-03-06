@@ -3,6 +3,7 @@ import type {
   CourseProgressSnapshot,
   ModuleProgressSnapshot,
   ProgressStartLessonRequest,
+  ProgressStartLessonResponse,
   ProgressSubmitLessonRequest,
   ProgressSubmitLessonResponse,
 } from '../types';
@@ -11,12 +12,15 @@ export function startLesson(
   lessonId: string,
   payload: ProgressStartLessonRequest,
   token: string,
-): Promise<void> {
-  return httpRequest<void>(`/v1/progress/lessons/${lessonId}/start`, {
+): Promise<ProgressStartLessonResponse> {
+  return httpRequest<ProgressStartLessonResponse>(
+    `/v1/progress/lessons/${lessonId}/start`,
+    {
     method: 'POST',
     body: payload,
     token,
-  });
+    },
+  );
 }
 
 export function submitLesson(

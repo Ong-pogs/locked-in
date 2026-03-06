@@ -34,6 +34,13 @@ export async function query(text, params = []) {
   return currentPool.query(text, params);
 }
 
+async function setWalletClaim(client, walletAddress) {
+  await client.query(
+    `select set_config('request.jwt.claim.wallet_address', $1, true)`,
+    [walletAddress],
+  );
+}
+
 export async function withTransaction(work) {
   const currentPool = getPool();
   if (!currentPool) {
@@ -52,4 +59,18 @@ export async function withTransaction(work) {
   } finally {
     client.release();
   }
+}
+
+export async function queryAsWallet(walletAddress, text, params = []) {
+  return withTransaction(async (client) => {
+    await setWalletClaim(client, walletAddress);
+    return client.query(text, params);
+  });
+}
+
+export async function withTransactionAsWallet(walletAddress, work) {
+  return withTransaction(async (client) => {
+    await setWalletClaim(client, walletAddress);
+    return work(client);
+  });
 }

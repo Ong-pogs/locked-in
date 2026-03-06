@@ -132,8 +132,12 @@ paths:
             schema:
               $ref: '#/components/schemas/ProgressStartLessonRequest'
       responses:
-        '204':
+        '200':
           description: Started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgressStartLessonResponse'
   /v1/progress/lessons/{lessonId}/submit:
     post:
       security:
@@ -246,7 +250,7 @@ components:
         estimatedMinutes: { type: integer }
     LessonPayload:
       type: object
-      required: [id, courseId, moduleId, title, order, version, releaseId, blocks, questions]
+      required: [id, courseId, moduleId, title, order, version, releaseId, contentHash, blocks, questions]
       properties:
         id: { type: string }
         courseId: { type: string }
@@ -255,6 +259,7 @@ components:
         order: { type: integer }
         version: { type: integer }
         releaseId: { type: string }
+        contentHash: { type: string }
         blocks:
           type: array
           items:
@@ -281,7 +286,7 @@ components:
         imageUrl: { type: string }
     Question:
       type: object
-      required: [id, type, prompt, correctAnswer]
+      required: [id, type, prompt]
       properties:
         id: { type: string }
         type:
@@ -292,7 +297,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/QuestionOption'
-        correctAnswer: { type: string }
     QuestionOption:
       type: object
       required: [id, text]
@@ -344,26 +348,60 @@ components:
           format: date-time
     ProgressStartLessonRequest:
       type: object
+      required: [attemptId]
       properties:
+        attemptId:
+          type: string
+          format: uuid
         startedAt:
           type: string
           format: date-time
+    ProgressStartLessonResponse:
+      type: object
+      required: [lessonId, attemptId, startedAt]
+      properties:
+        lessonId: { type: string }
+        attemptId:
+          type: string
+          format: uuid
+        startedAt:
+          type: string
+          format: date-time
+    ProgressAnswerSubmission:
+      type: object
+      required: [questionId, answerText]
+      properties:
+        questionId: { type: string }
+        answerText: { type: string }
     ProgressSubmitLessonRequest:
       type: object
-      required: [score, totalQuestions]
+      required: [attemptId, answers]
       properties:
-        score: { type: integer, minimum: 0, maximum: 100 }
-        totalQuestions: { type: integer, minimum: 1 }
+        attemptId:
+          type: string
+          format: uuid
+        answers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProgressAnswerSubmission'
+        startedAt:
+          type: string
+          format: date-time
         completedAt:
           type: string
           format: date-time
     ProgressSubmitLessonResponse:
       type: object
-      required: [lessonId, accepted, score, completedAt]
+      required: [lessonId, attemptId, accepted, score, correctAnswers, totalQuestions, completedAt]
       properties:
         lessonId: { type: string }
+        attemptId:
+          type: string
+          format: uuid
         accepted: { type: boolean }
         score: { type: integer }
+        correctAnswers: { type: integer }
+        totalQuestions: { type: integer }
         completedAt:
           type: string
           format: date-time
