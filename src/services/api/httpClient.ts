@@ -34,6 +34,7 @@ export async function httpRequest<T>(
 ): Promise<T> {
   const method = options.method ?? 'GET';
   const startedAt = Date.now();
+  const isAbsolutePath = path.startsWith('http://') || path.startsWith('https://');
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), LESSON_API_TIMEOUT_MS);
@@ -51,7 +52,7 @@ export async function httpRequest<T>(
   }
 
   const primaryBaseUrl = getLessonApiBaseUrl();
-  const candidateBaseUrls = path.startsWith('http://') || path.startsWith('https://')
+  const candidateBaseUrls = isAbsolutePath
     ? ['']
     : [primaryBaseUrl, ...getLessonApiFallbackBaseUrls(primaryBaseUrl)];
 
@@ -103,7 +104,7 @@ export async function httpRequest<T>(
           );
         }
 
-        if (!path.startsWith('http://') && !path.startsWith('https://') && baseUrl) {
+        if (!isAbsolutePath && baseUrl) {
           if (baseUrl !== primaryBaseUrl) {
             setLessonApiBaseUrl(baseUrl);
             if (__DEV__) {
@@ -125,8 +126,13 @@ export async function httpRequest<T>(
           throw error;
         }
 
-        // Retry network failures across candidate hosts only for idempotent reads.
-        const shouldTryNextHost = method === 'GET' && !isLastCandidate;
+        // Retry network failures across candidate hosts for reads and auth bootstrap.
+        const isAuthBootstrapRequest =
+          !isAbsolutePath &&
+          method === 'POST' &&
+          (path.startsWith('/v1/auth/challenge') || path.startsWith('/v1/auth/refresh'));
+        const shouldTryNextHost =
+          (method === 'GET' || isAuthBootstrapRequest) && !isLastCandidate;
         if (shouldTryNextHost) {
           if (__DEV__) {
             console.warn(`[lesson-api] retry host after network error: ${url}`);

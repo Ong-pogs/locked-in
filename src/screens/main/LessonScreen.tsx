@@ -13,6 +13,7 @@ import type { Question } from '@/types';
 import { getLessonReadableContent } from '@/utils/lessonContent';
 import { hasRemoteLessonApi, startLesson, submitLesson } from '@/services/api';
 import { refreshAuthSession } from '@/services/api/auth/authApi';
+import { ApiError } from '@/services/api/errors';
 
 type Nav = NativeStackNavigationProp<MainStackParamList, 'Lesson'>;
 type Route = RouteProp<MainStackParamList, 'Lesson'>;
@@ -47,15 +48,7 @@ export function LessonScreen() {
   const lessonOrder = lesson?.order ?? 0;
   const totalLessonsInCourse = lessons.length;
 
-  const ensureBackendAccessToken = useCallback(async (): Promise<string | null> => {
-    if (!hasRemoteLessonApi() || !walletAddress) {
-      return null;
-    }
-
-    if (authToken) {
-      return authToken;
-    }
-
+  const refreshBackendAccessToken = useCallback(async (): Promise<string | null> => {
     if (refreshToken) {
       try {
         const refreshed = await refreshAuthSession({ refreshToken });
@@ -68,12 +61,45 @@ export function LessonScreen() {
             error,
           );
         }
+        setAuthSession(null, null);
         return null;
       }
     }
 
     return null;
-  }, [walletAddress, authToken, refreshToken, setAuthSession]);
+  }, [refreshToken, setAuthSession]);
+
+  const ensureBackendAccessToken = useCallback(async (): Promise<string | null> => {
+    if (!hasRemoteLessonApi() || !walletAddress) {
+      return null;
+    }
+
+    if (authToken) {
+      return authToken;
+    }
+
+    return refreshBackendAccessToken();
+  }, [walletAddress, authToken, refreshBackendAccessToken]);
+
+  const runWithTokenRefreshRetry = useCallback(
+    async (operation: (token: string) => Promise<void>) => {
+      const token = await ensureBackendAccessToken();
+      if (!token) return;
+
+      try {
+        await operation(token);
+      } catch (error) {
+        if (!(error instanceof ApiError) || error.status !== 401) {
+          throw error;
+        }
+
+        const refreshedToken = await refreshBackendAccessToken();
+        if (!refreshedToken) return;
+        await operation(refreshedToken);
+      }
+    },
+    [ensureBackendAccessToken, refreshBackendAccessToken],
+  );
 
   const syncLessonStart = useCallback(() => {
     if (startSynced || !hasRemoteLessonApi()) {
@@ -83,13 +109,12 @@ export function LessonScreen() {
     setStartSynced(true);
 
     (async () => {
-      const token = await ensureBackendAccessToken();
-      if (!token) return;
-
-      await startLesson(
-        lessonId,
-        { startedAt: new Date().toISOString() },
-        token,
+      await runWithTokenRefreshRetry((token) =>
+        startLesson(
+          lessonId,
+          { startedAt: new Date().toISOString() },
+          token,
+        ),
       );
     })().catch((error) => {
       if (__DEV__) {
@@ -97,7 +122,7 @@ export function LessonScreen() {
       }
       // Keep local flow active even if remote start sync fails.
     });
-  }, [startSynced, ensureBackendAccessToken, lessonId]);
+  }, [startSynced, runWithTokenRefreshRetry, lessonId]);
 
   const handleCheck = useCallback(() => {
     if (!currentQuestion) return;
@@ -131,17 +156,16 @@ export function LessonScreen() {
 
       if (hasRemoteLessonApi() && walletAddress) {
         (async () => {
-          const token = await ensureBackendAccessToken();
-          if (!token) return;
-
-          await submitLesson(
-            lessonId,
-            {
-              score,
-              totalQuestions,
-              completedAt: new Date().toISOString(),
-            },
-            token,
+          await runWithTokenRefreshRetry((token) =>
+            submitLesson(
+              lessonId,
+              {
+                score,
+                totalQuestions,
+                completedAt: new Date().toISOString(),
+              },
+              token,
+            ).then(() => undefined),
           );
         })().catch((error) => {
           if (__DEV__) {
@@ -171,7 +195,7 @@ export function LessonScreen() {
     lessonId,
     courseId,
     walletAddress,
-    ensureBackendAccessToken,
+    runWithTokenRefreshRetry,
     navigation,
   ]);
 

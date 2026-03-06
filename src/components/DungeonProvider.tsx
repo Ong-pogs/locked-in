@@ -1,6 +1,5 @@
-import { createContext, useContext, useRef, useState, useCallback, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useRef, useState, useCallback, type ReactNode } from 'react';
 import { View, StyleSheet } from 'react-native';
-import Constants from 'expo-constants';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
 // ---------------------------------------------------------------------------
@@ -28,25 +27,11 @@ export function useDungeon() {
 }
 
 // ---------------------------------------------------------------------------
-// Dev host resolution (same as before)
+// Dungeon source selection
 // ---------------------------------------------------------------------------
-function getDevHost(): string {
-  try {
-    const debuggerHost =
-      Constants.expoConfig?.hostUri ??
-      (Constants.manifest2 as any)?.extra?.expoGo?.debuggerHost ??
-      (Constants.manifest as any)?.debuggerHost;
-    if (debuggerHost) {
-      const ip = debuggerHost.split(':')[0];
-      if (ip) return ip;
-    }
-  } catch {}
-  return '192.168.1.103';
-}
-
-const DEV_URI = `http://${getDevHost()}:5173`;
 const IS_DEV = __DEV__;
 const DUNGEON_ASSET = require('../../web/dungeon/dist/index.html');
+const EXPLICIT_DUNGEON_DEV_URL = (process.env.EXPO_PUBLIC_DUNGEON_WEB_DEV_URL ?? '').trim();
 
 // ---------------------------------------------------------------------------
 // Provider
@@ -58,6 +43,7 @@ export function DungeonProvider({ children }: { children: ReactNode }) {
   const [sceneReady, setSceneReady] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
   const [webviewError, setWebviewError] = useState<string | null>(null);
+  const [useBundledDungeon, setUseBundledDungeon] = useState(!(IS_DEV && EXPLICIT_DUNGEON_DEV_URL));
   const [overlayContent, setOverlayContent] = useState<ReactNode>(null);
 
   // Message handlers registered by consumers
@@ -110,7 +96,9 @@ export function DungeonProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const webviewSource = IS_DEV ? { uri: DEV_URI } : DUNGEON_ASSET;
+  const webviewSource = useBundledDungeon
+    ? DUNGEON_ASSET
+    : { uri: EXPLICIT_DUNGEON_DEV_URL };
 
   const ctx: DungeonContextType = {
     isLoaded,
@@ -146,11 +134,25 @@ export function DungeonProvider({ children }: { children: ReactNode }) {
             mediaPlaybackRequiresUserAction={false}
             onMessage={handleWebViewMessage}
             onError={(e) => {
+              if (!useBundledDungeon) {
+                console.warn('[Dungeon] Dev URL failed, falling back to bundled asset');
+                setUseBundledDungeon(true);
+                setWebviewError(null);
+                return;
+              }
               const msg = `${e.nativeEvent.description} (code ${e.nativeEvent.code})`;
               console.warn('[Dungeon] WebView error:', msg);
               setWebviewError(msg);
             }}
-            onHttpError={(e) => console.warn('[Dungeon] HTTP error:', e.nativeEvent.statusCode)}
+            onHttpError={(e) => {
+              if (!useBundledDungeon) {
+                console.warn('[Dungeon] Dev URL HTTP error, falling back to bundled asset');
+                setUseBundledDungeon(true);
+                setWebviewError(null);
+                return;
+              }
+              console.warn('[Dungeon] HTTP error:', e.nativeEvent.statusCode);
+            }}
             mixedContentMode="always"
             injectedJavaScript={`
               (function() {

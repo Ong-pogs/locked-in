@@ -1,15 +1,17 @@
 import './global.css';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { fromByteArray } from 'base64-js';
 import { AppNavigator } from '@/navigation';
 import { DungeonProvider } from '@/components/DungeonProvider';
 import { useUserStore } from '@/stores';
 import { hasRemoteLessonApi } from '@/services/api';
+import { issueBackendSession } from '@/services/api/auth/backendAuth';
 import { refreshAuthSession } from '@/services/api/auth/authApi';
-import { reconnectWallet } from '@/services/solana';
+import { reconnectWallet, signAuthChallengeMessage } from '@/services/solana';
 
 const theme = {
   ...DarkTheme,
@@ -65,26 +67,56 @@ function useBackendSessionBootstrap() {
   const authToken = useUserStore((s) => s.authToken);
   const refreshToken = useUserStore((s) => s.refreshToken);
   const setAuthSession = useUserStore((s) => s.setAuthSession);
+  const attemptedKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!hasRemoteLessonApi()) return;
     if (!walletAddress || !walletAuthToken) return;
     if (authToken) return;
 
-    if (!refreshToken) {
-      if (__DEV__) {
-        console.warn('[lesson-api] missing refresh token; backend sync disabled until next auth');
-      }
+    const attemptKey = `${walletAddress}:${walletAuthToken}:${refreshToken ?? 'no-refresh'}`;
+    if (attemptedKeyRef.current === attemptKey) return;
+    attemptedKeyRef.current = attemptKey;
+
+    if (refreshToken) {
+      refreshAuthSession({ refreshToken })
+        .then((session) => {
+          setAuthSession(session.accessToken, session.refreshToken);
+        })
+        .catch((error) => {
+          if (__DEV__) {
+            console.warn('[lesson-api] startup refresh failed; backend sync disabled until next auth', error);
+          }
+          setAuthSession(null, null);
+        });
       return;
     }
 
-    refreshAuthSession({ refreshToken })
+    if (__DEV__) {
+      console.info('[lesson-api] missing refresh token; bootstrapping backend auth challenge');
+    }
+
+    issueBackendSession(walletAddress, async (message) => {
+      const signatureBytes = await signAuthChallengeMessage(
+        walletAddress,
+        message,
+        walletAuthToken,
+      );
+      return fromByteArray(signatureBytes);
+    })
       .then((session) => {
+        if (!session) {
+          setAuthSession(null, null);
+          return;
+        }
         setAuthSession(session.accessToken, session.refreshToken);
+        if (__DEV__) {
+          console.info('[lesson-api] backend auth bootstrap succeeded');
+        }
       })
       .catch((error) => {
         if (__DEV__) {
-          console.warn('[lesson-api] startup refresh failed; backend sync disabled until next auth', error);
+          console.warn('[lesson-api] backend auth bootstrap failed; backend sync disabled until next auth', error);
         }
         setAuthSession(null, null);
       });
