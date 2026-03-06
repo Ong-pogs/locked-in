@@ -15,6 +15,15 @@ Fuel is not an SPL token.
 - No token account
 - No token transfer instruction
 
+Current implementation checkpoint:
+
+- off-chain course state now carries `fuelCounter`, `fuelCap`, `lastFuelCreditDay`, and `lastBrewerBurnTs`
+- UI now exposes Fuel balance, cap, earn status, next burn timestamp, and zero-Fuel brewer stopped state
+- backend now computes at most `1 Fuel / day / course` after verified completion and syncs that snapshot back to the app
+- Fuel can be earned during gauntlet, but Brewer remains locked until gauntlet completion
+- backend now exposes an idempotent daily burn path keyed by scheduler `cycleId`
+- each burn attempt writes a receipt row so replaying the same cycle cannot double-burn Fuel
+
 ## Earn Rules
 
 Fuel credits are applied only after verified lesson completion.

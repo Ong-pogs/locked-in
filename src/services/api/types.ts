@@ -124,6 +124,30 @@ export interface ProgressSubmitLessonRequest {
   completedAt?: string;
 }
 
+export type ApiFuelEarnStatus =
+  | 'PAUSED_RECOVERY'
+  | 'AT_CAP'
+  | 'EARNED_TODAY'
+  | 'AVAILABLE';
+
+export interface CourseRuntimeSnapshot {
+  courseId: string;
+  currentStreak: number;
+  longestStreak: number;
+  gauntletActive: boolean;
+  gauntletDay: number;
+  saverCount: number;
+  saverRecoveryMode: boolean;
+  currentYieldRedirectBps: number;
+  extensionDays: number;
+  fuelCounter: number;
+  fuelCap: number;
+  lastFuelCreditDay: string | null;
+  lastBrewerBurnTs: string | null;
+  fuelAwarded: number;
+  fuelEarnStatus: ApiFuelEarnStatus;
+}
+
 export interface ProgressSubmitLessonResponse {
   lessonId: string;
   attemptId: string;
@@ -133,6 +157,7 @@ export interface ProgressSubmitLessonResponse {
   correctAnswers: number;
   completedAt: string;
   completionEventId?: string;
+  courseRuntime?: CourseRuntimeSnapshot;
 }
 
 export interface CourseProgressSnapshot {

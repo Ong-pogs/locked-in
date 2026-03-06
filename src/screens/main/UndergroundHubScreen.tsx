@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { MainStackParamList } from '@/navigation/types';
-import { useFlameStore, useSceneStore, useStreakStore, useTokenStore, useBrewStore } from '@/stores';
+import { useFlameStore, useSceneStore, useStreakStore } from '@/stores';
 import { useCourseStore } from '@/stores/courseStore';
 import { useDungeon } from '@/components/DungeonProvider';
 
@@ -25,7 +25,9 @@ export function UndergroundHubScreen() {
   const currentViewpoint = useSceneStore((s) => s.currentViewpoint);
   const roomPhase = useSceneStore((s) => s.roomPhase);
   const currentStreak = useStreakStore((s) => s.currentStreak);
+  const activeCourseId = useCourseStore((s) => s.activeCourseId);
   const activeCourseIds = useCourseStore((s) => s.activeCourseIds);
+  const courseStates = useCourseStore((s) => s.courseStates);
 
   // Initialize mock data
   useCourseStore.getState().initializeMockData();
@@ -84,17 +86,19 @@ export function UndergroundHubScreen() {
 
         case 'brewConfirmed': {
           const modeId = data.payload?.modeId;
-          if (modeId) {
-            const spent = useTokenStore.getState().spendTokens(1);
-            if (spent) {
-              useBrewStore.getState().startBrew(modeId);
+          if (modeId && activeCourseId) {
+            const activeState = courseStates[activeCourseId];
+            if (activeState?.fuelCounter > 0 && !activeState?.gauntletActive) {
+              useCourseStore.getState().startBrewForCourse(activeCourseId, modeId);
             }
           }
           break;
         }
 
         case 'brewCancelled':
-          useBrewStore.getState().cancelBrew();
+          if (activeCourseId) {
+            useCourseStore.getState().cancelBrewForCourse(activeCourseId);
+          }
           break;
 
         case 'viewpointChanged':
@@ -104,7 +108,7 @@ export function UndergroundHubScreen() {
           break;
       }
     });
-  }, [onMessage, navigation]);
+  }, [activeCourseId, courseStates, onMessage, navigation]);
 
   // Send initial state once scene is ready
   useEffect(() => {

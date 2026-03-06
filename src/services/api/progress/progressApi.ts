@@ -1,5 +1,6 @@
 import { httpRequest } from '../httpClient';
 import type {
+  CourseRuntimeSnapshot,
   CourseProgressSnapshot,
   ModuleProgressSnapshot,
   ProgressStartLessonRequest,
@@ -45,6 +46,18 @@ export function getCourseProgress(
   return httpRequest<CourseProgressSnapshot>(`/v1/progress/courses/${courseId}`, {
     token,
   });
+}
+
+export function getCourseRuntime(
+  courseId: string,
+  token: string,
+): Promise<CourseRuntimeSnapshot> {
+  return httpRequest<CourseRuntimeSnapshot>(
+    `/v1/progress/runtime/courses/${courseId}`,
+    {
+      token,
+    },
+  );
 }
 
 export function getModuleProgress(

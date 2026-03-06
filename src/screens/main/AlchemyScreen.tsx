@@ -1,8 +1,8 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { useTokenStore, useBrewStore } from '@/stores';
+import { useCourseStore } from '@/stores/courseStore';
 import { BREW_MODE_LIST, type BrewModeId } from '@/types';
 
 function formatTime(ms: number): string {
@@ -13,39 +13,96 @@ function formatTime(ms: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+function getMode(modeId: string | null) {
+  return BREW_MODE_LIST.find((mode) => mode.id === modeId) ?? null;
+}
+
 export function AlchemyScreen() {
   const navigation = useNavigation();
-  const { fullTokens, fragments, dailyEarned, walletCap, spendTokens } = useTokenStore();
-  const brew = useBrewStore();
+  const activeCourseId = useCourseStore((s) => s.activeCourseId);
+  const courseStates = useCourseStore((s) => s.courseStates);
+  const startBrewForCourse = useCourseStore((s) => s.startBrewForCourse);
+  const tickBrewForCourse = useCourseStore((s) => s.tickBrewForCourse);
+  const cancelBrewForCourse = useCourseStore((s) => s.cancelBrewForCourse);
   const [selectedMode, setSelectedMode] = useState<BrewModeId>('slow');
-  const [remainingMs, setRemainingMs] = useState(0);
-  const [progress, setProgress] = useState(0);
-  const [accrued, setAccrued] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
 
-  // Tick timer every second while brewing
+  const activeState = activeCourseId ? courseStates[activeCourseId] ?? null : null;
+  const activeMode = getMode(activeState?.brewModeId ?? null);
+  const fuelBalance = activeState?.fuelCounter ?? 0;
+  const fuelCap = activeState?.fuelCap ?? 7;
+  const gauntletActive = activeState?.gauntletActive ?? true;
+  const brewStatus = activeState?.brewStatus ?? 'IDLE';
+  const ichorBalance = activeState?.ichorBalance ?? 0;
+  const canBrew = fuelBalance > 0 && !gauntletActive;
+
   useEffect(() => {
-    if (brew.status !== 'BREWING') return;
+    if (!activeCourseId || brewStatus !== 'BREWING') {
+      return;
+    }
+
     const tick = () => {
-      brew.tickBrew();
-      setRemainingMs(brew.getRemainingMs());
-      setProgress(brew.getProgress());
-      setAccrued(brew.getCurrentIchorAccrued());
+      setNow(Date.now());
+      tickBrewForCourse(activeCourseId);
     };
+
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [brew.status]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeCourseId, brewStatus, tickBrewForCourse]);
+
+  const remainingMs = useMemo(() => {
+    if (brewStatus !== 'BREWING' || !activeState?.brewEndsAt) {
+      return 0;
+    }
+
+    return Math.max(0, new Date(activeState.brewEndsAt).getTime() - now);
+  }, [activeState?.brewEndsAt, brewStatus, now]);
+
+  const progress = useMemo(() => {
+    if (
+      brewStatus !== 'BREWING' ||
+      !activeState?.brewStartedAt ||
+      !activeState?.brewEndsAt
+    ) {
+      return 0;
+    }
+
+    const start = new Date(activeState.brewStartedAt).getTime();
+    const end = new Date(activeState.brewEndsAt).getTime();
+    const total = end - start;
+    if (total <= 0) return 1;
+
+    return Math.min(1, Math.max(0, (now - start) / total));
+  }, [activeState?.brewEndsAt, activeState?.brewStartedAt, brewStatus, now]);
+
+  const accrued = useMemo(() => {
+    if (brewStatus !== 'BREWING' || !activeState?.brewStartedAt || !activeMode) {
+      return 0;
+    }
+
+    const elapsedHours =
+      Math.max(0, now - new Date(activeState.brewStartedAt).getTime()) /
+      (60 * 60 * 1000);
+
+    return Math.floor(activeMode.ichorPerHour * elapsedHours);
+  }, [activeMode, activeState?.brewStartedAt, brewStatus, now]);
 
   const handleConfirmBrew = useCallback(() => {
-    const mode = BREW_MODE_LIST.find((m) => m.id === selectedMode);
-    if (!mode) return;
-    if (!spendTokens(mode.cost)) return;
-    brew.startBrew(selectedMode);
-  }, [selectedMode, spendTokens, brew]);
+    if (!activeCourseId || !canBrew || brewStatus === 'BREWING') {
+      return;
+    }
+
+    startBrewForCourse(activeCourseId, selectedMode);
+  }, [activeCourseId, brewStatus, canBrew, selectedMode, startBrewForCourse]);
 
   const handleCancel = useCallback(() => {
-    brew.cancelBrew();
-  }, [brew]);
+    if (!activeCourseId) {
+      return;
+    }
+
+    cancelBrewForCourse(activeCourseId);
+  }, [activeCourseId, cancelBrewForCourse]);
 
   return (
     <SafeAreaView className="flex-1 bg-neutral-950">
@@ -56,45 +113,61 @@ export function AlchemyScreen() {
 
         <Text className="mt-4 text-2xl font-bold text-white">Brew Ichor</Text>
         <Text className="mt-1 text-sm text-neutral-500">
-          Transmute M-Tokens into Ichor
+          Fuel powers the Brewer. Ichor accrues while the brew is active.
         </Text>
 
-        {/* Status card */}
         <View className="mt-4 rounded-xl border border-neutral-700 bg-neutral-900 p-4">
           <View className="flex-row justify-between">
             <View>
-              <Text className="text-xs uppercase tracking-wide text-neutral-500">Current Brew</Text>
+              <Text className="text-xs uppercase tracking-wide text-neutral-500">
+                Current Brew
+              </Text>
               <Text className="mt-1 text-base font-semibold text-white">
-                {brew.status === 'BREWING' && brew.activeModeId
-                  ? BREW_MODE_LIST.find((m) => m.id === brew.activeModeId)?.label ?? 'None'
-                  : 'None'}
+                {brewStatus === 'BREWING' && activeMode ? activeMode.label : 'None'}
               </Text>
             </View>
             <View className="items-end">
-              <Text className="text-xs uppercase tracking-wide text-neutral-500">Ichor Balance</Text>
+              <Text className="text-xs uppercase tracking-wide text-neutral-500">
+                Ichor Balance
+              </Text>
               <Text className="mt-1 text-base font-bold text-emerald-400">
-                {Math.floor(brew.ichorBalance)}
+                {Math.floor(ichorBalance)}
+              </Text>
+            </View>
+          </View>
+
+          <View className="mt-4 flex-row justify-between">
+            <View>
+              <Text className="text-xs uppercase tracking-wide text-neutral-500">
+                Fuel
+              </Text>
+              <Text className="mt-1 text-base font-bold text-orange-400">
+                {fuelBalance}/{fuelCap}
+              </Text>
+            </View>
+            <View className="items-end">
+              <Text className="text-xs uppercase tracking-wide text-neutral-500">
+                Brewer
+              </Text>
+              <Text className="mt-1 text-base font-semibold text-white">
+                {gauntletActive ? 'Locked' : canBrew ? 'Ready' : 'Stopped'}
               </Text>
             </View>
           </View>
         </View>
 
-        {brew.status === 'BREWING' ? (
-          /* ── BREWING STATE ── */
+        {brewStatus === 'BREWING' ? (
           <View className="mt-4">
             <View className="rounded-xl border border-amber-800 bg-amber-950/30 p-5">
               <Text className="text-center text-lg font-bold text-amber-400">
-                {BREW_MODE_LIST.find((m) => m.id === brew.activeModeId)?.symbol}{' '}
-                {BREW_MODE_LIST.find((m) => m.id === brew.activeModeId)?.label}
+                {activeMode?.symbol} {activeMode?.label ?? 'Active Brew'}
               </Text>
 
-              {/* Countdown */}
               <Text className="mt-4 text-center text-3xl font-bold text-white">
                 {formatTime(remainingMs)}
               </Text>
               <Text className="mt-1 text-center text-xs text-neutral-500">remaining</Text>
 
-              {/* Progress bar */}
               <View className="mt-4 h-2 overflow-hidden rounded-full bg-neutral-800">
                 <View
                   className="h-full rounded-full bg-amber-500"
@@ -102,7 +175,6 @@ export function AlchemyScreen() {
                 />
               </View>
 
-              {/* Ichor accruing */}
               <Text className="mt-4 text-center text-sm text-neutral-400">
                 Ichor accumulating:
               </Text>
@@ -110,7 +182,6 @@ export function AlchemyScreen() {
                 +{accrued}
               </Text>
 
-              {/* Cancel */}
               <Pressable
                 className="mt-5 rounded-lg border border-red-900 bg-red-950/30 py-3"
                 onPress={handleCancel}
@@ -122,31 +193,32 @@ export function AlchemyScreen() {
             </View>
           </View>
         ) : (
-          /* ── IDLE STATE ── */
           <View className="mt-4">
-            {/* Brew mode cards */}
             {BREW_MODE_LIST.map((mode) => {
               const isSelected = selectedMode === mode.id;
-              const canAfford = fullTokens >= mode.cost;
               return (
                 <Pressable
                   key={mode.id}
-                  onPress={() => canAfford && setSelectedMode(mode.id)}
+                  onPress={() => canBrew && setSelectedMode(mode.id)}
                   className={`mt-3 rounded-xl border p-4 ${
                     isSelected
                       ? 'border-amber-500 bg-amber-950/30'
                       : 'border-neutral-700 bg-neutral-900'
-                  } ${!canAfford ? 'opacity-40' : ''}`}
+                  } ${!canBrew ? 'opacity-40' : ''}`}
                 >
                   <View className="flex-row items-center justify-between">
                     <View className="flex-row items-center gap-3">
                       <Text className="text-2xl">{mode.symbol}</Text>
                       <View>
-                        <Text className={`text-base font-semibold ${isSelected ? 'text-amber-400' : 'text-white'}`}>
+                        <Text
+                          className={`text-base font-semibold ${
+                            isSelected ? 'text-amber-400' : 'text-white'
+                          }`}
+                        >
                           {mode.label}
                         </Text>
                         <Text className="text-xs text-neutral-500">
-                          {mode.durationLabel} &middot; {mode.cost}M token
+                          {mode.durationLabel}
                         </Text>
                       </View>
                     </View>
@@ -168,30 +240,27 @@ export function AlchemyScreen() {
               );
             })}
 
-            {/* Confirm button */}
             <Pressable
               className={`mt-5 rounded-xl py-4 ${
-                fullTokens >= (BREW_MODE_LIST.find((m) => m.id === selectedMode)?.cost ?? 1)
-                  ? 'bg-purple-700'
-                  : 'bg-neutral-800'
+                canBrew ? 'bg-purple-700' : 'bg-neutral-800'
               }`}
               onPress={handleConfirmBrew}
-              disabled={fullTokens < (BREW_MODE_LIST.find((m) => m.id === selectedMode)?.cost ?? 1)}
+              disabled={!canBrew}
             >
               <Text className="text-center text-base font-bold text-white">
-                CONFIRM BREW
+                {gauntletActive
+                  ? 'GAUNTLET LOCKED'
+                  : fuelBalance <= 0
+                    ? 'FUEL REQUIRED'
+                    : 'CONFIRM BREW'}
               </Text>
             </Pressable>
           </View>
         )}
 
-        {/* M Token balance footer */}
-        <View className="mt-6 mb-8 rounded-xl border border-neutral-700 bg-neutral-900 p-4">
-          <Text className="text-center text-2xl font-bold text-emerald-400">
-            {fullTokens} M
-          </Text>
-          <Text className="mt-1 text-center text-xs text-neutral-500">
-            Fragments: {fragments.toFixed(2)} | Today: {dailyEarned.toFixed(1)}/1.0 | Cap: {fullTokens}/{walletCap}
+        <View className="mb-8 mt-6 rounded-xl border border-neutral-700 bg-neutral-900 p-4">
+          <Text className="text-center text-sm text-neutral-500">
+            Fuel is the brewing resource for this course.
           </Text>
         </View>
       </ScrollView>

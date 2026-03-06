@@ -2,8 +2,11 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { asyncStorageAdapter } from './storage';
 import { MOCK_COURSES, MOCK_LESSONS } from '@/data/mockCourses';
-import { hasRemoteLessonApi } from '@/services/api';
+import { getCourseRuntime, hasRemoteLessonApi } from '@/services/api';
+import type { CourseRuntimeSnapshot } from '@/services/api/types';
+import { BREW_MODES } from '@/types';
 import type {
+  BrewModeId,
   Course,
   CourseModule,
   Lesson,
@@ -11,7 +14,7 @@ import type {
   FlameState,
 } from '@/types';
 import { DEFAULT_COURSE_STATE } from '@/types/courseState';
-import type { CourseGameState } from '@/types/courseState';
+import type { CourseGameState, FuelEarnStatus } from '@/types/courseState';
 import { loadHydratedContentSnapshot } from '@/services/repositories';
 
 interface CourseStore {
@@ -37,6 +40,10 @@ interface CourseStore {
   getStreak: () => number;
   getSaverCount: () => number;
   getIchorBalance: () => number;
+  getFuelBalance: () => number;
+  getFuelCap: () => number;
+  getFuelEarnStatus: () => FuelEarnStatus;
+  getNextFuelBurnAt: () => string | null;
   getFlameState: () => FlameState;
   isGauntletActive: () => boolean;
 
@@ -49,7 +56,7 @@ interface CourseStore {
   completeLesson: (lessonId: string, courseId: string, score: number) => void;
   completeDayForCourse: (courseId: string) => void;
   useSaverForCourse: (courseId: string) => boolean;
-  startBrewForCourse: (courseId: string, modeId: string) => void;
+  startBrewForCourse: (courseId: string, modeId: BrewModeId) => void;
   tickBrewForCourse: (courseId: string) => void;
   cancelBrewForCourse: (courseId: string) => void;
 
@@ -66,6 +73,8 @@ interface CourseStore {
   unenrollCourse: (courseId: string) => void;
   isEnrolled: (courseId: string) => boolean;
   getEnrolledCourses: () => Course[];
+  syncCourseRuntime: (courseId: string, snapshot: CourseRuntimeSnapshot) => void;
+  refreshCourseRuntime: (courseId: string, token: string) => Promise<void>;
   resetLessonProgressForCourse: (courseId: string) => void;
   initializeContent: (force?: boolean) => Promise<void>;
   initializeMockData: (errorMessage?: string | null) => void;
@@ -87,6 +96,41 @@ const initialState = {
   contentError: null as string | null,
   contentInitialized: false,
 };
+
+function normalizeCourseGameState(
+  state?: Partial<CourseGameState> | null,
+): CourseGameState {
+  return {
+    ...DEFAULT_COURSE_STATE,
+    ...state,
+  };
+}
+
+function deriveFuelEarnStatus(state: CourseGameState): FuelEarnStatus {
+  const today = new Date().toISOString().slice(0, 10);
+  if (state.saverRecoveryMode) return 'PAUSED_RECOVERY';
+  if (state.fuelCounter >= state.fuelCap) return 'AT_CAP';
+  if (state.lastFuelCreditDay === today) return 'EARNED_TODAY';
+  return 'AVAILABLE';
+}
+
+function deriveNextFuelBurnAt(state: CourseGameState): string | null {
+  if (state.brewStatus !== 'BREWING' || state.fuelCounter <= 0) {
+    return null;
+  }
+
+  const anchor = state.lastBrewerBurnTs ?? state.brewStartedAt;
+  if (!anchor) {
+    return null;
+  }
+
+  return new Date(new Date(anchor).getTime() + 24 * 60 * 60 * 1000).toISOString();
+}
+
+function getBrewMode(modeId: string | null) {
+  if (!modeId) return null;
+  return BREW_MODES[modeId as BrewModeId] ?? null;
+}
 
 function buildFallbackModules(): Record<string, CourseModule[]> {
   return MOCK_COURSES.reduce<Record<string, CourseModule[]>>((acc, course) => {
@@ -134,6 +178,26 @@ export const useCourseStore = create<CourseStore>()(
         return state?.ichorBalance ?? 0;
       },
 
+      getFuelBalance: () => {
+        const state = get().getActiveState();
+        return state?.fuelCounter ?? 0;
+      },
+
+      getFuelCap: () => {
+        const state = get().getActiveState();
+        return state?.fuelCap ?? DEFAULT_COURSE_STATE.fuelCap;
+      },
+
+      getFuelEarnStatus: () => {
+        const state = get().getActiveState();
+        return state ? deriveFuelEarnStatus(state) : 'AVAILABLE';
+      },
+
+      getNextFuelBurnAt: () => {
+        const state = get().getActiveState();
+        return state ? deriveNextFuelBurnAt(state) : null;
+      },
+
       getFlameState: () => {
         const state = get().getActiveState();
         return state?.flameState ?? 'COLD';
@@ -149,12 +213,11 @@ export const useCourseStore = create<CourseStore>()(
 
       activateCourse: (courseId, lockAmount, lockDuration) => {
         const { courseStates, activeCourseIds, enrolledCourseIds } = get();
-        const newState: CourseGameState = {
-          ...DEFAULT_COURSE_STATE,
+        const newState: CourseGameState = normalizeCourseGameState({
           lockAmount,
           lockDuration,
           lockStartDate: new Date().toISOString(),
-        };
+        });
         set({
           courseStates: { ...courseStates, [courseId]: newState },
           activeCourseIds: activeCourseIds.includes(courseId)
@@ -227,6 +290,7 @@ export const useCourseStore = create<CourseStore>()(
             [courseId]: {
               ...state,
               saverCount: state.saverCount + 1,
+              saverRecoveryMode: true,
             },
           },
         });
@@ -236,10 +300,20 @@ export const useCourseStore = create<CourseStore>()(
       startBrewForCourse: (courseId, modeId) => {
         const { courseStates } = get();
         const state = courseStates[courseId];
-        if (!state || state.brewStatus === 'BREWING') return;
+        if (
+          !state ||
+          state.brewStatus === 'BREWING' ||
+          state.fuelCounter <= 0 ||
+          state.gauntletActive
+        ) {
+          return;
+        }
+
+        const mode = BREW_MODES[modeId];
+        if (!mode) return;
 
         const now = new Date();
-        const endsAt = new Date(now.getTime() + 4 * 60 * 60 * 1000); // 4 hours
+        const endsAt = new Date(now.getTime() + mode.durationMs);
 
         set({
           courseStates: {
@@ -263,7 +337,10 @@ export const useCourseStore = create<CourseStore>()(
         const now = new Date();
         if (now >= new Date(state.brewEndsAt)) {
           // Brew complete — award ichor
-          const ichorReward = 500;
+          const mode = getBrewMode(state.brewModeId);
+          const ichorReward = mode
+            ? Math.round(mode.ichorPerHour * (mode.durationMs / (60 * 60 * 1000)))
+            : 0;
           set({
             courseStates: {
               ...courseStates,
@@ -286,6 +363,16 @@ export const useCourseStore = create<CourseStore>()(
         const state = courseStates[courseId];
         if (!state) return;
 
+        const mode = getBrewMode(state.brewModeId);
+        const accruedIchor =
+          state.brewStatus === 'BREWING' && state.brewStartedAt && mode
+            ? Math.floor(
+                mode.ichorPerHour *
+                  ((Date.now() - new Date(state.brewStartedAt).getTime()) /
+                    (60 * 60 * 1000)),
+              )
+            : 0;
+
         set({
           courseStates: {
             ...courseStates,
@@ -295,6 +382,8 @@ export const useCourseStore = create<CourseStore>()(
               brewModeId: null,
               brewStartedAt: null,
               brewEndsAt: null,
+              ichorBalance: state.ichorBalance + accruedIchor,
+              totalIchorProduced: state.totalIchorProduced + accruedIchor,
             },
           },
         });
@@ -381,7 +470,10 @@ export const useCourseStore = create<CourseStore>()(
           // Initialize course state if not exists
           const newCourseStates = state.courseStates[courseId]
             ? state.courseStates
-            : { ...state.courseStates, [courseId]: { ...DEFAULT_COURSE_STATE } };
+            : {
+                ...state.courseStates,
+                [courseId]: normalizeCourseGameState(),
+              };
 
           set({
             enrolledCourseIds: newEnrolled,
@@ -410,6 +502,41 @@ export const useCourseStore = create<CourseStore>()(
       getEnrolledCourses: () => {
         const state = get();
         return state.courses.filter((c) => state.enrolledCourseIds.includes(c.id));
+      },
+
+      syncCourseRuntime: (courseId, snapshot) => {
+        const state = get();
+        const existingState = normalizeCourseGameState(state.courseStates[courseId]);
+
+        set({
+          courseStates: {
+            ...state.courseStates,
+            [courseId]: {
+              ...existingState,
+              currentStreak: snapshot.currentStreak,
+              longestStreak: snapshot.longestStreak,
+              gauntletActive: snapshot.gauntletActive,
+              gauntletDay: snapshot.gauntletDay,
+              saverCount: snapshot.saverCount,
+              saverRecoveryMode: snapshot.saverRecoveryMode,
+              currentYieldRedirectBps: snapshot.currentYieldRedirectBps,
+              extensionDays: snapshot.extensionDays,
+              fuelCounter: snapshot.fuelCounter,
+              fuelCap: snapshot.fuelCap,
+              lastFuelCreditDay: snapshot.lastFuelCreditDay,
+              lastBrewerBurnTs: snapshot.lastBrewerBurnTs,
+            },
+          },
+        });
+      },
+
+      refreshCourseRuntime: async (courseId, token) => {
+        if (!courseId || !token || !hasRemoteLessonApi()) {
+          return;
+        }
+
+        const snapshot = await getCourseRuntime(courseId, token);
+        get().syncCourseRuntime(courseId, snapshot);
       },
 
       resetLessonProgressForCourse: (courseId) => {
@@ -535,6 +662,22 @@ export const useCourseStore = create<CourseStore>()(
     {
       name: 'locked-in-courses',
       storage: createJSONStorage(() => asyncStorageAdapter),
+      merge: (persisted, current) => {
+        const mergedState = {
+          ...current,
+          ...(persisted as Partial<CourseStore>),
+        };
+
+        return {
+          ...mergedState,
+          courseStates: Object.fromEntries(
+            Object.entries(mergedState.courseStates ?? {}).map(([courseId, state]) => [
+              courseId,
+              normalizeCourseGameState(state),
+            ]),
+          ),
+        };
+      },
       partialize: (state) => {
         const { contentLoading, contentError, ...persisted } = state;
         void contentLoading;

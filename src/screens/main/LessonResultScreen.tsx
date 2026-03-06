@@ -17,7 +17,6 @@ export function LessonResultScreen() {
   const currentStreak = useStreakStore((s) => s.currentStreak);
 
   const correctCount = Math.round((score / 100) * totalQuestions);
-  const fragmentReward = score >= 80 ? 0.3 : score >= 50 ? 0.2 : 0.1;
 
   const scoreColor =
     score >= 80
@@ -37,11 +36,11 @@ export function LessonResultScreen() {
 
         {/* Reward cards */}
         <View className="mt-8 w-full gap-4">
-          {/* Fragment reward */}
+          {/* Verification status */}
           <View className="rounded-xl border border-neutral-700 bg-neutral-900 p-5">
-            <Text className="text-sm text-neutral-500">Fragment Earned</Text>
+            <Text className="text-sm text-neutral-500">Lesson Status</Text>
             <Text className="mt-1 text-2xl font-bold text-emerald-400">
-              +{fragmentReward} M
+              Verified
             </Text>
           </View>
 

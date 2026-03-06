@@ -1,4 +1,5 @@
 import { badRequest, notFound } from '../../lib/errors.mjs';
+import { appConfig } from '../../config.mjs';
 import {
   hasDatabase,
   queryAsWallet,
@@ -7,6 +8,14 @@ import {
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const FUEL_DAILY_REWARD = 1;
+const DEFAULT_FUEL_CAP = 7;
+const SAVER_REDIRECT_BPS_BY_COUNT = {
+  0: 0,
+  1: 1000,
+  2: 2000,
+  3: 2000,
+};
 
 function assertAttemptId(attemptId) {
   if (!attemptId || typeof attemptId !== 'string' || !UUID_RE.test(attemptId)) {
@@ -21,6 +30,16 @@ function normalizeAnswerText(value) {
   }
 
   return value.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function diffDays(fromDay, toDay) {
+  const from = new Date(`${fromDay}T00:00:00.000Z`).getTime();
+  const to = new Date(`${toDay}T00:00:00.000Z`).getTime();
+  return Math.round((to - from) / (24 * 60 * 60 * 1000));
+}
+
+function getSaverRedirectBps(saverCount) {
+  return SAVER_REDIRECT_BPS_BY_COUNT[saverCount] ?? 10000;
 }
 
 function assertAnswers(answers) {
@@ -192,6 +211,170 @@ async function getCourseIdForPublishedLesson(client, lessonId, lessonVersionId) 
   }
 
   return result.rows[0].courseId;
+}
+
+async function ensureCourseRuntimeState(client, walletAddress, courseId) {
+  await client.query(
+    `
+      insert into lesson.user_course_runtime_state (
+        wallet_address,
+        course_id,
+        fuel_cap
+      )
+      values ($1, $2, $3)
+      on conflict (wallet_address, course_id) do nothing
+    `,
+    [walletAddress, courseId, DEFAULT_FUEL_CAP],
+  );
+
+  const result = await client.query(
+    `
+      select
+        wallet_address as "walletAddress",
+        course_id as "courseId",
+        current_streak as "currentStreak",
+        longest_streak as "longestStreak",
+        gauntlet_active as "gauntletActive",
+        gauntlet_day as "gauntletDay",
+        saver_count as "saverCount",
+        saver_recovery_mode as "saverRecoveryMode",
+        current_yield_redirect_bps as "currentYieldRedirectBps",
+        extension_days as "extensionDays",
+        fuel_counter as "fuelCounter",
+        fuel_cap as "fuelCap",
+        last_completed_day::text as "lastCompletedDay",
+        last_miss_day::text as "lastMissDay",
+        last_fuel_credit_day::text as "lastFuelCreditDay",
+        last_brewer_burn_ts as "lastBrewerBurnTs"
+      from lesson.user_course_runtime_state
+      where wallet_address = $1
+        and course_id = $2
+      limit 1
+    `,
+    [walletAddress, courseId],
+  );
+
+  return result.rows[0];
+}
+
+function deriveFuelEarnStatus(state, completionDay) {
+  if (state.saverRecoveryMode) return 'PAUSED_RECOVERY';
+  if (state.fuelCounter >= state.fuelCap) return 'AT_CAP';
+  if (state.lastFuelCreditDay === completionDay) return 'EARNED_TODAY';
+  return 'AVAILABLE';
+}
+
+async function applyVerifiedCompletionToCourseRuntime(
+  client,
+  walletAddress,
+  courseId,
+  completionDay,
+  rewardUnits,
+) {
+  const state = await ensureCourseRuntimeState(client, walletAddress, courseId);
+  const sameDay = state.lastCompletedDay === completionDay;
+
+  let currentStreak = state.currentStreak;
+  let longestStreak = state.longestStreak;
+  let gauntletActive = state.gauntletActive;
+  let gauntletDay = state.gauntletDay;
+  let saverCount = state.saverCount;
+  let saverRecoveryMode = state.saverRecoveryMode;
+  let currentYieldRedirectBps = state.currentYieldRedirectBps;
+
+  if (!sameDay) {
+    const consecutive =
+      state.lastCompletedDay != null && diffDays(state.lastCompletedDay, completionDay) === 1;
+    currentStreak = state.lastCompletedDay == null ? 1 : consecutive ? state.currentStreak + 1 : 1;
+    longestStreak = Math.max(state.longestStreak, currentStreak);
+
+    if (state.gauntletActive) {
+      gauntletDay = Math.min(state.gauntletDay + 1, 8);
+      gauntletActive = state.gauntletDay < 7;
+    }
+  }
+
+  if (saverRecoveryMode && saverCount > 0) {
+    saverCount = Math.max(0, saverCount - 1);
+    saverRecoveryMode = saverCount > 0;
+    currentYieldRedirectBps = getSaverRedirectBps(saverCount);
+  }
+
+  let fuelCounter = state.fuelCounter;
+  let lastFuelCreditDay = state.lastFuelCreditDay;
+  let fuelAwarded = 0;
+
+  if (
+    rewardUnits > 0 &&
+    !saverRecoveryMode &&
+    fuelCounter < state.fuelCap &&
+    lastFuelCreditDay !== completionDay
+  ) {
+    fuelCounter = Math.min(state.fuelCap, fuelCounter + FUEL_DAILY_REWARD);
+    lastFuelCreditDay = completionDay;
+    fuelAwarded = fuelCounter > state.fuelCounter ? FUEL_DAILY_REWARD : 0;
+  }
+
+  await client.query(
+    `
+      update lesson.user_course_runtime_state
+      set current_streak = $3,
+          longest_streak = $4,
+          gauntlet_active = $5,
+          gauntlet_day = $6,
+          saver_count = $7,
+          saver_recovery_mode = $8,
+          current_yield_redirect_bps = $9,
+          fuel_counter = $10,
+          last_completed_day = $11::date,
+          last_fuel_credit_day = $12::date,
+          updated_at = now()
+      where wallet_address = $1
+        and course_id = $2
+    `,
+    [
+      walletAddress,
+      courseId,
+      currentStreak,
+      longestStreak,
+      gauntletActive,
+      gauntletDay,
+      saverCount,
+      saverRecoveryMode,
+      currentYieldRedirectBps,
+      fuelCounter,
+      completionDay,
+      lastFuelCreditDay,
+    ],
+  );
+
+  return {
+    courseId,
+    currentStreak,
+    longestStreak,
+    gauntletActive,
+    gauntletDay,
+    saverCount,
+    saverRecoveryMode,
+    currentYieldRedirectBps,
+    extensionDays: state.extensionDays,
+    fuelCounter,
+    fuelCap: state.fuelCap,
+    lastFuelCreditDay,
+    lastBrewerBurnTs: state.lastBrewerBurnTs,
+    fuelAwarded,
+    fuelEarnStatus: deriveFuelEarnStatus(
+      {
+        ...state,
+        saverCount,
+        saverRecoveryMode,
+        currentYieldRedirectBps,
+        fuelCounter,
+        lastFuelCreditDay,
+      },
+      completionDay,
+    ),
+  };
 }
 
 function gradeAnswers(questions, submittedAnswers) {
@@ -404,6 +587,382 @@ async function readVerifiedCompletionEvent(client, lessonAttemptId) {
   return result.rows[0] ?? null;
 }
 
+export async function readCourseRuntimeState(client, walletAddress, courseId) {
+  const state = await ensureCourseRuntimeState(client, walletAddress, courseId);
+  const referenceDay =
+    state.lastFuelCreditDay ??
+    state.lastCompletedDay ??
+    new Date().toISOString().slice(0, 10);
+
+  return {
+    courseId,
+    currentStreak: state.currentStreak,
+    longestStreak: state.longestStreak,
+    gauntletActive: state.gauntletActive,
+    gauntletDay: state.gauntletDay,
+    saverCount: state.saverCount,
+    saverRecoveryMode: state.saverRecoveryMode,
+    currentYieldRedirectBps: state.currentYieldRedirectBps,
+    extensionDays: state.extensionDays,
+    fuelCounter: state.fuelCounter,
+    fuelCap: state.fuelCap,
+    lastFuelCreditDay: state.lastFuelCreditDay,
+    lastBrewerBurnTs: state.lastBrewerBurnTs,
+    fuelAwarded: 0,
+    fuelEarnStatus: deriveFuelEarnStatus(state, referenceDay),
+  };
+}
+
+export async function getCourseRuntimeSnapshot(walletAddress, courseId) {
+  if (!hasDatabase()) {
+    return {
+      courseId,
+      currentStreak: 0,
+      longestStreak: 0,
+      gauntletActive: true,
+      gauntletDay: 1,
+      saverCount: 0,
+      saverRecoveryMode: false,
+      currentYieldRedirectBps: 0,
+      extensionDays: 0,
+      fuelCounter: 0,
+      fuelCap: DEFAULT_FUEL_CAP,
+      lastFuelCreditDay: null,
+      lastBrewerBurnTs: null,
+      fuelAwarded: 0,
+      fuelEarnStatus: 'AVAILABLE',
+    };
+  }
+
+  return withTransactionAsWallet(walletAddress, async (client) =>
+    readCourseRuntimeState(client, walletAddress, courseId),
+  );
+}
+
+async function readFuelBurnReceipt(client, walletAddress, courseId, cycleId) {
+  const result = await client.query(
+    `
+      select
+        cycle_id as "cycleId",
+        burned_at as "burnedAt",
+        applied,
+        fuel_before as "fuelBefore",
+        fuel_after as "fuelAfter",
+        reason
+      from lesson.fuel_burn_cycle_receipts
+      where wallet_address = $1
+        and course_id = $2
+        and cycle_id = $3
+      limit 1
+    `,
+    [walletAddress, courseId, cycleId],
+  );
+
+  return result.rows[0] ?? null;
+}
+
+async function readMissConsequenceReceipt(client, walletAddress, courseId, missEventId) {
+  const result = await client.query(
+    `
+      select
+        miss_event_id as "missEventId",
+        miss_day::text as "missDay",
+        applied,
+        reason,
+        saver_count_before as "saverCountBefore",
+        saver_count_after as "saverCountAfter",
+        redirect_bps_before as "redirectBpsBefore",
+        redirect_bps_after as "redirectBpsAfter",
+        extension_days_before as "extensionDaysBefore",
+        extension_days_after as "extensionDaysAfter"
+      from lesson.miss_consequence_receipts
+      where wallet_address = $1
+        and course_id = $2
+        and miss_event_id = $3
+      limit 1
+    `,
+    [walletAddress, courseId, missEventId],
+  );
+
+  return result.rows[0] ?? null;
+}
+
+export async function consumeSaverOrApplyFullConsequence(
+  walletAddress,
+  courseId,
+  missEventId,
+  missDay = null,
+) {
+  if (!missEventId || typeof missEventId !== 'string') {
+    throw badRequest('missEventId is required', 'MISSING_MISS_EVENT_ID');
+  }
+
+  const missDayValue = missDay ?? new Date().toISOString().slice(0, 10);
+
+  if (!hasDatabase()) {
+    return {
+      missEventId,
+      applied: false,
+      reason: 'NO_DATABASE',
+    };
+  }
+
+  return withTransactionAsWallet(walletAddress, async (client) => {
+    const existingReceipt = await readMissConsequenceReceipt(
+      client,
+      walletAddress,
+      courseId,
+      missEventId,
+    );
+
+    if (existingReceipt) {
+      const courseRuntime = await readCourseRuntimeState(client, walletAddress, courseId);
+      return {
+        missEventId,
+        applied: existingReceipt.applied,
+        reason: existingReceipt.reason,
+        courseRuntime,
+      };
+    }
+
+    const state = await ensureCourseRuntimeState(client, walletAddress, courseId);
+    const saverCountBefore = state.saverCount;
+    const redirectBpsBefore = state.currentYieldRedirectBps;
+    const extensionDaysBefore = state.extensionDays;
+
+    let applied = false;
+    let reason = 'GAUNTLET_LOCKED';
+    let saverCountAfter = saverCountBefore;
+    let redirectBpsAfter = redirectBpsBefore;
+    let extensionDaysAfter = extensionDaysBefore;
+    let saverRecoveryMode = state.saverRecoveryMode;
+    let currentStreak = state.currentStreak;
+
+    if (!state.gauntletActive) {
+      applied = true;
+      currentStreak = 0;
+
+      if (state.saverCount < 3) {
+        saverCountAfter = state.saverCount + 1;
+        redirectBpsAfter = getSaverRedirectBps(saverCountAfter);
+        saverRecoveryMode = true;
+        reason = 'SAVER_CONSUMED';
+      } else {
+        redirectBpsAfter = 10000;
+        extensionDaysAfter = state.extensionDays + appConfig.missExtensionDays;
+        saverRecoveryMode = true;
+        reason = 'FULL_CONSEQUENCE';
+      }
+
+      await client.query(
+        `
+          update lesson.user_course_runtime_state
+          set current_streak = $3,
+              saver_count = $4,
+              saver_recovery_mode = $5,
+              current_yield_redirect_bps = $6,
+              extension_days = $7,
+              last_miss_day = $8::date,
+              updated_at = now()
+          where wallet_address = $1
+            and course_id = $2
+        `,
+        [
+          walletAddress,
+          courseId,
+          currentStreak,
+          saverCountAfter,
+          saverRecoveryMode,
+          redirectBpsAfter,
+          extensionDaysAfter,
+          missDayValue,
+        ],
+      );
+    }
+
+    await client.query(
+      `
+        insert into lesson.miss_consequence_receipts (
+          wallet_address,
+          course_id,
+          miss_event_id,
+          miss_day,
+          applied,
+          reason,
+          saver_count_before,
+          saver_count_after,
+          redirect_bps_before,
+          redirect_bps_after,
+          extension_days_before,
+          extension_days_after
+        )
+        values (
+          $1,
+          $2,
+          $3,
+          $4::date,
+          $5,
+          $6,
+          $7,
+          $8,
+          $9,
+          $10,
+          $11,
+          $12
+        )
+      `,
+      [
+        walletAddress,
+        courseId,
+        missEventId,
+        missDayValue,
+        applied,
+        reason,
+        saverCountBefore,
+        saverCountAfter,
+        redirectBpsBefore,
+        redirectBpsAfter,
+        extensionDaysBefore,
+        extensionDaysAfter,
+      ],
+    );
+
+    const courseRuntime = await readCourseRuntimeState(client, walletAddress, courseId);
+
+    return {
+      missEventId,
+      applied,
+      reason,
+      courseRuntime,
+    };
+  });
+}
+
+export async function consumeDailyFuel(
+  walletAddress,
+  courseId,
+  cycleId,
+  burnedAt = null,
+) {
+  if (!cycleId || typeof cycleId !== 'string') {
+    throw badRequest('cycleId is required', 'MISSING_CYCLE_ID');
+  }
+
+  const timestamp = burnedAt ?? new Date().toISOString();
+
+  if (!hasDatabase()) {
+    return {
+      cycleId,
+      applied: false,
+      fuelBurned: 0,
+      burnedAt: timestamp,
+      reason: 'NO_DATABASE',
+    };
+  }
+
+  return withTransactionAsWallet(walletAddress, async (client) => {
+    const existingReceipt = await readFuelBurnReceipt(
+      client,
+      walletAddress,
+      courseId,
+      cycleId,
+    );
+
+    if (existingReceipt) {
+      const courseRuntime = await readCourseRuntimeState(client, walletAddress, courseId);
+      return {
+        cycleId,
+        applied: existingReceipt.applied,
+        fuelBurned: existingReceipt.applied ? 1 : 0,
+        burnedAt: existingReceipt.burnedAt,
+        reason: existingReceipt.reason ?? 'ALREADY_PROCESSED',
+        courseRuntime,
+      };
+    }
+
+    const state = await ensureCourseRuntimeState(client, walletAddress, courseId);
+    const burnedAtDate = new Date(timestamp);
+    const lastBurnAt = state.lastBrewerBurnTs
+      ? new Date(state.lastBrewerBurnTs)
+      : null;
+    const enoughTimeElapsed =
+      !lastBurnAt ||
+      burnedAtDate.getTime() - lastBurnAt.getTime() >= 24 * 60 * 60 * 1000;
+
+    let applied = false;
+    let fuelAfter = state.fuelCounter;
+    let reason = 'NO_FUEL';
+
+    if (state.gauntletActive) {
+      reason = 'GAUNTLET_LOCKED';
+    } else if (!enoughTimeElapsed) {
+      reason = 'TOO_EARLY';
+    } else if (state.fuelCounter > 0) {
+      applied = true;
+      fuelAfter = state.fuelCounter - 1;
+      reason = 'BURNED';
+
+      await client.query(
+        `
+          update lesson.user_course_runtime_state
+          set fuel_counter = $3,
+              last_brewer_burn_ts = $4::timestamptz,
+              updated_at = now()
+          where wallet_address = $1
+            and course_id = $2
+        `,
+        [walletAddress, courseId, fuelAfter, timestamp],
+      );
+    }
+
+    await client.query(
+      `
+        insert into lesson.fuel_burn_cycle_receipts (
+          wallet_address,
+          course_id,
+          cycle_id,
+          burned_at,
+          applied,
+          fuel_before,
+          fuel_after,
+          reason
+        )
+        values (
+          $1,
+          $2,
+          $3,
+          $4::timestamptz,
+          $5,
+          $6,
+          $7,
+          $8
+        )
+      `,
+      [
+        walletAddress,
+        courseId,
+        cycleId,
+        timestamp,
+        applied,
+        state.fuelCounter,
+        fuelAfter,
+        reason,
+      ],
+    );
+
+    const courseRuntime = await readCourseRuntimeState(client, walletAddress, courseId);
+
+    return {
+      cycleId,
+      applied,
+      fuelBurned: applied ? 1 : 0,
+      burnedAt: timestamp,
+      reason,
+      courseRuntime,
+    };
+  });
+}
+
 export async function startLessonAttempt(
   walletAddress,
   lessonId,
@@ -487,6 +1046,18 @@ export async function submitLessonAttempt(
         client,
         attempt.attemptId,
       );
+      const courseId =
+        completionEvent?.courseId ??
+        (await getCourseIdForPublishedLesson(
+          client,
+          lessonId,
+          attempt.lessonVersionId,
+        ));
+      const courseRuntime = await readCourseRuntimeState(
+        client,
+        walletAddress,
+        courseId,
+      );
 
       return {
         lessonId,
@@ -497,6 +1068,7 @@ export async function submitLessonAttempt(
         totalQuestions,
         completedAt: attempt.submittedAt,
         completionEventId: completionEvent?.eventId ?? attempt.attemptId,
+        courseRuntime,
       };
     }
 
@@ -533,6 +1105,13 @@ export async function submitLessonAttempt(
       grading,
       timestamp,
     );
+    const courseRuntime = await applyVerifiedCompletionToCourseRuntime(
+      client,
+      walletAddress,
+      completionEvent.courseId,
+      completionEvent.completionDay,
+      completionEvent.rewardUnits,
+    );
 
     return {
       lessonId,
@@ -543,6 +1122,7 @@ export async function submitLessonAttempt(
       totalQuestions: grading.totalQuestions,
       completedAt: timestamp,
       completionEventId: completionEvent.eventId,
+      courseRuntime,
     };
   });
 }

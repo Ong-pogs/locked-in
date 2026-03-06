@@ -60,6 +60,8 @@ export const appConfig = {
   jwtAudience: process.env.JWT_AUDIENCE ?? 'lockedin-mobile',
   accessTokenTtl: process.env.ACCESS_TOKEN_TTL ?? '15m',
   refreshTokenTtl: process.env.REFRESH_TOKEN_TTL ?? '30d',
+  schedulerSecret: required('SCHEDULER_SECRET', 'dev-only-scheduler-secret'),
+  missExtensionDays: optionalInt('MISS_EXTENSION_DAYS', 7),
   corsAllowedOrigins:
     configuredCorsOrigins.length > 0 ? configuredCorsOrigins : defaultCorsOrigins,
 };

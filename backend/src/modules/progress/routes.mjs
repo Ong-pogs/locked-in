@@ -1,6 +1,10 @@
-import { badRequest } from '../../lib/errors.mjs';
+import { badRequest, unauthorized } from '../../lib/errors.mjs';
+import { appConfig } from '../../config.mjs';
 import { requireAccessAuth } from '../../plugins/auth.mjs';
 import {
+  consumeDailyFuel,
+  consumeSaverOrApplyFullConsequence,
+  getCourseRuntimeSnapshot,
   getCourseProgress,
   getModuleProgress,
   startLessonAttempt,
@@ -26,6 +30,17 @@ function assertAnswers(value) {
     throw badRequest('answers must be an array', 'INVALID_ANSWERS');
   }
   return value;
+}
+
+function requireSchedulerAuth(request) {
+  const schedulerKey = request.headers['x-scheduler-key'];
+  if (
+    typeof schedulerKey !== 'string' ||
+    schedulerKey.length === 0 ||
+    schedulerKey !== appConfig.schedulerSecret
+  ) {
+    throw unauthorized('Invalid scheduler key', 'INVALID_SCHEDULER_KEY');
+  }
 }
 
 export async function progressRoutes(app) {
@@ -64,6 +79,58 @@ export async function progressRoutes(app) {
         startedAt,
         completedAt,
       );
+    },
+  );
+
+  app.post('/v1/internal/fuel/burn', async (request) => {
+    requireSchedulerAuth(request);
+
+    const walletAddress = request.body?.walletAddress;
+    const courseId = request.body?.courseId;
+    const cycleId = request.body?.cycleId;
+    const burnedAt = request.body?.burnedAt ?? null;
+
+    if (!walletAddress || typeof walletAddress !== 'string') {
+      throw badRequest('walletAddress is required', 'MISSING_WALLET_ADDRESS');
+    }
+
+    if (!courseId || typeof courseId !== 'string') {
+      throw badRequest('courseId is required', 'MISSING_COURSE_ID');
+    }
+
+    return consumeDailyFuel(walletAddress, courseId, cycleId, burnedAt);
+  });
+
+  app.post('/v1/internal/consequences/miss', async (request) => {
+    requireSchedulerAuth(request);
+
+    const walletAddress = request.body?.walletAddress;
+    const courseId = request.body?.courseId;
+    const missEventId = request.body?.missEventId;
+    const missDay = request.body?.missDay ?? null;
+
+    if (!walletAddress || typeof walletAddress !== 'string') {
+      throw badRequest('walletAddress is required', 'MISSING_WALLET_ADDRESS');
+    }
+
+    if (!courseId || typeof courseId !== 'string') {
+      throw badRequest('courseId is required', 'MISSING_COURSE_ID');
+    }
+
+    return consumeSaverOrApplyFullConsequence(
+      walletAddress,
+      courseId,
+      missEventId,
+      missDay,
+    );
+  });
+
+  app.get(
+    '/v1/progress/runtime/courses/:courseId',
+    { preHandler: requireAccessAuth },
+    async (request) => {
+      const courseId = assertPathParam(request.params?.courseId, 'courseId');
+      return getCourseRuntimeSnapshot(request.auth.walletAddress, courseId);
     },
   );
 

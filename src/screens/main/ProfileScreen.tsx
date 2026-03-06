@@ -1,10 +1,11 @@
+import { useCallback } from 'react';
 import { Alert, View, Text, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { MainStackParamList } from '@/navigation/types';
 import { disconnectWallet } from '@/services/solana';
-import { useTokenStore, useUserStore } from '@/stores';
+import { useUserStore } from '@/stores';
 import { useCourseStore } from '@/stores/courseStore';
 
 type Nav = NativeStackNavigationProp<MainStackParamList>;
@@ -12,15 +13,13 @@ type Nav = NativeStackNavigationProp<MainStackParamList>;
 export function ProfileScreen() {
   const navigation = useNavigation<Nav>();
 
-  const fullTokens = useTokenStore((s) => s.fullTokens);
-  const fragments = useTokenStore((s) => s.fragments);
-
   const activeCourseId = useCourseStore((s) => s.activeCourseId);
   const activeCourseIds = useCourseStore((s) => s.activeCourseIds);
   const courseStates = useCourseStore((s) => s.courseStates);
   const courses = useCourseStore((s) => s.courses);
   const setActiveCourse = useCourseStore((s) => s.setActiveCourse);
   const deactivateCourse = useCourseStore((s) => s.deactivateCourse);
+  const refreshCourseRuntime = useCourseStore((s) => s.refreshCourseRuntime);
   const resetLessonProgressForCourse = useCourseStore(
     (s) => s.resetLessonProgressForCourse,
   );
@@ -29,12 +28,25 @@ export function ProfileScreen() {
   const activeCourse = activeCourseId
     ? courses.find((c) => c.id === activeCourseId)
     : null;
+  const authToken = useUserStore((s) => s.authToken);
   const walletAuthToken = useUserStore((s) => s.walletAuthToken);
   const disconnect = useUserStore((s) => s.disconnect);
 
   const streak = activeState?.currentStreak ?? 0;
   const ichor = activeState?.ichorBalance ?? 0;
+  const fuel = activeState?.fuelCounter ?? 0;
+  const fuelCap = activeState?.fuelCap ?? 7;
   const saverCount = activeState?.saverCount ?? 0;
+
+  useFocusEffect(
+    useCallback(() => {
+      if (activeCourseId && authToken) {
+        void refreshCourseRuntime(activeCourseId, authToken).catch(() => {
+          // Keep last synced runtime visible if refresh fails.
+        });
+      }
+    }, [activeCourseId, authToken, refreshCourseRuntime]),
+  );
 
   const menuItems = [
     { label: 'Streak Status', screen: 'StreakStatus' as const, icon: '\u2739' },
@@ -71,14 +83,10 @@ export function ProfileScreen() {
             </Text>
           </View>
           <View className="flex-1 items-center rounded-xl border border-neutral-700 bg-neutral-900 p-3">
-            <Text className="text-xs uppercase text-neutral-500">M Tokens</Text>
-            <Text className="mt-1 text-xl font-bold text-emerald-400">
-              {fullTokens}
-              {fragments > 0 && (
-                <Text className="text-sm text-neutral-600">
-                  .{Math.round(fragments * 10)}
-                </Text>
-              )}
+            <Text className="text-xs uppercase text-neutral-500">Fuel</Text>
+            <Text className="mt-1 text-xl font-bold text-orange-400">
+              {fuel}
+              <Text className="text-sm text-neutral-600">/{fuelCap}</Text>
             </Text>
           </View>
           <View className="flex-1 items-center rounded-xl border border-neutral-700 bg-neutral-900 p-3">

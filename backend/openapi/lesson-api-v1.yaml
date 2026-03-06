@@ -172,6 +172,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CourseProgressSnapshot'
+  /v1/progress/runtime/courses/{courseId}:
+    get:
+      security:
+        - bearerAuth: []
+      summary: Course runtime snapshot
+      parameters:
+        - $ref: '#/components/parameters/CourseId'
+      responses:
+        '200':
+          description: Runtime snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseRuntimeSnapshot'
   /v1/progress/modules/{moduleId}:
     get:
       security:
@@ -408,6 +422,48 @@ components:
         completionEventId:
           type: string
           format: uuid
+        courseRuntime:
+          $ref: '#/components/schemas/CourseRuntimeSnapshot'
+    CourseRuntimeSnapshot:
+      type: object
+      required:
+        [
+          courseId,
+          currentStreak,
+          longestStreak,
+          gauntletActive,
+          gauntletDay,
+          saverCount,
+          saverRecoveryMode,
+          currentYieldRedirectBps,
+          extensionDays,
+          fuelCounter,
+          fuelCap,
+          fuelAwarded,
+          fuelEarnStatus
+        ]
+      properties:
+        courseId: { type: string }
+        currentStreak: { type: integer }
+        longestStreak: { type: integer }
+        gauntletActive: { type: boolean }
+        gauntletDay: { type: integer }
+        saverCount: { type: integer }
+        saverRecoveryMode: { type: boolean }
+        currentYieldRedirectBps: { type: integer }
+        extensionDays: { type: integer }
+        fuelCounter: { type: integer }
+        fuelCap: { type: integer }
+        lastFuelCreditDay:
+          type: [string, 'null']
+          format: date
+        lastBrewerBurnTs:
+          type: [string, 'null']
+          format: date-time
+        fuelAwarded: { type: integer }
+        fuelEarnStatus:
+          type: string
+          enum: [PAUSED_RECOVERY, AT_CAP, EARNED_TODAY, AVAILABLE]
     CourseProgressSnapshot:
       type: object
       required: [courseId, completedLessons, totalLessons, completionRate]

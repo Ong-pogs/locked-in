@@ -16,7 +16,6 @@ import * as Crypto from 'expo-crypto';
 import type { MainStackParamList } from '@/navigation/types';
 import { useCourseStore } from '@/stores/courseStore';
 import { useStreakStore } from '@/stores/streakStore';
-import { useTokenStore } from '@/stores/tokenStore';
 import { useUserStore } from '@/stores/userStore';
 import type { Question } from '@/types';
 import { hasRemoteLessonApi, startLesson, submitLesson } from '@/services/api';
@@ -125,10 +124,8 @@ export function LessonScreen() {
 
   const applyLessonCompletion = useCallback(
     (score: number) => {
-      const fragmentReward = score >= 80 ? 0.3 : score >= 50 ? 0.2 : 0.1;
       useCourseStore.getState().completeLesson(lessonId, courseId, score);
       useStreakStore.getState().completeDay();
-      useTokenStore.getState().awardFragment(fragmentReward, 'lesson');
     },
     [courseId, lessonId],
   );
@@ -226,6 +223,11 @@ export function LessonScreen() {
         setSubmitting(true);
         try {
           const result = await submitRemoteLesson(answerMap);
+          if (result.courseRuntime) {
+            useCourseStore
+              .getState()
+              .syncCourseRuntime(courseId, result.courseRuntime);
+          }
           applyLessonCompletion(result.score);
           navigation.navigate('LessonResult', {
             lessonId,

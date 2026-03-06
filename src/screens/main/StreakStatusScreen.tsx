@@ -1,6 +1,8 @@
 import { View, Text, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useCallback } from 'react';
+import { useUserStore } from '@/stores';
 import { useCourseStore } from '@/stores/courseStore';
 
 export function StreakStatusScreen() {
@@ -9,6 +11,8 @@ export function StreakStatusScreen() {
   const activeCourseId = useCourseStore((s) => s.activeCourseId);
   const courseStates = useCourseStore((s) => s.courseStates);
   const courses = useCourseStore((s) => s.courses);
+  const refreshCourseRuntime = useCourseStore((s) => s.refreshCourseRuntime);
+  const authToken = useUserStore((s) => s.authToken);
 
   const activeState = activeCourseId ? courseStates[activeCourseId] : null;
   const activeCourse = activeCourseId
@@ -18,8 +22,22 @@ export function StreakStatusScreen() {
   const streak = activeState?.currentStreak ?? 0;
   const longestStreak = activeState?.longestStreak ?? 0;
   const saverCount = activeState?.saverCount ?? 0;
+  const saversRemaining = Math.max(0, 3 - saverCount);
   const gauntletActive = activeState?.gauntletActive ?? false;
   const gauntletDay = activeState?.gauntletDay ?? 1;
+  const saverRecoveryMode = activeState?.saverRecoveryMode ?? false;
+  const redirectPercent = Math.round((activeState?.currentYieldRedirectBps ?? 0) / 100);
+  const extensionDays = activeState?.extensionDays ?? 0;
+
+  useFocusEffect(
+    useCallback(() => {
+      if (activeCourseId && authToken) {
+        void refreshCourseRuntime(activeCourseId, authToken).catch(() => {
+          // Keep last synced runtime visible if refresh fails.
+        });
+      }
+    }, [activeCourseId, authToken, refreshCourseRuntime]),
+  );
 
   // Flame state derived from streak
   const flameState = streak >= 3 ? 'BURNING' : streak >= 1 ? 'LIT' : 'COLD';
@@ -30,8 +48,7 @@ export function StreakStatusScreen() {
         ? 'text-orange-400'
         : 'text-neutral-600';
 
-  // Saver lamps: 3 - saverCount = lamps still lit
-  const lampsLit = 3 - saverCount;
+  const lampsLit = saversRemaining;
 
   return (
     <SafeAreaView className="flex-1 bg-neutral-950">
@@ -103,10 +120,25 @@ export function StreakStatusScreen() {
             ))}
           </View>
           <Text className="mt-3 text-center text-xs text-neutral-500">
-            {saverCount}/3 savers used
+            {saversRemaining}/3 savers remaining
             {gauntletActive
               ? ` \u00B7 Locked during gauntlet (Day ${gauntletDay}/7)`
               : ''}
+          </Text>
+        </View>
+
+        <View className="mt-4 rounded-xl border border-neutral-700 bg-neutral-900 p-4">
+          <Text className="text-xs uppercase tracking-wide text-neutral-500">
+            Consequence State
+          </Text>
+          <Text className="mt-2 text-sm text-neutral-300">
+            Yield redirect: {redirectPercent}%
+          </Text>
+          <Text className="mt-1 text-sm text-neutral-300">
+            Saver recovery: {saverRecoveryMode ? 'Active' : 'Inactive'}
+          </Text>
+          <Text className="mt-1 text-sm text-neutral-300">
+            Extension total: {extensionDays} day{extensionDays !== 1 ? 's' : ''}
           </Text>
         </View>
 

@@ -1,6 +1,8 @@
+import { useCallback } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useUserStore } from '@/stores';
 import { useCourseStore } from '@/stores/courseStore';
 
 export function CommunityPotScreen() {
@@ -10,6 +12,8 @@ export function CommunityPotScreen() {
   const activeCourseIds = useCourseStore((s) => s.activeCourseIds);
   const courseStates = useCourseStore((s) => s.courseStates);
   const courses = useCourseStore((s) => s.courses);
+  const refreshCourseRuntime = useCourseStore((s) => s.refreshCourseRuntime);
+  const authToken = useUserStore((s) => s.authToken);
 
   // Community pot = ichor redirected from missed-lesson saver penalties
   // For now, show totalIchorProduced as a proxy for pot contributions
@@ -17,6 +21,20 @@ export function CommunityPotScreen() {
   const totalPotIchor = activeCourseIds.reduce(
     (sum, id) => sum + (courseStates[id]?.totalIchorProduced ?? 0),
     0,
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!authToken) {
+        return;
+      }
+
+      for (const courseId of activeCourseIds) {
+        void refreshCourseRuntime(courseId, authToken).catch(() => {
+          // Keep last synced runtime visible if refresh fails.
+        });
+      }
+    }, [activeCourseIds, authToken, refreshCourseRuntime]),
   );
 
   return (
@@ -82,9 +100,15 @@ export function CommunityPotScreen() {
                       {Math.floor(state.totalIchorProduced)} Ichor redirected
                     </Text>
                     <Text className="text-sm text-neutral-500">
-                      Savers used: {state.saverCount}/3
+                      Savers remaining: {Math.max(0, 3 - state.saverCount)}/3
                     </Text>
                   </View>
+                  <Text className="mt-2 text-xs text-neutral-500">
+                    Current redirect: {Math.round((state.currentYieldRedirectBps ?? 0) / 100)}%
+                    {' \u00B7 '}
+                    Extension: {state.extensionDays ?? 0} day
+                    {(state.extensionDays ?? 0) !== 1 ? 's' : ''}
+                  </Text>
                 </View>
               );
             })}

@@ -12,6 +12,9 @@ This folder now includes a runnable starter backend for step 1:
 - `sql/0001_lesson_platform.sql`
 - `sql/0003_auth_progress_hardening.sql`
 - `sql/0004_verified_completion_events.sql`
+- `sql/0005_user_course_runtime_state.sql`
+- `sql/0006_fuel_burn_cycle_receipts.sql`
+- `sql/0007_saver_consequence_runtime.sql`
 - `openapi/lesson-api-v1.yaml`
 - `src/server.mjs`
 - `src/modules/content/routes.mjs`
@@ -81,6 +84,9 @@ Server default: `http://localhost:3001`
 - Public lesson payloads expose `contentHash` and omit `correctAnswer` so clients cannot self-grade.
 - Refresh sessions rotate one-time tokens and use Postgres persistence when `DATABASE_URL` is configured.
 - Accepted lesson submits now enqueue a `lesson.verified_completion_events` record for downstream workers.
+- Accepted lesson submits also update `lesson.user_course_runtime_state` so Fuel/gauntlet state is computed server-side.
+- Internal scheduler requests can now apply an idempotent daily Fuel burn cycle via `POST /v1/internal/fuel/burn`.
+- Internal scheduler requests can now apply miss-day saver/full-consequence logic via `POST /v1/internal/consequences/miss`.
 
 ## Next Hardening Tasks
 

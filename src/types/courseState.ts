@@ -1,5 +1,11 @@
 import type { FlameState } from './flame';
 
+export type FuelEarnStatus =
+  | 'PAUSED_RECOVERY'
+  | 'AT_CAP'
+  | 'EARNED_TODAY'
+  | 'AVAILABLE';
+
 export interface CourseGameState {
   // Lock
   lockAmount: number;
@@ -14,9 +20,18 @@ export interface CourseGameState {
   // Streak
   currentStreak: number;
   longestStreak: number;
-  saverCount: number; // 0-3
+  // Legacy-compatible: number of savers already consumed (0-3).
+  saverCount: number;
+  saverRecoveryMode: boolean;
   lastCompletedDate: string | null;
   todayCompleted: boolean;
+  currentYieldRedirectBps: number;
+
+  // Fuel
+  fuelCounter: number;
+  fuelCap: number;
+  lastFuelCreditDay: string | null;
+  lastBrewerBurnTs: string | null;
 
   // Brew
   brewStatus: 'IDLE' | 'BREWING';
@@ -41,8 +56,14 @@ export const DEFAULT_COURSE_STATE: CourseGameState = {
   currentStreak: 0,
   longestStreak: 0,
   saverCount: 0,
+  saverRecoveryMode: false,
   lastCompletedDate: null,
   todayCompleted: false,
+  currentYieldRedirectBps: 0,
+  fuelCounter: 0,
+  fuelCap: 7,
+  lastFuelCreditDay: null,
+  lastBrewerBurnTs: null,
   brewStatus: 'IDLE',
   brewModeId: null,
   brewStartedAt: null,
