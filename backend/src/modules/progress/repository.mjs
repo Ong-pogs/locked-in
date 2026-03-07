@@ -5,6 +5,7 @@ import {
   hasDatabase,
   query,
   queryAsWallet,
+  withTransaction,
   withTransactionAsWallet,
 } from '../../lib/db.mjs';
 import {
@@ -3340,16 +3341,7 @@ export async function getCommunityPotWindowDetail(walletAddress, windowId) {
   };
 }
 
-export async function getLeaderboardSnapshot(walletAddress) {
-  if (!hasDatabase()) {
-    return {
-      currentPotSizeUi: '0',
-      nextDistributionWindowLabel: null,
-      currentUser: null,
-      entries: [],
-    };
-  }
-
+async function computeLeaderboardRows() {
   const runtimeWallets = await query(
     `
       select distinct wallet_address
@@ -3440,7 +3432,6 @@ export async function getLeaderboardSnapshot(walletAddress) {
           ? formatAtomicUsdcUi(projectedRow.payoutAmount)
           : '0',
       recentActivityDate,
-      isCurrentUser: wallet === walletAddress,
     });
   }
 
@@ -3462,16 +3453,261 @@ export async function getLeaderboardSnapshot(walletAddress) {
   }));
 
   return {
-    currentPotSizeUi: latestClosedWindow
-      ? formatAtomicUsdcUi(latestClosedWindow.totalRedirectedAmount)
-      : '0',
+    currentPotAmount:
+      latestClosedWindow?.totalRedirectedAmount != null
+        ? String(latestClosedWindow.totalRedirectedAmount)
+        : '0',
     nextDistributionWindowLabel:
       latestClosedWindowId != null
         ? formatCommunityPotWindowLabel(latestClosedWindowId + 1)
         : null,
-    currentUser:
-      rankedEntries.find((entry) => entry.walletAddress === walletAddress) ?? null,
     entries: rankedEntries,
+  };
+}
+
+function mapLeaderboardSnapshotRow(row, walletAddress) {
+  return {
+    rank: Number(row.rank),
+    walletAddress: row.walletAddress,
+    displayIdentity: row.displayIdentity,
+    streakLength: Number(row.streakLength),
+    streakStatus: row.streakStatus,
+    activeCourseCount: Number(row.activeCourseCount),
+    lockedPrincipalAmount: String(row.lockedPrincipalAmount),
+    lockedPrincipalAmountUi: formatAtomicUsdcUi(row.lockedPrincipalAmount),
+    projectedCommunityPotShare: String(row.projectedCommunityPotShare),
+    projectedCommunityPotShareUi: formatAtomicUsdcUi(row.projectedCommunityPotShare),
+    recentActivityDate: row.recentActivityDate ?? null,
+    isCurrentUser: row.walletAddress === walletAddress,
+  };
+}
+
+async function readLatestLeaderboardSnapshot(walletAddress, page = 1, pageSize = 25) {
+  const snapshotResult = await query(
+    `
+      select
+        snapshot_id as "snapshotId",
+        snapshot_at as "snapshotAt",
+        current_pot_amount as "currentPotAmount",
+        next_distribution_window_label as "nextDistributionWindowLabel",
+        entry_count as "entryCount"
+      from lesson.leaderboard_snapshots
+      order by snapshot_id desc
+      limit 1
+    `,
+  );
+
+  const snapshot = snapshotResult.rows[0] ?? null;
+  if (!snapshot) {
+    return null;
+  }
+
+  const safePageSize = Math.max(1, Number(pageSize) || 25);
+  const totalEntries = Number(snapshot.entryCount ?? 0);
+  const totalPages = Math.max(1, Math.ceil(totalEntries / safePageSize));
+  const safePage = Math.min(Math.max(1, Number(page) || 1), totalPages);
+  const offset = (safePage - 1) * safePageSize;
+
+  const [entriesResult, currentUserResult] = await Promise.all([
+    query(
+      `
+        select
+          rank,
+          wallet_address as "walletAddress",
+          display_identity as "displayIdentity",
+          streak_length as "streakLength",
+          streak_status as "streakStatus",
+          active_course_count as "activeCourseCount",
+          locked_principal_amount as "lockedPrincipalAmount",
+          projected_community_pot_share as "projectedCommunityPotShare",
+          recent_activity_date as "recentActivityDate"
+        from lesson.leaderboard_snapshot_rows
+        where snapshot_id = $1
+        order by rank asc
+        limit $2
+        offset $3
+      `,
+      [snapshot.snapshotId, safePageSize, offset],
+    ),
+    walletAddress
+      ? query(
+          `
+            select
+              rank,
+              wallet_address as "walletAddress",
+              display_identity as "displayIdentity",
+              streak_length as "streakLength",
+              streak_status as "streakStatus",
+              active_course_count as "activeCourseCount",
+              locked_principal_amount as "lockedPrincipalAmount",
+              projected_community_pot_share as "projectedCommunityPotShare",
+              recent_activity_date as "recentActivityDate"
+            from lesson.leaderboard_snapshot_rows
+            where snapshot_id = $1
+              and wallet_address = $2
+            limit 1
+          `,
+          [snapshot.snapshotId, walletAddress],
+        )
+      : Promise.resolve({ rows: [] }),
+  ]);
+
+  return {
+    source: 'materialized',
+    snapshotAt: snapshot.snapshotAt,
+    page: safePage,
+    pageSize: safePageSize,
+    totalEntries,
+    totalPages,
+    currentPotSizeUi: formatAtomicUsdcUi(snapshot.currentPotAmount),
+    nextDistributionWindowLabel: snapshot.nextDistributionWindowLabel ?? null,
+    currentUser:
+      currentUserResult.rows[0] != null
+        ? mapLeaderboardSnapshotRow(currentUserResult.rows[0], walletAddress)
+        : null,
+    entries: entriesResult.rows.map((row) => mapLeaderboardSnapshotRow(row, walletAddress)),
+  };
+}
+
+export async function refreshLeaderboardSnapshot(limit = 25) {
+  if (!hasDatabase()) {
+    return {
+      processed: false,
+      reason: 'NO_DATABASE',
+    };
+  }
+
+  const live = await computeLeaderboardRows();
+
+  return withTransaction(async (client) => {
+    const snapshotInsert = await client.query(
+      `
+        insert into lesson.leaderboard_snapshots (
+          current_pot_amount,
+          next_distribution_window_label,
+          entry_count
+        )
+        values ($1::bigint, $2, $3)
+        returning
+          snapshot_id as "snapshotId",
+          snapshot_at as "snapshotAt",
+          current_pot_amount as "currentPotAmount",
+          next_distribution_window_label as "nextDistributionWindowLabel",
+          entry_count as "entryCount"
+      `,
+      [live.currentPotAmount, live.nextDistributionWindowLabel, live.entries.length],
+    );
+
+    const snapshot = snapshotInsert.rows[0];
+
+    for (const entry of live.entries) {
+      await client.query(
+        `
+          insert into lesson.leaderboard_snapshot_rows (
+            snapshot_id,
+            rank,
+            wallet_address,
+            display_identity,
+            streak_length,
+            streak_status,
+            active_course_count,
+            locked_principal_amount,
+            projected_community_pot_share,
+            recent_activity_date
+          )
+          values ($1, $2, $3, $4, $5, $6, $7, $8::bigint, $9::bigint, $10::date)
+        `,
+        [
+          snapshot.snapshotId,
+          entry.rank,
+          entry.walletAddress,
+          entry.displayIdentity,
+          entry.streakLength,
+          entry.streakStatus,
+          entry.activeCourseCount,
+          entry.lockedPrincipalAmount,
+          entry.projectedCommunityPotShare,
+          entry.recentActivityDate,
+        ],
+      );
+    }
+
+    await client.query(
+      `
+        delete from lesson.leaderboard_snapshots
+        where snapshot_id not in (
+          select snapshot_id
+          from lesson.leaderboard_snapshots
+          order by snapshot_id desc
+          limit 20
+        )
+      `,
+    );
+
+    return {
+      processed: true,
+      reason: 'SNAPSHOT_CREATED',
+      source: 'materialized',
+      snapshotAt: snapshot.snapshotAt,
+      page: 1,
+      pageSize: limit,
+      totalEntries: live.entries.length,
+      totalPages: Math.max(1, Math.ceil(live.entries.length / limit)),
+      currentPotSizeUi: formatAtomicUsdcUi(snapshot.currentPotAmount),
+      nextDistributionWindowLabel: snapshot.nextDistributionWindowLabel ?? null,
+      currentUser: null,
+      entries: live.entries.slice(0, limit).map((entry) => ({
+        ...entry,
+        isCurrentUser: false,
+      })),
+    };
+  });
+}
+
+export async function getLeaderboardSnapshot(walletAddress, page = 1, pageSize = 25) {
+  if (!hasDatabase()) {
+    return {
+      source: 'live',
+      snapshotAt: null,
+      page: 1,
+      pageSize,
+      totalEntries: 0,
+      totalPages: 1,
+      currentPotSizeUi: '0',
+      nextDistributionWindowLabel: null,
+      currentUser: null,
+      entries: [],
+    };
+  }
+
+  const materialized = await readLatestLeaderboardSnapshot(walletAddress, page, pageSize);
+  if (materialized) {
+    return materialized;
+  }
+
+  const live = await computeLeaderboardRows();
+  const safePageSize = Math.max(1, Number(pageSize) || 25);
+  const totalEntries = live.entries.length;
+  const totalPages = Math.max(1, Math.ceil(totalEntries / safePageSize));
+  const safePage = Math.min(Math.max(1, Number(page) || 1), totalPages);
+  const startIndex = (safePage - 1) * safePageSize;
+  const liveCurrentUser =
+    live.entries.find((entry) => entry.walletAddress === walletAddress) ?? null;
+
+  return {
+    source: 'live',
+    snapshotAt: null,
+    page: safePage,
+    pageSize: safePageSize,
+    totalEntries,
+    totalPages,
+    currentPotSizeUi: formatAtomicUsdcUi(live.currentPotAmount),
+    nextDistributionWindowLabel: live.nextDistributionWindowLabel,
+    currentUser: liveCurrentUser ? { ...liveCurrentUser, isCurrentUser: true } : null,
+    entries: live.entries.slice(startIndex, startIndex + safePageSize).map((entry) => ({
+      ...entry,
+      isCurrentUser: entry.walletAddress === walletAddress,
+    })),
   };
 }
 

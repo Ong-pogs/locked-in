@@ -8,6 +8,10 @@ The next follow-up now has its first code slice too: a standalone `YieldSplitter
 Harvest receipts can now also track a dedicated `YieldSplitter` publish phase before `LockVault` relay.
 The new `YieldSplitter` phase has been verified live on devnet with a small harvest.
 The runtime scheduler can now create automatic fixed-APY harvest receipts in dev mode.
+The backend now also supports a second adapter kind, `kamino_klend_reserve_v1`, which keeps the same harvest receipt flow but sources APY from a live Kamino reserve instead of a fixed env number.
+That Kamino adapter can read from a separate configured RPC path, so devnet lock testing can still reference a live mainnet reserve APY.
+The backend now also supports one-line yield profiles, so operators can switch between the fixed dev adapter and live Kamino USDC APY without touching code.
+Profile mode now takes precedence over the raw `YIELD_*` strategy fields, so the switch behaves predictably even when older env values are still present.
 
 ## What Was Implemented
 
@@ -100,6 +104,6 @@ The runtime scheduler can now create automatic fixed-APY harvest receipts in dev
 
 ## Remaining Follow-up
 
-- Replace manual harvest seeding with a real `YieldSplitter` / strategy integration path.
+- Switch a live environment from `fixed_apy_v1` to `kamino_klend_reserve_v1` and verify the first real protocol-backed harvest.
 - Decide whether harvest logic stays in `LockVault` or moves behind a dedicated companion program.
 - Add monthly `CommunityPot` settlement from redirected yield.

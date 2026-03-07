@@ -35,6 +35,33 @@ function csvList(value) {
     .filter(Boolean);
 }
 
+function resolveYieldStrategyProfile(profile) {
+  switch ((profile ?? '').trim()) {
+    case 'fixed_apy_dev':
+      return {
+        enabled: true,
+        kind: 'fixed_apy_v1',
+        fixedApyBps: 800,
+        harvestIntervalSeconds: 3600,
+        kaminoRpcUrl: 'https://api.mainnet-beta.solana.com',
+        kaminoMarketAddress: '7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF',
+        kaminoReserveSymbol: 'USDC',
+      };
+    case 'kamino_usdc_mainnet':
+      return {
+        enabled: true,
+        kind: 'kamino_klend_reserve_v1',
+        fixedApyBps: 800,
+        harvestIntervalSeconds: 3600,
+        kaminoRpcUrl: 'https://api.mainnet-beta.solana.com',
+        kaminoMarketAddress: '7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF',
+        kaminoReserveSymbol: 'USDC',
+      };
+    default:
+      return null;
+  }
+}
+
 const defaultCorsOrigins = [
   'http://localhost:8081',
   'http://127.0.0.1:8081',
@@ -47,6 +74,9 @@ const defaultCorsOrigins = [
 const configuredCorsOrigins = csvList(
   process.env.CORS_ALLOWED_ORIGINS ?? process.env.ALLOWED_ORIGIN ?? '',
 );
+const yieldStrategyProfile = process.env.YIELD_STRATEGY_PROFILE ?? '';
+const yieldStrategyProfileDefaults = resolveYieldStrategyProfile(yieldStrategyProfile);
+const isYieldProfileActive = Boolean(yieldStrategyProfileDefaults);
 
 export const appConfig = {
   port: optionalInt('PORT', 3001),
@@ -73,10 +103,33 @@ export const appConfig = {
   openaiResponsesBaseUrl: process.env.OPENAI_RESPONSES_BASE_URL ?? 'https://api.openai.com/v1',
   openaiValidatorModel: process.env.OPENAI_VALIDATOR_MODEL ?? 'gpt-4o-mini',
   openaiValidatorTimeoutMs: optionalInt('OPENAI_VALIDATOR_TIMEOUT_MS', 4000),
-  yieldStrategyEnabled: optionalBool('YIELD_STRATEGY_ENABLED', false),
-  yieldStrategyKind: process.env.YIELD_STRATEGY_KIND ?? 'fixed_apy_v1',
-  yieldFixedApyBps: optionalInt('YIELD_FIXED_APY_BPS', 800),
-  yieldHarvestIntervalSeconds: optionalInt('YIELD_HARVEST_INTERVAL_SECONDS', 86_400),
+  yieldStrategyProfile: yieldStrategyProfile || null,
+  yieldStrategyEnabled: isYieldProfileActive
+    ? yieldStrategyProfileDefaults.enabled
+    : optionalBool('YIELD_STRATEGY_ENABLED', false),
+  yieldStrategyKind: isYieldProfileActive
+    ? yieldStrategyProfileDefaults.kind
+    : process.env.YIELD_STRATEGY_KIND ?? 'fixed_apy_v1',
+  yieldFixedApyBps: isYieldProfileActive
+    ? yieldStrategyProfileDefaults.fixedApyBps
+    : optionalInt('YIELD_FIXED_APY_BPS', 800),
+  yieldHarvestIntervalSeconds: isYieldProfileActive
+    ? yieldStrategyProfileDefaults.harvestIntervalSeconds
+    : optionalInt('YIELD_HARVEST_INTERVAL_SECONDS', 86_400),
+  yieldKaminoRpcUrl: isYieldProfileActive
+    ? yieldStrategyProfileDefaults.kaminoRpcUrl
+    : process.env.YIELD_KAMINO_RPC_URL ?? 'https://api.mainnet-beta.solana.com',
+  yieldKaminoMarketAddress: isYieldProfileActive
+    ? yieldStrategyProfileDefaults.kaminoMarketAddress
+    : process.env.YIELD_KAMINO_MARKET_ADDRESS ?? '',
+  yieldKaminoReserveSymbol: isYieldProfileActive
+    ? yieldStrategyProfileDefaults.kaminoReserveSymbol
+    : process.env.YIELD_KAMINO_RESERVE_SYMBOL ?? 'USDC',
+  yieldKaminoRecentSlotDurationMs: optionalInt(
+    'YIELD_KAMINO_RECENT_SLOT_DURATION_MS',
+    30_000,
+  ),
+  yieldStrategyApyCacheMs: optionalInt('YIELD_STRATEGY_APY_CACHE_MS', 60_000),
   solanaRpcUrl:
     process.env.SOLANA_RPC_URL ??
     process.env.EXPO_PUBLIC_SOLANA_RPC_URL ??

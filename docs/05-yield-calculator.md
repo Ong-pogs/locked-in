@@ -19,6 +19,12 @@ Current implementation checkpoint:
 - backend now exposes a dedicated publish route for the split step before `LockVault`:
   - `POST /v1/internal/yield-splitter/yield/harvest/publish`
 - backend now includes a fixed-APY strategy adapter for devnet/runtime testing
+- backend now also supports a second strategy kind, `kamino_klend_reserve_v1`, which reads a live Kamino reserve supply APY and feeds that rate into the existing harvest math
+- the Kamino adapter reads APY from a separate configured RPC path, so devnet lock/testing can still reference a mainnet Kamino rate source
+- backend config now also supports one-line strategy profiles:
+  - `fixed_apy_dev`
+  - `kamino_usdc_mainnet`
+- when a strategy profile is set, it takes precedence over the raw `YIELD_*` strategy env fields
 - the runtime scheduler worker can now auto-create deterministic `auto-harvest:*` receipts
 - a positive devnet harvest has already credited real `ichor_counter` and `ichor_lifetime_total`
 - the mobile `Ichor Shop` now reads live on-chain Ichor state and redemption tier
@@ -60,6 +66,8 @@ At each yield harvest interval:
 Current auto-harvest note:
 
 - the first strategy adapter uses fixed APY math for devnet verification
+- the second adapter kind keeps the same receipt/relay pipeline but swaps the APY source to a configured Kamino reserve
+- harvest quote failures from the Kamino read path now skip only that harvest and do not stop burn/miss scheduler work
 - it collapses missed time into one deterministic catch-up harvest instead of backfilling many small periods
 
 Full-redirect edge case:

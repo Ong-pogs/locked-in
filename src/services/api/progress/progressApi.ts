@@ -105,8 +105,20 @@ export function getCommunityPotWindowDetail(
   );
 }
 
-export function getLeaderboard(token: string): Promise<LeaderboardResponse> {
-  return httpRequest<LeaderboardResponse>('/v1/progress/leaderboard', {
+export function getLeaderboard(
+  token: string,
+  options?: { page?: number; pageSize?: number },
+): Promise<LeaderboardResponse> {
+  const query = new URLSearchParams();
+  if (options?.page) {
+    query.set('page', String(options.page));
+  }
+  if (options?.pageSize) {
+    query.set('pageSize', String(options.pageSize));
+  }
+  const suffix = query.size > 0 ? `?${query.toString()}` : '';
+
+  return httpRequest<LeaderboardResponse>(`/v1/progress/leaderboard${suffix}`, {
     token,
   });
 }

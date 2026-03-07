@@ -6,6 +6,8 @@ import { ApiError, getLeaderboard, type LeaderboardEntry, type LeaderboardRespon
 import { refreshAuthSession } from '@/services/api/auth/authApi';
 import { useUserStore } from '@/stores';
 
+const PAGE_SIZE = 10;
+
 function renderStatus(status: LeaderboardEntry['streakStatus']) {
   return status === 'active' ? 'Active' : 'Broken';
 }
@@ -18,6 +20,7 @@ export function LeaderboardScreen() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
 
   const refreshBackendAccessToken = useCallback(async () => {
     if (!refreshToken) {
@@ -50,7 +53,10 @@ export function LeaderboardScreen() {
         }
 
         try {
-          const response = await getLeaderboard(backendAccessToken);
+          const response = await getLeaderboard(backendAccessToken, {
+            page,
+            pageSize: PAGE_SIZE,
+          });
           if (!active) return;
           setLeaderboard(response);
           setErrorMessage(null);
@@ -63,7 +69,10 @@ export function LeaderboardScreen() {
           ) {
             try {
               const refreshedToken = await refreshBackendAccessToken();
-              const retried = await getLeaderboard(refreshedToken);
+              const retried = await getLeaderboard(refreshedToken, {
+                page,
+                pageSize: PAGE_SIZE,
+              });
               if (!active) return;
               setLeaderboard(retried);
               setErrorMessage(null);
@@ -95,7 +104,7 @@ export function LeaderboardScreen() {
       return () => {
         active = false;
       };
-    }, [authToken, refreshBackendAccessToken, refreshToken]),
+    }, [authToken, page, refreshBackendAccessToken, refreshToken]),
   );
 
   return (
@@ -109,6 +118,13 @@ export function LeaderboardScreen() {
         <Text className="mt-1 text-sm text-neutral-500">
           Ranked by active streak, then locked principal, with Community Pot projection
         </Text>
+        {leaderboard ? (
+          <Text className="mt-1 text-xs text-neutral-600">
+            {leaderboard.source === 'materialized' && leaderboard.snapshotAt
+              ? `Snapshot updated ${new Date(leaderboard.snapshotAt).toLocaleString()}`
+              : 'Live fallback view'}
+          </Text>
+        ) : null}
 
         {loading ? (
           <Text className="mt-6 rounded-xl border border-neutral-700 bg-neutral-900 p-4 text-sm text-neutral-500">
@@ -162,9 +178,16 @@ export function LeaderboardScreen() {
             ) : null}
 
             <View className="mt-6 mb-8">
-              <Text className="mb-3 text-sm font-semibold uppercase tracking-wider text-neutral-500">
-                Rankings
-              </Text>
+              <View className="mb-3 flex-row items-center justify-between">
+                <Text className="text-sm font-semibold uppercase tracking-wider text-neutral-500">
+                  Rankings
+                </Text>
+                <Text className="text-xs text-neutral-500">
+                  Page {leaderboard.page} / {leaderboard.totalPages}
+                  {' \u00B7 '}
+                  {leaderboard.totalEntries} total
+                </Text>
+              </View>
               {leaderboard.entries.map((entry) => (
                 <View
                   key={entry.walletAddress}
@@ -204,6 +227,37 @@ export function LeaderboardScreen() {
                   ) : null}
                 </View>
               ))}
+
+              <View className="mt-2 flex-row gap-3">
+                <Pressable
+                  className={`flex-1 rounded-xl border px-4 py-3 ${
+                    page <= 1
+                      ? 'border-neutral-800 bg-neutral-900'
+                      : 'border-neutral-700 bg-neutral-900 active:opacity-80'
+                  }`}
+                  disabled={page <= 1}
+                  onPress={() => setPage((current) => Math.max(1, current - 1))}
+                >
+                  <Text className="text-center text-sm font-semibold text-white">
+                    Previous
+                  </Text>
+                </Pressable>
+                <Pressable
+                  className={`flex-1 rounded-xl border px-4 py-3 ${
+                    leaderboard.page >= leaderboard.totalPages
+                      ? 'border-neutral-800 bg-neutral-900'
+                      : 'border-neutral-700 bg-neutral-900 active:opacity-80'
+                  }`}
+                  disabled={leaderboard.page >= leaderboard.totalPages}
+                  onPress={() =>
+                    setPage((current) =>
+                      Math.min(leaderboard.totalPages, current + 1),
+                    )
+                  }
+                >
+                  <Text className="text-center text-sm font-semibold text-white">Next</Text>
+                </Pressable>
+              </View>
             </View>
           </>
         ) : null}

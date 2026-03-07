@@ -7,12 +7,11 @@ interface ResurfaceStore {
   receipts: ResurfaceReceipt[];
   addReceipt: (receipt: ResurfaceReceipt) => void;
   hydrateReceipts: (receipts: ResurfaceReceipt[]) => void;
-  getReceiptsForWallet: (walletAddress: string | null) => ResurfaceReceipt[];
 }
 
 export const useResurfaceStore = create<ResurfaceStore>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       receipts: [],
 
       addReceipt: (receipt) =>
@@ -38,14 +37,6 @@ export const useResurfaceStore = create<ResurfaceStore>()(
             receipts: merged.slice(0, 50),
           };
         }),
-
-      getReceiptsForWallet: (walletAddress) => {
-        if (!walletAddress) {
-          return [];
-        }
-
-        return get().receipts.filter((entry) => entry.walletAddress === walletAddress);
-      },
     }),
     {
       name: 'locked-in-resurface-receipts',

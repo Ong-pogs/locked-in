@@ -255,6 +255,7 @@ export interface CommunityPotWindowDetailResponse {
 }
 
 export type LeaderboardEntryStatus = 'active' | 'broken';
+export type LeaderboardSource = 'materialized' | 'live';
 
 export interface LeaderboardEntry {
   rank: number;
@@ -272,6 +273,12 @@ export interface LeaderboardEntry {
 }
 
 export interface LeaderboardResponse {
+  source: LeaderboardSource;
+  snapshotAt: string | null;
+  page: number;
+  pageSize: number;
+  totalEntries: number;
+  totalPages: number;
   currentPotSizeUi: string;
   nextDistributionWindowLabel: string | null;
   currentUser: LeaderboardEntry | null;

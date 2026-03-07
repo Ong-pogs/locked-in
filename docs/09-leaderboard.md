@@ -49,11 +49,32 @@ Distribution policy basis:
 
 Backend should maintain precomputed ranking snapshots for responsive mobile queries.
 
+Current implementation checkpoint:
+
+- backend can now materialize ranking snapshots into Postgres
+- snapshots store:
+  - current pot amount
+  - next distribution window label
+  - all ranked wallet rows for that refresh
+- the public leaderboard route now prefers the latest materialized snapshot and falls back to a live computation only when no snapshot exists yet
+- the app now shows whether the current view is a snapshot or live fallback
+
 ## Refresh and Latency Targets
 
 - ranking refresh: near real-time batch cadence (for example every few minutes)
 - pot and projection refresh: on balance/index updates
 - user rank pinning: always show signed-in user rank even outside current page window
+
+Current implementation checkpoint:
+
+- leaderboard reads are now paged
+- the current user row is fetched independently from the current page slice
+- mobile can page through snapshot rows without losing the pinned signed-in rank card
+
+Current operator path:
+
+- scheduler/admin can trigger a refresh through:
+  - `POST /v1/internal/leaderboard/refresh`
 
 ## Privacy and Fairness
 

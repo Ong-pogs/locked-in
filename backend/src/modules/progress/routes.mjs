@@ -15,6 +15,7 @@ import {
   getUnlockReceipts,
   getYieldHistory,
   getModuleProgress,
+  refreshLeaderboardSnapshot,
   recordUnlockReceipt,
   publishFuelBurnReceipt,
   publishHarvestSplitReceipt,
@@ -261,10 +262,29 @@ export async function progressRoutes(app) {
     );
   });
 
+  app.post('/v1/internal/leaderboard/refresh', async (request) => {
+    requireSchedulerAuth(request);
+    const limit =
+      Number.isFinite(Number(request.body?.limit)) && Number(request.body?.limit) > 0
+        ? Number(request.body?.limit)
+        : 25;
+    return refreshLeaderboardSnapshot(limit);
+  });
+
   app.get(
     '/v1/progress/leaderboard',
     { preHandler: requireAccessAuth },
-    async (request) => getLeaderboardSnapshot(request.auth.walletAddress),
+    async (request) => {
+      const page =
+        Number.isFinite(Number(request.query?.page)) && Number(request.query?.page) > 0
+          ? Number(request.query?.page)
+          : 1;
+      const pageSize =
+        Number.isFinite(Number(request.query?.pageSize)) && Number(request.query?.pageSize) > 0
+          ? Number(request.query?.pageSize)
+          : 10;
+      return getLeaderboardSnapshot(request.auth.walletAddress, page, pageSize);
+    },
   );
 
   app.get(

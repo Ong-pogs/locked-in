@@ -1,9 +1,8 @@
 import { appConfig } from '../config.mjs';
 import { hasLockVaultRelayConfig, readLockAccountSnapshot } from '../lib/lockVault.mjs';
 import {
-  createFixedApyStrategyAdapter,
+  createYieldStrategyAdapter,
   deriveHarvestBucketTimestamp,
-  getYieldHarvestIntervalSeconds,
   hasYieldStrategyConfig,
 } from '../lib/yieldStrategy.mjs';
 import {
@@ -84,7 +83,7 @@ function deriveDueMiss(runtime, snapshot, now) {
   };
 }
 
-function deriveDueHarvest(runtime, snapshot, now, strategy) {
+async function deriveDueHarvest(runtime, snapshot, now, strategy) {
   if (!snapshot.gauntletComplete) {
     return null;
   }
@@ -115,7 +114,7 @@ function deriveDueHarvest(runtime, snapshot, now, strategy) {
     return null;
   }
 
-  const quote = strategy.quoteHarvest({
+  const quote = await strategy.quoteHarvest({
     principalAmount: snapshot.principalAmount,
     elapsedSeconds,
   });
@@ -132,6 +131,7 @@ function deriveDueHarvest(runtime, snapshot, now, strategy) {
     harvestedAt: harvestedAtIso,
     grossYieldAmount: grossYieldAmount.toString(),
     elapsedSeconds,
+    apyBps: Number(quote.apyBps ?? 0),
   };
 }
 
@@ -166,56 +166,69 @@ async function processRuntimeCandidate(app, candidate, now) {
   let harvestProcessed = 0;
 
   if (hasYieldStrategyConfig()) {
-    const strategy = createFixedApyStrategyAdapter();
-    const dueHarvest = deriveDueHarvest(
-      {
-        walletAddress: candidate.walletAddress,
-        courseId: candidate.courseId,
-        updatedAt: candidate.updatedAt,
-        lastHarvestedAt: candidate.lastHarvestedAt,
-      },
-      snapshot,
-      now,
-      strategy,
-    );
-
-    if (dueHarvest) {
-      const recorded = await recordHarvestResult(
-        candidate.walletAddress,
-        candidate.courseId,
-        dueHarvest.harvestId,
-        dueHarvest.grossYieldAmount,
-        dueHarvest.harvestedAt,
-      );
-      const lockVaultResult = await publishHarvestResultReceipt(
-        candidate.walletAddress,
-        candidate.courseId,
-        dueHarvest.harvestId,
-        true,
-      );
-      const communityPotResult = await publishHarvestRedirectToCommunityPot(
-        candidate.walletAddress,
-        candidate.courseId,
-        dueHarvest.harvestId,
-        true,
-      );
-
-      app.log.info(
+    try {
+      const strategy = createYieldStrategyAdapter();
+      const dueHarvest = await deriveDueHarvest(
         {
           walletAddress: candidate.walletAddress,
           courseId: candidate.courseId,
-          harvestId: dueHarvest.harvestId,
-          harvestedAt: dueHarvest.harvestedAt,
-          grossYieldAmount: dueHarvest.grossYieldAmount,
-          elapsedSeconds: dueHarvest.elapsedSeconds,
-          recordStatus: recorded.yieldSplitterStatus ?? null,
-          lockVaultReason: lockVaultResult.reason,
-          communityPotReason: communityPotResult.reason,
-          lockVaultSignature: lockVaultResult.signature ?? null,
+          updatedAt: candidate.updatedAt,
+          lastHarvestedAt: candidate.lastHarvestedAt,
         },
-        'runtime_scheduler.harvest_processed',
+        snapshot,
+        now,
+        strategy,
       );
-      harvestProcessed += 1;
+
+      if (dueHarvest) {
+        const recorded = await recordHarvestResult(
+          candidate.walletAddress,
+          candidate.courseId,
+          dueHarvest.harvestId,
+          dueHarvest.grossYieldAmount,
+          dueHarvest.harvestedAt,
+        );
+        const lockVaultResult = await publishHarvestResultReceipt(
+          candidate.walletAddress,
+          candidate.courseId,
+          dueHarvest.harvestId,
+          true,
+        );
+        const communityPotResult = await publishHarvestRedirectToCommunityPot(
+          candidate.walletAddress,
+          candidate.courseId,
+          dueHarvest.harvestId,
+          true,
+        );
+
+        app.log.info(
+          {
+            walletAddress: candidate.walletAddress,
+            courseId: candidate.courseId,
+            harvestId: dueHarvest.harvestId,
+            harvestedAt: dueHarvest.harvestedAt,
+            grossYieldAmount: dueHarvest.grossYieldAmount,
+            elapsedSeconds: dueHarvest.elapsedSeconds,
+            strategyKind: strategy.kind,
+            quotedApyBps: dueHarvest.apyBps ?? null,
+            recordStatus: recorded.yieldSplitterStatus ?? null,
+            lockVaultReason: lockVaultResult.reason,
+            communityPotReason: communityPotResult.reason,
+            lockVaultSignature: lockVaultResult.signature ?? null,
+          },
+          'runtime_scheduler.harvest_processed',
+        );
+        harvestProcessed += 1;
+      }
+    } catch (error) {
+      app.log.warn(
+        {
+          walletAddress: candidate.walletAddress,
+          courseId: candidate.courseId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        'runtime_scheduler.harvest_skipped',
+      );
     }
   }
 
@@ -382,6 +395,8 @@ export function registerRuntimeSchedulerWorker(app) {
       {
         intervalMs: appConfig.runtimeSchedulerIntervalMs,
         batchSize: appConfig.runtimeSchedulerBatchSize,
+        yieldStrategyProfile: appConfig.yieldStrategyProfile,
+        yieldStrategyKind: appConfig.yieldStrategyKind,
       },
       'Runtime scheduler worker started',
     );

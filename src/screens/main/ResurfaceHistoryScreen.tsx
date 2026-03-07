@@ -1,6 +1,6 @@
 import { ScrollView, View, Text, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
@@ -22,9 +22,17 @@ export function ResurfaceHistoryScreen() {
   const setAuthSession = useUserStore((s) => s.setAuthSession);
   const courses = useCourseStore((s) => s.courses);
   const hydrateReceipts = useResurfaceStore((s) => s.hydrateReceipts);
-  const receipts = useResurfaceStore((s) => s.getReceiptsForWallet(walletAddress));
+  const allReceipts = useResurfaceStore((s) => s.receipts);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const receipts = useMemo(
+    () =>
+      walletAddress
+        ? allReceipts.filter((entry) => entry.walletAddress === walletAddress)
+        : [],
+    [allReceipts, walletAddress],
+  );
 
   const refreshBackendAccessToken = useCallback(async () => {
     if (!refreshToken) {
