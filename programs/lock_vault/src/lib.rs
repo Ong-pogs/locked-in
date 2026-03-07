@@ -1004,50 +1004,39 @@ impl LockAccount {
             LockVaultError::LockAlreadyClosed
         );
 
-        if !self.gauntlet_complete || self.fuel_counter == 0 || gross_yield_amount == 0 {
+        let brewer_active = self.gauntlet_complete && self.fuel_counter > 0;
+        let split = calculate_harvest_split(
+            gross_yield_amount,
+            self.current_yield_redirect_bps,
+            brewer_active,
+            self.skr_tier,
+        )?;
+
+        if split.ichor_awarded == 0 {
             return Ok(HarvestEffect {
                 applied: false,
                 outcome: OUTCOME_HARVEST_SKIPPED,
-                platform_fee_amount: 0,
-                redirected_amount: 0,
+                platform_fee_amount: split.platform_fee_amount,
+                redirected_amount: split.redirected_amount,
                 ichor_awarded: 0,
             });
         }
 
-        let platform_fee_amount = percentage_of_amount(gross_yield_amount, 1_000)?;
-        let redirected_amount =
-            percentage_of_amount(gross_yield_amount, self.current_yield_redirect_bps)?;
-        let user_share = gross_yield_amount
-            .checked_sub(platform_fee_amount)
-            .and_then(|value| value.checked_sub(redirected_amount))
-            .ok_or(LockVaultError::NumericalOverflow)?;
-
-        if user_share == 0 {
-            return Ok(HarvestEffect {
-                applied: false,
-                outcome: OUTCOME_HARVEST_SKIPPED,
-                platform_fee_amount,
-                redirected_amount,
-                ichor_awarded: 0,
-            });
-        }
-
-        let ichor_awarded = apply_skr_multiplier(user_share, self.skr_tier)?;
         self.ichor_counter = self
             .ichor_counter
-            .checked_add(ichor_awarded)
+            .checked_add(split.ichor_awarded)
             .ok_or(LockVaultError::NumericalOverflow)?;
         self.ichor_lifetime_total = self
             .ichor_lifetime_total
-            .checked_add(ichor_awarded)
+            .checked_add(split.ichor_awarded)
             .ok_or(LockVaultError::NumericalOverflow)?;
 
         Ok(HarvestEffect {
             applied: true,
             outcome: OUTCOME_HARVEST_APPLIED,
-            platform_fee_amount,
-            redirected_amount,
-            ichor_awarded,
+            platform_fee_amount: split.platform_fee_amount,
+            redirected_amount: split.redirected_amount,
+            ichor_awarded: split.ichor_awarded,
         })
     }
 }
@@ -1425,6 +1414,47 @@ fn apply_skr_multiplier(base_amount: u64, skr_tier: u8) -> Result<u64> {
     percentage_of_amount(base_amount, multiplier_bps)
 }
 
+fn calculate_harvest_split(
+    gross_yield_amount: u64,
+    redirect_bps: u16,
+    brewer_active: bool,
+    skr_tier: u8,
+) -> Result<HarvestSplit> {
+    if gross_yield_amount == 0 {
+        return Ok(HarvestSplit {
+            platform_fee_amount: 0,
+            redirected_amount: 0,
+            ichor_awarded: 0,
+        });
+    }
+
+    if redirect_bps >= FULL_REDIRECT_BPS {
+        return Ok(HarvestSplit {
+            platform_fee_amount: 0,
+            redirected_amount: gross_yield_amount,
+            ichor_awarded: 0,
+        });
+    }
+
+    let platform_fee_amount = percentage_of_amount(gross_yield_amount, 1_000)?;
+    let redirected_amount = percentage_of_amount(gross_yield_amount, redirect_bps)?;
+    let user_share_amount = gross_yield_amount
+        .checked_sub(platform_fee_amount)
+        .and_then(|value| value.checked_sub(redirected_amount))
+        .ok_or(LockVaultError::NumericalOverflow)?;
+    let ichor_awarded = if brewer_active && user_share_amount > 0 {
+        apply_skr_multiplier(user_share_amount, skr_tier)?
+    } else {
+        0
+    };
+
+    Ok(HarvestSplit {
+        platform_fee_amount,
+        redirected_amount,
+        ichor_awarded,
+    })
+}
+
 struct CompletionEffect {
     applied: bool,
     outcome: u8,
@@ -1451,6 +1481,12 @@ struct RedeemEffect {
 struct HarvestEffect {
     applied: bool,
     outcome: u8,
+    platform_fee_amount: u64,
+    redirected_amount: u64,
+    ichor_awarded: u64,
+}
+
+struct HarvestSplit {
     platform_fee_amount: u64,
     redirected_amount: u64,
     ichor_awarded: u64,
@@ -1721,6 +1757,27 @@ mod tests {
         let skipped = lock.apply_harvest_result(100_000_000).unwrap();
         assert!(!skipped.applied);
         assert_eq!(skipped.outcome, OUTCOME_HARVEST_SKIPPED);
+        assert_eq!(skipped.platform_fee_amount, 10_000_000);
+        assert_eq!(skipped.redirected_amount, 10_000_000);
+    }
+
+    #[test]
+    fn harvest_full_redirect_sends_all_yield_to_redirect_without_overflow() {
+        let protocol = protocol();
+        let mut lock = lock(&protocol);
+        lock.gauntlet_complete = true;
+        lock.gauntlet_day = 8;
+        lock.fuel_counter = 1;
+        lock.current_yield_redirect_bps = FULL_REDIRECT_BPS;
+
+        let effect = lock.apply_harvest_result(100_000_000).unwrap();
+        assert!(!effect.applied);
+        assert_eq!(effect.outcome, OUTCOME_HARVEST_SKIPPED);
+        assert_eq!(effect.platform_fee_amount, 0);
+        assert_eq!(effect.redirected_amount, 100_000_000);
+        assert_eq!(effect.ichor_awarded, 0);
+        assert_eq!(lock.ichor_counter, 0);
+        assert_eq!(lock.ichor_lifetime_total, 0);
     }
 
     #[test]

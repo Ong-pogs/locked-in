@@ -12,6 +12,7 @@ The backend can now evaluate due runtime actions against on-chain lock state ins
 - Added a polling runtime scheduler worker under `backend/src/workers/runtimeSchedulerWorker.mjs`.
 - The worker starts and stops with the Fastify server lifecycle.
 - Before scheduling anything, it reads the live `LockVault` account and syncs the runtime row from chain.
+- The worker can now also auto-create fixed-APY `auto-harvest:*` receipts in dev mode.
 
 ### Deterministic automatic runtime ids
 
@@ -57,10 +58,13 @@ The backend can now evaluate due runtime actions against on-chain lock state ins
 ## Verified Outcomes
 
 - The runtime scheduler worker was verified to no-op safely against the live devnet lock while nothing was due.
+- After adding the fixed-APY adapter path, the worker created and published a real automatic harvest:
+  - `auto-harvest:FRXsCB...:solana-fundamentals:1772877300`
 - Automatic work did not misfire during gauntlet.
 - Relay workers correctly rejected pre-lock completion history instead of mutating the live lock.
 - App reconnect now returns to the existing locked course flow instead of incorrectly showing the deposit screen again.
 - Live profile/runtime screens now show the real lock state after refresh.
+- The user can now see recent harvest receipts in `Ichor Shop` instead of relying only on backend logs.
 
 ## Remaining Follow-up
 

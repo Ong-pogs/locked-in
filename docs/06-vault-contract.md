@@ -44,6 +44,12 @@ Companion programs in the same on-chain stack:
 
 Current companion checkpoint:
 
+- a first `YieldSplitter` program now exists in the Anchor workspace
+- it currently covers:
+  - protocol initialization
+  - idempotent harvest split receipts
+  - canonical platform fee / redirect / user-share math
+  - full-redirect protection so `100%` redirect does not underflow the remainder
 - `CommunityPot` now exists as a separate on-chain accumulator program on devnet
 - published harvest receipts can relay their `redirected_amount` into the live monthly pot window
 - monthly close/distribution instructions are still the next slice
@@ -243,6 +249,13 @@ Required guards:
 - idempotent `harvest_id`
 - only authorized harvester/worker signers
 - checked arithmetic on split outputs
+
+Current first implementation note:
+
+- the first `YieldSplitter` slice records split receipts and emits split events
+- it does not CPI into `LockVault` or `CommunityPot` yet
+- `LockVault` harvest math was patched to match the same canonical full-redirect rule
+- backend harvest relay now has a dedicated `YieldSplitter` publish phase and DB status tracking before `LockVault` publish proceeds
 
 ### `CommunityPot` (required interface contract)
 

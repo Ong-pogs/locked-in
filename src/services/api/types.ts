@@ -277,3 +277,40 @@ export interface LeaderboardResponse {
   currentUser: LeaderboardEntry | null;
   entries: LeaderboardEntry[];
 }
+
+export type HarvestRelayStatus = 'pending' | 'publishing' | 'published' | 'failed';
+export type HarvestKind = 'AUTO' | 'MANUAL';
+
+export interface YieldHistoryEntry {
+  harvestId: string;
+  kind: HarvestKind;
+  harvestedAt: string;
+  grossYieldAmount: string;
+  grossYieldAmountUi: string;
+  applied: boolean | null;
+  reason: string | null;
+  platformFeeAmount: string;
+  platformFeeAmountUi: string;
+  redirectedAmount: string;
+  redirectedAmountUi: string;
+  ichorAwarded: string;
+  yieldSplitterStatus: HarvestRelayStatus;
+  yieldSplitterTransactionSignature: string | null;
+  lockVaultStatus: HarvestRelayStatus;
+  lockVaultTransactionSignature: string | null;
+  communityPotStatus: HarvestRelayStatus;
+  communityPotTransactionSignature: string | null;
+}
+
+export interface YieldHistoryResponse {
+  courseId: string;
+  totalHarvests: number;
+  totalGrossYield: string;
+  totalGrossYieldUi: string;
+  totalPlatformFee: string;
+  totalPlatformFeeUi: string;
+  totalRedirected: string;
+  totalRedirectedUi: string;
+  totalIchorAwarded: string;
+  entries: YieldHistoryEntry[];
+}

@@ -8,6 +8,7 @@ skip-lint = false
 [programs.localnet]
 community_pot = "BsJDnhJGVdLQ3mxBJ7YCMkkBitKP2RT49zFqR9XsGri1"
 lock_vault = "41TexnrHDMV4ASJmqNNFcgQ7RBk6N193yvukfiCzKQmD"
+yield_splitter = "8bevd3T3LWoUh2Z9348UKwFFN1p5MdbRbAe2zniCrnVv"
 
 [provider]
 cluster = "Localnet"

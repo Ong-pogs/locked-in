@@ -10,6 +10,7 @@ import type {
   ProgressStartLessonResponse,
   ProgressSubmitLessonRequest,
   ProgressSubmitLessonResponse,
+  YieldHistoryResponse,
 } from '../types';
 
 export function startLesson(
@@ -90,6 +91,15 @@ export function getCommunityPotWindowDetail(
 
 export function getLeaderboard(token: string): Promise<LeaderboardResponse> {
   return httpRequest<LeaderboardResponse>('/v1/progress/leaderboard', {
+    token,
+  });
+}
+
+export function getYieldHistory(
+  courseId: string,
+  token: string,
+): Promise<YieldHistoryResponse> {
+  return httpRequest<YieldHistoryResponse>(`/v1/progress/yield/courses/${courseId}/history`, {
     token,
   });
 }

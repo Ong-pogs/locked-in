@@ -1,11 +1,20 @@
 import { appConfig } from '../config.mjs';
 import { hasLockVaultRelayConfig, readLockAccountSnapshot } from '../lib/lockVault.mjs';
 import {
+  createFixedApyStrategyAdapter,
+  deriveHarvestBucketTimestamp,
+  getYieldHarvestIntervalSeconds,
+  hasYieldStrategyConfig,
+} from '../lib/yieldStrategy.mjs';
+import {
   consumeDailyFuel,
   consumeSaverOrApplyFullConsequence,
   listRuntimeSchedulerCandidates,
+  publishHarvestRedirectToCommunityPot,
+  publishHarvestResultReceipt,
   publishFuelBurnReceipt,
   publishMissConsequenceReceipt,
+  recordHarvestResult,
   syncCourseRuntimeStateWithLockSnapshot,
 } from '../modules/progress/repository.mjs';
 
@@ -75,6 +84,57 @@ function deriveDueMiss(runtime, snapshot, now) {
   };
 }
 
+function deriveDueHarvest(runtime, snapshot, now, strategy) {
+  if (!snapshot.gauntletComplete) {
+    return null;
+  }
+
+  const intervalSeconds = strategy.intervalSeconds;
+  const intervalMs = intervalSeconds * 1000;
+  const lastHarvestedAt = runtime.lastHarvestedAt
+    ? new Date(runtime.lastHarvestedAt).getTime()
+    : null;
+  const cursorMs = Number.isFinite(lastHarvestedAt)
+    ? lastHarvestedAt
+    : new Date(runtime.updatedAt).getTime();
+
+  if (!Number.isFinite(cursorMs)) {
+    return null;
+  }
+
+  if (now.getTime() - cursorMs < intervalMs) {
+    return null;
+  }
+
+  const harvestBucket = deriveHarvestBucketTimestamp(now, intervalSeconds);
+  const elapsedSeconds = Math.max(
+    intervalSeconds,
+    Math.floor((now.getTime() - cursorMs) / 1000),
+  );
+  if (elapsedSeconds <= 0) {
+    return null;
+  }
+
+  const quote = strategy.quoteHarvest({
+    principalAmount: snapshot.principalAmount,
+    elapsedSeconds,
+  });
+  const grossYieldAmount = BigInt(quote.grossYieldAmount ?? '0');
+  if (grossYieldAmount <= 0n) {
+    return null;
+  }
+
+  const harvestedAtIso = now.toISOString();
+  return {
+    harvestId: `auto-harvest:${runtime.walletAddress}:${runtime.courseId}:${Math.floor(
+      harvestBucket.getTime() / 1000,
+    )}`,
+    harvestedAt: harvestedAtIso,
+    grossYieldAmount: grossYieldAmount.toString(),
+    elapsedSeconds,
+  };
+}
+
 async function processRuntimeCandidate(app, candidate, now) {
   let snapshot;
 
@@ -103,6 +163,61 @@ async function processRuntimeCandidate(app, candidate, now) {
 
   let burnProcessed = 0;
   let missProcessed = 0;
+  let harvestProcessed = 0;
+
+  if (hasYieldStrategyConfig()) {
+    const strategy = createFixedApyStrategyAdapter();
+    const dueHarvest = deriveDueHarvest(
+      {
+        walletAddress: candidate.walletAddress,
+        courseId: candidate.courseId,
+        updatedAt: candidate.updatedAt,
+        lastHarvestedAt: candidate.lastHarvestedAt,
+      },
+      snapshot,
+      now,
+      strategy,
+    );
+
+    if (dueHarvest) {
+      const recorded = await recordHarvestResult(
+        candidate.walletAddress,
+        candidate.courseId,
+        dueHarvest.harvestId,
+        dueHarvest.grossYieldAmount,
+        dueHarvest.harvestedAt,
+      );
+      const lockVaultResult = await publishHarvestResultReceipt(
+        candidate.walletAddress,
+        candidate.courseId,
+        dueHarvest.harvestId,
+        true,
+      );
+      const communityPotResult = await publishHarvestRedirectToCommunityPot(
+        candidate.walletAddress,
+        candidate.courseId,
+        dueHarvest.harvestId,
+        true,
+      );
+
+      app.log.info(
+        {
+          walletAddress: candidate.walletAddress,
+          courseId: candidate.courseId,
+          harvestId: dueHarvest.harvestId,
+          harvestedAt: dueHarvest.harvestedAt,
+          grossYieldAmount: dueHarvest.grossYieldAmount,
+          elapsedSeconds: dueHarvest.elapsedSeconds,
+          recordStatus: recorded.yieldSplitterStatus ?? null,
+          lockVaultReason: lockVaultResult.reason,
+          communityPotReason: communityPotResult.reason,
+          lockVaultSignature: lockVaultResult.signature ?? null,
+        },
+        'runtime_scheduler.harvest_processed',
+      );
+      harvestProcessed += 1;
+    }
+  }
 
   const dueBurn = deriveDueBurn(
     { walletAddress: candidate.walletAddress, courseId: candidate.courseId },
@@ -176,6 +291,7 @@ async function processRuntimeCandidate(app, candidate, now) {
   }
 
   return {
+    harvestProcessed,
     burnProcessed,
     missProcessed,
   };
@@ -221,19 +337,22 @@ export function registerRuntimeSchedulerWorker(app) {
       const candidates = await listRuntimeSchedulerCandidates(
         appConfig.runtimeSchedulerBatchSize,
       );
+      let harvestProcessed = 0;
       let burnProcessed = 0;
       let missProcessed = 0;
 
       for (const candidate of candidates) {
         const result = await processRuntimeCandidate(app, candidate, new Date());
+        harvestProcessed += result.harvestProcessed;
         burnProcessed += result.burnProcessed;
         missProcessed += result.missProcessed;
       }
 
-      if (burnProcessed > 0 || missProcessed > 0) {
+      if (harvestProcessed > 0 || burnProcessed > 0 || missProcessed > 0) {
         app.log.info(
           {
             candidates: candidates.length,
+            harvestProcessed,
             burnProcessed,
             missProcessed,
           },

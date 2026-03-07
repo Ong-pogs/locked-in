@@ -66,6 +66,7 @@ Current implementation checkpoint:
 - app UI can render remaining savers, redirect percent, and extension total from synced runtime state
 - backend now includes a polling runtime scheduler worker that:
   - syncs runtime rows from live `LockVault` state before evaluating due work
+  - can auto-create deterministic `auto-harvest:*` receipts from the current yield strategy adapter
   - auto-generates deterministic burn cycle ids when Brewer is actually due
   - auto-generates deterministic miss event ids when a full UTC day is missed
   - no-ops safely while a course is still in gauntlet

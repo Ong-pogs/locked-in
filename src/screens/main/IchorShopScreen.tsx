@@ -1,7 +1,13 @@
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, View, Text, Pressable, TextInput } from 'react-native';
+import { ActivityIndicator, View, Text, Pressable, TextInput, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import {
+  ApiError,
+  getYieldHistory,
+  type YieldHistoryEntry,
+  type YieldHistoryResponse,
+} from '@/services/api';
 import {
   buildRedeemIchorTransaction,
   connection,
@@ -14,6 +20,31 @@ import {
 } from '@/services/solana';
 import { useCourseStore } from '@/stores/courseStore';
 import { useUserStore } from '@/stores';
+import { refreshAuthSession } from '@/services/api/auth/authApi';
+
+function renderHarvestStatus(status: YieldHistoryEntry['lockVaultStatus']) {
+  if (status === 'published') return 'Published';
+  if (status === 'publishing') return 'Publishing';
+  if (status === 'failed') return 'Failed';
+  return 'Pending';
+}
+
+function renderSplitterStatus(entry: YieldHistoryEntry) {
+  const isLegacyManualHarvest =
+    entry.kind === 'MANUAL' &&
+    entry.yieldSplitterStatus === 'pending' &&
+    entry.lockVaultStatus === 'published';
+  if (isLegacyManualHarvest) {
+    return 'Legacy';
+  }
+  return renderHarvestStatus(entry.yieldSplitterStatus);
+}
+
+function renderHarvestReason(reason: string | null) {
+  if (reason === 'HARVEST_APPLIED') return 'Applied';
+  if (reason === 'HARVEST_SKIPPED') return 'Skipped';
+  return reason ?? 'Pending';
+}
 
 export function IchorShopScreen() {
   const navigation = useNavigation();
@@ -23,6 +54,9 @@ export function IchorShopScreen() {
   const syncLockSnapshot = useCourseStore((s) => s.syncLockSnapshot);
   const walletAddress = useUserStore((s) => s.walletAddress);
   const walletAuthToken = useUserStore((s) => s.walletAuthToken);
+  const authToken = useUserStore((s) => s.authToken);
+  const refreshToken = useUserStore((s) => s.refreshToken);
+  const setAuthSession = useUserStore((s) => s.setAuthSession);
   const activeLockAccountAddress = activeCourseId
     ? courseStates[activeCourseId]?.lockAccountAddress ?? null
     : null;
@@ -33,18 +67,119 @@ export function IchorShopScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [ichorAmount, setIchorAmount] = useState('1000');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [yieldHistory, setYieldHistory] = useState<YieldHistoryResponse | null>(null);
+  const [yieldHistoryLoading, setYieldHistoryLoading] = useState(true);
+  const [yieldHistoryError, setYieldHistoryError] = useState<string | null>(null);
+
+  const refreshBackendAccessToken = useCallback(async () => {
+    if (!refreshToken) {
+      throw new Error('Connect your wallet again to read harvest history.');
+    }
+
+    const refreshed = await refreshAuthSession({ refreshToken });
+    setAuthSession(refreshed.accessToken, refreshed.refreshToken);
+    return refreshed.accessToken;
+  }, [refreshToken, setAuthSession]);
 
   useFocusEffect(
     useCallback(() => {
+      let active = true;
+
+      const loadYieldHistory = async () => {
+        if (!activeCourseId) {
+          if (!active) return;
+          setYieldHistory(null);
+          setYieldHistoryError(null);
+          setYieldHistoryLoading(false);
+          return;
+        }
+
+        if (active) {
+          setYieldHistoryLoading(true);
+        }
+
+        let backendAccessToken = authToken;
+        if (!backendAccessToken && refreshToken) {
+          try {
+            backendAccessToken = await refreshBackendAccessToken();
+          } catch (error) {
+            if (!active) return;
+            setYieldHistory(null);
+            setYieldHistoryError(
+              error instanceof Error
+                ? error.message
+                : 'Connect your wallet again to read harvest history.',
+            );
+            setYieldHistoryLoading(false);
+            return;
+          }
+        }
+
+        if (!backendAccessToken) {
+          if (!active) return;
+          setYieldHistory(null);
+          setYieldHistoryError('Connect your wallet again to read harvest history.');
+          setYieldHistoryLoading(false);
+          return;
+        }
+
+        try {
+          const response = await getYieldHistory(activeCourseId, backendAccessToken);
+          if (!active) return;
+          setYieldHistory(response);
+          setYieldHistoryError(null);
+          setYieldHistoryLoading(false);
+        } catch (error) {
+          if (
+            error instanceof ApiError &&
+            (error.code === 'TOKEN_EXPIRED' || error.status === 401) &&
+            refreshToken
+          ) {
+            try {
+              const refreshedToken = await refreshBackendAccessToken();
+              const retried = await getYieldHistory(activeCourseId, refreshedToken);
+              if (!active) return;
+              setYieldHistory(retried);
+              setYieldHistoryError(null);
+              setYieldHistoryLoading(false);
+              return;
+            } catch (refreshError) {
+              if (!active) return;
+              setYieldHistory(null);
+              setYieldHistoryError(
+                refreshError instanceof Error
+                  ? refreshError.message
+                  : 'Unable to read yield history.',
+              );
+              setYieldHistoryLoading(false);
+              return;
+            }
+          }
+
+          if (!active) return;
+          setYieldHistory(null);
+          setYieldHistoryError(
+            error instanceof Error ? error.message : 'Unable to read yield history.',
+          );
+          setYieldHistoryLoading(false);
+        }
+      };
+
+      void loadYieldHistory();
+
       if (
         !activeCourseId ||
         !walletAddress ||
         !activeLockAccountAddress ||
         !hasLockVaultConfig()
       ) {
-        setLockSnapshot(null);
-        setIsLoadingLock(false);
-        return;
+        if (active) {
+          setLockSnapshot(null);
+          setIsLoadingLock(false);
+        }
+        return () => {
+          active = false;
+        };
       }
 
       setIsLoadingLock(true);
@@ -56,6 +191,7 @@ export function IchorShopScreen() {
         fetchRedemptionVaultBalance(),
       ])
         .then(([snapshot, redemptionVault]) => {
+          if (!active) return;
           setStatusMessage(null);
           if (activeCourseId) {
             syncLockSnapshot(activeCourseId, snapshot);
@@ -64,6 +200,7 @@ export function IchorShopScreen() {
           setRedemptionVaultBalanceUi(redemptionVault.balanceUi);
         })
         .catch((error) => {
+          if (!active) return;
           const message =
             error instanceof Error ? error.message : 'Unable to read live Ichor state.';
           setStatusMessage(message);
@@ -71,9 +208,22 @@ export function IchorShopScreen() {
           setRedemptionVaultBalanceUi('0');
         })
         .finally(() => {
+          if (!active) return;
           setIsLoadingLock(false);
         });
-    }, [activeCourseId, activeLockAccountAddress, syncLockSnapshot, walletAddress]),
+
+      return () => {
+        active = false;
+      };
+    }, [
+      activeCourseId,
+      activeLockAccountAddress,
+      authToken,
+      refreshBackendAccessToken,
+      refreshToken,
+      syncLockSnapshot,
+      walletAddress,
+    ]),
   );
 
   const quote = useMemo(() => {
@@ -88,6 +238,7 @@ export function IchorShopScreen() {
 
   const availableIchor = lockSnapshot?.ichorCounter ?? 0;
   const redemptionVaultBalance = Number(redemptionVaultBalanceUi || '0');
+  const recentHarvests = yieldHistory?.entries ?? [];
   const canRedeem =
     Boolean(lockSnapshot?.gauntletComplete) &&
     availableIchor > 0 &&
@@ -152,7 +303,7 @@ export function IchorShopScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-neutral-950">
-      <View className="flex-1 px-6 pt-4">
+      <ScrollView className="flex-1 px-6 pt-4">
         <Pressable onPress={() => navigation.goBack()}>
           <Text className="text-neutral-400">{'\u2190'} Back</Text>
         </Pressable>
@@ -197,6 +348,49 @@ export function IchorShopScreen() {
             </View>
 
             <View className="mt-6 rounded-xl border border-neutral-700 bg-neutral-900 p-5">
+              <Text className="text-sm font-semibold text-neutral-400">Harvest Summary</Text>
+              {yieldHistoryLoading ? (
+                <Text className="mt-3 text-sm text-neutral-500">Loading harvest history...</Text>
+              ) : yieldHistoryError ? (
+                <Text className="mt-3 text-xs text-amber-300">{yieldHistoryError}</Text>
+              ) : (
+                <>
+                  <View className="mt-3 flex-row justify-between">
+                    <View>
+                      <Text className="text-xs uppercase text-neutral-500">Gross Yield</Text>
+                      <Text className="mt-1 text-lg font-bold text-white">
+                        {yieldHistory?.totalGrossYieldUi ?? '0'} USDC
+                      </Text>
+                    </View>
+                    <View>
+                      <Text className="text-xs uppercase text-neutral-500">Platform Fee</Text>
+                      <Text className="mt-1 text-lg font-bold text-white">
+                        {yieldHistory?.totalPlatformFeeUi ?? '0'} USDC
+                      </Text>
+                    </View>
+                  </View>
+                  <View className="mt-4 flex-row justify-between">
+                    <View>
+                      <Text className="text-xs uppercase text-neutral-500">Redirected</Text>
+                      <Text className="mt-1 text-lg font-bold text-white">
+                        {yieldHistory?.totalRedirectedUi ?? '0'} USDC
+                      </Text>
+                    </View>
+                    <View>
+                      <Text className="text-xs uppercase text-neutral-500">Ichor Awarded</Text>
+                      <Text className="mt-1 text-lg font-bold text-amber-400">
+                        {Number(yieldHistory?.totalIchorAwarded ?? '0').toLocaleString()}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text className="mt-3 text-xs text-neutral-600">
+                    Total harvests: {yieldHistory?.totalHarvests ?? 0}
+                  </Text>
+                </>
+              )}
+            </View>
+
+            <View className="mt-6 rounded-xl border border-neutral-700 bg-neutral-900 p-5">
               <Text className="text-xs uppercase tracking-[2px] text-neutral-500">
                 Redeem Amount
               </Text>
@@ -226,8 +420,59 @@ export function IchorShopScreen() {
               </View>
             ) : null}
 
+            <View className="mt-6 rounded-xl border border-neutral-700 bg-neutral-900 p-5">
+              <Text className="text-sm font-semibold text-neutral-400">Recent Harvests</Text>
+              {yieldHistoryLoading ? (
+                <Text className="mt-3 text-sm text-neutral-500">Loading harvest receipts...</Text>
+              ) : yieldHistoryError ? (
+                <Text className="mt-3 text-xs text-amber-300">{yieldHistoryError}</Text>
+              ) : recentHarvests.length === 0 ? (
+                <Text className="mt-3 text-sm text-neutral-500">No harvest history yet.</Text>
+              ) : (
+                recentHarvests.map((entry) => (
+                  <View
+                    key={entry.harvestId}
+                    className="mt-4 rounded-xl border border-neutral-800 bg-neutral-950 p-4"
+                  >
+                    <View className="flex-row items-center justify-between">
+                      <Text className="text-xs font-semibold uppercase text-neutral-500">
+                        {entry.kind}
+                      </Text>
+                      <Text className="text-xs text-neutral-500">
+                        {renderHarvestStatus(entry.lockVaultStatus)}
+                      </Text>
+                    </View>
+                    <Text className="mt-2 text-sm font-semibold text-white">
+                      {renderHarvestReason(entry.reason)}
+                    </Text>
+                    <Text className="mt-1 text-xs text-neutral-600">
+                      {new Date(entry.harvestedAt).toLocaleString()}
+                    </Text>
+                    <Text className="mt-3 text-sm text-neutral-300">
+                      Gross: {entry.grossYieldAmountUi} USDC
+                      {' \u00B7 '}Fee: {entry.platformFeeAmountUi} USDC
+                      {' \u00B7 '}Redirect: {entry.redirectedAmountUi} USDC
+                    </Text>
+                    <Text className="mt-1 text-sm text-amber-400">
+                      Ichor awarded: {Number(entry.ichorAwarded).toLocaleString()}
+                    </Text>
+                    <Text className="mt-2 text-xs text-neutral-600">
+                      Splitter: {renderSplitterStatus(entry)}
+                      {' \u00B7 '}LockVault: {renderHarvestStatus(entry.lockVaultStatus)}
+                      {' \u00B7 '}Pot: {renderHarvestStatus(entry.communityPotStatus)}
+                    </Text>
+                    {entry.lockVaultTransactionSignature ? (
+                      <Text className="mt-1 text-xs text-neutral-600">
+                        Lock tx: {entry.lockVaultTransactionSignature.slice(0, 12)}...
+                      </Text>
+                    ) : null}
+                  </View>
+                ))
+              )}
+            </View>
+
             <Pressable
-              className={`mt-6 rounded-xl py-4 ${
+              className={`mt-6 mb-8 rounded-xl py-4 ${
                 canRedeem ? 'bg-purple-700 active:opacity-80' : 'bg-neutral-700'
               }`}
               disabled={!canRedeem}
@@ -248,7 +493,7 @@ export function IchorShopScreen() {
             </Pressable>
           </>
         )}
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }

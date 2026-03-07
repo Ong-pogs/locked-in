@@ -11,8 +11,10 @@ import {
   getLeaderboardSnapshot,
   getCourseRuntimeSnapshot,
   getCourseProgress,
+  getYieldHistory,
   getModuleProgress,
   publishFuelBurnReceipt,
+  publishHarvestSplitReceipt,
   publishHarvestRedirectToCommunityPot,
   publishHarvestResultReceipt,
   publishMissConsequenceReceipt,
@@ -150,6 +152,17 @@ export async function progressRoutes(app) {
     );
   });
 
+  app.post('/v1/internal/yield-splitter/yield/harvest/publish', async (request) => {
+    requireSchedulerAuth(request);
+
+    const walletAddress = assertBodyField(request.body?.walletAddress, 'walletAddress');
+    const courseId = assertBodyField(request.body?.courseId, 'courseId');
+    const harvestId = assertBodyField(request.body?.harvestId, 'harvestId');
+    const retryFailed = request.body?.retryFailed === true;
+
+    return publishHarvestSplitReceipt(walletAddress, courseId, harvestId, retryFailed);
+  });
+
   app.post('/v1/internal/lock-vault/yield/harvest/publish', async (request) => {
     requireSchedulerAuth(request);
 
@@ -268,6 +281,15 @@ export async function progressRoutes(app) {
       }
 
       return getCommunityPotWindowDetail(request.auth.walletAddress, windowId);
+    },
+  );
+
+  app.get(
+    '/v1/progress/yield/courses/:courseId/history',
+    { preHandler: requireAccessAuth },
+    async (request) => {
+      const courseId = assertPathParam(request.params?.courseId, 'courseId');
+      return getYieldHistory(request.auth.walletAddress, courseId);
     },
   );
 

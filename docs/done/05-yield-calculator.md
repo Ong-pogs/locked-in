@@ -4,6 +4,10 @@
 
 This checkpoint established the first real Ichor accrual and redemption plumbing on devnet.
 It does not integrate Kamino/Marginfi yet, but it now has a working harvest receipt path, on-chain Ichor counters, funded redemption vault, and live app-side shop state.
+The next follow-up now has its first code slice too: a standalone `YieldSplitter` program scaffold with canonical split math tests.
+Harvest receipts can now also track a dedicated `YieldSplitter` publish phase before `LockVault` relay.
+The new `YieldSplitter` phase has been verified live on devnet with a small harvest.
+The runtime scheduler can now create automatic fixed-APY harvest receipts in dev mode.
 
 ## What Was Implemented
 
@@ -51,6 +55,10 @@ It does not integrate Kamino/Marginfi yet, but it now has a working harvest rece
   - real lifetime total
   - real conversion tier
   - real protocol redemption-vault liquidity
+- It now also shows:
+  - harvest summary totals
+  - recent harvest receipts
+  - relay/audit status for recent receipts
 - The redeem button is enabled/disabled from live chain state, not placeholder copy.
 
 ## Main Files
@@ -68,10 +76,23 @@ It does not integrate Kamino/Marginfi yet, but it now has a working harvest rece
 
 - Manual harvest `manual-harvest-001` published as `HARVEST_SKIPPED` while the lock was still in gauntlet.
 - Manual harvest `manual-harvest-002` published as `HARVEST_APPLIED`.
+- `manual-harvest-ys-001` published through:
+  - `YieldSplitter`
+  - `LockVault`
+  - `CommunityPot` skip path (`0` redirect)
+- `auto-harvest:FRXsCB...:solana-fundamentals:1772877300` was created automatically by the runtime worker and published end to end.
 - The positive harvest stored:
   - `platformFeeAmount = 100000`
   - `redirectedAmount = 100000`
   - `ichorAwarded = 840000`
+- The YieldSplitter-backed test harvest stored:
+  - `platformFeeAmount = 10000`
+  - `redirectedAmount = 0`
+  - `ichorAwarded = 94500`
+- The automatic fixed-APY harvest stored:
+  - `platformFeeAmount = 0`
+  - `redirectedAmount = 0`
+  - `ichorAwarded = 2`
 - The live redemption vault now has `5 USDC`.
 - The app shop shows the live Ichor state, live vault liquidity, and a redeemable quote.
 - The live mobile redemption path is now usable against the deployed devnet program.

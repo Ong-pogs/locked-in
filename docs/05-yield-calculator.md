@@ -11,10 +11,24 @@ Current implementation checkpoint:
 
 - `LockVault` now includes a worker-only `apply_harvest_result(...)` instruction
 - backend can queue and publish manual harvest receipts into the live devnet lock
+- a first `YieldSplitter` Anchor program now exists in the workspace with:
+  - protocol config
+  - idempotent harvest split receipts
+  - canonical split math tests
+- backend harvest receipts now track a separate `yield_splitter_status`
+- backend now exposes a dedicated publish route for the split step before `LockVault`:
+  - `POST /v1/internal/yield-splitter/yield/harvest/publish`
+- backend now includes a fixed-APY strategy adapter for devnet/runtime testing
+- the runtime scheduler worker can now auto-create deterministic `auto-harvest:*` receipts
 - a positive devnet harvest has already credited real `ichor_counter` and `ichor_lifetime_total`
 - the mobile `Ichor Shop` now reads live on-chain Ichor state and redemption tier
+- the mobile `Ichor Shop` now also reads backend harvest history and summary totals
 - the redirected-yield share from a published harvest can now be relayed into the live `CommunityPot` program
 - the mobile `Community Pot` screen now reads the live current-month pot balance on-chain
+- full-redirect harvest math now uses the canonical rule:
+  - `100% redirect` sends all gross yield to redirect
+  - no platform fee is taken in that branch
+  - user share stays `0`
 
 ## Inputs
 
@@ -42,6 +56,18 @@ At each yield harvest interval:
 4. compute user share remainder
 5. if Brewer active, convert user share to Ichor counter increment
 6. if Brewer inactive, user share does not mint Ichor for that cycle
+
+Current auto-harvest note:
+
+- the first strategy adapter uses fixed APY math for devnet verification
+- it collapses missed time into one deterministic catch-up harvest instead of backfilling many small periods
+
+Full-redirect edge case:
+
+- if penalty redirect is `100%`, then:
+  - platform fee is `0`
+  - redirected share is the full gross harvest
+  - user share is `0`
 
 ## Penalty Application
 
@@ -75,6 +101,7 @@ Per course, UI should show:
 - current Ichor balance (`ichor_counter`)
 - projected daily equivalent yield under current APY assumptions
 - active conversion tier and quote
+- recent harvest receipts with audit status
 
 ## Ichor Exchange Quote Logic
 

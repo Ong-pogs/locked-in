@@ -38,6 +38,10 @@ This checkpoint established the first working `LockVault` program on devnet and 
   - SKR boost
   - Ichor accrual into `ichor_counter` and `ichor_lifetime_total`
 - Backend harvest receipts can now be queued and published to the live lock.
+- `LockVault` harvest math now also guards the full-redirect edge case:
+  - `100%` redirect sends the full harvest to redirect
+  - no platform fee is taken in that branch
+  - user-share underflow is avoided
 
 ### Companion CommunityPot program
 
@@ -47,6 +51,19 @@ This checkpoint established the first working `LockVault` program on devnet and 
 - `close_distribution_window(window_id)` now exists as the first monthly settlement instruction.
 - Closed windows can now carry total redirected amount, total weight, and eligible recipient count on-chain.
 - `distribute_window(...)` now exists and transfers USDC out of the CommunityPot vault to eligible recipients.
+
+### First YieldSplitter scaffold
+
+- A dedicated `YieldSplitter` program now exists in the Anchor workspace.
+- The first slice currently covers:
+  - protocol config
+  - idempotent harvest split receipts
+  - canonical split math tests
+- Backend harvest rows now track:
+  - `yield_splitter_status`
+  - receipt account
+  - transaction signature
+- The first live devnet relay was verified on `manual-harvest-ys-001`.
 
 ### Worker-side runtime instructions
 
