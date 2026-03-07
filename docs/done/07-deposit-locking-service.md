@@ -21,6 +21,9 @@ The mobile app now creates funded course locks on-chain, persists them across re
 - Deposit signing runs through mobile wallet approval.
 - The app now signs with MWA and submits the serialized transaction itself.
 - This removed the previous hang-prone wallet-side send path.
+- The deposit builder now also passes a safe trailing placeholder for `owner_skr_token_account` when locking `0 SKR`, which fixes the live `USDC`-only deposit path on Anchor.
+- The deposit screen now simulates `lock_funds` before wallet approval, so token-account and program-level errors surface in-app instead of only as a generic Phantom failure.
+- The screen also shows current `SOL`, `USDC`, and `SKR` balances before deposit, and it defaults the new lock amount to `1 USDC` for devnet testing.
 
 ### Devnet deployment and bootstrap
 
@@ -53,6 +56,7 @@ The mobile app now creates funded course locks on-chain, persists them across re
 
 - Reconnect now reconciles persisted onboarding state with the real locked course state.
 - The app no longer drops a user back onto the deposit screen when a lock already exists.
+- Fresh-device onboarding now also checks for an existing on-chain lock before attempting deposit, so the same wallet can resume its course from another phone without trying to create a duplicate lock PDA.
 
 ### Live resurface UI
 
@@ -63,6 +67,18 @@ The mobile app now creates funded course locks on-chain, persists them across re
   - unlock timestamp
   - current lock availability state
 - `Unlock & Resurface` is only enabled when the program-derived lock is actually unlockable.
+
+### Resurface receipt history
+
+- The app now persists successful resurface receipts locally per wallet.
+- A dedicated `Resurface Receipts` screen can show:
+  - course title
+  - returned principal
+  - returned SKR
+  - unlock target timestamp
+  - actual unlock timestamp
+  - transaction signature
+- Successful unlocks now route into that receipt screen instead of dropping straight back to browsing.
 
 ## Main Files
 
@@ -90,6 +106,4 @@ The mobile app now creates funded course locks on-chain, persists them across re
 
 ## Remaining Follow-up
 
-- Relay verified completion, burn, and miss events from backend workers into the `LockVault` instruction surface.
 - Live-test `unlock_funds` once the current devnet lock reaches maturity.
-- Optionally add a dedicated unlock history or receipt view in the app.

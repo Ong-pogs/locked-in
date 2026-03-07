@@ -39,6 +39,7 @@ export type MainStackParamList = {
   Profile: undefined;
   Inventory: undefined;
   IchorShop: undefined;
+  ResurfaceHistory: { receiptId?: string } | undefined;
 };
 
 // --- Root ---

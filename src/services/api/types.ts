@@ -314,3 +314,62 @@ export interface YieldHistoryResponse {
   totalIchorAwarded: string;
   entries: YieldHistoryEntry[];
 }
+
+export type RuntimeAuditEventType = 'FUEL_BURN' | 'MISS';
+export type RuntimeRelayStatus = 'pending' | 'publishing' | 'published' | 'failed';
+
+export interface RuntimeAuditEvent {
+  eventType: RuntimeAuditEventType;
+  eventId: string;
+  occurredAt: string;
+  eventDay: string | null;
+  applied: boolean;
+  reason: string | null;
+  fuelBefore: number | null;
+  fuelAfter: number | null;
+  saverCountBefore: number | null;
+  saverCountAfter: number | null;
+  redirectBpsBefore: number | null;
+  redirectBpsAfter: number | null;
+  extensionDaysBefore: number | null;
+  extensionDaysAfter: number | null;
+  lockVaultStatus: RuntimeRelayStatus;
+  lockVaultTransactionSignature: string | null;
+  lockVaultLastError: string | null;
+}
+
+export interface RuntimeHistoryResponse {
+  courseId: string;
+  burnCount: number;
+  missCount: number;
+  extensionDaysAdded: number;
+  events: RuntimeAuditEvent[];
+}
+
+export interface UnlockReceiptPayload {
+  courseId: string;
+  lockAccountAddress: string;
+  principalAmountUi: string;
+  skrLockedAmountUi: string;
+  lockEndDate: string;
+  unlockedAt?: string;
+  unlockTxSignature: string;
+}
+
+export interface UnlockReceiptRecord {
+  unlockTxSignature: string;
+  walletAddress: string;
+  courseId: string;
+  lockAccountAddress: string;
+  principalAmountUi: string;
+  skrLockedAmountUi: string;
+  lockEndAt: string;
+  unlockedAt: string;
+  verifiedSlot: number | null;
+  verifiedBlockTime: string | null;
+  createdAt?: string;
+}
+
+export interface UnlockReceiptHistoryResponse {
+  receipts: UnlockReceiptRecord[];
+}

@@ -37,6 +37,7 @@ interface LockVaultConfig {
 export interface WalletDepositBalances {
   stableBalanceUi: string;
   skrBalanceUi: string;
+  solBalanceUi: string;
 }
 
 export interface RedemptionVaultBalance {
@@ -342,6 +343,12 @@ function formatAtomicAmount(amount: bigint, decimals: number): string {
   return `${whole.toString()}.${paddedFraction}`;
 }
 
+function formatLamportsAmount(lamports: number): string {
+  const sol = lamports / 1_000_000_000;
+  const formatted = sol.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+  return formatted || '0';
+}
+
 async function hashCourseId(courseId: string): Promise<Uint8Array> {
   const hashHex = await Crypto.digestStringAsync(
     Crypto.CryptoDigestAlgorithm.SHA256,
@@ -426,14 +433,16 @@ export async function fetchWalletDepositBalances(
   const config = getLockVaultConfig();
   const owner = new PublicKey(ownerAddress);
 
-  const [stableBalanceUi, skrBalanceUi] = await Promise.all([
+  const [stableBalanceUi, skrBalanceUi, solLamports] = await Promise.all([
     getTokenBalanceUi(owner, config.usdcMint),
     getTokenBalanceUi(owner, config.skrMint),
+    connection.getBalance(owner, 'confirmed'),
   ]);
 
   return {
     stableBalanceUi,
     skrBalanceUi,
+    solBalanceUi: formatLamportsAmount(solLamports),
   };
 }
 
@@ -557,15 +566,13 @@ export async function buildLockFundsTransaction(params: {
     { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-  ];
-
-  if (skrAmount > 0n) {
-    keys.push({
-      pubkey: ownerSkrTokenAccount,
+    {
+      // Anchor still expects a trailing account key here even when no SKR is locked.
+      pubkey: skrAmount > 0n ? ownerSkrTokenAccount : ownerStableTokenAccount,
       isSigner: false,
       isWritable: true,
-    });
-  }
+    },
+  ];
 
   const instruction = new TransactionInstruction({
     programId: config.programId,

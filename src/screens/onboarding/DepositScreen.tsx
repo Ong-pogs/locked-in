@@ -3,14 +3,43 @@ import { View, Text, Pressable, TextInput, ActivityIndicator } from 'react-nativ
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { PublicKey } from '@solana/web3.js';
 import type { OnboardingStackParamList } from '@/navigation/types';
-import { connection, buildLockFundsTransaction, fetchWalletDepositBalances, hasLockVaultConfig, signTransaction, type LockDurationDays } from '@/services/solana';
+import {
+  connection,
+  buildLockFundsTransaction,
+  fetchLockAccountSnapshot,
+  fetchWalletDepositBalances,
+  hasLockVaultConfig,
+  signTransaction,
+  type LockDurationDays,
+} from '@/services/solana';
+import { SendTransactionError } from '@solana/web3.js';
 import { useCourseStore, useUserStore } from '@/stores';
 
 type Nav = NativeStackNavigationProp<OnboardingStackParamList, 'Deposit'>;
 type DepositRoute = RouteProp<OnboardingStackParamList, 'Deposit'>;
 
 const LOCK_DURATIONS: LockDurationDays[] = [30, 60, 90];
+const MIN_RENT_SOL_BUFFER = 0.01;
+const LAMPORTS_PER_SOL = 1_000_000_000;
+
+function inferLockDurationDays(params: {
+  lockStartDate: string;
+  lockEndDate: string;
+  extensionDays: number;
+}): LockDurationDays {
+  const startMs = new Date(params.lockStartDate).getTime();
+  const endMs = new Date(params.lockEndDate).getTime();
+  const totalDays = Math.max(
+    30,
+    Math.round((endMs - startMs) / (24 * 60 * 60 * 1000)) - params.extensionDays,
+  );
+
+  if (totalDays >= 90) return 90;
+  if (totalDays >= 60) return 60;
+  return 30;
+}
 
 export function DepositScreen() {
   const navigation = useNavigation<Nav>();
@@ -18,7 +47,9 @@ export function DepositScreen() {
   const walletAddress = useUserStore((s) => s.walletAddress);
   const walletAuthToken = useUserStore((s) => s.walletAuthToken);
   const startGauntlet = useUserStore((s) => s.startGauntlet);
+  const completeGauntlet = useUserStore((s) => s.completeGauntlet);
   const activateCourse = useCourseStore((s) => s.activateCourse);
+  const syncLockSnapshot = useCourseStore((s) => s.syncLockSnapshot);
   const courses = useCourseStore((s) => s.courses);
   const course = useMemo(
     () => courses.find((entry) => entry.id === route.params.courseId) ?? null,
@@ -26,13 +57,15 @@ export function DepositScreen() {
   );
 
   const [lockDuration, setLockDuration] = useState<LockDurationDays>(30);
-  const [principalAmount, setPrincipalAmount] = useState('100');
+  const [principalAmount, setPrincipalAmount] = useState('1');
   const [skrAmount, setSkrAmount] = useState('0');
-  const [balances, setBalances] = useState<{ stable: string; skr: string }>({
+  const [balances, setBalances] = useState<{ stable: string; skr: string; sol: string }>({
     stable: '0',
     skr: '0',
+    sol: '0',
   });
   const [isRefreshingBalances, setIsRefreshingBalances] = useState(false);
+  const [isRestoringExistingLock, setIsRestoringExistingLock] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [configMessage, setConfigMessage] = useState<string | null>(null);
@@ -62,6 +95,7 @@ export function DepositScreen() {
         setBalances({
           stable: nextBalances.stableBalanceUi,
           skr: nextBalances.skrBalanceUi,
+          sol: nextBalances.solBalanceUi,
         });
       })
       .catch((error) => {
@@ -80,6 +114,76 @@ export function DepositScreen() {
     };
   }, [walletAddress]);
 
+  useEffect(() => {
+    if (!walletAddress || !hasLockVaultConfig()) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsRestoringExistingLock(true);
+    setStatusMessage('Checking for an existing on-chain lock...');
+
+    void fetchLockAccountSnapshot({
+      ownerAddress: walletAddress,
+      courseId: route.params.courseId,
+    })
+      .then((snapshot) => {
+        if (cancelled) return;
+
+        const inferredDuration = inferLockDurationDays({
+          lockStartDate: snapshot.lockStartDate,
+          lockEndDate: snapshot.lockEndDate,
+          extensionDays: snapshot.extensionDays,
+        });
+
+        activateCourse(route.params.courseId, {
+          amount: Number(snapshot.principalAmountUi),
+          duration: inferredDuration,
+          lockAccountAddress: snapshot.lockAccountAddress,
+          skrAmount: Number(snapshot.skrLockedAmountUi),
+        });
+        syncLockSnapshot(route.params.courseId, snapshot);
+
+        if (snapshot.gauntletComplete) {
+          completeGauntlet();
+          setStatusMessage('Existing lock found on-chain. Resuming your course...');
+          return;
+        }
+
+        startGauntlet();
+        setStatusMessage('Existing lock found on-chain. Returning to your gauntlet...');
+        navigation.replace('GauntletRoom');
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        const message =
+          error instanceof Error ? error.message : 'Unable to read the lock account.';
+
+        if (message.includes('No LockVault account was found')) {
+          setStatusMessage(null);
+          return;
+        }
+
+        setStatusMessage(message);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setIsRestoringExistingLock(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activateCourse,
+    completeGauntlet,
+    navigation,
+    route.params.courseId,
+    startGauntlet,
+    syncLockSnapshot,
+    walletAddress,
+  ]);
+
   const handleDeposit = async () => {
     if (!walletAddress || !walletAuthToken) {
       setStatusMessage('Connect your wallet again before creating a lock.');
@@ -95,6 +199,33 @@ export function DepositScreen() {
 
     try {
       setIsSubmitting(true);
+
+      const requestedStable = Number(principalAmount);
+      const availableStable = Number(balances.stable);
+      if (Number.isFinite(requestedStable) && requestedStable > availableStable) {
+        throw new Error(
+          `Wallet has ${balances.stable} USDC available, which is below the requested deposit of ${principalAmount} USDC.`,
+        );
+      }
+
+      const requestedSkr = Number(skrAmount || '0');
+      const availableSkr = Number(balances.skr);
+      if (Number.isFinite(requestedSkr) && requestedSkr > availableSkr) {
+        throw new Error(
+          `Wallet has ${balances.skr} SKR available, which is below the requested lock amount of ${skrAmount} SKR.`,
+        );
+      }
+
+      const walletLamports = await connection.getBalance(
+        new PublicKey(walletAddress),
+        'confirmed',
+      );
+      if (walletLamports < MIN_RENT_SOL_BUFFER * LAMPORTS_PER_SOL) {
+        throw new Error(
+          `Wallet needs at least ~${MIN_RENT_SOL_BUFFER.toFixed(2)} SOL to pay rent for the lock accounts.`,
+        );
+      }
+
       setStatusMessage('Building lock transaction...');
 
       const buildResult = await buildLockFundsTransaction({
@@ -104,6 +235,21 @@ export function DepositScreen() {
         skrAmountUi: skrAmount,
         lockDurationDays: lockDuration,
       });
+
+      setStatusMessage('Simulating transaction...');
+      try {
+        await connection.simulateTransaction(buildResult.transaction);
+      } catch (error) {
+        if (error instanceof SendTransactionError) {
+          const simulationLogs = error.logs?.slice(-6).join(' | ');
+          throw new Error(
+            simulationLogs
+              ? `Deposit simulation failed: ${simulationLogs}`
+              : 'Deposit simulation failed before wallet approval. Check the wallet balances and token accounts.',
+          );
+        }
+        throw error;
+      }
 
       setStatusMessage('Requesting wallet approval...');
       const signedTransaction = await signTransaction(
@@ -139,11 +285,15 @@ export function DepositScreen() {
         setBalances({
           stable: nextBalances.stableBalanceUi,
           skr: nextBalances.skrBalanceUi,
+          sol: nextBalances.solBalanceUi,
         });
       });
     } catch (error) {
-      const message =
+      const rawMessage =
         error instanceof Error ? error.message : 'Unable to create the lock transaction.';
+      const message = rawMessage.includes('Transaction simulation failed')
+        ? `${rawMessage} Phantom showing "Unknown" is expected on devnet for this custom program.`
+        : rawMessage;
       setStatusMessage(message);
     } finally {
       setIsSubmitting(false);
@@ -179,7 +329,7 @@ export function DepositScreen() {
             keyboardType="decimal-pad"
             value={principalAmount}
             onChangeText={setPrincipalAmount}
-            placeholder="100"
+            placeholder="1"
             placeholderTextColor="#737373"
           />
 
@@ -225,6 +375,7 @@ export function DepositScreen() {
               USDC: {balances.stable}
             </Text>
             <Text className="mt-1 text-sm text-neutral-300">SKR: {balances.skr}</Text>
+            <Text className="mt-1 text-sm text-neutral-300">SOL: {balances.sol}</Text>
             {isRefreshingBalances ? (
               <View className="mt-3 flex-row items-center gap-2">
                 <ActivityIndicator size="small" color="#a3a3a3" />
@@ -247,14 +398,18 @@ export function DepositScreen() {
         ) : null}
 
         <Pressable
-          className={`mt-6 rounded-xl px-6 py-4 ${isSubmitting || Boolean(configMessage) ? 'bg-neutral-700' : 'bg-emerald-600 active:bg-emerald-700'}`}
-          disabled={isSubmitting || Boolean(configMessage)}
+          className={`mt-6 rounded-xl px-6 py-4 ${isSubmitting || isRestoringExistingLock || Boolean(configMessage) ? 'bg-neutral-700' : 'bg-emerald-600 active:bg-emerald-700'}`}
+          disabled={isSubmitting || isRestoringExistingLock || Boolean(configMessage)}
           onPress={() => {
             void handleDeposit();
           }}
         >
           <Text className="text-center text-lg font-semibold text-white">
-            {isSubmitting ? 'Creating Lock...' : 'Deposit & Start Gauntlet'}
+            {isRestoringExistingLock
+              ? 'Checking Existing Lock...'
+              : isSubmitting
+                ? 'Creating Lock...'
+                : 'Deposit & Start Gauntlet'}
           </Text>
         </Pressable>
       </View>

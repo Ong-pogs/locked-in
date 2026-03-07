@@ -13,6 +13,7 @@ import { CommunityPotWindowScreen } from '@/screens/main/CommunityPotWindowScree
 import { ProfileScreen } from '@/screens/main/ProfileScreen';
 import { InventoryScreen } from '@/screens/main/InventoryScreen';
 import { IchorShopScreen } from '@/screens/main/IchorShopScreen';
+import { ResurfaceHistoryScreen } from '@/screens/main/ResurfaceHistoryScreen';
 import { useCourseStore } from '@/stores/courseStore';
 
 const Stack = createNativeStackNavigator<MainStackParamList>();
@@ -90,6 +91,11 @@ export function MainStack() {
       <Stack.Screen
         name="IchorShop"
         component={IchorShopScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="ResurfaceHistory"
+        component={ResurfaceHistoryScreen}
         options={{ animation: 'slide_from_right' }}
       />
     </Stack.Navigator>

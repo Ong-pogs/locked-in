@@ -10,6 +10,10 @@ import type {
   ProgressStartLessonResponse,
   ProgressSubmitLessonRequest,
   ProgressSubmitLessonResponse,
+  RuntimeHistoryResponse,
+  UnlockReceiptHistoryResponse,
+  UnlockReceiptPayload,
+  UnlockReceiptRecord,
   YieldHistoryResponse,
 } from '../types';
 
@@ -64,6 +68,18 @@ export function getCourseRuntime(
   );
 }
 
+export function getCourseRuntimeHistory(
+  courseId: string,
+  token: string,
+): Promise<RuntimeHistoryResponse> {
+  return httpRequest<RuntimeHistoryResponse>(
+    `/v1/progress/runtime/courses/${courseId}/history`,
+    {
+      token,
+    },
+  );
+}
+
 export function getModuleProgress(
   moduleId: string,
   token: string,
@@ -100,6 +116,23 @@ export function getYieldHistory(
   token: string,
 ): Promise<YieldHistoryResponse> {
   return httpRequest<YieldHistoryResponse>(`/v1/progress/yield/courses/${courseId}/history`, {
+    token,
+  });
+}
+
+export function getUnlockReceipts(token: string): Promise<UnlockReceiptHistoryResponse> {
+  return httpRequest<UnlockReceiptHistoryResponse>('/v1/progress/unlocks', {
+    token,
+  });
+}
+
+export function createUnlockReceipt(
+  payload: UnlockReceiptPayload,
+  token: string,
+): Promise<UnlockReceiptRecord> {
+  return httpRequest<UnlockReceiptRecord>('/v1/progress/unlocks', {
+    method: 'POST',
+    body: payload,
     token,
   });
 }

@@ -6,3 +6,4 @@ export { useCourseStore } from './courseStore';
 export { useYieldStore } from './yieldStore';
 export { useSceneStore } from './sceneStore';
 export { useBrewStore } from './brewStore';
+export { useResurfaceStore } from './resurfaceStore';

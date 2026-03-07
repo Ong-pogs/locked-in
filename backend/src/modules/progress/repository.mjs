@@ -8,6 +8,7 @@ import {
   withTransactionAsWallet,
 } from '../../lib/db.mjs';
 import {
+  hasLockVaultReadConfig,
   hasLockVaultRelayConfig,
   publishFuelBurnToLockVault,
   publishHarvestToLockVault,
@@ -15,6 +16,7 @@ import {
   publishVerifiedCompletionToLockVault,
   readLockAccountSnapshot,
   readLockAccountTiming,
+  verifyUnlockTransaction,
 } from '../../lib/lockVault.mjs';
 import {
   hasYieldSplitterRelayConfig,
@@ -1317,6 +1319,304 @@ export async function getCourseRuntimeSnapshot(walletAddress, courseId) {
   return withTransactionAsWallet(walletAddress, async (client) =>
     readCourseRuntimeState(client, walletAddress, courseId),
   );
+}
+
+function mapRelayLifecycleStatus(rawStatus) {
+  if (rawStatus === 'published') return 'published';
+  if (rawStatus === 'publishing') return 'publishing';
+  if (rawStatus === 'failed') return 'failed';
+  return 'pending';
+}
+
+export async function getCourseRuntimeHistory(walletAddress, courseId, limit = 12) {
+  if (!hasDatabase()) {
+    return {
+      courseId,
+      burnCount: 0,
+      missCount: 0,
+      extensionDaysAdded: 0,
+      events: [],
+    };
+  }
+
+  const [summaryResult, eventsResult] = await Promise.all([
+    query(
+      `
+        select
+          (
+            select count(*)::int
+            from lesson.fuel_burn_cycle_receipts
+            where wallet_address = $1
+              and course_id = $2
+              and applied = true
+              and reason = 'BURNED'
+          ) as "burnCount",
+          (
+            select count(*)::int
+            from lesson.miss_consequence_receipts
+            where wallet_address = $1
+              and course_id = $2
+              and applied = true
+          ) as "missCount",
+          (
+            select coalesce(sum(greatest(extension_days_after - extension_days_before, 0)), 0)::int
+            from lesson.miss_consequence_receipts
+            where wallet_address = $1
+              and course_id = $2
+          ) as "extensionDaysAdded"
+      `,
+      [walletAddress, courseId],
+    ),
+    query(
+      `
+        select *
+        from (
+          select
+            'FUEL_BURN'::text as "eventType",
+            cycle_id as "eventId",
+            burned_at as "occurredAt",
+            null::text as "eventDay",
+            applied,
+            reason,
+            fuel_before as "fuelBefore",
+            fuel_after as "fuelAfter",
+            null::int as "saverCountBefore",
+            null::int as "saverCountAfter",
+            null::int as "redirectBpsBefore",
+            null::int as "redirectBpsAfter",
+            null::int as "extensionDaysBefore",
+            null::int as "extensionDaysAfter",
+            lock_vault_status as "lockVaultStatus",
+            lock_vault_transaction_signature as "lockVaultTransactionSignature",
+            lock_vault_last_error as "lockVaultLastError",
+            created_at as "createdAt"
+          from lesson.fuel_burn_cycle_receipts
+          where wallet_address = $1
+            and course_id = $2
+
+          union all
+
+          select
+            'MISS'::text as "eventType",
+            miss_event_id as "eventId",
+            created_at as "occurredAt",
+            miss_day::text as "eventDay",
+            applied,
+            reason,
+            null::int as "fuelBefore",
+            null::int as "fuelAfter",
+            saver_count_before as "saverCountBefore",
+            saver_count_after as "saverCountAfter",
+            redirect_bps_before as "redirectBpsBefore",
+            redirect_bps_after as "redirectBpsAfter",
+            extension_days_before as "extensionDaysBefore",
+            extension_days_after as "extensionDaysAfter",
+            lock_vault_status as "lockVaultStatus",
+            lock_vault_transaction_signature as "lockVaultTransactionSignature",
+            lock_vault_last_error as "lockVaultLastError",
+            created_at as "createdAt"
+          from lesson.miss_consequence_receipts
+          where wallet_address = $1
+            and course_id = $2
+        ) events
+        order by "occurredAt" desc, "createdAt" desc
+        limit $3
+      `,
+      [walletAddress, courseId, limit],
+    ),
+  ]);
+
+  const summary = summaryResult.rows[0] ?? {
+    burnCount: 0,
+    missCount: 0,
+    extensionDaysAdded: 0,
+  };
+
+  return {
+    courseId,
+    burnCount: Number(summary.burnCount ?? 0),
+    missCount: Number(summary.missCount ?? 0),
+    extensionDaysAdded: Number(summary.extensionDaysAdded ?? 0),
+    events: eventsResult.rows.map((row) => ({
+      eventType: row.eventType,
+      eventId: row.eventId,
+      occurredAt: row.occurredAt,
+      eventDay: row.eventDay ?? null,
+      applied: Boolean(row.applied),
+      reason: row.reason ?? null,
+      fuelBefore: row.fuelBefore == null ? null : Number(row.fuelBefore),
+      fuelAfter: row.fuelAfter == null ? null : Number(row.fuelAfter),
+      saverCountBefore:
+        row.saverCountBefore == null ? null : Number(row.saverCountBefore),
+      saverCountAfter: row.saverCountAfter == null ? null : Number(row.saverCountAfter),
+      redirectBpsBefore:
+        row.redirectBpsBefore == null ? null : Number(row.redirectBpsBefore),
+      redirectBpsAfter:
+        row.redirectBpsAfter == null ? null : Number(row.redirectBpsAfter),
+      extensionDaysBefore:
+        row.extensionDaysBefore == null ? null : Number(row.extensionDaysBefore),
+      extensionDaysAfter:
+        row.extensionDaysAfter == null ? null : Number(row.extensionDaysAfter),
+      lockVaultStatus: mapRelayLifecycleStatus(row.lockVaultStatus),
+      lockVaultTransactionSignature: row.lockVaultTransactionSignature ?? null,
+      lockVaultLastError: row.lockVaultLastError ?? null,
+    })),
+  };
+}
+
+async function readUnlockReceipt(client, walletAddress, unlockTxSignature) {
+  const result = await client.query(
+    `
+      select
+        unlock_tx_signature as "unlockTxSignature",
+        wallet_address as "walletAddress",
+        course_id as "courseId",
+        lock_account_address as "lockAccountAddress",
+        principal_amount_ui as "principalAmountUi",
+        skr_locked_amount_ui as "skrLockedAmountUi",
+        lock_end_at as "lockEndAt",
+        unlocked_at as "unlockedAt",
+        verified_slot as "verifiedSlot",
+        verified_block_time as "verifiedBlockTime",
+        created_at as "createdAt"
+      from lesson.unlock_receipts
+      where wallet_address = $1
+        and unlock_tx_signature = $2
+      limit 1
+    `,
+    [walletAddress, unlockTxSignature],
+  );
+
+  return result.rows[0] ?? null;
+}
+
+export async function recordUnlockReceipt(walletAddress, payload) {
+  if (!payload?.unlockTxSignature || typeof payload.unlockTxSignature !== 'string') {
+    throw badRequest('unlockTxSignature is required', 'MISSING_UNLOCK_TX_SIGNATURE');
+  }
+  if (!payload?.courseId || typeof payload.courseId !== 'string') {
+    throw badRequest('courseId is required', 'MISSING_COURSE_ID');
+  }
+  if (!payload?.lockAccountAddress || typeof payload.lockAccountAddress !== 'string') {
+    throw badRequest('lockAccountAddress is required', 'MISSING_LOCK_ACCOUNT_ADDRESS');
+  }
+  if (!payload?.principalAmountUi || typeof payload.principalAmountUi !== 'string') {
+    throw badRequest('principalAmountUi is required', 'MISSING_PRINCIPAL_AMOUNT_UI');
+  }
+  if (typeof payload?.skrLockedAmountUi !== 'string') {
+    throw badRequest('skrLockedAmountUi is required', 'MISSING_SKR_LOCKED_AMOUNT_UI');
+  }
+  if (!payload?.lockEndDate || typeof payload.lockEndDate !== 'string') {
+    throw badRequest('lockEndDate is required', 'MISSING_LOCK_END_DATE');
+  }
+
+  const unlockedAt =
+    typeof payload.unlockedAt === 'string' && payload.unlockedAt
+      ? payload.unlockedAt
+      : new Date().toISOString();
+
+  if (!hasDatabase()) {
+    return {
+      unlockTxSignature: payload.unlockTxSignature,
+      walletAddress,
+      courseId: payload.courseId,
+      lockAccountAddress: payload.lockAccountAddress,
+      principalAmountUi: payload.principalAmountUi,
+      skrLockedAmountUi: payload.skrLockedAmountUi,
+      lockEndAt: payload.lockEndDate,
+      unlockedAt,
+      verifiedSlot: null,
+      verifiedBlockTime: null,
+    };
+  }
+
+  if (!hasLockVaultReadConfig()) {
+    throw badRequest('LockVault read config is incomplete', 'LOCK_VAULT_READ_DISABLED');
+  }
+
+  const verification = await verifyUnlockTransaction({
+    unlockTxSignature: payload.unlockTxSignature,
+    walletAddress,
+    lockAccountAddress: payload.lockAccountAddress,
+  });
+  if (!verification.valid) {
+    throw badRequest('Unlock transaction could not be verified', verification.reason);
+  }
+
+  return withTransactionAsWallet(walletAddress, async (client) => {
+    const existing = await readUnlockReceipt(client, walletAddress, payload.unlockTxSignature);
+    if (existing) {
+      return existing;
+    }
+
+    await client.query(
+      `
+        insert into lesson.unlock_receipts (
+          unlock_tx_signature,
+          wallet_address,
+          course_id,
+          lock_account_address,
+          principal_amount_ui,
+          skr_locked_amount_ui,
+          lock_end_at,
+          unlocked_at,
+          verified_slot,
+          verified_block_time
+        )
+        values ($1, $2, $3, $4, $5, $6, $7::timestamptz, $8::timestamptz, $9::bigint, $10::timestamptz)
+        on conflict (unlock_tx_signature) do nothing
+      `,
+      [
+        payload.unlockTxSignature,
+        walletAddress,
+        payload.courseId,
+        verification.lockAccountAddress ?? payload.lockAccountAddress,
+        payload.principalAmountUi,
+        payload.skrLockedAmountUi,
+        payload.lockEndDate,
+        unlockedAt,
+        verification.slot,
+        verification.blockTime,
+      ],
+    );
+
+    return readUnlockReceipt(client, walletAddress, payload.unlockTxSignature);
+  });
+}
+
+export async function getUnlockReceipts(walletAddress, limit = 20) {
+  if (!hasDatabase()) {
+    return {
+      receipts: [],
+    };
+  }
+
+  const result = await queryAsWallet(
+    walletAddress,
+    `
+      select
+        unlock_tx_signature as "unlockTxSignature",
+        wallet_address as "walletAddress",
+        course_id as "courseId",
+        lock_account_address as "lockAccountAddress",
+        principal_amount_ui as "principalAmountUi",
+        skr_locked_amount_ui as "skrLockedAmountUi",
+        lock_end_at as "lockEndAt",
+        unlocked_at as "unlockedAt",
+        verified_slot as "verifiedSlot",
+        verified_block_time as "verifiedBlockTime",
+        created_at as "createdAt"
+      from lesson.unlock_receipts
+      where wallet_address = $1
+      order by unlocked_at desc
+      limit $2
+    `,
+    [walletAddress, limit],
+  );
+
+  return {
+    receipts: result.rows,
+  };
 }
 
 export async function publishVerifiedCompletionEvent(

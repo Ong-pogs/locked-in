@@ -40,6 +40,11 @@ The backend can now evaluate due runtime actions against on-chain lock state ins
 
 - App screens now refresh runtime or lock state when opened, so visible Fuel, savers, unlock state, and Ichor numbers stay aligned with backend/on-chain truth.
 - This removed stale UI cases after reconnects, misses, and live lock reads.
+- `Streak Status` now shows a recent runtime audit timeline with:
+  - fuel burns
+  - miss consequences
+  - redirect deltas
+  - extension changes
 
 ## Main Files
 

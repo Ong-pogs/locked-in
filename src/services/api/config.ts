@@ -36,6 +36,9 @@ function getDiscoveredFallbackUrls(): string[] {
   }
 
   if (Platform.OS === 'android') {
+    // Physical Android devices can use localhost when adb reverse is active.
+    fallbackUrls.push('http://127.0.0.1:3001', 'http://localhost:3001');
+
     // Android emulator host routes.
     fallbackUrls.push('http://10.0.2.2:3001', 'http://10.0.3.2:3001');
   }

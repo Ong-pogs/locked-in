@@ -10,6 +10,11 @@ Current implementation checkpoint:
 - on-chain `lock_funds` now exists under `programs/lock_vault`
 - the mobile app now builds a real `lock_funds` transaction from `src/screens/onboarding/DepositScreen.tsx`
 - the client derives lock/vault PDAs, fetches wallet token balances, signs through MWA, and submits the raw transaction from the app for confirmation
+- the client now always passes the trailing SKR source account meta, even for `USDC`-only locks, because the live Anchor account layout still requires that final key during instruction decoding
+- the deposit screen now:
+  - checks for an existing on-chain lock before attempting another deposit
+  - shows `SOL` alongside `USDC` and `SKR`
+  - simulates `lock_funds` before opening the wallet so program/token errors surface in-app
 - the Solana client layer can now also build a real `unlock_funds` transaction for a locked course
 - the flow still depends on configured program/mint env vars and a deployed `LockVault` program on the selected cluster
 - live lock inspection is now available through `scripts/inspect-lock-vault.mjs`
@@ -30,11 +35,12 @@ Current implementation checkpoint:
    - lock PDA
    - user ATAs
    - vault ATAs
-4. build transaction for `lock_funds(...)`
-5. request wallet signature
-6. submit and confirm transaction
-7. persist lock reference in app state
-8. route user to gauntlet flow
+4. simulate `lock_funds(...)` locally to catch account/mint/balance errors before wallet approval
+5. build transaction for `lock_funds(...)`
+6. request wallet signature
+7. submit and confirm transaction
+8. persist lock reference in app state
+9. route user to gauntlet flow
 
 ## Single-Transaction Requirement
 
@@ -75,7 +81,10 @@ When lock is unlockable:
 Current implementation checkpoint:
 
 - the transaction builder now exists in `src/services/solana/lockVault.ts`
-- a dedicated mobile unlock/resurface UI flow is still the next app-layer slice
+- the mobile app now includes:
+  - a live resurface card in `Profile`
+  - a persisted resurface receipt history screen
+  - post-unlock navigation into that receipt history
 
 ## Failure Handling
 

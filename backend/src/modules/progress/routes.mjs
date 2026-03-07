@@ -9,10 +9,13 @@ import {
   consumeSaverOrApplyFullConsequence,
   getCommunityPotHistory,
   getLeaderboardSnapshot,
+  getCourseRuntimeHistory,
   getCourseRuntimeSnapshot,
   getCourseProgress,
+  getUnlockReceipts,
   getYieldHistory,
   getModuleProgress,
+  recordUnlockReceipt,
   publishFuelBurnReceipt,
   publishHarvestSplitReceipt,
   publishHarvestRedirectToCommunityPot,
@@ -294,11 +297,32 @@ export async function progressRoutes(app) {
   );
 
   app.get(
+    '/v1/progress/unlocks',
+    { preHandler: requireAccessAuth },
+    async (request) => getUnlockReceipts(request.auth.walletAddress),
+  );
+
+  app.post(
+    '/v1/progress/unlocks',
+    { preHandler: requireAccessAuth },
+    async (request) => recordUnlockReceipt(request.auth.walletAddress, request.body),
+  );
+
+  app.get(
     '/v1/progress/runtime/courses/:courseId',
     { preHandler: requireAccessAuth },
     async (request) => {
       const courseId = assertPathParam(request.params?.courseId, 'courseId');
       return getCourseRuntimeSnapshot(request.auth.walletAddress, courseId);
+    },
+  );
+
+  app.get(
+    '/v1/progress/runtime/courses/:courseId/history',
+    { preHandler: requireAccessAuth },
+    async (request) => {
+      const courseId = assertPathParam(request.params?.courseId, 'courseId');
+      return getCourseRuntimeHistory(request.auth.walletAddress, courseId);
     },
   );
 

@@ -30,8 +30,10 @@ const CONSUME_SAVER_OR_FULL_CONSEQUENCE_DISCRIMINATOR = anchorDiscriminator(
   'consume_saver_or_apply_full_consequence',
 );
 const APPLY_HARVEST_RESULT_DISCRIMINATOR = anchorDiscriminator('apply_harvest_result');
+const UNLOCK_FUNDS_DISCRIMINATOR = anchorDiscriminator('unlock_funds');
 
 let relay = null;
+let readConnection = null;
 
 function anchorDiscriminator(name) {
   return crypto.createHash('sha256').update(`global:${name}`).digest().subarray(0, 8);
@@ -85,6 +87,25 @@ export function hasLockVaultRelayConfig() {
       appConfig.lockVaultSkrMint &&
       appConfig.lockVaultWorkerPrivateKey,
   );
+}
+
+export function hasLockVaultReadConfig() {
+  return Boolean(appConfig.solanaRpcUrl && appConfig.lockVaultProgramId);
+}
+
+function getReadConnection() {
+  if (!hasLockVaultReadConfig()) {
+    throw new Error('LockVault read config is incomplete.');
+  }
+
+  if (!readConnection) {
+    readConnection = new Connection(
+      appConfig.solanaRpcUrl || clusterApiUrl('devnet'),
+      'confirmed',
+    );
+  }
+
+  return readConnection;
 }
 
 function getRelay() {
@@ -306,6 +327,99 @@ export async function readLockAccountSnapshot(walletAddress, courseId) {
   return {
     lockAccount: lockAccount.toBase58(),
     ...decodeLockAccountSnapshot(account.data),
+  };
+}
+
+function toBase58PublicKey(value) {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  if (typeof value?.toBase58 === 'function') return value.toBase58();
+  if (value.pubkey) {
+    return toBase58PublicKey(value.pubkey);
+  }
+  return String(value);
+}
+
+export async function verifyUnlockTransaction({
+  unlockTxSignature,
+  walletAddress,
+  lockAccountAddress = null,
+}) {
+  const connection = getReadConnection();
+  const transaction = await connection.getParsedTransaction(unlockTxSignature, {
+    commitment: 'confirmed',
+    maxSupportedTransactionVersion: 0,
+  });
+
+  if (!transaction) {
+    return {
+      valid: false,
+      reason: 'TRANSACTION_NOT_FOUND',
+    };
+  }
+
+  if (transaction.meta?.err != null) {
+    return {
+      valid: false,
+      reason: 'TRANSACTION_FAILED',
+    };
+  }
+
+  const accountKeys = transaction.transaction.message.accountKeys ?? [];
+  const signerMatchesWallet = accountKeys.some((accountKey) => {
+    const pubkey = toBase58PublicKey(accountKey);
+    return Boolean(accountKey?.signer) && pubkey === walletAddress;
+  });
+
+  if (!signerMatchesWallet) {
+    return {
+      valid: false,
+      reason: 'SIGNER_MISMATCH',
+    };
+  }
+
+  const unlockInstruction = transaction.transaction.message.instructions.find((instruction) => {
+    const programId = toBase58PublicKey(instruction?.programId);
+    if (programId !== appConfig.lockVaultProgramId || typeof instruction?.data !== 'string') {
+      return false;
+    }
+
+    try {
+      const data = bs58.decode(instruction.data);
+      return data.subarray(0, 8).equals(UNLOCK_FUNDS_DISCRIMINATOR);
+    } catch {
+      return false;
+    }
+  });
+
+  if (!unlockInstruction) {
+    return {
+      valid: false,
+      reason: 'NOT_UNLOCK_TRANSACTION',
+    };
+  }
+
+  const instructionAccounts = Array.isArray(unlockInstruction.accounts)
+    ? unlockInstruction.accounts.map((account) => toBase58PublicKey(account))
+    : [];
+  const derivedLockAccountAddress = instructionAccounts[0] ?? null;
+
+  if (lockAccountAddress && derivedLockAccountAddress && lockAccountAddress !== derivedLockAccountAddress) {
+    return {
+      valid: false,
+      reason: 'LOCK_ACCOUNT_MISMATCH',
+      lockAccountAddress: derivedLockAccountAddress,
+    };
+  }
+
+  return {
+    valid: true,
+    slot: transaction.slot,
+    blockTime:
+      transaction.blockTime != null
+        ? new Date(transaction.blockTime * 1000).toISOString()
+        : null,
+    lockAccountAddress: derivedLockAccountAddress,
   };
 }
 

@@ -5,6 +5,11 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { MainStackParamList } from '@/navigation/types';
 import {
+  ApiError,
+  createUnlockReceipt,
+} from '@/services/api';
+import { refreshAuthSession } from '@/services/api/auth/authApi';
+import {
   buildUnlockFundsTransaction,
   connection,
   disconnectWallet,
@@ -13,7 +18,7 @@ import {
   signTransaction,
   type LockAccountSnapshot,
 } from '@/services/solana';
-import { useUserStore } from '@/stores';
+import { useResurfaceStore, useUserStore } from '@/stores';
 import { useCourseStore } from '@/stores/courseStore';
 
 type Nav = NativeStackNavigationProp<MainStackParamList>;
@@ -40,12 +45,25 @@ export function ProfileScreen() {
     : null;
   const walletAddress = useUserStore((s) => s.walletAddress);
   const authToken = useUserStore((s) => s.authToken);
+  const refreshToken = useUserStore((s) => s.refreshToken);
+  const setAuthSession = useUserStore((s) => s.setAuthSession);
   const walletAuthToken = useUserStore((s) => s.walletAuthToken);
   const disconnect = useUserStore((s) => s.disconnect);
+  const addResurfaceReceipt = useResurfaceStore((s) => s.addReceipt);
   const [lockSnapshot, setLockSnapshot] = useState<LockAccountSnapshot | null>(null);
   const [isLoadingLock, setIsLoadingLock] = useState(false);
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [unlockStatusMessage, setUnlockStatusMessage] = useState<string | null>(null);
+
+  const refreshBackendAccessToken = useCallback(async () => {
+    if (!refreshToken) {
+      throw new Error('Connect your wallet again before syncing the unlock receipt.');
+    }
+
+    const refreshed = await refreshAuthSession({ refreshToken });
+    setAuthSession(refreshed.accessToken, refreshed.refreshToken);
+    return refreshed.accessToken;
+  }, [refreshToken, setAuthSession]);
 
   const streak = activeState?.currentStreak ?? 0;
   const ichor = activeState?.ichorBalance ?? 0;
@@ -133,14 +151,106 @@ export function ProfileScreen() {
       setUnlockStatusMessage('Confirming unlock on-chain...');
       await connection.confirmTransaction(signature, 'confirmed');
 
+      const unlockedAt = new Date().toISOString();
+
+      if (lockSnapshot && walletAddress && activeCourseId) {
+        const localReceipt = {
+          id: signature,
+          walletAddress,
+          courseId: activeCourseId,
+          courseTitle: activeCourse?.title ?? activeCourseId,
+          lockAccountAddress: lockSnapshot.lockAccountAddress,
+          principalAmountUi: lockSnapshot.principalAmountUi,
+          skrLockedAmountUi: lockSnapshot.skrLockedAmountUi,
+          unlockedAt,
+          unlockTxSignature: signature,
+          lockEndDate: lockSnapshot.lockEndDate,
+          source: 'local' as const,
+        };
+        addResurfaceReceipt(localReceipt);
+
+        let backendAccessToken = authToken;
+        if (!backendAccessToken && refreshToken) {
+          try {
+            backendAccessToken = await refreshBackendAccessToken();
+          } catch {
+            backendAccessToken = null;
+          }
+        }
+
+        if (backendAccessToken) {
+          try {
+            const receipt = await createUnlockReceipt(
+              {
+                courseId: activeCourseId,
+                lockAccountAddress: lockSnapshot.lockAccountAddress,
+                principalAmountUi: lockSnapshot.principalAmountUi,
+                skrLockedAmountUi: lockSnapshot.skrLockedAmountUi,
+                lockEndDate: lockSnapshot.lockEndDate,
+                unlockedAt,
+                unlockTxSignature: signature,
+              },
+              backendAccessToken,
+            );
+            addResurfaceReceipt({
+              id: receipt.unlockTxSignature,
+              walletAddress: receipt.walletAddress,
+              courseId: receipt.courseId,
+              courseTitle: activeCourse?.title ?? receipt.courseId,
+              lockAccountAddress: receipt.lockAccountAddress,
+              principalAmountUi: receipt.principalAmountUi,
+              skrLockedAmountUi: receipt.skrLockedAmountUi,
+              unlockedAt: receipt.unlockedAt,
+              unlockTxSignature: receipt.unlockTxSignature,
+              lockEndDate: receipt.lockEndAt,
+              verifiedBlockTime: receipt.verifiedBlockTime,
+              source: 'backend',
+            });
+          } catch (error) {
+            if (
+              error instanceof ApiError &&
+              (error.code === 'TOKEN_EXPIRED' || error.status === 401) &&
+              refreshToken
+            ) {
+              try {
+                const refreshedToken = await refreshBackendAccessToken();
+                const receipt = await createUnlockReceipt(
+                  {
+                    courseId: activeCourseId,
+                    lockAccountAddress: lockSnapshot.lockAccountAddress,
+                    principalAmountUi: lockSnapshot.principalAmountUi,
+                    skrLockedAmountUi: lockSnapshot.skrLockedAmountUi,
+                    lockEndDate: lockSnapshot.lockEndDate,
+                    unlockedAt,
+                    unlockTxSignature: signature,
+                  },
+                  refreshedToken,
+                );
+                addResurfaceReceipt({
+                  id: receipt.unlockTxSignature,
+                  walletAddress: receipt.walletAddress,
+                  courseId: receipt.courseId,
+                  courseTitle: activeCourse?.title ?? receipt.courseId,
+                  lockAccountAddress: receipt.lockAccountAddress,
+                  principalAmountUi: receipt.principalAmountUi,
+                  skrLockedAmountUi: receipt.skrLockedAmountUi,
+                  unlockedAt: receipt.unlockedAt,
+                  unlockTxSignature: receipt.unlockTxSignature,
+                  lockEndDate: receipt.lockEndAt,
+                  verifiedBlockTime: receipt.verifiedBlockTime,
+                  source: 'backend',
+                });
+              } catch {
+                // Keep the local receipt if backend sync still fails.
+              }
+            }
+          }
+        }
+      }
+
       deactivateCourse(activeCourseId);
       setUnlockStatusMessage(`Unlocked: ${signature.slice(0, 8)}...`);
-
-      if (activeCourseIds.length <= 1) {
-        navigation.replace('CourseBrowser');
-      } else {
-        navigation.goBack();
-      }
+      navigation.replace('ResurfaceHistory', { receiptId: signature });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unable to unlock this course yet.';
@@ -156,6 +266,7 @@ export function ProfileScreen() {
     { label: 'Ichor Shop', screen: 'IchorShop' as const, icon: '\u2697' },
     { label: 'Community Pot', screen: 'CommunityPot' as const, icon: '\u26b2' },
     { label: 'Inventory', screen: 'Inventory' as const, icon: '\u2692' },
+    { label: 'Resurface Receipts', screen: 'ResurfaceHistory' as const, icon: '\u21ba' },
   ];
 
   return (
