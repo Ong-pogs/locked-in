@@ -621,7 +621,7 @@ async function loadModel(
     if (mesh.material) {
       const mat = mesh.material as any;
       if ('maxSimultaneousLights' in mat) {
-        mat.maxSimultaneousLights = isMobile ? 8 : 16;
+        mat.maxSimultaneousLights = 16;
       }
       // Fix unlit / emissive-only GLB models so they respond to scene lights.
       // Skip for alchemy_yield — its baked emissive texture IS the visual.
