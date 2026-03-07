@@ -21,8 +21,7 @@ export function UndergroundHubScreen() {
   const [cinematicPhase, setCinematicPhase] = useState<'idle' | 'text' | 'playing' | 'done'>('idle');
   const cinematicOpacity = useRef(new Animated.Value(0)).current;
   const textOpacity = useRef(new Animated.Value(0)).current;
-  const prevGauntletActive = useRef<boolean | null>(null);
-
+  const prevGauntletActive = useRef<boolean | null>(null);              
   // Store subscriptions
   const flameState = useFlameStore((s) => s.flameState);
   const lightIntensity = useFlameStore((s) => s.lightIntensity);
@@ -47,7 +46,6 @@ export function UndergroundHubScreen() {
       navigation.replace('CourseBrowser');
     }
   }, [lockedCourseIds.length, navigation]);
-
   useEffect(() => {
     if (lockedCourseIds.length > 0 && (!activeCourseId || !lockedCourseIds.includes(activeCourseId))) {
       setActiveCourse(lockedCourseIds[0]);

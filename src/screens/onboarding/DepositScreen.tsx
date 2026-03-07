@@ -249,9 +249,9 @@ export function DepositScreen() {
           navigateToCourseEntry();
           return;
         }
+
         completeGauntlet();
         setStatusMessage('Existing lock found on-chain. Entering the dungeon...');
-        navigateToCourseEntry();
       })
       .catch((error) => {
         if (cancelled) return;
@@ -432,9 +432,7 @@ export function DepositScreen() {
         stableMintAddress: buildResult.stableMintAddress,
         skrAmount: Number(confirmedLockSnapshot.skrLockedAmountUi),
       });
-      syncLockSnapshot(route.params.courseId, confirmedLockSnapshot);
       completeGauntlet();
-      navigateToCourseEntry();
 
       setStatusMessage(`Lock created: ${signature.slice(0, 8)}...`);
 
