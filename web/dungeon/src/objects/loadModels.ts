@@ -338,8 +338,8 @@ export async function createDungeonGeometry(scene: Scene) {
   for (const c of candlePositions) addCandleLight(scene, c.pos, c.name);
   for (const lamp of saverLampPositions) addSaverLampGlow(scene, lamp.pos, lamp.name);
 
-  // Gizmo system — click models to select, use UI to switch mode
-  setupGizmos(scene);
+  // Gizmo system — dev only, skip on mobile (saves per-frame picking overhead)
+  if (!isMobile) setupGizmos(scene);
 }
 
 /* ---------- Room geometry helpers ---------- */
@@ -618,11 +618,10 @@ async function loadModel(
     }
     // Allow lights to affect models — mobile GPUs can't compile shaders with 16 lights,
     // cap at 8 (Babylon picks the 8 most impactful lights per mesh automatically)
-    const isMob = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     if (mesh.material) {
       const mat = mesh.material as any;
       if ('maxSimultaneousLights' in mat) {
-        mat.maxSimultaneousLights = isMob ? 8 : 16;
+        mat.maxSimultaneousLights = isMobile ? 8 : 16;
       }
       // Fix unlit / emissive-only GLB models so they respond to scene lights.
       // Skip for alchemy_yield — its baked emissive texture IS the visual.

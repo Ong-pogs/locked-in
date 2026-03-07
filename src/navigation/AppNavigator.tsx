@@ -20,14 +20,8 @@ export function AppNavigator() {
     (courseId) => Boolean(courseStates[courseId]?.lockAccountAddress),
   );
   const hasActiveLock = activeLockCourseIds.length > 0;
-  const hasActiveGauntlet = activeLockCourseIds.some(
-    (courseId) => courseStates[courseId]?.gauntletActive,
-  );
 
-  if ((phase === 'onboarding' || phase === 'gauntlet') && hasActiveGauntlet) {
-    return <OnboardingStack />;
-  }
-
+  // Go straight to dungeon if there's an active lock (gauntlet skip is in Profile)
   if ((phase === 'onboarding' || phase === 'gauntlet') && hasActiveLock) {
     return <MainStack />;
   }

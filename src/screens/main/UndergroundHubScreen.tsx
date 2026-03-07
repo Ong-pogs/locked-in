@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { View, StyleSheet, ActivityIndicator, Text, Pressable, Modal, ScrollView } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { View, StyleSheet, ActivityIndicator, Text, Pressable, Modal, ScrollView, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -18,6 +18,10 @@ export function UndergroundHubScreen() {
     sceneReady, loadProgress, webviewError,
   } = useDungeon();
   const [bookModalVisible, setBookModalVisible] = useState(false);
+  const [cinematicPhase, setCinematicPhase] = useState<'idle' | 'text' | 'playing' | 'done'>('idle');
+  const cinematicOpacity = useRef(new Animated.Value(0)).current;
+  const textOpacity = useRef(new Animated.Value(0)).current;
+  const prevGauntletActive = useRef<boolean | null>(null);
 
   // Store subscriptions
   const flameState = useFlameStore((s) => s.flameState);
@@ -32,6 +36,7 @@ export function UndergroundHubScreen() {
   const lockedCourseIds = activeCourseIds.filter((courseId) =>
     Boolean(courseStates[courseId]?.lockAccountAddress),
   );
+  const gauntletActive = activeCourseId ? courseStates[activeCourseId]?.gauntletActive ?? false : false;
 
   // Initialize mock data
   useCourseStore.getState().initializeMockData();
@@ -119,7 +124,7 @@ export function UndergroundHubScreen() {
     });
   }, [activeCourseId, courseStates, onMessage, navigation]);
 
-  // Send initial state once scene is ready
+  // Send initial state + lighting mode once scene is ready
   useEffect(() => {
     if (!sceneReady) return;
     sendMessage('initState', {
@@ -129,7 +134,51 @@ export function UndergroundHubScreen() {
       roomPhase,
       streak: currentStreak,
     });
+    // Delay slightly so all dungeon lights are fully created before toggling
+    setTimeout(() => {
+      sendMessage('setLightingMode', { mode: gauntletActive ? 'gauntlet' : 'normal' });
+    }, 300);
+    prevGauntletActive.current = gauntletActive;
   }, [sceneReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Detect gauntlet → post-gauntlet transition and trigger cinematic
+  useEffect(() => {
+    if (!sceneReady) return;
+    // Only trigger when gauntlet was active and now it's not
+    if (prevGauntletActive.current === true && gauntletActive === false) {
+      // Phase 1: black screen + text
+      setCinematicPhase('text');
+      // Snap camera to lamp close-up while screen is black
+      sendMessage('snapToLamps', {});
+      Animated.timing(cinematicOpacity, { toValue: 1, duration: 600, useNativeDriver: true }).start(() => {
+        Animated.timing(textOpacity, { toValue: 1, duration: 800, useNativeDriver: true }).start(() => {
+          // Hold text for 2s
+          setTimeout(() => {
+            // Phase 2: fade out text
+            Animated.timing(textOpacity, { toValue: 0, duration: 600, useNativeDriver: true }).start(() => {
+              // Phase 3: fade out black overlay — user sees lamp close-up
+              Animated.timing(cinematicOpacity, { toValue: 0, duration: 1200, useNativeDriver: true }).start(() => {
+                // Unmount overlay so touches work
+                setCinematicPhase('idle');
+                // Phase 4: light up lamps then zoom out
+                sendMessage('playGauntletCinematic', {});
+              });
+            });
+          }, 2000);
+        });
+      });
+    }
+    prevGauntletActive.current = gauntletActive;
+  }, [gauntletActive, sceneReady, sendMessage, cinematicOpacity, textOpacity]);
+
+  // Listen for cinematic completion from dungeon
+  useEffect(() => {
+    return onMessage((data) => {
+      if (data.type === 'cinematicComplete') {
+        setCinematicPhase('idle');
+      }
+    });
+  }, [onMessage]);
 
   // Sync flame state changes
   useEffect(() => {
@@ -194,9 +243,21 @@ export function UndergroundHubScreen() {
             navigation.navigate('CourseBrowser');
           }}
         />
+
+        {/* Gauntlet completion cinematic overlay */}
+        {cinematicPhase !== 'idle' && (
+          <Animated.View
+            style={[overlayStyles.cinematicOverlay, { opacity: cinematicOpacity }]}
+            pointerEvents={cinematicPhase === 'text' ? 'auto' : 'none'}
+          >
+            <Animated.Text style={[overlayStyles.cinematicText, { opacity: textOpacity }]}>
+              The dungeon recognises{'\n'}your efforts...
+            </Animated.Text>
+          </Animated.View>
+        )}
       </>,
     );
-  }, [sceneReady, loadProgress, webviewError, bookModalVisible, insets.top, navigation, setOverlay]);
+  }, [sceneReady, loadProgress, webviewError, bookModalVisible, cinematicPhase, cinematicOpacity, textOpacity, insets.top, navigation, setOverlay]);
 
   // Screen renders nothing — all UI is via the overlay portal
   return <View style={{ flex: 1, backgroundColor: 'transparent' }} />;
@@ -471,5 +532,23 @@ const overlayStyles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '700',
+  },
+
+  // ====== Cinematic Overlay ======
+  cinematicOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#000',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cinematicText: {
+    color: '#d4a44c',
+    fontSize: 20,
+    fontWeight: '300',
+    textAlign: 'center',
+    lineHeight: 32,
+    fontFamily: 'Georgia',
+    fontStyle: 'italic',
+    letterSpacing: 1,
   },
 });

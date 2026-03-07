@@ -59,7 +59,15 @@ const BUILT_IN_PATHS: CameraPath[] = [
     duration: 2.4,
     keyframes: [
       { alpha: 3.987, beta: 1.32, radius: 11.97, target: { x: 0, y: 1.5, z: 1 } },
-      { alpha: 4.3578, beta: 1.5176, radius: 1, target: { x: 0, y: 1.5, z: 1 } },
+      { alpha: 4.373, beta: 1.425, radius: 1.0, target: { x: 0, y: 1.5, z: 1 } },
+    ],
+  },
+  {
+    name: 'gauntlet_return',
+    duration: 2.8,
+    keyframes: [
+      { alpha: 4.373, beta: 1.425, radius: 1.0, target: { x: 0, y: 1.5, z: 1 } },
+      { alpha: 3.987, beta: 1.32, radius: 11.97, target: { x: 0, y: 1.5, z: 1 } },
     ],
   },
 ];

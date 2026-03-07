@@ -432,6 +432,31 @@ export function ProfileScreen() {
 
         {/* Danger zone */}
         <View className="mt-6 gap-3 pb-8">
+          {__DEV__ && activeCourseId && activeState?.gauntletActive && (
+            <Pressable
+              className="rounded-xl border border-purple-500/30 bg-purple-500/10 py-3 active:opacity-80"
+              onPress={() => {
+                Alert.alert(
+                  'Skip Gauntlet (DEV)',
+                  'This skips the 1-week gauntlet and triggers the cinematic.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Skip',
+                      onPress: () => {
+                        useCourseStore.getState().skipGauntletForCourse(activeCourseId);
+                        navigation.goBack();
+                      },
+                    },
+                  ],
+                );
+              }}
+            >
+              <Text className="text-center text-sm font-semibold text-purple-300">
+                Skip Gauntlet (DEV)
+              </Text>
+            </Pressable>
+          )}
           {__DEV__ && activeCourseId && (
             <Pressable
               className="rounded-xl border border-amber-500/30 bg-amber-500/10 py-3 active:opacity-80"

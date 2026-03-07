@@ -56,7 +56,6 @@ export function DepositScreen() {
   const route = useRoute<DepositRoute>();
   const walletAddress = useUserStore((s) => s.walletAddress);
   const walletAuthToken = useUserStore((s) => s.walletAuthToken);
-  const startGauntlet = useUserStore((s) => s.startGauntlet);
   const completeGauntlet = useUserStore((s) => s.completeGauntlet);
   const activateCourse = useCourseStore((s) => s.activateCourse);
   const deactivateCourse = useCourseStore((s) => s.deactivateCourse);
@@ -125,6 +124,13 @@ export function DepositScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [configMessage, setConfigMessage] = useState<string | null>(null);
+
+  const navigateToCourseEntry = () => {
+    const routeNames = navigation.getState().routeNames;
+    if (routeNames.includes('DungeonHome')) {
+      navigation.navigate('DungeonHome');
+    }
+  };
 
   useEffect(() => {
     if (!hasLockVaultConfig()) {
@@ -240,14 +246,12 @@ export function DepositScreen() {
         if (snapshot.gauntletComplete) {
           completeGauntlet();
           setStatusMessage('Existing lock found on-chain. Resuming your course...');
-          if (navigation.canGoBack()) {
-            navigation.goBack();
-          }
+          navigateToCourseEntry();
           return;
         }
-
-        startGauntlet();
-        setStatusMessage('Existing lock found on-chain. Returning to your gauntlet...');
+        completeGauntlet();
+        setStatusMessage('Existing lock found on-chain. Entering the dungeon...');
+        navigateToCourseEntry();
       })
       .catch((error) => {
         if (cancelled) return;
@@ -279,7 +283,6 @@ export function DepositScreen() {
     deactivateCourse,
     navigation,
     route.params.courseId,
-    startGauntlet,
     syncLockSnapshot,
     walletAddress,
   ]);
@@ -430,7 +433,8 @@ export function DepositScreen() {
         skrAmount: Number(confirmedLockSnapshot.skrLockedAmountUi),
       });
       syncLockSnapshot(route.params.courseId, confirmedLockSnapshot);
-      startGauntlet();
+      completeGauntlet();
+      navigateToCourseEntry();
 
       setStatusMessage(`Lock created: ${signature.slice(0, 8)}...`);
 

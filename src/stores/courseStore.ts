@@ -61,6 +61,7 @@ interface CourseStore {
       skrAmount?: number;
     },
   ) => void;
+  skipGauntletForCourse: (courseId: string) => void;
   deactivateCourse: (courseId: string) => void;
 
   // Per-course actions
@@ -244,6 +245,18 @@ export const useCourseStore = create<CourseStore>()(
           enrolledCourseIds: enrolledCourseIds.includes(courseId)
             ? enrolledCourseIds
             : [...enrolledCourseIds, courseId],
+        });
+      },
+
+      skipGauntletForCourse: (courseId: string) => {
+        const { courseStates } = get();
+        const state = courseStates[courseId];
+        if (!state) return;
+        set({
+          courseStates: {
+            ...courseStates,
+            [courseId]: { ...state, gauntletActive: false, gauntletDay: 0 },
+          },
         });
       },
 

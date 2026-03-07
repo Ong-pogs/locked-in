@@ -1,11 +1,13 @@
 import { Engine } from '@babylonjs/core/Engines/engine';
 import { createScene } from './scene/createScene';
 import { onBridgeMessage, sendToRN } from './bridge';
-import { transitionTo, logCameraPosition, toggleCameraLock, goBack } from './camera/cameraController';
+import { transitionTo, logCameraPosition, toggleCameraLock, goBack, getCamera } from './camera/cameraController';
 import { setFlameState } from './effects/flameParticles';
 import { applyPhase } from './scene/environment';
 import { setRoomTexture, modelStats, setGizmoMode, onModelSelect, setModelTransform, getSelectedModel } from './objects/loadModels';
-import { toggleSunMode, isSunMode, toggleOrb, cycleOrbColor, getOrbColorName, setLightMultiplier, getLightMultiplier } from './scene/lighting';
+import { toggleSunMode, isSunMode, toggleOrb, cycleOrbColor, getOrbColorName, setLightMultiplier, getLightMultiplier, applyGauntletLighting, applyNormalLighting } from './scene/lighting';
+import { setEffectGroupEnabled, setAllEffectLightsEnabled } from './effects/candleFlames';
+import { playPath } from './camera/cameraPaths';
 import type { Viewpoint } from './camera/viewpoints';
 import type { FlameState } from './effects/flameStates';
 import type { RoomPhase } from './scene/environment';
@@ -62,6 +64,32 @@ async function main() {
       }
       case 'cameraGoBack': {
         goBack();
+        break;
+      }
+      case 'setLightingMode': {
+        const { mode } = msg.payload;
+        if (mode === 'gauntlet') {
+          // Only chandelier on
+          applyGauntletLighting();
+          setAllEffectLightsEnabled(false);
+          setEffectGroupEnabled('chandelier', true);
+        } else {
+          applyNormalLighting();
+          setAllEffectLightsEnabled(true);
+        }
+        break;
+      }
+      case 'snapToLamps': {
+        // Instantly position camera at lamp close-up (while RN overlay is black)
+        const cam = getCamera();
+        cam.alpha = 4.373;
+        cam.beta = 1.425;
+        cam.radius = 1.0;
+        cam.target.set(0, 1.5, 1);
+        break;
+      }
+      case 'playGauntletCinematic': {
+        playGauntletCinematic();
         break;
       }
     }
@@ -290,6 +318,34 @@ function setupDevPanel(scene: import('@babylonjs/core/scene').Scene) {
       triListEl.innerHTML = html;
     }, 500);
   }
+}
+
+function playGauntletCinematic() {
+  const camera = getCamera();
+
+  // Camera is already at lamp close-up (snapped during black screen).
+  // Light up lamps one by one (left → center → right)
+  setTimeout(() => {
+    setEffectGroupEnabled('oil_lamp_left', true);
+  }, 400);
+  setTimeout(() => {
+    setEffectGroupEnabled('oil_lamp_center', true);
+  }, 1200);
+  setTimeout(() => {
+    setEffectGroupEnabled('oil_lamp_right', true);
+  }, 2000);
+
+  // After lamps are lit, zoom out to overview + light everything else
+  setTimeout(() => {
+    applyNormalLighting();
+    setAllEffectLightsEnabled(true);
+
+    playPath('gauntlet_return', camera, {
+      onComplete: () => {
+        sendToRN({ type: 'cinematicComplete', payload: {} });
+      },
+    });
+  }, 3000);
 }
 
 main().catch((err) => {

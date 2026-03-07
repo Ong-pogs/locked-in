@@ -9,7 +9,6 @@ export type AuthStackParamList = {
 export type OnboardingStackParamList = {
   CourseSelection: undefined;
   Deposit: { courseId: string };
-  GauntletRoom: undefined;
 };
 
 // --- Main Stack (flat, dungeon-first) ---

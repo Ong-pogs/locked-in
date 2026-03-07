@@ -49,8 +49,10 @@ export function setupLighting(scene: Scene) {
   // Start in dungeon mode (dark atmospheric lighting)
   applyDungeonMode();
 
-  // --- Draggable light orb (off by default) ---
-  createDraggableOrb(scene);
+  // --- Draggable light orb (dev only, skip on mobile) ---
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+    || (navigator.maxTouchPoints > 0 && window.innerWidth < 768);
+  if (!isMobile) createDraggableOrb(scene);
 }
 
 function createDraggableOrb(scene: Scene) {
@@ -184,4 +186,22 @@ export function setFireLightIntensity(intensity: number) {
 
 export function getFireLight(): PointLight {
   return fireLight;
+}
+
+/** Gauntlet mode: dim ambient, disable fire/accent/overhead lights. */
+export function applyGauntletLighting() {
+  ambientLight.intensity = 0.1;
+  ambientLight.diffuse = new Color3(0.2, 0.18, 0.15);
+  ambientLight.groundColor = new Color3(0.04, 0.03, 0.02);
+  fireLight.setEnabled(false);
+  accentLight.setEnabled(false);
+  overheadLight.setEnabled(false);
+}
+
+/** Normal post-gauntlet dungeon lighting: restore all base lights. */
+export function applyNormalLighting() {
+  fireLight.setEnabled(true);
+  accentLight.setEnabled(true);
+  overheadLight.setEnabled(true);
+  applyDungeonMode();
 }
