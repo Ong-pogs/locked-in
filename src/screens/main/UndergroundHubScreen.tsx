@@ -56,10 +56,9 @@ export function UndergroundHubScreen() {
       // Zoom camera back to default viewpoint when returning to dungeon
       sendMessage('cameraGoBack', {});
       return () => {
-        setOverlay(null);
         hide();
       };
-    }, [show, hide, setOverlay, sendMessage]),
+    }, [show, hide, sendMessage]),
   );
 
   // Register message handlers
@@ -174,7 +173,7 @@ export function UndergroundHubScreen() {
               style={overlayStyles.profileBtn}
               onPress={() => navigation.navigate('Profile')}
             >
-              <Text style={overlayStyles.profileBtnText}>{'\u2666'}</Text>
+              <Text style={overlayStyles.profileBtnText}>{'\u{1F464}'}</Text>
             </Pressable>
           </View>
         )}
