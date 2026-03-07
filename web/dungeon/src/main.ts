@@ -190,7 +190,6 @@ function setupDevPanel(scene: import('@babylonjs/core/scene').Scene) {
     ['devCandles', 'candles_set'],
     ['devChandelier', 'chandelier'],
     ['devLamps', 'oil_lamp'],
-    ['devPotion', 'fire_potion'],
   ];
   for (const [id, prefix] of groupBtns) {
     const btn = document.getElementById(id) as HTMLButtonElement;

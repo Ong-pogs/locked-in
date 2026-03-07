@@ -1,4 +1,4 @@
-import { createContext, useContext, useRef, useState, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useRef, useState, useCallback, useMemo, type ReactNode } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
@@ -100,17 +100,20 @@ export function DungeonProvider({ children }: { children: ReactNode }) {
     ? DUNGEON_ASSET
     : { uri: EXPLICIT_DUNGEON_DEV_URL };
 
-  const ctx: DungeonContextType = {
-    isLoaded,
-    sceneReady,
-    loadProgress,
-    webviewError,
-    show,
-    hide,
-    sendMessage,
-    onMessage,
-    setOverlay,
-  };
+  const ctx = useMemo<DungeonContextType>(
+    () => ({
+      isLoaded,
+      sceneReady,
+      loadProgress,
+      webviewError,
+      show,
+      hide,
+      sendMessage,
+      onMessage,
+      setOverlay,
+    }),
+    [isLoaded, sceneReady, loadProgress, webviewError, show, hide, sendMessage, onMessage, setOverlay],
+  );
 
   return (
     <DungeonContext.Provider value={ctx}>

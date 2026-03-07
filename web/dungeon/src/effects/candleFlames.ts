@@ -68,10 +68,12 @@ export function getEffectLight(name: string): PointLight | undefined {
   return effectLights.get(name);
 }
 
-/** Add a flickering warm point light for a candle set. No particles. */
+/** Add a flickering warm point light + flame particles for a candle set. */
 export function addCandleLight(scene: Scene, position: Vector3, name: string) {
+  const lightPos = position.add(new Vector3(0, 0.5, 0));
+
   const lightName = `${name}_light`;
-  const light = new PointLight(lightName, position.add(new Vector3(0, 0.5, 0)), scene);
+  const light = new PointLight(lightName, lightPos, scene);
   light.diffuse = new Color3(1.0, 0.65, 0.2);
   light.specular = new Color3(1.0, 0.5, 0.1);
   light.intensity = 8.0;
@@ -86,6 +88,45 @@ export function addCandleLight(scene: Scene, position: Vector3, name: string) {
     const flicker = 7.0 + Math.sin(flickerTime * 3) * 1.0 + Math.sin(flickerTime * 7.3) * 0.5;
     light.intensity = flicker * emitterMultiplier;
   });
+
+  // Warm amber flame particles
+  const particles = new ParticleSystem(`${name}_flame`, 20, scene);
+  particles.particleTexture = new Texture(createFlameDataURL(), scene);
+
+  particles.emitter = lightPos;
+  particles.minEmitBox = new Vector3(-0.04, 0, -0.04);
+  particles.maxEmitBox = new Vector3(0.04, 0, 0.04);
+
+  particles.direction1 = new Vector3(-0.01, 0.1, -0.01);
+  particles.direction2 = new Vector3(0.01, 0.2, 0.01);
+
+  particles.gravity = new Vector3(0, 0.02, 0);
+
+  particles.minEmitPower = 0.05;
+  particles.maxEmitPower = 0.15;
+
+  particles.emitRate = 8;
+
+  particles.minLifeTime = 0.2;
+  particles.maxLifeTime = 0.5;
+
+  particles.minSize = 0.03;
+  particles.maxSize = 0.1;
+
+  // Warm amber → orange → fade
+  particles.color1 = new Color4(1.0, 0.7, 0.2, 0.9);
+  particles.color2 = new Color4(1.0, 0.4, 0.1, 0.7);
+  particles.colorDead = new Color4(0.3, 0.1, 0.0, 0.0);
+
+  particles.blendMode = ParticleSystem.BLENDMODE_ADD;
+  const flameName = `${name}_flame`;
+  effectParticles.set(flameName, particles);
+
+  if (isGroupDisabled(flameName) || isGroupDisabled(lightName)) {
+    particles.stop();
+  } else {
+    particles.start();
+  }
 }
 
 /** Add a flickering amber point light for the chandelier. No particles. */
@@ -170,67 +211,6 @@ export function addSaverLampGlow(scene: Scene, position: Vector3, name: string) 
   }
 }
 
-/** Green fire glow for the magic potion — point light + flame particles */
-export function addPotionGlow(scene: Scene, position: Vector3, name: string) {
-  const lightPos = position.add(new Vector3(0, 0.4, 0));
-
-  // Green point light
-  const lightName = `${name}_light`;
-  const light = new PointLight(lightName, lightPos, scene);
-  light.diffuse = new Color3(0.15, 1.0, 0.3);
-  light.specular = new Color3(0.1, 0.8, 0.2);
-  light.intensity = 5.0;
-  light.range = 8;
-  if (isGroupDisabled(lightName)) light.setEnabled(false);
-  effectLights.set(lightName, light);
-
-  let flickerTime = Math.random() * 100;
-  scene.onBeforeRenderObservable.add(() => {
-    if (!light.isEnabled()) return;
-    flickerTime += 0.07 + Math.random() * 0.03;
-    const flicker = 4.0 + Math.sin(flickerTime * 4.0) * 1.2 + Math.sin(flickerTime * 9.5) * 0.5;
-    light.intensity = flicker * emitterMultiplier;
-  });
-
-  // Green flame particles rising from the potion
-  const particles = new ParticleSystem(`${name}_flame`, 25, scene);
-  particles.particleTexture = new Texture(createFlameDataURL(), scene);
-
-  particles.emitter = lightPos;
-  particles.minEmitBox = new Vector3(-0.03, 0, -0.03);
-  particles.maxEmitBox = new Vector3(0.03, 0, 0.03);
-
-  particles.direction1 = new Vector3(-0.015, 0.12, -0.015);
-  particles.direction2 = new Vector3(0.015, 0.25, 0.015);
-
-  particles.gravity = new Vector3(0, 0.03, 0);
-
-  particles.minEmitPower = 0.08;
-  particles.maxEmitPower = 0.2;
-
-  particles.emitRate = 10;
-
-  particles.minLifeTime = 0.3;
-  particles.maxLifeTime = 0.6;
-
-  particles.minSize = 0.04;
-  particles.maxSize = 0.12;
-
-  // Green → dark green → fade
-  particles.color1 = new Color4(0.2, 1.0, 0.3, 0.9);
-  particles.color2 = new Color4(0.1, 0.7, 0.15, 0.7);
-  particles.colorDead = new Color4(0.0, 0.2, 0.0, 0.0);
-
-  particles.blendMode = ParticleSystem.BLENDMODE_ADD;
-  const flameName = `${name}_flame`;
-  effectParticles.set(flameName, particles);
-
-  if (isGroupDisabled(flameName) || isGroupDisabled(lightName)) {
-    particles.stop();
-  } else {
-    particles.start();
-  }
-}
 
 /** Canvas-generated 16x16 soft flame texture (white radial gradient). */
 function createFlameDataURL(): string {

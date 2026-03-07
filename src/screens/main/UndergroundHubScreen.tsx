@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, StyleSheet, ActivityIndicator, Text, Pressable, Modal, ScrollView, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -33,17 +33,21 @@ export function UndergroundHubScreen() {
   const activeCourseIds = useCourseStore((s) => s.activeCourseIds);
   const courseStates = useCourseStore((s) => s.courseStates);
   const setActiveCourse = useCourseStore((s) => s.setActiveCourse);
-  const lockedCourseIds = activeCourseIds.filter((courseId) =>
-    Boolean(courseStates[courseId]?.lockAccountAddress),
+  const lockedCourseIds = useMemo(
+    () =>
+      activeCourseIds.filter((courseId) =>
+        Boolean(courseStates[courseId]?.lockAccountAddress),
+      ),
+    [activeCourseIds, courseStates],
   );
   const gauntletActive = activeCourseId ? courseStates[activeCourseId]?.gauntletActive ?? false : false;
 
   // Initialize mock data
   useCourseStore.getState().initializeMockData();
 
-  // Guard: no locked courses → CourseBrowser
+  // Guard: no locked courses → CourseBrowser (only when focused)
   useEffect(() => {
-    if (lockedCourseIds.length === 0) {
+    if (lockedCourseIds.length === 0 && navigation.isFocused()) {
       navigation.replace('CourseBrowser');
     }
   }, [lockedCourseIds.length, navigation]);
@@ -58,7 +62,6 @@ export function UndergroundHubScreen() {
   useFocusEffect(
     useCallback(() => {
       show();
-      // Zoom camera back to default viewpoint when returning to dungeon
       sendMessage('cameraGoBack', {});
       return () => {
         hide();
@@ -66,11 +69,12 @@ export function UndergroundHubScreen() {
     }, [show, hide, sendMessage]),
   );
 
-  // Register message handlers
+  // Register message handlers (stable deps — read store state via getState inside handler)
   useEffect(() => {
     return onMessage((data) => {
       switch (data.type) {
         case 'objectTapped': {
+          if (!navigation.isFocused()) break;
           const objectId = data.payload?.objectId;
           switch (objectId) {
             case 'book':
@@ -100,20 +104,23 @@ export function UndergroundHubScreen() {
 
         case 'brewConfirmed': {
           const modeId = data.payload?.modeId;
-          if (modeId && activeCourseId) {
-            const activeState = courseStates[activeCourseId];
+          const { activeCourseId: acid, courseStates: cs } = useCourseStore.getState();
+          if (modeId && acid) {
+            const activeState = cs[acid];
             if (activeState?.fuelCounter > 0 && !activeState?.gauntletActive) {
-              useCourseStore.getState().startBrewForCourse(activeCourseId, modeId);
+              useCourseStore.getState().startBrewForCourse(acid, modeId);
             }
           }
           break;
         }
 
-        case 'brewCancelled':
-          if (activeCourseId) {
-            useCourseStore.getState().cancelBrewForCourse(activeCourseId);
+        case 'brewCancelled': {
+          const { activeCourseId: acid } = useCourseStore.getState();
+          if (acid) {
+            useCourseStore.getState().cancelBrewForCourse(acid);
           }
           break;
+        }
 
         case 'viewpointChanged':
           if (data.payload?.viewpoint) {
@@ -122,7 +129,7 @@ export function UndergroundHubScreen() {
           break;
       }
     });
-  }, [activeCourseId, courseStates, onMessage, navigation]);
+  }, [onMessage, navigation]);
 
   // Send initial state + lighting mode once scene is ready
   useEffect(() => {

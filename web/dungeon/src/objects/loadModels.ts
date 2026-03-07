@@ -11,7 +11,7 @@ import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { GizmoManager } from '@babylonjs/core/Gizmos/gizmoManager';
 import '@babylonjs/loaders/glTF';
-import { addCandleLight, addChandelierGlow, addSaverLampGlow, addPotionGlow } from '../effects/candleFlames';
+import { addCandleLight, addChandelierGlow, addSaverLampGlow } from '../effects/candleFlames';
 
 const GRID_SIZE = 7;
 const FLOOR_DEPTH = 8;
@@ -270,7 +270,6 @@ export async function createDungeonGeometry(scene: Scene) {
 
   const M = '/assets/models/';
 
-  const potionPos = new Vector3(5.50, -1.40, -0.50);
   const chandelierPos = new Vector3(0.00, 5.40, 1.48);
 
   const candlePositions: { name: string; pos: Vector3; scale?: Vector3; rot?: Vector3 }[] = [
@@ -300,11 +299,9 @@ export async function createDungeonGeometry(scene: Scene) {
           'alchemy_table', new Vector3(6.22, -3.03, 1.56), new Vector3(0.03, 0.03, 0.03), new Vector3(0, 3.14, 0)),
     /* 2 */ safeLoad(scene, M + 'alchemy_yield/', 'base_basic_shaded.glb',
             'alchemy_yield', new Vector3(6.22, -1.50, 1.56), new Vector3(2.00, 2.00, 2.00), new Vector3(0, 1.79, 0)),
-    /* 3 */ safeLoad(scene, M, 'a_slightly_different_magic_fire_potion.glb',
-              'fire_potion', potionPos, new Vector3(0.50, 0.50, 0.50), new Vector3(0, 3.14, 0)),
-    /* 4 */ safeLoad(scene, M, 'medieval_chandelier3.glb',
+    /* 3 */ safeLoad(scene, M, 'medieval_chandelier3.glb',
                 'chandelier', chandelierPos, new Vector3(0.10, 0.10, 0.10), new Vector3(0, 3.14, 0)),
-    /* 5 */ safeLoad(scene, M, 'old_chest.glb',
+    /* 4 */ safeLoad(scene, M, 'old_chest.glb',
                   'old_chest', new Vector3(3.19, -1.13, 7.62), new Vector3(3.50, 2.80, 3.00), new Vector3(0, -2.41, 0)),
     // Candles (4)
     ...candlePositions.map(c =>
@@ -333,7 +330,6 @@ export async function createDungeonGeometry(scene: Scene) {
   }
 
   // Add all glow/light effects (safe — effects work even if their model failed)
-  addPotionGlow(scene, potionPos, 'fire_potion');
   addChandelierGlow(scene, chandelierPos, 'chandelier');
   for (const c of candlePositions) addCandleLight(scene, c.pos, c.name);
   for (const lamp of saverLampPositions) addSaverLampGlow(scene, lamp.pos, lamp.name);
