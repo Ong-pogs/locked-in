@@ -2,6 +2,7 @@
 
 # dependencies
 node_modules/
+.firecrawl/
 
 # Expo
 .expo/
@@ -35,6 +36,7 @@ yarn-error.*
 .env
 .env*.local
 backend/.env
+render.env.local
 
 # typescript
 *.tsbuildinfo
