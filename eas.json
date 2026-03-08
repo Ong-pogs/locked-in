@@ -8,7 +8,17 @@
       "distribution": "internal"
     },
     "preview": {
+      "environment": "preview",
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_LESSON_API_BASE_URL": "https://locked-in-mmxz.onrender.com",
+        "EXPO_PUBLIC_SOLANA_RPC_URL": "https://api.devnet.solana.com",
+        "EXPO_PUBLIC_LOCK_VAULT_PROGRAM_ID": "41TexnrHDMV4ASJmqNNFcgQ7RBk6N193yvukfiCzKQmD",
+        "EXPO_PUBLIC_YIELD_SPLITTER_PROGRAM_ID": "8bevd3T3LWoUh2Z9348UKwFFN1p5MdbRbAe2zniCrnVv",
+        "EXPO_PUBLIC_COMMUNITY_POT_PROGRAM_ID": "BsJDnhJGVdLQ3mxBJ7YCMkkBitKP2RT49zFqR9XsGri1",
+        "EXPO_PUBLIC_LOCK_VAULT_USDC_MINT": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+        "EXPO_PUBLIC_LOCK_VAULT_SKR_MINT": "CQAiXocPkmrr6MTDigHn1yDJ66v5nbPyxwMoUxb4PgST"
+      },
       "android": {
         "buildType": "apk"
       }
