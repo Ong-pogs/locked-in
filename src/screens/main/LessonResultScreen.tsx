@@ -83,11 +83,10 @@ export function LessonResultScreen() {
         )}
 
         {/* Return button */}
-        <Pressable
-          style={({ pressed }) => [ts.primaryBtn, s.returnBtn, pressed && s.returnBtnPressed]}
-          onPress={() => navigation.navigate('DungeonHome')}
-        >
-          <Text style={ts.primaryBtnText}>Return to Hub</Text>
+        <Pressable onPress={() => navigation.navigate('DungeonHome')}>
+          <View style={[ts.primaryBtn, s.returnBtn]}>
+            <Text style={ts.primaryBtnText}>Return to Hub</Text>
+          </View>
         </Pressable>
       </View>
     </ScreenBackground>
@@ -155,8 +154,5 @@ const s = StyleSheet.create({
   returnBtn: {
     marginTop: 28,
     width: '100%',
-  },
-  returnBtnPressed: {
-    opacity: 0.85,
   },
 });

@@ -25,6 +25,7 @@
     "expo": "~54.0.33",
     "expo-constants": "~18.0.13",
     "expo-crypto": "^15.0.8",
+    "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
     "nativewind": "^4.2.2",
     "react": "19.1.0",

@@ -426,7 +426,7 @@ export function CourseSelectionScreen() {
 
             <Text style={s.headerTitle}>
               Choose Your{'\n'}
-              <Text style={{ color: C.amber }}>Discipline</Text>
+              <Text style={{ color: C.amber }}>Path</Text>
             </Text>
 
             <Text style={s.headerSub}>

@@ -255,7 +255,13 @@ export const useCourseStore = create<CourseStore>()(
         set({
           courseStates: {
             ...courseStates,
-            [courseId]: { ...state, gauntletActive: false, gauntletDay: 0 },
+            [courseId]: {
+              ...state,
+              gauntletActive: false,
+              gauntletDay: 0,
+              // Give dev fuel so brewer is usable immediately
+              fuelCounter: Math.max(state.fuelCounter, 3),
+            },
           },
         });
       },

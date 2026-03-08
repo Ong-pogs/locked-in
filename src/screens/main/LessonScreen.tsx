@@ -15,6 +15,7 @@ import type { RouteProp } from '@react-navigation/native';
 import * as Crypto from 'expo-crypto';
 import type { MainStackParamList } from '@/navigation/types';
 import { useCourseStore } from '@/stores/courseStore';
+import { useFlameStore } from '@/stores/flameStore';
 import { useStreakStore } from '@/stores/streakStore';
 import { useUserStore } from '@/stores/userStore';
 import type { Question } from '@/types';
@@ -133,6 +134,9 @@ export function LessonScreen() {
     (score: number) => {
       useCourseStore.getState().completeLesson(lessonId, courseId, score);
       useStreakStore.getState().completeDay();
+      // Sync flame brightness with the new streak count
+      const newStreak = useStreakStore.getState().currentStreak;
+      useFlameStore.getState().updateFromStreak(newStreak);
     },
     [courseId, lessonId],
   );
@@ -381,12 +385,26 @@ export function LessonScreen() {
     <ScreenBackground>
       <ScrollView style={s.scrollView} contentContainerStyle={s.scrollContent}>
         <View style={s.questionHeader}>
-          <Text style={s.questionCounter}>
-            Question {currentQuestionIndex + 1} of {totalQuestions}
-          </Text>
-          {usesRemoteVerification && (
-            <Text style={s.scoredOnSubmit}>Scored on submit</Text>
-          )}
+          <Pressable
+            onPress={() => {
+              Alert.alert('Leave Lesson?', 'Your progress on this attempt will be lost.', [
+                { text: 'Stay', style: 'cancel' },
+                { text: 'Leave', style: 'destructive', onPress: () => navigation.goBack() },
+              ]);
+            }}
+          >
+            <View style={s.exitBtn}>
+              <Text style={s.exitBtnText}>{'\u2715'}</Text>
+            </View>
+          </Pressable>
+          <View style={s.questionHeaderText}>
+            <Text style={s.questionCounter}>
+              Question {currentQuestionIndex + 1} of {totalQuestions}
+            </Text>
+            {usesRemoteVerification && (
+              <Text style={s.scoredOnSubmit}>Scored on submit</Text>
+            )}
+          </View>
         </View>
 
         <View style={[ts.progressBarBg, s.progressBarMargin]}>
@@ -586,7 +604,29 @@ const s = StyleSheet.create({
   questionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
+    marginTop: 8,
+  },
+  questionHeaderText: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  exitBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: T.borderDormant,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exitBtnText: {
+    fontSize: 16,
+    color: T.textMuted,
+    fontWeight: '600',
   },
   questionCounter: {
     fontSize: 12,

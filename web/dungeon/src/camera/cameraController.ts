@@ -28,10 +28,9 @@ export function createCamera(scene: Scene): ArcRotateCamera {
   // No collisions — camera can pass through walls freely during transitions
   camera.checkCollisions = false;
 
-  // Temporarily enable controls so we can debug the view
-  camera.attachControl(scene.getEngine().getRenderingCanvas()!, true);
-  camera.lowerRadiusLimit = 1;
-  camera.upperRadiusLimit = 50;
+  // Camera is fixed — user cannot rotate/pan/zoom. Movement is only via viewpoint transitions.
+  camera.detachControl();
+  camera.inputs.clear();
 
   return camera;
 }

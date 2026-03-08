@@ -17,7 +17,7 @@ import {
   signTransaction,
   type LockAccountSnapshot,
 } from '@/services/solana';
-import { useResurfaceStore, useUserStore } from '@/stores';
+import { useFlameStore, useResurfaceStore, useStreakStore, useUserStore } from '@/stores';
 import { useCourseStore } from '@/stores/courseStore';
 import {
   T,
@@ -42,9 +42,7 @@ export function ProfileScreen() {
   const deactivateCourse = useCourseStore((s) => s.deactivateCourse);
   const refreshCourseRuntime = useCourseStore((s) => s.refreshCourseRuntime);
   const syncLockSnapshot = useCourseStore((s) => s.syncLockSnapshot);
-  const resetLessonProgressForCourse = useCourseStore(
-    (s) => s.resetLessonProgressForCourse,
-  );
+
 
   const lockedCourseIds = activeCourseIds.filter((courseId) =>
     Boolean(courseStates[courseId]?.lockAccountAddress),
@@ -427,21 +425,6 @@ export function ProfileScreen() {
 
         {/* Danger zone */}
         <View style={s.dangerZone}>
-          {__DEV__ && (
-            <Pressable
-              onPress={() => {
-                useUserStore.setState({ dungeonTourCompleted: false });
-                navigation.goBack();
-              }}
-            >
-              <View style={[ts.secondaryBtn, s.actionBtn, s.devBtnTeal]}>
-                <Text style={s.actionBtnIcon}>{'\u{1F9ED}'}</Text>
-                <Text style={[s.actionBtnText, { color: T.teal }]}>
-                  Replay Dungeon Tour (DEV)
-                </Text>
-              </View>
-            </Pressable>
-          )}
           {__DEV__ && activeCourseId && activeState?.gauntletActive && (
             <Pressable
               onPress={() => {
@@ -454,6 +437,8 @@ export function ProfileScreen() {
                       text: 'Skip',
                       onPress: () => {
                         useCourseStore.getState().skipGauntletForCourse(activeCourseId);
+                        const streak = Math.max(useStreakStore.getState().currentStreak, 1);
+                        useFlameStore.getState().updateFromStreak(streak);
                         navigation.goBack();
                       },
                     },
@@ -461,38 +446,10 @@ export function ProfileScreen() {
                 );
               }}
             >
-              <View style={[ts.secondaryBtn, s.actionBtn, s.devBtnViolet]}>
+              <View style={[ts.secondaryBtn, s.actionBtn, { borderColor: 'rgba(153,69,255,0.2)' }]}>
                 <Text style={s.actionBtnIcon}>{'\u269B'}</Text>
                 <Text style={[s.actionBtnText, { color: T.violet }]}>
                   Skip Gauntlet (DEV)
-                </Text>
-              </View>
-            </Pressable>
-          )}
-          {__DEV__ && activeCourseId && (
-            <Pressable
-              onPress={() => {
-                Alert.alert(
-                  'Reset Lesson Progress',
-                  'This clears local lesson completion for the active course so you can retake it.',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Reset',
-                      style: 'destructive',
-                      onPress: () => {
-                        resetLessonProgressForCourse(activeCourseId);
-                        navigation.goBack();
-                      },
-                    },
-                  ],
-                );
-              }}
-            >
-              <View style={[ts.secondaryBtn, s.actionBtn, s.devBtnAmber]}>
-                <Text style={s.actionBtnIcon}>{'\u21BA'}</Text>
-                <Text style={[s.actionBtnText, { color: T.amber }]}>
-                  Reset Lesson Progress
                 </Text>
               </View>
             </Pressable>
@@ -647,14 +604,5 @@ const s = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: T.textSecondary,
-  },
-  devBtnTeal: {
-    borderColor: 'rgba(42,232,212,0.2)',
-  },
-  devBtnViolet: {
-    borderColor: 'rgba(153,69,255,0.2)',
-  },
-  devBtnAmber: {
-    borderColor: 'rgba(212,160,74,0.2)',
   },
 });

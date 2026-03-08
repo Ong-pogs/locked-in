@@ -8,6 +8,7 @@ import { useFlameStore, useSceneStore, useStreakStore, useUserStore } from '@/st
 import { useCourseStore } from '@/stores/courseStore';
 import { useDungeon } from '@/components/DungeonProvider';
 import { GuidedTour } from '@/components/GuidedTour';
+import { T } from '@/theme';
 
 type HubNav = NativeStackNavigationProp<MainStackParamList>;
 
@@ -426,7 +427,7 @@ function BookModal({
               </Pressable>
             ) : (
               <View style={[overlayStyles.startBtn, overlayStyles.startBtnDone]}>
-                <Text style={overlayStyles.startBtnText}>All Lessons Complete!</Text>
+                <Text style={[overlayStyles.startBtnText, { color: T.green }]}>All Lessons Complete!</Text>
               </View>
             )}
           </ScrollView>
@@ -464,17 +465,17 @@ const overlayStyles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   profileBtn: {
-    backgroundColor: 'rgba(20, 20, 22, 0.85)',
+    backgroundColor: T.bgCard,
     borderRadius: 20,
     width: 36,
     height: 36,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(60, 60, 64, 0.6)',
+    borderColor: T.borderAlive,
   },
   profileBtnText: {
-    color: '#f59e0b',
+    color: T.amber,
     fontSize: 16,
     fontWeight: '700',
   },
@@ -482,11 +483,11 @@ const overlayStyles = StyleSheet.create({
   // ====== Book Modal ======
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(3,3,6,0.82)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#141416',
+    backgroundColor: T.bg,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 24,
@@ -494,55 +495,57 @@ const overlayStyles = StyleSheet.create({
     paddingBottom: 40,
     maxHeight: '80%',
     borderTopWidth: 1,
-    borderColor: '#2a2a2e',
+    borderColor: T.borderAlive,
   },
   modalTitle: {
-    color: '#fff',
+    color: T.textPrimary,
     fontSize: 22,
     fontWeight: '700',
+    fontFamily: 'monospace',
   },
   modalSubtitle: {
-    color: '#888',
+    color: T.textSecondary,
     fontSize: 14,
     marginTop: 6,
     lineHeight: 20,
   },
   modalCard: {
-    backgroundColor: '#1c1c1e',
+    backgroundColor: T.bgCard,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#2a2a2e',
+    borderColor: T.borderDormant,
     padding: 16,
     marginTop: 16,
   },
   cardLabel: {
-    color: '#999',
-    fontSize: 12,
-    fontWeight: '600',
+    color: T.textSecondary,
+    fontSize: 11,
+    fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 1,
+    fontFamily: 'monospace',
   },
   cardValue: {
-    color: '#fff',
+    color: T.textPrimary,
     fontSize: 16,
     fontWeight: '600',
     marginTop: 4,
   },
   cardMuted: {
-    color: '#666',
+    color: T.textMuted,
     fontSize: 13,
     marginTop: 4,
   },
   progressTrack: {
-    height: 6,
-    backgroundColor: '#2a2a2e',
+    height: 5,
+    backgroundColor: T.borderDormant,
     borderRadius: 3,
     marginTop: 10,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#f59e0b',
+    backgroundColor: T.amber,
     borderRadius: 3,
   },
   actionGrid: {
@@ -552,10 +555,10 @@ const overlayStyles = StyleSheet.create({
   },
   actionBtn: {
     flex: 1,
-    backgroundColor: '#1c1c1e',
+    backgroundColor: T.bgCard,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#2a2a2e',
+    borderColor: T.borderDormant,
     paddingVertical: 14,
     alignItems: 'center',
   },
@@ -563,25 +566,29 @@ const overlayStyles = StyleSheet.create({
     fontSize: 20,
   },
   actionLabel: {
-    color: '#999',
+    color: T.textSecondary,
     fontSize: 11,
     marginTop: 6,
-    fontWeight: '500',
+    fontWeight: '600',
+    fontFamily: 'monospace',
   },
   startBtn: {
-    backgroundColor: '#7c3aed',
+    backgroundColor: T.amber,
     borderRadius: 14,
     paddingVertical: 16,
     marginTop: 20,
     alignItems: 'center',
   },
   startBtnDone: {
-    backgroundColor: '#166534',
+    backgroundColor: 'rgba(62,230,138,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(62,230,138,0.25)',
   },
   startBtnText: {
-    color: '#fff',
-    fontSize: 16,
+    color: T.bg,
+    fontSize: 15,
     fontWeight: '700',
+    fontFamily: 'monospace',
   },
 
   // ====== Cinematic Overlay ======

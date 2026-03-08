@@ -7,6 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { fromByteArray } from 'base64-js';
 import { AppNavigator } from '@/navigation';
 import { DungeonProvider } from '@/components/DungeonProvider';
+import { AnimatedSplash } from '@/components/AnimatedSplash';
 import { useUserStore } from '@/stores';
 import { useCourseStore } from '@/stores/courseStore';
 import { hasRemoteLessonApi } from '@/services/api';
@@ -133,13 +134,15 @@ export default function App() {
   useWalletScopedCourseState();
 
   return (
-    <SafeAreaProvider>
-      <NavigationContainer theme={theme}>
-        <DungeonProvider>
-          <AppNavigator />
-        </DungeonProvider>
-        <StatusBar style="light" />
-      </NavigationContainer>
-    </SafeAreaProvider>
+    <AnimatedSplash>
+      <SafeAreaProvider>
+        <NavigationContainer theme={theme}>
+          <DungeonProvider>
+            <AppNavigator />
+          </DungeonProvider>
+          <StatusBar style="light" />
+        </NavigationContainer>
+      </SafeAreaProvider>
+    </AnimatedSplash>
   );
 }
