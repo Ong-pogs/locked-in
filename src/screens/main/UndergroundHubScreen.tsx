@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, StyleSheet, ActivityIndicator, Text, Pressable, Modal, ScrollView, Animated } from 'react-native';
+import { View, StyleSheet, ImageBackground, ActivityIndicator, Text, Pressable, Modal, ScrollView, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -8,7 +8,8 @@ import { useFlameStore, useSceneStore, useStreakStore, useUserStore } from '@/st
 import { useCourseStore } from '@/stores/courseStore';
 import { useDungeon } from '@/components/DungeonProvider';
 import { GuidedTour } from '@/components/GuidedTour';
-import { T } from '@/theme';
+import { T, woodBg, parchmentBg } from '@/theme';
+import { User, BookOpen, FlaskConical, Puzzle, Scroll, Library, ChevronRight } from 'lucide-react-native';
 
 type HubNav = NativeStackNavigationProp<MainStackParamList>;
 
@@ -243,7 +244,7 @@ export function UndergroundHubScreen() {
               style={overlayStyles.profileBtn}
               onPress={() => navigation.navigate('Profile')}
             >
-              <Text style={overlayStyles.profileBtnText}>{'\u{1F464}'}</Text>
+              <User size={18} color={T.amber} strokeWidth={2.5} />
             </Pressable>
           </View>
         )}
@@ -355,82 +356,111 @@ function BookModal({
       onRequestClose={onClose}
     >
       <Pressable style={overlayStyles.modalBackdrop} onPress={onClose}>
-        <Pressable style={overlayStyles.modalContent} onPress={() => { }}>
-          <ScrollView showsVerticalScrollIndicator={false}>
-            <Text style={overlayStyles.modalTitle}>
-              {course?.title ?? 'No Course'}
-            </Text>
-            <Text style={overlayStyles.modalSubtitle}>
-              {course?.description ?? ''}
-            </Text>
+        <Pressable onPress={() => { }}>
+          <ImageBackground
+            source={woodBg}
+            resizeMode="cover"
+            style={overlayStyles.modalContent}
+            imageStyle={{ borderTopLeftRadius: 24, borderTopRightRadius: 24, opacity: 0.7 }}
+          >
+            {/* Decorative top bar */}
+            <View style={overlayStyles.modalTopBar}>
+              <View style={overlayStyles.modalTopBarLine} />
+              <Text style={overlayStyles.modalTopBarDiamond}>{'\u25C6'}</Text>
+              <View style={overlayStyles.modalTopBarLine} />
+            </View>
 
-            <View style={overlayStyles.modalCard}>
-              <Text style={overlayStyles.cardLabel}>Progress</Text>
-              <View style={overlayStyles.progressTrack}>
-                <View
-                  style={[
-                    overlayStyles.progressFill,
-                    {
-                      width: course
-                        ? `${(course.completedLessons / course.totalLessons) * 100}%`
-                        : '0%',
-                    },
-                  ]}
-                />
-              </View>
-              <Text style={overlayStyles.cardMuted}>
-                {course?.completedLessons ?? 0}/{course?.totalLessons ?? 0} lessons
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={overlayStyles.modalTitle}>
+                {course?.title ?? 'No Course'}
               </Text>
-            </View>
+              <Text style={overlayStyles.modalSubtitle}>
+                {course?.description ?? ''}
+              </Text>
 
-            <View style={overlayStyles.modalCard}>
-              <Text style={overlayStyles.cardLabel}>Last Learned</Text>
-              {lastCompleted ? (
-                <>
-                  <Text style={overlayStyles.cardValue}>{lastCompleted.title}</Text>
-                  <Text style={overlayStyles.cardMuted}>
-                    Score: {lastScore ?? 0}%
-                  </Text>
-                </>
-              ) : (
-                <Text style={overlayStyles.cardMuted}>No lessons completed yet</Text>
-              )}
-            </View>
-
-            <View style={overlayStyles.actionGrid}>
-              <Pressable style={overlayStyles.actionBtn} onPress={() => { }}>
-                <Text style={overlayStyles.actionIcon}>{'\u{1F3CB}\uFE0F'}</Text>
-                <Text style={overlayStyles.actionLabel}>Practice</Text>
-              </Pressable>
-              <Pressable style={overlayStyles.actionBtn} onPress={() => { }}>
-                <Text style={overlayStyles.actionIcon}>{'\u{1F9E9}'}</Text>
-                <Text style={overlayStyles.actionLabel}>Puzzle</Text>
-              </Pressable>
-              <Pressable style={overlayStyles.actionBtn} onPress={() => { }}>
-                <Text style={overlayStyles.actionIcon}>{'\u{1F4D6}'}</Text>
-                <Text style={overlayStyles.actionLabel}>Dictionary</Text>
-              </Pressable>
-              <Pressable style={overlayStyles.actionBtn} onPress={onBrowseCourses}>
-                <Text style={overlayStyles.actionIcon}>{'\u{1F4DA}'}</Text>
-                <Text style={overlayStyles.actionLabel}>All Courses</Text>
-              </Pressable>
-            </View>
-
-            {nextLesson ? (
-              <Pressable
-                style={overlayStyles.startBtn}
-                onPress={() => onStartLesson(nextLesson.id, nextLesson.courseId)}
+              {/* Progress card */}
+              <ImageBackground
+                source={parchmentBg}
+                resizeMode="cover"
+                style={overlayStyles.modalCard}
+                imageStyle={{ borderRadius: 10, opacity: 0.25 }}
               >
-                <Text style={overlayStyles.startBtnText}>
-                  Start Lesson {nextLesson.order}: {nextLesson.title}
+                <Text style={overlayStyles.cardLabel}>PROGRESS</Text>
+                <View style={overlayStyles.progressTrack}>
+                  <View
+                    style={[
+                      overlayStyles.progressFill,
+                      {
+                        width: course
+                          ? `${(course.completedLessons / course.totalLessons) * 100}%`
+                          : '0%',
+                      },
+                    ]}
+                  />
+                </View>
+                <Text style={overlayStyles.cardMuted}>
+                  {course?.completedLessons ?? 0}/{course?.totalLessons ?? 0} lessons
                 </Text>
-              </Pressable>
-            ) : (
-              <View style={[overlayStyles.startBtn, overlayStyles.startBtnDone]}>
-                <Text style={[overlayStyles.startBtnText, { color: T.green }]}>All Lessons Complete!</Text>
+              </ImageBackground>
+
+              {/* Last Learned card */}
+              <ImageBackground
+                source={parchmentBg}
+                resizeMode="cover"
+                style={overlayStyles.modalCard}
+                imageStyle={{ borderRadius: 10, opacity: 0.25 }}
+              >
+                <Text style={overlayStyles.cardLabel}>LAST LEARNED</Text>
+                {lastCompleted ? (
+                  <>
+                    <Text style={overlayStyles.cardValue}>{lastCompleted.title}</Text>
+                    <Text style={overlayStyles.cardMuted}>
+                      Score: {lastScore ?? 0}%
+                    </Text>
+                  </>
+                ) : (
+                  <Text style={overlayStyles.cardMuted}>No lessons completed yet</Text>
+                )}
+              </ImageBackground>
+
+              {/* Action grid */}
+              <View style={overlayStyles.actionGrid}>
+                <Pressable style={overlayStyles.actionBtn} onPress={() => { }}>
+                  <FlaskConical size={20} color={T.amber} strokeWidth={1.8} />
+                  <Text style={overlayStyles.actionLabel}>Practice</Text>
+                </Pressable>
+                <Pressable style={overlayStyles.actionBtn} onPress={() => { }}>
+                  <Puzzle size={20} color={T.amber} strokeWidth={1.8} />
+                  <Text style={overlayStyles.actionLabel}>Puzzle</Text>
+                </Pressable>
+                <Pressable style={overlayStyles.actionBtn} onPress={() => { }}>
+                  <Scroll size={20} color={T.amber} strokeWidth={1.8} />
+                  <Text style={overlayStyles.actionLabel}>Dictionary</Text>
+                </Pressable>
+                <Pressable style={overlayStyles.actionBtn} onPress={onBrowseCourses}>
+                  <Library size={20} color={T.amber} strokeWidth={1.8} />
+                  <Text style={overlayStyles.actionLabel}>Courses</Text>
+                </Pressable>
               </View>
-            )}
-          </ScrollView>
+
+              {/* Start / Done button */}
+              {nextLesson ? (
+                <Pressable
+                  style={overlayStyles.startBtn}
+                  onPress={() => onStartLesson(nextLesson.id, nextLesson.courseId)}
+                >
+                  <BookOpen size={18} color="#1A1000" strokeWidth={2.5} style={{ marginRight: 8 }} />
+                  <Text style={overlayStyles.startBtnText}>
+                    Lesson {nextLesson.order}: {nextLesson.title}
+                  </Text>
+                </Pressable>
+              ) : (
+                <View style={[overlayStyles.startBtn, overlayStyles.startBtnDone]}>
+                  <Text style={[overlayStyles.startBtnText, { color: T.green }]}>All Lessons Complete!</Text>
+                </View>
+              )}
+            </ScrollView>
+          </ImageBackground>
         </Pressable>
       </Pressable>
     </Modal>
@@ -465,19 +495,14 @@ const overlayStyles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   profileBtn: {
-    backgroundColor: T.bgCard,
-    borderRadius: 20,
-    width: 36,
-    height: 36,
+    backgroundColor: 'rgba(14,14,28,0.88)',
+    borderRadius: 22,
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: T.borderAlive,
-  },
-  profileBtnText: {
-    color: T.amber,
-    fontSize: 16,
-    fontWeight: '700',
   },
 
   // ====== Book Modal ======
@@ -490,57 +515,78 @@ const overlayStyles = StyleSheet.create({
     backgroundColor: T.bg,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    paddingHorizontal: 24,
-    paddingTop: 28,
+    paddingHorizontal: 22,
+    paddingTop: 0,
     paddingBottom: 40,
-    maxHeight: '80%',
+    maxHeight: '100%',
     borderTopWidth: 1,
     borderColor: T.borderAlive,
+    overflow: 'hidden',
+  },
+  modalTopBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingTop: 16,
+    paddingBottom: 14,
+  },
+  modalTopBarLine: {
+    width: 40,
+    height: 1,
+    backgroundColor: `${T.amber}40`,
+  },
+  modalTopBarDiamond: {
+    fontSize: 7,
+    color: `${T.amber}60`,
   },
   modalTitle: {
     color: T.textPrimary,
     fontSize: 22,
     fontWeight: '700',
-    fontFamily: 'monospace',
+    fontFamily: 'Georgia',
+    letterSpacing: 0.5,
   },
   modalSubtitle: {
     color: T.textSecondary,
-    fontSize: 14,
+    fontSize: 13,
     marginTop: 6,
     lineHeight: 20,
   },
   modalCard: {
-    backgroundColor: T.bgCard,
-    borderRadius: 14,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: T.borderDormant,
     padding: 16,
-    marginTop: 16,
+    marginTop: 14,
+    backgroundColor: T.bgCard,
+    overflow: 'hidden',
   },
   cardLabel: {
     color: T.textSecondary,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: 2,
     fontFamily: 'monospace',
+    marginBottom: 6,
   },
   cardValue: {
     color: T.textPrimary,
     fontSize: 16,
     fontWeight: '600',
-    marginTop: 4,
+    marginTop: 2,
   },
   cardMuted: {
     color: T.textMuted,
-    fontSize: 13,
+    fontSize: 12,
     marginTop: 4,
+    fontFamily: 'monospace',
   },
   progressTrack: {
     height: 5,
-    backgroundColor: T.borderDormant,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: 3,
-    marginTop: 10,
     overflow: 'hidden',
   },
   progressFill: {
@@ -551,44 +597,50 @@ const overlayStyles = StyleSheet.create({
   actionGrid: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 20,
+    marginTop: 18,
   },
   actionBtn: {
     flex: 1,
     backgroundColor: T.bgCard,
-    borderRadius: 14,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: T.borderDormant,
     paddingVertical: 14,
     alignItems: 'center',
-  },
-  actionIcon: {
-    fontSize: 20,
+    gap: 6,
   },
   actionLabel: {
     color: T.textSecondary,
-    fontSize: 11,
-    marginTop: 6,
+    fontSize: 10,
     fontWeight: '600',
     fontFamily: 'monospace',
+    letterSpacing: 0.5,
   },
   startBtn: {
     backgroundColor: T.amber,
-    borderRadius: 14,
-    paddingVertical: 16,
-    marginTop: 20,
+    borderRadius: 10,
+    paddingVertical: 15,
+    marginTop: 18,
+    marginBottom: 4,
     alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: '#E8B860',
+    elevation: 6,
   },
   startBtnDone: {
-    backgroundColor: 'rgba(62,230,138,0.18)',
-    borderWidth: 1,
+    backgroundColor: 'rgba(62,230,138,0.12)',
     borderColor: 'rgba(62,230,138,0.25)',
+    elevation: 0,
   },
   startBtnText: {
-    color: T.bg,
-    fontSize: 15,
-    fontWeight: '700',
-    fontFamily: 'monospace',
+    color: '#1A1000',
+    fontSize: 13,
+    fontWeight: '800',
+    fontFamily: 'Georgia',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
   },
 
   // ====== Cinematic Overlay ======

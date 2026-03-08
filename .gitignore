@@ -6,6 +6,7 @@ node_modules/
 # Expo
 .expo/
 dist/
+!web/dungeon/dist/
 web-build/
 expo-env.d.ts
 
@@ -40,7 +41,7 @@ backend/.env
 
 # Babylon.js web build
 web/dungeon/node_modules/
-web/dungeon/dist/
+# web/dungeon/dist/ — committed so EAS builds have the bundled HTML
 
 # Rust / Anchor
 /target
