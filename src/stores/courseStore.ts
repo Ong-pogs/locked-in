@@ -697,39 +697,53 @@ export const useCourseStore = create<CourseStore>()(
 
         set({ contentLoading: true, contentError: null });
 
-        try {
-          const snapshot = await loadHydratedContentSnapshot();
-          if (__DEV__) {
-            console.info(
-              `[content-sync] success: releaseId=${snapshot.releaseId} publishedAt=${snapshot.publishedAt}`,
-            );
-          }
-          set({
-            courses: snapshot.courses,
-            modules: snapshot.modulesByCourse,
-            lessons: snapshot.lessonsByCourse,
-            contentReleaseId: snapshot.releaseId,
-            contentPublishedAt: snapshot.publishedAt,
-            contentLoading: false,
-            contentError: null,
-            contentInitialized: true,
-          });
-        } catch (error) {
-          const message =
-            error instanceof Error
-              ? error.message
-              : 'Unable to load lesson catalog';
-          if (__DEV__) {
-            console.warn(`[content-sync] error: ${message}`);
-          }
-          set({
-            contentLoading: false,
-            contentError: message,
-            contentInitialized: false,
-          });
+        const MAX_RETRIES = 2;
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+          try {
+            const snapshot = await loadHydratedContentSnapshot();
+            if (__DEV__) {
+              console.info(
+                `[content-sync] success: releaseId=${snapshot.releaseId} publishedAt=${snapshot.publishedAt}`,
+              );
+            }
+            set({
+              courses: snapshot.courses,
+              modules: snapshot.modulesByCourse,
+              lessons: snapshot.lessonsByCourse,
+              contentReleaseId: snapshot.releaseId,
+              contentPublishedAt: snapshot.publishedAt,
+              contentLoading: false,
+              contentError: null,
+              contentInitialized: true,
+            });
+            return;
+          } catch (error) {
+            const message =
+              error instanceof Error
+                ? error.message
+                : 'Unable to load lesson catalog';
 
-          // Keep the app usable while backend wiring is in progress.
-          get().initializeMockData(message);
+            if (attempt < MAX_RETRIES) {
+              if (__DEV__) {
+                console.info(`[content-sync] retry ${attempt + 1}/${MAX_RETRIES} after: ${message}`);
+              }
+              // Brief pause before retry (1s, then 2s)
+              await new Promise((r) => setTimeout(r, (attempt + 1) * 1000));
+              continue;
+            }
+
+            if (__DEV__) {
+              console.warn(`[content-sync] error after ${MAX_RETRIES + 1} attempts: ${message}`);
+            }
+            set({
+              contentLoading: false,
+              contentError: message,
+              contentInitialized: false,
+            });
+
+            // Keep the app usable while backend wiring is in progress.
+            get().initializeMockData(message);
+          }
         }
       },
 

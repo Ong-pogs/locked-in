@@ -76,8 +76,8 @@ export function addCandleLight(scene: Scene, position: Vector3, name: string) {
   const light = new PointLight(lightName, lightPos, scene);
   light.diffuse = new Color3(1.0, 0.65, 0.2);
   light.specular = new Color3(1.0, 0.5, 0.1);
-  light.intensity = 8.0;
-  light.range = 18;
+  light.intensity = 10.0;
+  light.range = 28;
   if (isGroupDisabled(lightName)) light.setEnabled(false);
   effectLights.set(lightName, light);
 
@@ -85,7 +85,7 @@ export function addCandleLight(scene: Scene, position: Vector3, name: string) {
   scene.onBeforeRenderObservable.add(() => {
     if (!light.isEnabled()) return;
     flickerTime += 0.05 + Math.random() * 0.02;
-    const flicker = 7.0 + Math.sin(flickerTime * 3) * 1.0 + Math.sin(flickerTime * 7.3) * 0.5;
+    const flicker = 9.0 + Math.sin(flickerTime * 3) * 1.0 + Math.sin(flickerTime * 7.3) * 0.5;
     light.intensity = flicker * emitterMultiplier;
   });
 
@@ -135,8 +135,8 @@ export function addChandelierGlow(scene: Scene, position: Vector3, name: string)
   const light = new PointLight(lightName, position.add(new Vector3(0, -0.3, 0)), scene);
   light.diffuse = new Color3(1.0, 0.6, 0.15);
   light.specular = new Color3(1.0, 0.45, 0.1);
-  light.intensity = 18.0;
-  light.range = 35;
+  light.intensity = 22.0;
+  light.range = 45;
   if (isGroupDisabled(lightName)) light.setEnabled(false);
   effectLights.set(lightName, light);
 
@@ -144,7 +144,7 @@ export function addChandelierGlow(scene: Scene, position: Vector3, name: string)
   scene.onBeforeRenderObservable.add(() => {
     if (!light.isEnabled()) return;
     flickerTime += 0.03 + Math.random() * 0.01;
-    const flicker = 16.0 + Math.sin(flickerTime * 2.5) * 2.0 + Math.sin(flickerTime * 6.1) * 1.0;
+    const flicker = 20.0 + Math.sin(flickerTime * 2.5) * 2.0 + Math.sin(flickerTime * 6.1) * 1.0;
     light.intensity = flicker * emitterMultiplier;
   });
 }
@@ -158,8 +158,8 @@ export function addSaverLampGlow(scene: Scene, position: Vector3, name: string) 
   const light = new PointLight(lightName, lightPos, scene);
   light.diffuse = new Color3(0.6, 0.15, 0.9);
   light.specular = new Color3(0.5, 0.1, 0.8);
-  light.intensity = 6.0;
-  light.range = 12;
+  light.intensity = 8.0;
+  light.range = 20;
   if (isGroupDisabled(lightName)) light.setEnabled(false);
   effectLights.set(lightName, light);
 
