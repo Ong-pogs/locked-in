@@ -20,7 +20,8 @@
         "EXPO_PUBLIC_LOCK_VAULT_SKR_MINT": "CQAiXocPkmrr6MTDigHn1yDJ66v5nbPyxwMoUxb4PgST"
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease"
       }
     },
     "production": {}
