@@ -281,7 +281,7 @@ export default function CoursesPage() {
 
   const handleActiveCoursePress = (courseId: string) => {
     useCourseStore.getState().setActiveCourse(courseId);
-    router.push('/dungeon');
+    router.push('/village');
   };
 
   const handleSignIn = async () => {

@@ -299,7 +299,7 @@ function DepositContent() {
 
       setStatusMessage('Lock created successfully!');
       useUserStore.getState().setOnboardingPhase('main');
-      router.push('/dungeon');
+      router.push('/village');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Transaction failed';
       console.error('[deposit] Lock transaction failed:', error);

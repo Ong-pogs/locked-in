@@ -1,0 +1,58 @@
+{
+  "buildings": [
+    {
+      "id": "academy",
+      "route": "/courses",
+      "label": "Academy",
+      "bounds": { "x": 0.04, "y": 0.10, "w": 0.28, "h": 0.30 }
+    },
+    {
+      "id": "tavern",
+      "route": "/community-pot",
+      "label": "Tavern",
+      "bounds": { "x": 0.68, "y": 0.10, "w": 0.28, "h": 0.30 }
+    },
+    {
+      "id": "forge",
+      "route": "/alchemy",
+      "label": "Forge",
+      "bounds": { "x": 0.04, "y": 0.43, "w": 0.24, "h": 0.24 }
+    },
+    {
+      "id": "market",
+      "route": "/shop",
+      "label": "Market",
+      "bounds": { "x": 0.72, "y": 0.43, "w": 0.24, "h": 0.24 }
+    },
+    {
+      "id": "cottage",
+      "route": "/dashboard",
+      "label": "Cottage",
+      "bounds": { "x": 0.31, "y": 0.43, "w": 0.18, "h": 0.22 }
+    },
+    {
+      "id": "storage-shed",
+      "route": "/inventory",
+      "label": "Storage Shed",
+      "bounds": { "x": 0.51, "y": 0.43, "w": 0.18, "h": 0.22 }
+    },
+    {
+      "id": "notice-board",
+      "route": "/leaderboard",
+      "label": "Notice Board",
+      "bounds": { "x": 0.36, "y": 0.10, "w": 0.28, "h": 0.22 }
+    },
+    {
+      "id": "clock-tower",
+      "route": "/streaks",
+      "label": "Clock Tower",
+      "bounds": { "x": 0.34, "y": 0.70, "w": 0.32, "h": 0.24 }
+    },
+    {
+      "id": "lantern-beacon",
+      "route": "/profile",
+      "label": "Lantern Beacon",
+      "bounds": { "x": 0.42, "y": 0.34, "w": 0.16, "h": 0.08 }
+    }
+  ]
+}

@@ -10,6 +10,7 @@ import {
   useEffect,
   type ReactNode,
 } from 'react';
+import { usePathname } from 'next/navigation';
 import { useUserStore } from '@/stores/userStore';
 import { TourOverlay } from './TourOverlay';
 
@@ -46,6 +47,11 @@ const DUNGEON_URL =
 // Provider
 // ---------------------------------------------------------------------------
 export function DungeonProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  // Suppress iframe + lifecycle on the village route so we don't pay the 3D
+  // bandwidth/CPU cost there. Consumers' show/hide/sendMessage become no-ops.
+  const isVillageRoute = pathname?.startsWith('/village') ?? false;
+
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [visible, setVisible] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -59,9 +65,10 @@ export function DungeonProvider({ children }: { children: ReactNode }) {
   const handlersRef = useRef<Set<(data: Record<string, unknown>) => void>>(new Set());
 
   const show = useCallback(() => {
+    if (isVillageRoute) return;
     setVisible(true);
     if (!isLoaded) setIsLoaded(true);
-  }, [isLoaded]);
+  }, [isLoaded, isVillageRoute]);
 
   const hide = useCallback(() => {
     setVisible(false);
@@ -158,8 +165,9 @@ export function DungeonProvider({ children }: { children: ReactNode }) {
     <DungeonContext.Provider value={ctx}>
       {children}
 
-      {/* Persistent iframe — mounted once isLoaded, kept alive offscreen when hidden */}
-      {isLoaded && (
+      {/* Persistent iframe — mounted once isLoaded, kept alive offscreen when hidden.
+          On /village we never mount: no iframe network/CPU cost on the new hub. */}
+      {isLoaded && !isVillageRoute && (
         <div
           className={`fixed inset-0 z-0 bg-[#050508] ${
             !visible ? 'opacity-0 pointer-events-none -left-[9999px] w-px h-px' : ''
@@ -177,14 +185,14 @@ export function DungeonProvider({ children }: { children: ReactNode }) {
       )}
 
       {/* Overlay — rendered above the iframe */}
-      {visible && overlayContent != null && (
+      {visible && !isVillageRoute && overlayContent != null && (
         <div className="fixed inset-0 z-10 pointer-events-none">
           <div className="pointer-events-auto">{overlayContent}</div>
         </div>
       )}
 
       {/* Dungeon tour for first-time users */}
-      {visible && showTour && (
+      {visible && showTour && !isVillageRoute && (
         <TourOverlay
           sendMessage={sendMessage}
           onMessage={onMessage}

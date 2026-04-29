@@ -46,7 +46,7 @@ export function Sidebar() {
         style={{ borderBottom: '1px solid rgba(212,160,74,0.06)' }}
       >
         <Link
-          href="/dungeon"
+          href="/village"
           className="text-[14px] font-bold tracking-[5px] uppercase"
           style={{
             background: 'linear-gradient(180deg, #D4A04A, #8B6914)',

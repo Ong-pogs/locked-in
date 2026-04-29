@@ -220,7 +220,7 @@ export default function DashboardPage() {
             {activeCourse.completedLessons}/{(lessons[activeCourse.id] ?? []).length || activeCourse.totalLessons} lessons completed
           </p>
           <button
-            onClick={() => router.push('/dungeon')}
+            onClick={() => router.push('/village')}
             className="w-full mt-3 py-2.5 rounded-lg text-center font-bold text-sm uppercase tracking-[1px]"
             style={{
               border: `1px solid ${T.amber}`,

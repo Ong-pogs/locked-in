@@ -176,15 +176,21 @@ export function AppShell({ children }: { children: ReactNode }) {
     (courseId: string) => Boolean(courseStates[courseId]?.lockAccountAddress),
   );
   const hasActiveLock = activeLockCourseIds.length > 0;
+  const pathname = usePathname();
+  const isVillageRoute = pathname.startsWith('/village');
   const isInMainApp =
     isAuthenticated &&
     (phase === 'main' || (phase === 'onboarding' && hasActiveLock));
 
+  // Village route owns its full viewport — suppress sidebar + bottom nav (still
+  // visible elsewhere as a fallback while the village builds out).
+  const showChrome = isInMainApp && !isVillageRoute;
+
   return (
     <>
-      {isInMainApp && <Sidebar />}
-      {isInMainApp && <BottomNav />}
-      <main className={`flex-1 ${isInMainApp ? 'md:ml-[240px] pb-[calc(72px_+_env(safe-area-inset-bottom,0px))] md:pb-0' : ''}`}>
+      {showChrome && <Sidebar />}
+      {showChrome && <BottomNav />}
+      <main className={`flex-1 ${showChrome ? 'md:ml-[240px] pb-[calc(72px_+_env(safe-area-inset-bottom,0px))] md:pb-0' : ''}`}>
         {children}
       </main>
     </>
