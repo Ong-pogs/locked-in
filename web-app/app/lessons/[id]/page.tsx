@@ -17,6 +17,21 @@ import { LessonBlockRenderer } from '@/components/LessonBlocks';
 
 type Phase = 'recall' | 'reading' | 'questions';
 
+// crypto.randomUUID is missing on iOS Safari < 15.4, which crashes the lesson
+// page outright. Fall back to an RFC4122 v4 implementation built on getRandomValues.
+function safeRandomUUID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex: string[] = [];
+  for (let i = 0; i < bytes.length; i += 1) hex.push(bytes[i].toString(16).padStart(2, '0'));
+  return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10, 16).join('')}`;
+}
+
 export default function LessonPage(props: {
   params: Promise<{ id: string }>;
 }) {
@@ -142,6 +157,14 @@ export default function LessonPage(props: {
       if (!attemptId || !attemptStartedAt) {
         throw new Error('Lesson attempt was not initialized.');
       }
+      // If the initial start sync failed, the backend doesn't know about this
+      // attempt and will reject the submit. Retry the start first.
+      if (!startSynced) {
+        await fetchWithAuth((token) =>
+          startLesson(lessonId, { attemptId, startedAt: attemptStartedAt }, token),
+        );
+        setStartSynced(true);
+      }
       const response = await fetchWithAuth((token) =>
         submitLesson(
           lessonId,
@@ -160,7 +183,7 @@ export default function LessonPage(props: {
       if (!response) throw new Error('Backend session expired.');
       return response;
     },
-    [attemptId, attemptStartedAt, lessonId, questions],
+    [attemptId, attemptStartedAt, lessonId, questions, startSynced],
   );
 
   const finalizeLesson = useCallback(
@@ -275,7 +298,7 @@ export default function LessonPage(props: {
   }, [buildAnswerMapWithCurrent, currentQuestion, finalizeLesson, isLastQuestion]);
 
   const handleStartQuestions = useCallback(() => {
-    const nextAttemptId = crypto.randomUUID();
+    const nextAttemptId = safeRandomUUID();
     const startedAt = new Date().toISOString();
     setAttemptId(nextAttemptId);
     setAttemptStartedAt(startedAt);
