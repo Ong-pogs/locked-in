@@ -82,7 +82,12 @@ export function TourOverlay({ sendMessage, onMessage, onComplete }: TourOverlayP
       sendMessage('tourHighlight', { objectId: TOUR_STEPS[0].objectId });
       setReady(true);
     }, 200);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      // If the user closes the tour without finishing (e.g. via the back button),
+      // the dungeon scene would otherwise keep the highlight + pulse running.
+      sendMessage('tourClearHighlight', {});
+    };
   }, [sendMessage]);
 
   // Highlight the current step's object whenever step changes

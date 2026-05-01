@@ -23,7 +23,10 @@ const GROUP_MAP: Record<string, string[]> = {
 };
 
 export function initTourHighlight(scene: Scene, camera: ArcRotateCamera) {
-  if (hl) return; // already initialised
+  // Already initialised for this scene — no-op
+  if (hl && sceneRef === scene) return;
+  // Stale singleton from a previous scene — tear down before re-initialising
+  if (hl) disposeTourHighlight();
   sceneRef = scene;
   cameraRef = camera;
 
@@ -106,6 +109,18 @@ export function clearHighlight() {
   for (const mesh of highlightedMeshes) {
     hl.removeMesh(mesh);
   }
+  highlightedMeshes = [];
+}
+
+export function disposeTourHighlight() {
+  if (pulseObserver && sceneRef) {
+    sceneRef.onBeforeRenderObservable.remove(pulseObserver);
+  }
+  pulseObserver = null;
+  if (hl) hl.dispose();
+  hl = null;
+  sceneRef = null;
+  cameraRef = null;
   highlightedMeshes = [];
 }
 
