@@ -40,7 +40,7 @@ export function useDungeon() {
 // Config
 // ---------------------------------------------------------------------------
 const DUNGEON_URL =
-  process.env.NEXT_PUBLIC_DUNGEON_URL ?? 'https://dist-ochre-kappa-70.vercel.app';
+  process.env.NEXT_PUBLIC_DUNGEON_URL ?? 'https://dungeon-vert.vercel.app';
 const DUNGEON_ORIGIN = new URL(DUNGEON_URL).origin;
 
 // ---------------------------------------------------------------------------
