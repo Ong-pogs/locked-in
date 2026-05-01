@@ -33,6 +33,21 @@ async function main() {
   // Force resize after init (catches DevTools viewport edge cases)
   engine.resize(true);
 
+  // Track render-loop state so we can pause when the iframe is offscreen.
+  // Babylon's runRenderLoop stacks callbacks on repeated calls; gate it ourselves.
+  let renderingActive = false;
+  const renderTick = () => scene.render();
+  const startRender = () => {
+    if (renderingActive) return;
+    engine.runRenderLoop(renderTick);
+    renderingActive = true;
+  };
+  const stopRender = () => {
+    if (!renderingActive) return;
+    engine.stopRenderLoop(renderTick);
+    renderingActive = false;
+  };
+
   // Register bridge message handler
   onBridgeMessage((msg) => {
     switch (msg.type) {
@@ -101,6 +116,12 @@ async function main() {
         clearHighlight();
         break;
       }
+      case 'visibility': {
+        const { visible } = msg.payload;
+        if (visible) startRender();
+        else stopRender();
+        break;
+      }
     }
   });
 
@@ -112,10 +133,8 @@ async function main() {
     bumpLevel: 4.0,
   });
 
-  // Render loop
-  engine.runRenderLoop(() => {
-    scene.render();
-  });
+  // Render loop — start now; the parent may pause us via the 'visibility' bridge message.
+  startRender();
 
   // Resize — ResizeObserver catches DevTools viewport changes that window.resize misses
   const resizeObserver = new ResizeObserver(() => {

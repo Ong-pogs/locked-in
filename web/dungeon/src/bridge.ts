@@ -14,6 +14,10 @@ type BridgeHandler = (msg: BridgeMessage) => void;
 
 let handler: BridgeHandler | null = null;
 
+// Captured on first valid postMessage from the parent. Used to pin outbound
+// messages to a known origin instead of broadcasting with '*'.
+let parentOrigin: string | null = null;
+
 /** Register the single handler for incoming RN messages. */
 export function onBridgeMessage(fn: BridgeHandler) {
   handler = fn;
@@ -39,9 +43,11 @@ export function sendToRN(msg: BridgeMessage) {
     return;
   }
 
-  // Web (iframe) fallback — react-native-webview on web uses window.parent.postMessage
+  // Web (iframe) fallback — react-native-webview on web uses window.parent.postMessage.
+  // Use the captured parent origin once we've seen one inbound message;
+  // until then fall back to '*' (initial sceneReady carries no sensitive data).
   if (window.parent && window.parent !== window) {
-    window.parent.postMessage(json, '*');
+    window.parent.postMessage(json, parentOrigin ?? '*');
     return;
   }
 
@@ -63,6 +69,9 @@ window.addEventListener('camera-arrived', ((e: CustomEvent) => {
 // This enables the same bridge when embedded as an iframe instead of a WebView
 window.addEventListener('message', (event) => {
   if (event.source === window) return; // ignore own messages
+  if (!parentOrigin && event.source === window.parent) {
+    parentOrigin = event.origin;
+  }
   const raw = typeof event.data === 'string' ? event.data : JSON.stringify(event.data);
   dispatchBridgeMessage(raw);
 });

@@ -41,6 +41,7 @@ export function useDungeon() {
 // ---------------------------------------------------------------------------
 const DUNGEON_URL =
   process.env.NEXT_PUBLIC_DUNGEON_URL ?? 'https://dist-ochre-kappa-70.vercel.app';
+const DUNGEON_ORIGIN = new URL(DUNGEON_URL).origin;
 
 // ---------------------------------------------------------------------------
 // Provider
@@ -72,7 +73,7 @@ export function DungeonProvider({ children }: { children: ReactNode }) {
   const sendMessage = useCallback(
     (type: string, payload: Record<string, unknown>) => {
       const json = JSON.stringify({ type, payload });
-      iframeRef.current?.contentWindow?.postMessage(json, '*');
+      iframeRef.current?.contentWindow?.postMessage(json, DUNGEON_ORIGIN);
     },
     [],
   );
@@ -94,8 +95,9 @@ export function DungeonProvider({ children }: { children: ReactNode }) {
   // Listen for messages from the dungeon iframe
   useEffect(() => {
     const handler = (event: MessageEvent) => {
-      // Only accept messages from the dungeon origin
-      if (!event.origin.includes(new URL(DUNGEON_URL).hostname)) return;
+      // Only accept messages from the dungeon origin (exact match — substring would let
+      // attacker.dungeon-origin.example slip through)
+      if (event.origin !== DUNGEON_ORIGIN) return;
 
       // Dungeon sends JSON strings via postMessage, not objects
       let data: Record<string, unknown>;
@@ -133,6 +135,13 @@ export function DungeonProvider({ children }: { children: ReactNode }) {
     const t = setTimeout(() => setShowTour(true), 1000);
     return () => clearTimeout(t);
   }, [sceneReady]);
+
+  // Pause the dungeon's render loop while the iframe is offscreen — otherwise
+  // it keeps eating CPU/battery on every other route via requestAnimationFrame.
+  useEffect(() => {
+    if (!sceneReady) return;
+    sendMessage('visibility', { visible });
+  }, [visible, sceneReady, sendMessage]);
 
   const handleTourComplete = useCallback(() => {
     setShowTour(false);
