@@ -128,7 +128,7 @@ export async function transferUsdc(walletAddress, amountUi) {
       usdcMint,
       destAta,
       signer.publicKey,
-      Number(amountAtomic),
+      amountAtomic,
       mint.decimals,
       [],
       TOKEN_PROGRAM_ID,
@@ -145,6 +145,9 @@ export async function transferUsdc(walletAddress, amountUi) {
 
 export async function checkCooldown(walletAddress) {
   const pool = getPool();
+  if (!pool) {
+    throw new Error('Faucet requires DATABASE_URL to be configured');
+  }
   const { rows } = await pool.query(
     `SELECT 1 FROM lesson.faucet_claims
      WHERE wallet_address = $1 AND round = $2
@@ -161,6 +164,9 @@ export async function checkCooldown(walletAddress) {
 
 export async function recordClaim(walletAddress, solSignature, usdcSignature, solLamports, usdcAtomic) {
   const pool = getPool();
+  if (!pool) {
+    throw new Error('Faucet requires DATABASE_URL to be configured');
+  }
   await pool.query(
     `INSERT INTO lesson.faucet_claims
        (wallet_address, sol_signature, usdc_signature, sol_amount_lamports, usdc_amount_atomic, round)

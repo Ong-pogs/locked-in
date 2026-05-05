@@ -52,7 +52,7 @@ export async function faucetRoutes(app) {
         solResult.signature,
         usdc.signature,
         solResult.signature ? appConfig.faucetSolLamports : 0,
-        Number(usdc.amountAtomic),
+        usdc.amountAtomic.toString(),
       );
 
       return {
