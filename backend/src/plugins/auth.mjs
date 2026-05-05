@@ -24,7 +24,14 @@ export async function optionalAccessAuth(request) {
   const header = request.headers.authorization;
   if (!header) return;
 
-  const rawToken = readBearerToken(header);
-  const decoded = await verifyToken(rawToken, 'access');
-  request.auth = decoded;
+  // Treat any auth failure as anonymous — the whole point of "optional" is to
+  // let the route serve unauthenticated callers. readBearerToken/verifyToken
+  // throw on malformed or expired tokens; swallow those here.
+  try {
+    const rawToken = readBearerToken(header);
+    const decoded = await verifyToken(rawToken, 'access');
+    request.auth = decoded;
+  } catch {
+    // Anonymous — leave request.auth unset
+  }
 }
