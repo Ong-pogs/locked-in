@@ -12,7 +12,7 @@ import { getUserEnrollments } from '@/services/api/progress/progressApi';
 import { T } from './theme';
 
 // Routes that don't require authentication
-const PUBLIC_ROUTES = ['/courses'];
+const PUBLIC_ROUTES = ['/courses', '/village'];
 
 // Routes allowed during onboarding (before active lock)
 const ONBOARDING_ROUTES = ['/courses', '/onboarding/deposit', '/onboarding/tutorial'];
@@ -123,6 +123,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const phase = useUserStore((s) => s.onboardingPhase);
   const activeCourseIds = useCourseStore((s) => s.activeCourseIds);
   const courseStates = useCourseStore((s) => s.courseStates);
+  const pathname = usePathname();
 
   // Enforce flow
   useFlowGuard();
@@ -176,7 +177,6 @@ export function AppShell({ children }: { children: ReactNode }) {
     (courseId: string) => Boolean(courseStates[courseId]?.lockAccountAddress),
   );
   const hasActiveLock = activeLockCourseIds.length > 0;
-  const pathname = usePathname();
   const isVillageRoute = pathname.startsWith('/village');
   const isInMainApp =
     isAuthenticated &&

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // Public routes that don't require authentication
-const PUBLIC_ROUTES = ['/', '/manifest.webmanifest'];
+const PUBLIC_ROUTES = ['/', '/manifest.webmanifest', '/village'];
 
 // Auth guard — redirects unauthenticated users to landing page
 // JWT is stored in localStorage (client-side), so proxy checks for
