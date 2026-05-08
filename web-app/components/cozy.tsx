@@ -50,6 +50,49 @@ export function CozyCard({
 }
 
 /**
+ * Centered stat tile: pixel-mono label on top, big pixel-mono value below.
+ * Replaces theme.tsx StatBox on cozified pages.
+ */
+export function CozyStatBox({
+  label,
+  value,
+  suffix,
+  color,
+  className = '',
+}: {
+  label: string;
+  value: string | number;
+  suffix?: string;
+  color?: string;
+  className?: string;
+}) {
+  return (
+    <CozyCard
+      className={`flex-1 flex flex-col items-center ${className}`}
+      style={{ padding: 14 }}
+    >
+      <span
+        className="font-pixel-mono text-[10px] uppercase tracking-[1px] whitespace-nowrap"
+        style={{ color: COZY_TEXT, opacity: 0.75, textShadow: COZY_TEXT_SHADOW }}
+      >
+        {label}
+      </span>
+      <span
+        className="font-pixel-mono text-xl font-bold mt-1"
+        style={{ color: color ?? COZY_TEXT, textShadow: COZY_TEXT_SHADOW }}
+      >
+        {value}
+        {suffix && (
+          <span className="text-[10px] font-normal ml-1 opacity-70">
+            {suffix}
+          </span>
+        )}
+      </span>
+    </CozyCard>
+  );
+}
+
+/**
  * Pixel-font section label in amber. Replaces the old gray monospace
  * SectionLabel on cozy pages.
  */
