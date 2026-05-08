@@ -25,14 +25,20 @@ type Building = {
   label: string;
 };
 
-// Active interactable buildings only. The other 5 buildings in the painted
-// village (Cottage, Clock Tower, Storage, Notice Board, Well) are decoration —
-// they don't hover-glow or click. Their data lives in the top bar / Profile.
+// Active interactable buildings only. The remaining masks (clock tower, well,
+// storage, notice board, awning stall) are decoration — they don't hover-glow
+// or click. The mapping below pairs each route with the painted building that
+// best fits visually; the mask_id is just the asset filename, the label is
+// what users see, the route is where they land on click.
 const BUILDINGS: Building[] = [
+  // Far-left tudor (biggest)  → Academy
   { id: 'academy', outline: '/images/village/outlines/outline-academy.png', route: '/courses', label: 'Academy' },
-  { id: 'forge', outline: '/images/village/outlines/outline-forge.png', route: '/alchemy', label: 'Apothecary' },
-  { id: 'market', outline: '/images/village/outlines/outline-market.png', route: '/shop', label: 'Market' },
+  // Left-middle tudor          → Market (Trader's Stall)
+  { id: 'cottage', outline: '/images/village/outlines/outline-cottage.png', route: '/shop', label: 'Market' },
+  // Right-center building      → Tavern (community pot)
   { id: 'tavern', outline: '/images/village/outlines/outline-tavern.png', route: '/community-pot', label: 'Tavern' },
+  // Far-right church-like      → Apothecary (alchemy)
+  { id: 'forge', outline: '/images/village/outlines/outline-forge.png', route: '/alchemy', label: 'Apothecary' },
 ];
 
 // Cozy palette — pulled from the painted village's own colors so the UI

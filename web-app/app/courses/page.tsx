@@ -303,12 +303,11 @@ export default function CoursesPage() {
 
   return (
     <div className="min-h-screen relative" style={{ backgroundColor: T.bg }}>
-      {/* Academy interior backdrop slot — drop academybackground.png in
-          /public/images/academy/ to activate. */}
+      {/* Academy interior backdrop. */}
       <div aria-hidden className="fixed inset-0 z-0 pointer-events-none">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/images/academy/academybackground.png"
+          src="/images/academy/course.png"
           alt=""
           draggable={false}
           className="w-full h-full object-cover select-none"

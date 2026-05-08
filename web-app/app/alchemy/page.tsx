@@ -52,12 +52,11 @@ export default function AlchemyPage() {
 
   return (
     <div className="min-h-screen relative" style={{ backgroundColor: T.bg }}>
-      {/* Apothecary interior backdrop slot — drop apothecarybackground.png in
-          /public/images/apothecary/ to activate. Falls back to flat dark bg. */}
+      {/* Apothecary interior backdrop. */}
       <div aria-hidden className="fixed inset-0 z-0 pointer-events-none">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/images/apothecary/apothecarybackground.png"
+          src="/images/apothecary/brewerbg.png"
           alt=""
           draggable={false}
           className="w-full h-full object-cover select-none"
