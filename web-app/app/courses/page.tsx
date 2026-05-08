@@ -9,12 +9,12 @@ import { getUserEnrollments, getUserXp } from '@/services/api/progress/progressA
 import { useCourseStore, useUserStore } from '@/stores';
 import type { Course, CourseDifficulty } from '@/types';
 import {
-  ParchmentCard,
-  SectionLabel,
   CornerMarks,
   PrimaryButton,
   T,
 } from '@/components/theme';
+import { CozyCard, CozySectionLabel } from '@/components/cozy';
+import { HubButton } from '@/components/HubButton';
 
 const DIFFICULTY_COLORS: Record<CourseDifficulty, string> = {
   beginner: T.green,
@@ -33,7 +33,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 function Tag({ label, color }: { label: string; color: string }) {
   return (
     <span
-      className="px-2 py-[3px] rounded text-[9px] font-bold uppercase tracking-[1px] font-mono"
+      className="px-2 py-[3px] rounded text-[9px] font-bold uppercase tracking-[1px] font-pixel-mono"
       style={{ color, backgroundColor: `${color}14`, border: `1px solid ${color}30` }}
     >
       {label}
@@ -71,13 +71,13 @@ function DifficultyFlasks({ level }: { level: number }) {
 function StatsRow({ course, accentColor }: { course: Course; accentColor: string }) {
   return (
     <div className="flex items-center gap-2 pt-3" style={{ borderTop: `1px solid ${T.borderDormant}` }}>
-      <span className="font-mono text-[10px]" style={{ color: T.textMuted }}>{course.totalModules ?? 1} mod</span>
+      <span className="font-pixel-mono text-[10px]" style={{ color: T.textMuted }}>{course.totalModules ?? 1} mod</span>
       <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.08)' }}>&middot;</span>
-      <span className="font-mono text-[10px]" style={{ color: T.textMuted }}>{course.totalLessons} lessons</span>
+      <span className="font-pixel-mono text-[10px]" style={{ color: T.textMuted }}>{course.totalLessons} lessons</span>
       <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.08)' }}>&middot;</span>
-      <span className="font-mono text-[10px]" style={{ color: T.textMuted }}>{course.difficulty}</span>
+      <span className="font-pixel-mono text-[10px]" style={{ color: T.textMuted }}>{course.difficulty}</span>
       <span className="flex-1" />
-      <span className="font-mono text-[9px]" style={{ color: `${accentColor}70` }}>{course.category}</span>
+      <span className="font-pixel-mono text-[9px]" style={{ color: `${accentColor}70` }}>{course.category}</span>
     </div>
   );
 }
@@ -111,7 +111,7 @@ function CourseCard({
       role={isComingSoon ? undefined : 'button'}
       tabIndex={isComingSoon ? undefined : 0}
     >
-      <ParchmentCard
+      <CozyCard
         style={{
           backgroundColor: selected ? T.bgCardActive : T.bgCard,
           borderColor: selected ? `${accentColor}35` : T.borderDormant,
@@ -128,7 +128,7 @@ function CourseCard({
 
         <h3
           className="text-[17px] font-bold tracking-wide leading-[22px] mb-[5px] line-clamp-2"
-          style={{ color: selected ? T.textPrimary : '#B8B0A4', fontFamily: 'Georgia, serif' }}
+          style={{ color: selected ? T.textPrimary : '#B8B0A4', fontFamily: 'var(--font-pixel), Georgia, serif' }}
         >
           {course.title}
         </h3>
@@ -144,7 +144,7 @@ function CourseCard({
           >
             <span
               className="text-[12px] font-bold uppercase tracking-[2px]"
-              style={{ color: T.textMuted, fontFamily: 'Georgia, serif' }}
+              style={{ color: T.textMuted, fontFamily: 'var(--font-pixel), Georgia, serif' }}
             >
               Coming Soon
             </span>
@@ -161,7 +161,7 @@ function CourseCard({
         )}
 
         <StatsRow course={course} accentColor={accentColor} />
-      </ParchmentCard>
+      </CozyCard>
     </div>
   );
 }
@@ -170,7 +170,7 @@ function CourseCard({
 function ActiveCourseCard({ course, streak, lessonCount, onPress }: { course: Course; streak: number; lessonCount: number; onPress: () => void }) {
   return (
     <button onClick={onPress} className="w-full text-left transition-opacity hover:opacity-[0.85]">
-      <ParchmentCard style={{ borderColor: `${T.violet}35` }}>
+      <CozyCard style={{ borderColor: `${T.violet}35` }}>
         <CornerMarks />
         <div
           className="absolute inset-[-1px] rounded-[10px] pointer-events-none animate-pulse"
@@ -180,20 +180,20 @@ function ActiveCourseCard({ course, streak, lessonCount, onPress }: { course: Co
           <div className="flex-1">
             <h3
               className="text-[17px] font-bold tracking-wide leading-[22px] mb-1.5"
-              style={{ color: T.textPrimary, fontFamily: 'Georgia, serif' }}
+              style={{ color: T.textPrimary, fontFamily: 'var(--font-pixel), Georgia, serif' }}
             >
               {course.title}
             </h3>
             <div className="flex items-center gap-3">
-              <span className="font-mono text-[11px]" style={{ color: T.amber }}>✹ {streak} streak</span>
-              <span className="font-mono text-[11px]" style={{ color: T.textMuted }}>
+              <span className="font-pixel-mono text-[11px]" style={{ color: T.amber }}>✹ {streak} streak</span>
+              <span className="font-pixel-mono text-[11px]" style={{ color: T.textMuted }}>
                 {course.completedLessons}/{lessonCount || course.totalLessons} lessons
               </span>
             </div>
           </div>
           <span className="text-lg" style={{ color: T.textMuted }}>›</span>
         </div>
-      </ParchmentCard>
+      </CozyCard>
     </button>
   );
 }
@@ -302,18 +302,33 @@ export default function CoursesPage() {
   };
 
   return (
-    <div
-      className="min-h-screen relative"
-      style={{
-        backgroundColor: T.bg,
-        backgroundImage: "url('/images/wood.png')",
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundAttachment: 'fixed',
-      }}
-    >
-      <div className="fixed inset-0" style={{ backgroundColor: 'rgba(6,6,12,0.4)' }} />
-      <div className={`relative max-w-[1100px] mx-auto px-[18px] ${isOnboardingMode ? 'pb-32' : 'pb-10'}`}>
+    <div className="min-h-screen relative" style={{ backgroundColor: T.bg }}>
+      {/* Academy interior backdrop slot — drop academybackground.png in
+          /public/images/academy/ to activate. */}
+      <div aria-hidden className="fixed inset-0 z-0 pointer-events-none">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/images/academy/academybackground.png"
+          alt=""
+          draggable={false}
+          className="w-full h-full object-cover select-none"
+          style={{ imageRendering: 'pixelated' }}
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).style.display = 'none';
+          }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              'linear-gradient(180deg, rgba(14,14,28,0.30) 0%, rgba(14,14,28,0.55) 60%, rgba(14,14,28,0.78) 100%)',
+          }}
+        />
+      </div>
+
+      <HubButton />
+
+      <div className={`relative z-10 max-w-[1100px] mx-auto px-[18px] ${isOnboardingMode ? 'pb-32' : 'pb-10'}`}>
 
         {/* Header — adapts to mode */}
         <div className="text-center pt-14 pb-7">
@@ -326,7 +341,7 @@ export default function CoursesPage() {
             <>
               <h1
                 className="text-[26px] font-bold tracking-wide leading-tight mb-2"
-                style={{ color: T.textPrimary, fontFamily: 'Georgia, serif' }}
+                style={{ color: T.textPrimary, fontFamily: 'var(--font-pixel), Georgia, serif' }}
               >
                 Choose Your {'\n'}<span style={{ color: T.amber }}>Path</span>
               </h1>
@@ -336,7 +351,7 @@ export default function CoursesPage() {
               {isAuthenticated ? (
                 <button
                   onClick={disconnect}
-                  className="mt-3 px-5 py-2 rounded-lg border text-[11px] font-mono font-bold uppercase tracking-[1.5px] transition-opacity hover:opacity-80"
+                  className="mt-3 px-5 py-2 rounded-lg border text-[11px] font-pixel-mono font-bold uppercase tracking-[1.5px] transition-opacity hover:opacity-80"
                   style={{
                     color: T.crimson,
                     borderColor: `${T.crimson}30`,
@@ -348,7 +363,7 @@ export default function CoursesPage() {
               ) : (
                 <button
                   onClick={handleSignIn}
-                  className="mt-3 px-5 py-2 rounded-lg border text-[11px] font-mono font-bold uppercase tracking-[1.5px] transition-opacity hover:opacity-80"
+                  className="mt-3 px-5 py-2 rounded-lg border text-[11px] font-pixel-mono font-bold uppercase tracking-[1.5px] transition-opacity hover:opacity-80"
                   style={{
                     color: T.amber,
                     borderColor: `${T.amber}30`,
@@ -363,7 +378,7 @@ export default function CoursesPage() {
             <>
               <h1
                 className="text-[26px] font-bold tracking-wide leading-tight mb-2"
-                style={{ color: T.textPrimary, fontFamily: 'Georgia, serif' }}
+                style={{ color: T.textPrimary, fontFamily: 'var(--font-pixel), Georgia, serif' }}
               >
                 Your <span style={{ color: T.amber }}>Courses</span>
               </h1>
@@ -380,10 +395,10 @@ export default function CoursesPage() {
                 return (
                   <div className="max-w-xs mx-auto">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] font-mono font-bold uppercase tracking-[1px]" style={{ color: T.amber }}>
+                      <span className="text-[10px] font-pixel-mono font-bold uppercase tracking-[1px]" style={{ color: T.amber }}>
                         Lv.{xp.xpLevel} {levelName}
                       </span>
-                      <span className="text-[10px] font-mono" style={{ color: T.textMuted }}>
+                      <span className="text-[10px] font-pixel-mono" style={{ color: T.textMuted }}>
                         {xp.xpTotal} / {nextThreshold} XP
                       </span>
                     </div>
@@ -432,7 +447,7 @@ export default function CoursesPage() {
         {/* Active courses (post-onboarding only) */}
         {activeCourses.length > 0 && (
           <div className="mb-5">
-            <SectionLabel>Active Courses</SectionLabel>
+            <CozySectionLabel>Active Courses</CozySectionLabel>
             <div className="flex flex-col gap-2.5">
               {activeCourses.map((course) => (
                 <ActiveCourseCard
@@ -461,7 +476,7 @@ export default function CoursesPage() {
               {readyCourses.length > 0 && (
                 <>
                   {(activeCourses.length > 0 || comingSoonCourses.length > 0) && (
-                    <SectionLabel>Available Courses</SectionLabel>
+                    <CozySectionLabel>Available Courses</CozySectionLabel>
                   )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {readyCourses.map((course) => (
@@ -485,7 +500,7 @@ export default function CoursesPage() {
 
               {comingSoonCourses.length > 0 && (
                 <div className="mt-5">
-                  <SectionLabel>Coming Soon</SectionLabel>
+                  <CozySectionLabel>Coming Soon</CozySectionLabel>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {comingSoonCourses.map((course) => (
                       <CourseCard
@@ -528,7 +543,7 @@ export default function CoursesPage() {
             >
               <span
                 className="text-[13px] font-bold uppercase tracking-[3px]"
-                style={{ color: T.bg, fontFamily: 'Georgia, serif' }}
+                style={{ color: T.bg, fontFamily: 'var(--font-pixel), Georgia, serif' }}
               >
                 {'\u25C6'}  BEGIN DESCENT  {'\u25C6'}
               </span>
