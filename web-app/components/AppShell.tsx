@@ -182,9 +182,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     isAuthenticated &&
     (phase === 'main' || (phase === 'onboarding' && hasActiveLock));
 
-  // Village route owns its full viewport — suppress sidebar + bottom nav (still
-  // visible elsewhere as a fallback while the village builds out).
-  const showChrome = isInMainApp && !isVillageRoute;
+  // Village hub IS the navigation. Sidebar + BottomNav are dropped across the
+  // whole app to commit to the diegetic pattern (Hades / Stardew / Spiritfarer).
+  // Each inner page provides its own "↩ Hub" floating button back to /village.
+  const showChrome = false;
+  // Suppress unused-var warnings while the chrome flags stick around.
+  void isInMainApp;
+  void isVillageRoute;
 
   return (
     <>

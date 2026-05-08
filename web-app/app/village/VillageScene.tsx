@@ -176,8 +176,7 @@ export default function VillageScene() {
             >
               <div
                 style={{
-                  fontFamily: 'Georgia, "Times New Roman", serif',
-                  fontStyle: 'italic',
+                  fontFamily: 'var(--font-pixel), Georgia, serif',
                   fontWeight: 600,
                   fontSize: 14,
                   letterSpacing: 0.5,
@@ -230,8 +229,8 @@ export default function VillageScene() {
         <span
           className="hidden sm:inline"
           style={{
-            fontFamily: 'Georgia, serif',
-            fontSize: 13,
+            fontFamily: 'var(--font-pixel), Georgia, serif',
+            fontSize: 14,
             fontWeight: 600,
             letterSpacing: 0.6,
             color: COZY_TEXT,
@@ -340,13 +339,12 @@ function StatSegment({
       {icon}
       <span
         style={{
-          // System sans for stats — Georgia's old-style figures make "0" look
-          // like "o". Brand/plaque keep Georgia; HUD readout uses sans for clarity.
-          fontFamily:
-            'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
-          fontSize: 13,
+          // Silkscreen — actual pixel-art font, lining figures by default,
+          // legible at small sizes. Matches the painted village aesthetic.
+          fontFamily: 'var(--font-pixel-mono), ui-monospace, monospace',
+          fontSize: 12,
           fontWeight: 700,
-          letterSpacing: 0.2,
+          letterSpacing: 0.5,
           color: COZY_TEXT,
           textShadow: COZY_TEXT_SHADOW,
           fontVariantNumeric: 'tabular-nums',

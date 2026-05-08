@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Geist, Geist_Mono, Pixelify_Sans, Silkscreen } from 'next/font/google';
 import { Providers } from './providers';
 import { SerwistProvider } from './serwist';
 import { AppShell } from '@/components/AppShell';
@@ -15,6 +15,20 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
   subsets: ['latin'],
+});
+
+// Cozy pixel-art body font — matches painted village aesthetic.
+const pixelifySans = Pixelify_Sans({
+  variable: '--font-pixel',
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+});
+
+// Tight HUD readout font for stat numbers — sharper than Pixelify, very legible at small sizes.
+const silkscreen = Silkscreen({
+  variable: '--font-pixel-mono',
+  subsets: ['latin'],
+  weight: ['400', '700'],
 });
 
 const APP_NAME = 'Locked-In';
@@ -46,7 +60,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
+      className={`${geistSans.variable} ${geistMono.variable} ${pixelifySans.variable} ${silkscreen.variable} h-full antialiased dark`}
     >
       <body className="min-h-full flex flex-col">
         <SerwistProvider swUrl="/serwist/sw.js">
