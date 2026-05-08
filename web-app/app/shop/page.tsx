@@ -8,41 +8,7 @@ import type { YieldHistoryResponse } from '@/services/api/types';
 import { T } from '@/components/theme';
 import { CozyCard } from '@/components/cozy';
 import { HubButton } from '@/components/HubButton';
-
-/* ── Inline SVG Icons ──────────────────────────────────────────────── */
-
-function ArrowUpIcon({ color = '#3EE68A' }: { color?: string }) {
-  return (
-    <svg viewBox="0 0 14 14" width={12} height={12} fill="none">
-      <path d="M7 1v12M3 5l4-4 4 4" stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function MinusBoxIcon() {
-  return (
-    <svg viewBox="0 0 14 14" width={12} height={12} fill="none">
-      <rect x="2.5" y="2.5" width="9" height="9" rx="2" stroke="rgba(255,255,255,0.3)" strokeWidth="1.1" />
-      <path d="M5 7h4" stroke="rgba(255,255,255,0.3)" strokeWidth="1.1" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function DoubleChevronIcon() {
-  return (
-    <svg viewBox="0 0 14 14" width={12} height={12} fill="none">
-      <path d="M3 11l4-4 4 4M3 7l4-4 4 4" stroke="#E8845A" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function SmallPotionIcon() {
-  return (
-    <svg viewBox="0 0 14 14" width={12} height={12} fill="none">
-      <path d="M5 2.5h4v2.5l3 5c.4.8 0 1.5-.5 2S9.5 13.5 7 13.5s-3.5-.5-4-1-.9-1.2-.5-2l3-5V2.5z" stroke="#D4A04A" strokeWidth="1.1" />
-    </svg>
-  );
-}
+import { Coins, Wallet, Package, Crown, Shield, Droplet, Zap } from 'lucide-react';
 
 /* ── Helpers ────────────────────────────────────────────────────────── */
 
@@ -70,10 +36,93 @@ function getTierLabel(ichorLifetime: number): string {
   return 'Tier 4';
 }
 
-const PRESETS = [250, 500, 1000] as const;
-
 const COZY_BORDER = 'rgba(58, 143, 168, 0.45)';
 const AMBER = '#FFD580';
+
+/* ── Shop catalog ───────────────────────────────────────────────────── */
+
+type ShopItem = {
+  id: string;
+  name: string;
+  description: string;
+  cost: number;
+  Icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+  iconColor: string;
+  category: 'usdc' | 'utility';
+  comingSoon?: boolean;
+};
+
+const USDC_ITEMS: ShopItem[] = [
+  {
+    id: 'small-pouch',
+    name: 'Small Coin Pouch',
+    description: 'A modest handful of coin',
+    cost: 250,
+    Icon: Coins,
+    iconColor: '#FFD580',
+    category: 'usdc',
+  },
+  {
+    id: 'medium-pouch',
+    name: 'Medium Coin Pouch',
+    description: 'A solid sack of coin',
+    cost: 1000,
+    Icon: Wallet,
+    iconColor: '#FFD580',
+    category: 'usdc',
+  },
+  {
+    id: 'large-pouch',
+    name: 'Large Coin Pouch',
+    description: 'A heavy purse worth carrying',
+    cost: 5000,
+    Icon: Package,
+    iconColor: '#FFD580',
+    category: 'usdc',
+  },
+  {
+    id: 'travelers-stash',
+    name: "Trader's Stash",
+    description: "A merchant's lifetime savings",
+    cost: 10000,
+    Icon: Crown,
+    iconColor: '#FFD580',
+    category: 'usdc',
+  },
+];
+
+const UTILITY_ITEMS: ShopItem[] = [
+  {
+    id: 'streak-saver',
+    name: 'Streak Saver',
+    description: 'Banks one missed day',
+    cost: 500,
+    Icon: Shield,
+    iconColor: '#3EE68A',
+    category: 'utility',
+    comingSoon: true,
+  },
+  {
+    id: 'fuel-vial',
+    name: 'Fuel Vial',
+    description: 'Instant fuel refill',
+    cost: 200,
+    Icon: Droplet,
+    iconColor: '#E8845A',
+    category: 'utility',
+    comingSoon: true,
+  },
+  {
+    id: 'daily-boost',
+    name: 'Daily Boost',
+    description: '2x fuel for 24 hours',
+    cost: 2000,
+    Icon: Zap,
+    iconColor: '#2AE8D4',
+    category: 'utility',
+    comingSoon: true,
+  },
+];
 
 /* ── Page ───────────────────────────────────────────────────────────── */
 
@@ -87,13 +136,9 @@ export default function ShopPage() {
   const [yieldHistory, setYieldHistory] = useState<YieldHistoryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [ichorAmount, setIchorAmount] = useState('1000');
 
   const rate = getConversionRate(lifetimeIchor);
   const tierLabel = getTierLabel(lifetimeIchor);
-  const parsedAmount = Number(ichorAmount) || 0;
-  const payout = parsedAmount > 0 ? ((parsedAmount / 1000) * rate).toFixed(2) : '--';
-  const balanceWorth = ((ichorBalance / 1000) * rate).toFixed(2);
 
   const fetchShopData = useCallback(async (courseId: string | null, signal?: AbortSignal) => {
     if (!courseId) {
@@ -105,7 +150,7 @@ export default function ShopPage() {
     try {
       const resp = await fetchWithAuth((token) => getYieldHistory(courseId, token));
       if (signal?.aborted) return;
-      if (!resp) { setError('Connect wallet to view rewards.'); setLoading(false); return; }
+      if (!resp) { setError('Connect wallet to view wares.'); setLoading(false); return; }
       setYieldHistory(resp);
       setError(null);
       setLoading(false);
@@ -125,12 +170,11 @@ export default function ShopPage() {
 
   return (
     <div className="min-h-screen relative" style={{ backgroundColor: T.bg }}>
-      {/* Market interior backdrop slot — drop marketbackground.png in
-          /public/images/market/ to activate. */}
+      {/* Market interior backdrop. */}
       <div aria-hidden className="fixed inset-0 z-0 pointer-events-none">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/images/market/marketbackground.png"
+          src="/images/market/shop.png"
           alt=""
           draggable={false}
           className="w-full h-full object-cover select-none"
@@ -157,190 +201,135 @@ export default function ShopPage() {
           className="text-3xl font-bold tracking-wide font-pixel"
           style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
         >
-          Rewards
+          Trader&apos;s Stall
         </h1>
         <p className="text-sm leading-[18px] mb-5" style={{ color: 'rgba(255,255,255,0.6)' }}>
-          Redeem ichor for USDC
+          Spend ichor on coin pouches and rare goods
         </p>
 
-        {/* 2-column layout on desktop */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {/* ── Left: Redemption UI ── */}
-          <CozyCard style={{ padding: 24 }}>
-            {/* Ichor hero */}
-            <div className="text-center mb-5">
-              <p
-                className="text-4xl font-bold font-pixel-mono"
-                style={{ color: T.green, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
-              >
-                {ichorBalance.toLocaleString()}
-              </p>
-              <p
-                className="font-pixel-mono text-[10px] uppercase tracking-[1px] mt-1"
-                style={{ color: T.textMuted }}
-              >
-                Ichor Balance
-              </p>
-              <div className="flex items-center justify-center gap-2 mt-2">
-                <span
-                  className="font-pixel-mono text-[10px] px-2.5 py-1 rounded-xl"
-                  style={{ color: T.teal, background: 'rgba(42,232,212,0.08)', border: '1px solid rgba(42,232,212,0.25)' }}
-                >
-                  {tierLabel}
-                </span>
-                <span className="font-pixel-mono text-[10px]" style={{ color: T.textMuted }}>
-                  1,000 = {rate.toFixed(2)} USDC
-                </span>
-              </div>
-              <p className="text-[14px] font-bold font-pixel-mono mt-2" style={{ color: T.teal }}>
-                Worth ~${balanceWorth} USDC
-              </p>
-            </div>
-
-            {/* Redeem section */}
-            <p
-              className="font-pixel-mono text-[10px] font-bold uppercase tracking-[2px] text-center mb-3"
-              style={{ color: T.textMuted }}
-            >
-              Redeem Ichor
-            </p>
-
-            {/* Amount input */}
-            <div
-              className="rounded-[10px] border px-3.5 py-3 flex items-center justify-center mb-3"
-              style={{ backgroundColor: 'rgba(0,0,0,0.3)', borderColor: COZY_BORDER }}
-            >
-              <input
-                type="number"
-                min={0}
-                value={ichorAmount}
-                onChange={(e) => {
-                  const val = Math.max(0, Number(e.target.value));
-                  setIchorAmount(String(val));
-                }}
-                placeholder="1000"
-                className="bg-transparent outline-none text-2xl font-bold font-pixel-mono text-center w-full"
-                style={{ color: AMBER }}
-              />
-              <span className="text-[11px] ml-2 flex-shrink-0 font-pixel-mono" style={{ color: T.textMuted }}>ICHOR</span>
-            </div>
-
-            {/* Preset pills */}
-            <div className="flex justify-center gap-2 mb-4">
-              {PRESETS.map((preset) => {
-                const selected = parsedAmount === preset;
-                return (
-                  <button
-                    key={preset}
-                    onClick={() => setIchorAmount(String(preset))}
-                    className="px-3.5 py-1.5 rounded-lg text-[11px] font-pixel-mono font-bold border transition-colors"
-                    style={{
-                      borderColor: selected ? AMBER : COZY_BORDER,
-                      backgroundColor: selected ? 'rgba(255,213,128,0.10)' : 'transparent',
-                      color: selected ? AMBER : T.textSecondary,
-                    }}
-                  >
-                    {preset.toLocaleString()}
-                  </button>
-                );
-              })}
-              <button
-                onClick={() => setIchorAmount(String(ichorBalance))}
-                className="px-3.5 py-1.5 rounded-lg text-[11px] font-pixel-mono font-bold border transition-colors"
-                style={{
-                  borderColor: parsedAmount === ichorBalance && ichorBalance > 0 ? AMBER : COZY_BORDER,
-                  backgroundColor: parsedAmount === ichorBalance && ichorBalance > 0 ? 'rgba(255,213,128,0.10)' : 'transparent',
-                  color: parsedAmount === ichorBalance && ichorBalance > 0 ? AMBER : T.textSecondary,
-                }}
-              >
-                All
-              </button>
-            </div>
-
-            {/* Payout preview */}
-            <div
-              className="rounded-lg p-3.5 text-center mb-4"
-              style={{ background: 'rgba(62,230,138,0.04)', border: '1px solid rgba(62,230,138,0.15)' }}
-            >
-              <p className="font-pixel-mono text-[10px] uppercase tracking-[1px]" style={{ color: T.textMuted }}>Payout</p>
-              <p
-                className="text-[22px] font-bold font-pixel-mono mt-1"
-                style={{ color: T.green, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
-              >
-                {payout === '--' ? '--' : `${payout} USDC`}
-              </p>
-            </div>
-
-            {/* Claim button (disabled) */}
-            <button
-              className="w-full py-3 rounded-lg text-center font-bold text-sm uppercase tracking-[1px] font-pixel"
-              style={{
-                border: `1px solid ${AMBER}`,
-                background: 'rgba(255,213,128,0.12)',
-                color: AMBER,
-                opacity: 0.4,
-                cursor: 'not-allowed',
-              }}
-              disabled
-            >
-              ◆ Coming Soon ◆
-            </button>
-            <p className="text-center text-[10px] mt-2" style={{ color: T.textMuted }}>
-              On-chain redemption launching soon
-            </p>
-          </CozyCard>
-
-          {/* ── Right: Earnings + Activity ── */}
-          <div>
-            {/* Earnings stats 2x2 */}
-            {loading ? (
-              <p className="text-sm" style={{ color: T.textSecondary }}>Loading earnings...</p>
-            ) : error ? (
+        {/* Ichor balance hero — your purse */}
+        <CozyCard className="mb-5" style={{ padding: 18 }}>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <Coins size={28} color={AMBER} strokeWidth={2.2} />
               <div>
-                <p className="text-xs" style={{ color: AMBER }}>{error}</p>
-                <button
-                  onClick={() => { setError(null); void fetchShopData(activeCourseId); }}
-                  className="mt-3 px-4 py-2 rounded-md border text-[11px] font-semibold uppercase tracking-wide font-pixel"
-                  style={{ borderColor: COZY_BORDER, backgroundColor: 'rgba(255,213,128,0.10)', color: AMBER }}
+                <p className="font-pixel-mono text-[10px] uppercase tracking-[1.5px]" style={{ color: T.textMuted }}>
+                  Your Purse
+                </p>
+                <p
+                  className="text-3xl font-bold font-pixel-mono leading-tight"
+                  style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
                 >
-                  Retry
-                </button>
+                  {ichorBalance.toLocaleString()} <span className="text-sm opacity-70">ichor</span>
+                </p>
               </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-2 gap-2.5 mb-3">
-                  <StatCard icon={<ArrowUpIcon />} label="Total Yield" value={`${yieldHistory?.totalGrossYieldUi ?? '0'}`} unit="USDC" />
-                  <StatCard icon={<MinusBoxIcon />} label="Fees" value={`${yieldHistory?.totalPlatformFeeUi ?? '0'}`} unit="USDC" />
-                  <StatCard icon={<DoubleChevronIcon />} label="Redirected" value={`${yieldHistory?.totalRedirectedUi ?? '0'}`} unit="USDC" />
-                  <StatCard icon={<SmallPotionIcon />} label="Ichor Earned" value={Number(yieldHistory?.totalIchorAwarded ?? '0').toLocaleString()} valueColor={AMBER} />
-                </div>
-                <CozyCard className="text-center mb-4" style={{ padding: 12 }}>
-                  <p className="font-pixel-mono text-[9px] uppercase tracking-[1.5px]" style={{ color: T.textMuted }}>Harvests</p>
-                  <p
-                    className="text-base font-bold font-pixel-mono mt-0.5"
-                    style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
-                  >
-                    {yieldHistory?.totalHarvests ?? 0} harvests total
-                  </p>
-                </CozyCard>
-              </>
-            )}
+            </div>
+            <div className="flex items-center gap-2">
+              <span
+                className="font-pixel-mono text-[10px] px-2.5 py-1 rounded-xl"
+                style={{ color: T.teal, background: 'rgba(42,232,212,0.10)', border: '1px solid rgba(42,232,212,0.35)' }}
+              >
+                {tierLabel}
+              </span>
+              <span className="font-pixel-mono text-[10px]" style={{ color: T.textMuted }}>
+                1,000 ichor = {rate.toFixed(2)} USDC
+              </span>
+            </div>
+          </div>
+        </CozyCard>
 
-            {/* Recent Activity */}
+        {/* On Offer — USDC bundles */}
+        <p
+          className="font-pixel-mono text-[12px] font-bold uppercase tracking-[2px] mb-3"
+          style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)', opacity: 0.85 }}
+        >
+          On Offer
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+          {USDC_ITEMS.map((item) => {
+            const payout = ((item.cost / 1000) * rate).toFixed(2);
+            const canAfford = ichorBalance >= item.cost;
+            return (
+              <ShopTile
+                key={item.id}
+                item={item}
+                canAfford={canAfford}
+                primaryRight={`+${payout} USDC`}
+                primaryRightColor={T.green}
+              />
+            );
+          })}
+        </div>
+
+        {/* Coming Soon — utility items */}
+        <p
+          className="font-pixel-mono text-[12px] font-bold uppercase tracking-[2px] mb-3"
+          style={{ color: T.textMuted, opacity: 0.7 }}
+        >
+          Coming Soon
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+          {UTILITY_ITEMS.map((item) => (
+            <ShopTile
+              key={item.id}
+              item={item}
+              canAfford={false}
+              primaryRight={null}
+              primaryRightColor={T.textMuted}
+            />
+          ))}
+        </div>
+
+        {/* Trader's Ledger — earnings + activity */}
+        <p
+          className="font-pixel-mono text-[12px] font-bold uppercase tracking-[2px] mb-3"
+          style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)', opacity: 0.85 }}
+        >
+          Trader&apos;s Ledger
+        </p>
+        {loading ? (
+          <CozyCard><p className="text-sm" style={{ color: T.textSecondary }}>Loading earnings...</p></CozyCard>
+        ) : error ? (
+          <CozyCard>
+            <p className="text-xs" style={{ color: AMBER }}>{error}</p>
+            <button
+              onClick={() => { setError(null); void fetchShopData(activeCourseId); }}
+              className="mt-3 px-4 py-2 rounded-md border text-[11px] font-semibold uppercase tracking-wide font-pixel"
+              style={{ borderColor: COZY_BORDER, backgroundColor: 'rgba(255,213,128,0.10)', color: AMBER }}
+            >
+              Retry
+            </button>
+          </CozyCard>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Earnings stats */}
             <CozyCard style={{ padding: 16 }}>
               <p
                 className="font-pixel-mono text-[10px] font-bold uppercase tracking-[2px] mb-3"
                 style={{ color: T.textMuted }}
               >
-                Recent Activity
+                Earnings
               </p>
-              {loading ? (
-                <p className="text-sm" style={{ color: T.textSecondary }}>Loading...</p>
-              ) : recentHarvests.length === 0 ? (
+              <LedgerRow label="Total Yield" value={`${yieldHistory?.totalGrossYieldUi ?? '0'} USDC`} valueColor={T.green} />
+              <LedgerRow label="Fees" value={`${yieldHistory?.totalPlatformFeeUi ?? '0'} USDC`} valueColor={T.textSecondary} />
+              <LedgerRow label="Redirected" value={`${yieldHistory?.totalRedirectedUi ?? '0'} USDC`} valueColor={T.rust} />
+              <LedgerRow label="Ichor Earned" value={Number(yieldHistory?.totalIchorAwarded ?? '0').toLocaleString()} valueColor={AMBER} />
+              <LedgerRow label="Harvests" value={`${yieldHistory?.totalHarvests ?? 0} total`} valueColor={T.textPrimary} last />
+            </CozyCard>
+
+            {/* Recent activity */}
+            <CozyCard style={{ padding: 16 }}>
+              <p
+                className="font-pixel-mono text-[10px] font-bold uppercase tracking-[2px] mb-3"
+                style={{ color: T.textMuted }}
+              >
+                Recent Trades
+              </p>
+              {recentHarvests.length === 0 ? (
                 <p className="text-sm" style={{ color: T.textSecondary }}>No activity yet.</p>
               ) : (
                 <div className="flex flex-col gap-2">
-                  {recentHarvests.map((entry) => (
+                  {recentHarvests.slice(0, 5).map((entry) => (
                     <div
                       key={entry.harvestId}
                       className="flex justify-between items-center py-2"
@@ -360,49 +349,131 @@ export default function ShopPage() {
               )}
             </CozyCard>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
 }
 
-/* ── Stat Card Component ───────────────────────────────────────────── */
+/* ── Shop tile (one item card) ─────────────────────────────────────── */
 
-function StatCard({
-  icon,
+function ShopTile({
+  item,
+  canAfford,
+  primaryRight,
+  primaryRightColor,
+}: {
+  item: ShopItem;
+  canAfford: boolean;
+  primaryRight: string | null;
+  primaryRightColor: string;
+}) {
+  const disabled = item.comingSoon || !canAfford;
+  const buttonLabel = item.comingSoon
+    ? 'Coming Soon'
+    : canAfford
+      ? '◆ Buy ◆'
+      : 'Not Enough Ichor';
+  const Icon = item.Icon;
+
+  return (
+    <CozyCard
+      style={{
+        padding: 16,
+        opacity: item.comingSoon ? 0.55 : 1,
+      }}
+    >
+      <div className="flex items-start gap-3 mb-3">
+        <div
+          className="flex items-center justify-center rounded-lg flex-shrink-0"
+          style={{
+            width: 44,
+            height: 44,
+            backgroundColor: 'rgba(255,213,128,0.08)',
+            border: '1px solid rgba(255,213,128,0.20)',
+          }}
+        >
+          <Icon size={22} color={item.iconColor} strokeWidth={2.2} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p
+            className="text-[14px] font-bold font-pixel leading-tight"
+            style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
+          >
+            {item.name}
+          </p>
+          <p className="text-[11px] mt-0.5 font-pixel" style={{ color: T.textSecondary }}>
+            {item.description}
+          </p>
+        </div>
+      </div>
+
+      {/* Price + payout row */}
+      <div
+        className="flex items-center justify-between rounded-lg px-3 py-2 mb-3"
+        style={{
+          background: 'rgba(0,0,0,0.25)',
+          border: `1px solid ${COZY_BORDER}`,
+        }}
+      >
+        <div>
+          <p className="font-pixel-mono text-[8px] uppercase tracking-[1px]" style={{ color: T.textMuted }}>Cost</p>
+          <p className="font-pixel-mono text-[14px] font-bold" style={{ color: AMBER }}>
+            {item.cost.toLocaleString()} <span className="text-[10px] opacity-70">ichor</span>
+          </p>
+        </div>
+        {primaryRight && (
+          <div className="text-right">
+            <p className="font-pixel-mono text-[8px] uppercase tracking-[1px]" style={{ color: T.textMuted }}>You get</p>
+            <p className="font-pixel-mono text-[14px] font-bold" style={{ color: primaryRightColor }}>
+              {primaryRight}
+            </p>
+          </div>
+        )}
+      </div>
+
+      <button
+        disabled={disabled}
+        className="w-full py-2.5 rounded-lg text-center text-[12px] font-bold uppercase tracking-[1.5px] font-pixel transition-colors"
+        style={{
+          border: `1px solid ${disabled ? COZY_BORDER : AMBER}`,
+          background: disabled ? 'transparent' : 'rgba(255,213,128,0.12)',
+          color: disabled ? T.textMuted : AMBER,
+          opacity: disabled ? 0.5 : 1,
+          cursor: disabled ? 'not-allowed' : 'pointer',
+        }}
+      >
+        {buttonLabel}
+      </button>
+    </CozyCard>
+  );
+}
+
+/* ── Ledger row helper ─────────────────────────────────────────────── */
+
+function LedgerRow({
   label,
   value,
-  unit,
   valueColor,
+  last,
 }: {
-  icon: React.ReactNode;
   label: string;
   value: string;
-  unit?: string;
-  valueColor?: string;
+  valueColor: string;
+  last?: boolean;
 }) {
   return (
-    <CozyCard style={{ padding: 14 }}>
-      <div className="flex items-center gap-1.5 mb-1.5">
-        {icon}
-        <span
-          className="font-pixel-mono text-[8px] uppercase tracking-[1px]"
-          style={{ color: 'rgba(255,255,255,0.45)' }}
-        >
-          {label}
-        </span>
-      </div>
+    <div
+      className="flex justify-between items-center py-1.5"
+      style={{ borderBottom: last ? 'none' : '1px dashed rgba(255,255,255,0.06)' }}
+    >
+      <span className="text-[12px] font-pixel" style={{ color: T.textSecondary }}>{label}</span>
       <span
-        className="text-[17px] font-bold font-pixel-mono"
-        style={{ color: valueColor ?? T.textPrimary, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
+        className="text-[13px] font-bold font-pixel-mono"
+        style={{ color: valueColor, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
       >
         {value}
-        {unit && (
-          <span className="text-[10px] ml-1" style={{ color: 'rgba(255,255,255,0.45)' }}>
-            {unit}
-          </span>
-        )}
       </span>
-    </CozyCard>
+    </div>
   );
 }
