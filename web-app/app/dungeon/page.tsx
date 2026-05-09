@@ -220,7 +220,7 @@ export default function DungeonPage() {
 
       {/* Floating profile button — matches Android UndergroundHubScreen overlay (mobile only, desktop has sidebar) */}
       <button
-        onClick={() => router.push('/profile')}
+        onClick={() => router.push('/dashboard')}
         className="fixed top-4 right-4 z-30 flex items-center justify-center md:hidden"
         style={{
           width: 40,

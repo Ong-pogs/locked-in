@@ -12,7 +12,7 @@ import { getUserEnrollments } from '@/services/api/progress/progressApi';
 import { T } from './theme';
 
 // Routes that don't require authentication
-const PUBLIC_ROUTES = ['/courses', '/village'];
+const PUBLIC_ROUTES = ['/courses', '/village', '/menu'];
 
 // Routes allowed during onboarding (before active lock)
 const ONBOARDING_ROUTES = ['/courses', '/onboarding/deposit', '/onboarding/tutorial'];

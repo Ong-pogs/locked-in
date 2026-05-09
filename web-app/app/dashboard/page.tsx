@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { T } from '@/components/theme';
-import { CozyCard } from '@/components/cozy';
+import { CozyCard, CozySectionLabel } from '@/components/cozy';
 import { HubButton } from '@/components/HubButton';
 import { useCourseStore, useUserStore } from '@/stores';
 import { getUserXp } from '@/services/api/progress/progressApi';
@@ -22,6 +22,7 @@ import { getUserXp } from '@/services/api/progress/progressApi';
    ────────────────────────────────────────────────────────────────────── */
 
 const AMBER = '#FFD580';
+const COZY_BORDER = 'rgba(58, 143, 168, 0.45)';
 
 const LEVEL_NAMES = ['Novice', 'Apprentice', 'Scholar', 'Adept', 'Master', 'Sage', 'Legend'];
 const DEFAULT_XP_THRESHOLDS = [0, 500, 1500, 3500, 7000, 12000, 20000];
@@ -35,14 +36,11 @@ const HEATMAP_LEVEL_BG = [
 ];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const WEEKDAYS = ['Mon', 'Wed', 'Fri'];
+const PIP_COUNT = 10;
 
 /* ──────────────────────────────────────────────────────────────────────
    Helpers
    ────────────────────────────────────────────────────────────────────── */
-
-function todayString() {
-  return new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-}
 
 function relativeTime(iso: string | null | undefined): string {
   if (!iso) return '';
@@ -108,7 +106,109 @@ function buildYearActivity(completedAtList: (string | null | undefined)[]): numb
 }
 
 /* ──────────────────────────────────────────────────────────────────────
-   Tile / pip rendering
+   Hero — identity + chips + XP bar (folded together)
+   ────────────────────────────────────────────────────────────────────── */
+
+function HeroBold(props: {
+  displayName: string;
+  truncatedWallet: string;
+  level: number;
+  levelName: string;
+  xpInLevel: number;
+  xpRange: number;
+  currentStreak: number;
+}) {
+  const { displayName, truncatedWallet, level, levelName, xpInLevel, xpRange, currentStreak } =
+    props;
+  const pct = Math.min(100, Math.max(0, (xpInLevel / Math.max(1, xpRange)) * 100));
+  return (
+    <CozyCard className="mb-5" style={{ padding: 18 }}>
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
+        {/* Identity: avatar + name + wallet */}
+        <div className="flex items-center gap-3 min-w-0">
+          <div
+            className="flex items-center justify-center rounded-xl shrink-0"
+            style={{
+              width: 44,
+              height: 44,
+              backgroundColor: 'rgba(255,213,128,0.10)',
+              border: `1px solid ${AMBER}40`,
+            }}
+          >
+            <Sparkles size={20} color={AMBER} strokeWidth={2.4} />
+          </div>
+          <div className="min-w-0">
+            <p
+              className="text-xl font-bold font-pixel leading-tight truncate"
+              style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
+            >
+              {displayName}
+            </p>
+            <p
+              className="font-pixel-mono text-[11px] uppercase tracking-[1.5px] truncate"
+              style={{ color: T.textMuted }}
+            >
+              {truncatedWallet}
+            </p>
+          </div>
+        </div>
+        {/* Streak chip + Lv chip */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full"
+            style={{
+              backgroundColor: 'rgba(255,213,128,0.10)',
+              border: `1px solid ${AMBER}40`,
+            }}
+          >
+            <Flame
+              size={14}
+              color={AMBER}
+              strokeWidth={2.4}
+              style={{ filter: `drop-shadow(0 0 4px ${AMBER}80)` }}
+            />
+            <span
+              className="font-pixel-mono text-[12px] font-bold"
+              style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
+            >
+              {currentStreak}d
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Sparkles size={16} color="#2AE8D4" strokeWidth={2.4} />
+            <span
+              className="font-pixel-mono text-[11px] font-bold uppercase tracking-[1.5px]"
+              style={{ color: '#2AE8D4', textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
+            >
+              Lv.{level} {levelName}
+            </span>
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-3">
+        <div
+          className="flex-1 h-2 rounded-full overflow-hidden"
+          style={{ backgroundColor: 'rgba(255,255,255,0.08)' }}
+        >
+          <div
+            className="h-full rounded-full transition-all duration-700"
+            style={{
+              width: `${pct}%`,
+              background: 'linear-gradient(90deg, rgba(42,232,212,0.5) 0%, #2AE8D4 100%)',
+              boxShadow: '0 0 8px rgba(42,232,212,0.6)',
+            }}
+          />
+        </div>
+        <span className="font-pixel-mono text-[10px]" style={{ color: T.textMuted }}>
+          {xpInLevel}/{xpRange} XP
+        </span>
+      </div>
+    </CozyCard>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   Pip tile + row (Fuel + Ichor)
    ────────────────────────────────────────────────────────────────────── */
 
 type StatTile = {
@@ -121,8 +221,6 @@ type StatTile = {
   Icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
   hint: string;
 };
-
-const PIP_COUNT = 10;
 
 function PipTile({ s }: { s: StatTile }) {
   const filled = Math.round(Math.min(1, Math.max(0, s.value / Math.max(1, s.cap))) * PIP_COUNT);
@@ -162,94 +260,6 @@ function PipTile({ s }: { s: StatTile }) {
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────────
-   Hero — Bold variant
-   ────────────────────────────────────────────────────────────────────── */
-
-function HeroBold(props: {
-  displayName: string;
-  level: number;
-  levelName: string;
-  xpInLevel: number;
-  xpRange: number;
-  currentStreak: number;
-}) {
-  const { displayName, level, levelName, xpInLevel, xpRange, currentStreak } = props;
-  const pct = Math.min(100, Math.max(0, (xpInLevel / Math.max(1, xpRange)) * 100));
-  return (
-    <CozyCard className="mb-5" style={{ padding: 18 }}>
-      <div className="flex items-start justify-between flex-wrap gap-3 mb-3">
-        <div className="min-w-0">
-          <p className="font-pixel-mono text-[10px] uppercase tracking-[1.5px]" style={{ color: T.textMuted }}>
-            {todayString()}
-          </p>
-          <p
-            className="text-xl font-bold font-pixel"
-            style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
-          >
-            Welcome back, {displayName}
-          </p>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* Streak chip */}
-          <div
-            className="flex items-center gap-2 px-3 py-1.5 rounded-full"
-            style={{
-              backgroundColor: 'rgba(255,213,128,0.10)',
-              border: `1px solid ${AMBER}40`,
-            }}
-          >
-            <Flame
-              size={14}
-              color={AMBER}
-              strokeWidth={2.4}
-              style={{ filter: `drop-shadow(0 0 4px ${AMBER}80)` }}
-            />
-            <span
-              className="font-pixel-mono text-[12px] font-bold"
-              style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
-            >
-              {currentStreak}d
-            </span>
-          </div>
-          {/* Level chip */}
-          <div className="flex items-center gap-2">
-            <Sparkles size={16} color="#2AE8D4" strokeWidth={2.4} />
-            <span
-              className="font-pixel-mono text-[11px] font-bold uppercase tracking-[1.5px]"
-              style={{ color: '#2AE8D4', textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
-            >
-              Lv.{level} {levelName}
-            </span>
-          </div>
-        </div>
-      </div>
-      <div className="flex items-center gap-3">
-        <div
-          className="flex-1 h-2 rounded-full overflow-hidden"
-          style={{ backgroundColor: 'rgba(255,255,255,0.08)' }}
-        >
-          <div
-            className="h-full rounded-full transition-all duration-700"
-            style={{
-              width: `${pct}%`,
-              background: 'linear-gradient(90deg, rgba(42,232,212,0.5) 0%, #2AE8D4 100%)',
-              boxShadow: '0 0 8px rgba(42,232,212,0.6)',
-            }}
-          />
-        </div>
-        <span className="font-pixel-mono text-[10px]" style={{ color: T.textMuted }}>
-          {xpInLevel}/{xpRange} XP
-        </span>
-      </div>
-    </CozyCard>
-  );
-}
-
-/* ──────────────────────────────────────────────────────────────────────
-   Pips row — Bold variant has just Fuel + Ichor
-   ────────────────────────────────────────────────────────────────────── */
-
 function PipsRow({ tiles }: { tiles: StatTile[] }) {
   return (
     <div className="grid grid-cols-2 gap-3 mb-5">
@@ -261,7 +271,7 @@ function PipsRow({ tiles }: { tiles: StatTile[] }) {
 }
 
 /* ──────────────────────────────────────────────────────────────────────
-   Heatmap
+   Heatmap (365-day GitHub style)
    ────────────────────────────────────────────────────────────────────── */
 
 function HeatmapSection({
@@ -412,7 +422,7 @@ function HeatmapSection({
 }
 
 /* ──────────────────────────────────────────────────────────────────────
-   Flame management
+   Flame management (savers + risk + flame state)
    ────────────────────────────────────────────────────────────────────── */
 
 function FlameManagement(props: {
@@ -518,7 +528,10 @@ function FlameManagement(props: {
             />
             <p
               className="font-pixel text-[14px] font-bold capitalize"
-              style={{ color: flameLit ? AMBER : T.textMuted, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
+              style={{
+                color: flameLit ? AMBER : T.textMuted,
+                textShadow: '0 1px 2px rgba(0,0,0,0.85)',
+              }}
             >
               {flameState}
             </p>
@@ -533,7 +546,7 @@ function FlameManagement(props: {
 }
 
 /* ──────────────────────────────────────────────────────────────────────
-   Active Courses + Recent Activity
+   Active Course with inline Switch dropdown
    ────────────────────────────────────────────────────────────────────── */
 
 type ActiveCourseRow = {
@@ -544,6 +557,206 @@ type ActiveCourseRow = {
   nextLessonTitle: string;
 };
 
+type SwitchOption = { id: string; title: string };
+
+function ActiveCourseWithSwitcher({
+  activeCourse,
+  switchOptions,
+  onContinue,
+  onSwitch,
+}: {
+  activeCourse: ActiveCourseRow | null;
+  switchOptions: SwitchOption[];
+  onContinue: (id: string) => void;
+  onSwitch: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  if (!activeCourse) {
+    return (
+      <CozyCard className="mb-5">
+        <p
+          className="font-pixel-mono text-[10px] font-bold uppercase tracking-[2px] mb-2"
+          style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
+        >
+          Active Course
+        </p>
+        <p className="font-pixel-mono text-[11px]" style={{ color: T.textMuted }}>
+          No active course yet — head to the bookshelf to enroll.
+        </p>
+      </CozyCard>
+    );
+  }
+
+  const pct =
+    activeCourse.totalLessons > 0
+      ? (activeCourse.completedLessons / activeCourse.totalLessons) * 100
+      : 0;
+
+  return (
+    <CozyCard className="mb-5">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <p
+          className="font-pixel-mono text-[10px] font-bold uppercase tracking-[2px]"
+          style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
+        >
+          Active Course
+        </p>
+        {switchOptions.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="font-pixel-mono text-[10px] uppercase tracking-[1.5px] flex items-center gap-1 px-2.5 py-1 rounded-full transition-colors cursor-pointer"
+            style={{
+              color: AMBER,
+              backgroundColor: open ? 'rgba(255,213,128,0.14)' : 'rgba(255,213,128,0.06)',
+              border: `1px solid ${open ? AMBER : 'rgba(255,213,128,0.22)'}`,
+            }}
+            aria-expanded={open}
+          >
+            Switch
+            <ChevronRight
+              size={11}
+              color={AMBER}
+              strokeWidth={2.5}
+              style={{
+                transform: open ? 'rotate(90deg)' : 'rotate(0deg)',
+                transition: 'transform 150ms ease',
+              }}
+            />
+          </button>
+        )}
+      </div>
+
+      <button
+        type="button"
+        onClick={() => onContinue(activeCourse.id)}
+        className="w-full text-left cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 rounded"
+      >
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+          <p
+            className="text-[14px] font-bold font-pixel truncate"
+            style={{ color: T.textPrimary }}
+          >
+            {activeCourse.title}
+          </p>
+          <span
+            className="font-pixel-mono text-[10px] flex items-center gap-0.5 shrink-0"
+            style={{ color: AMBER }}
+          >
+            Continue <ChevronRight size={12} color={AMBER} strokeWidth={2.5} />
+          </span>
+        </div>
+        <div
+          className="w-full h-1.5 rounded-full overflow-hidden"
+          style={{ backgroundColor: 'rgba(255,255,255,0.06)' }}
+        >
+          <div
+            className="h-full rounded-full transition-all duration-500"
+            style={{
+              width: `${pct}%`,
+              background: `linear-gradient(90deg, ${AMBER}66 0%, ${AMBER} 100%)`,
+              boxShadow: `0 0 6px ${AMBER}55`,
+            }}
+          />
+        </div>
+        <p className="text-[10px] mt-1 font-pixel-mono" style={{ color: T.textMuted }}>
+          {activeCourse.completedLessons}/{activeCourse.totalLessons} lessons · next:{' '}
+          {activeCourse.nextLessonTitle}
+        </p>
+      </button>
+
+      {open && switchOptions.length > 0 && (
+        <div
+          className="mt-3 pt-3 flex flex-col gap-2"
+          style={{ borderTop: `1px dashed ${COZY_BORDER}` }}
+        >
+          <p
+            className="font-pixel-mono text-[9px] uppercase tracking-[1.5px]"
+            style={{ color: T.textMuted }}
+          >
+            Switch to another locked course
+          </p>
+          {switchOptions.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => {
+                onSwitch(c.id);
+                setOpen(false);
+              }}
+              className="flex items-center justify-between gap-2 py-2 px-3 rounded-lg transition-colors text-left cursor-pointer"
+              style={{
+                backgroundColor: 'rgba(14,14,28,0.40)',
+                border: `1px solid ${COZY_BORDER}`,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = AMBER;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = COZY_BORDER;
+              }}
+            >
+              <span className="font-pixel text-[12px]" style={{ color: T.textPrimary }}>
+                {c.title}
+              </span>
+              <ChevronRight size={12} color={T.textMuted} strokeWidth={2.5} />
+            </button>
+          ))}
+        </div>
+      )}
+    </CozyCard>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   Journey (4 small stats)
+   ────────────────────────────────────────────────────────────────────── */
+
+function JourneySection({
+  lessonsCompleted,
+  longestStreak,
+  coursesEnrolled,
+}: {
+  lessonsCompleted: number;
+  longestStreak: number;
+  coursesEnrolled: number;
+}) {
+  const stats: { label: string; value: string | number }[] = [
+    { label: 'Lessons Completed', value: lessonsCompleted },
+    { label: 'Longest Streak', value: `${longestStreak}d` },
+    { label: 'Courses Enrolled', value: coursesEnrolled },
+    { label: 'Member Since', value: '—' },
+  ];
+  return (
+    <div className="mb-5">
+      <CozySectionLabel>Journey</CozySectionLabel>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {stats.map((s) => (
+          <CozyCard key={s.label} style={{ padding: 14 }}>
+            <p
+              className="font-pixel-mono text-[9px] uppercase tracking-[1.5px] mb-1.5"
+              style={{ color: T.textMuted }}
+            >
+              {s.label}
+            </p>
+            <p
+              className="font-pixel-mono text-[16px] font-bold leading-tight"
+              style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
+            >
+              {s.value}
+            </p>
+          </CozyCard>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   Recent activity feed
+   ────────────────────────────────────────────────────────────────────── */
+
 type RecentActivityRow = {
   id: string;
   label: string;
@@ -552,113 +765,73 @@ type RecentActivityRow = {
   color: string;
 };
 
-function CoursesAndActivity({
-  activeCourses,
-  recentActivity,
-  onCourseClick,
-}: {
-  activeCourses: ActiveCourseRow[];
-  recentActivity: RecentActivityRow[];
-  onCourseClick: (courseId: string) => void;
-}) {
+function RecentActivity({ rows }: { rows: RecentActivityRow[] }) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-      <CozyCard>
-        <p
-          className="font-pixel-mono text-[10px] font-bold uppercase tracking-[2px] mb-3"
-          style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
-        >
-          Active Courses
+    <CozyCard className="mb-5">
+      <p
+        className="font-pixel-mono text-[10px] font-bold uppercase tracking-[2px] mb-3"
+        style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
+      >
+        Recent Activity
+      </p>
+      {rows.length === 0 ? (
+        <p className="font-pixel-mono text-[11px]" style={{ color: T.textMuted }}>
+          No activity yet — complete a lesson to see it here.
         </p>
-        {activeCourses.length === 0 ? (
-          <p className="font-pixel-mono text-[11px]" style={{ color: T.textMuted }}>
-            No active courses yet — head to the bookshelf to enroll.
-          </p>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {activeCourses.map((c) => {
-              const pct = c.totalLessons > 0 ? (c.completedLessons / c.totalLessons) * 100 : 0;
-              return (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => onCourseClick(c.id)}
-                  className="text-left cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 rounded"
-                >
-                  <div className="flex items-center justify-between gap-2 mb-1.5">
-                    <p
-                      className="text-[13px] font-bold font-pixel truncate"
-                      style={{ color: T.textPrimary }}
-                    >
-                      {c.title}
-                    </p>
-                    <span
-                      className="font-pixel-mono text-[10px] flex items-center gap-0.5 shrink-0"
-                      style={{ color: AMBER }}
-                    >
-                      Continue <ChevronRight size={12} color={AMBER} strokeWidth={2.5} />
-                    </span>
-                  </div>
-                  <div
-                    className="w-full h-1.5 rounded-full overflow-hidden"
-                    style={{ backgroundColor: 'rgba(255,255,255,0.06)' }}
-                  >
-                    <div
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${pct}%`,
-                        background: `linear-gradient(90deg, ${AMBER}66 0%, ${AMBER} 100%)`,
-                        boxShadow: `0 0 6px ${AMBER}55`,
-                      }}
-                    />
-                  </div>
-                  <p className="text-[10px] mt-1 font-pixel-mono" style={{ color: T.textMuted }}>
-                    {c.completedLessons}/{c.totalLessons} lessons · next: {c.nextLessonTitle}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </CozyCard>
-
-      <CozyCard>
-        <p
-          className="font-pixel-mono text-[10px] font-bold uppercase tracking-[2px] mb-3"
-          style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
-        >
-          Recent Activity
-        </p>
-        {recentActivity.length === 0 ? (
-          <p className="font-pixel-mono text-[11px]" style={{ color: T.textMuted }}>
-            No activity yet — complete a lesson to see it here.
-          </p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {recentActivity.map((a) => (
-              <div
-                key={a.id}
-                className="flex items-center gap-2.5 py-1.5"
-                style={{ borderBottom: '1px dashed rgba(255,255,255,0.06)' }}
+      ) : (
+        <div className="flex flex-col gap-2">
+          {rows.map((a) => (
+            <div
+              key={a.id}
+              className="flex items-center gap-2.5 py-1.5"
+              style={{ borderBottom: '1px dashed rgba(255,255,255,0.06)' }}
+            >
+              <a.Icon size={14} color={a.color} strokeWidth={2.2} />
+              <p
+                className="text-[12px] font-pixel flex-1 truncate"
+                style={{ color: T.textSecondary }}
               >
-                <a.Icon size={14} color={a.color} strokeWidth={2.2} />
-                <p
-                  className="text-[12px] font-pixel flex-1 truncate"
-                  style={{ color: T.textSecondary }}
-                >
-                  {a.label}
-                </p>
-                <span
-                  className="font-pixel-mono text-[9px] uppercase tracking-[1px] shrink-0"
-                  style={{ color: T.textMuted }}
-                >
-                  {a.when}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </CozyCard>
+                {a.label}
+              </p>
+              <span
+                className="font-pixel-mono text-[9px] uppercase tracking-[1px] shrink-0"
+                style={{ color: T.textMuted }}
+              >
+                {a.when}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </CozyCard>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   Footer disconnect (quiet text-only crimson button)
+   ────────────────────────────────────────────────────────────────────── */
+
+function DisconnectFooter({ onDisconnect }: { onDisconnect: () => void }) {
+  return (
+    <div className="flex justify-center pt-4 pb-2">
+      <button
+        type="button"
+        onClick={onDisconnect}
+        className="font-pixel-mono text-[11px] uppercase tracking-[1.5px] py-1.5 px-3 rounded transition-colors cursor-pointer"
+        style={{
+          color: 'rgba(255,68,102,0.70)',
+          backgroundColor: 'transparent',
+          border: 'none',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.color = T.crimson;
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.color = 'rgba(255,68,102,0.70)';
+        }}
+      >
+        Disconnect Wallet
+      </button>
     </div>
   );
 }
@@ -670,16 +843,24 @@ function CoursesAndActivity({
 export default function DashboardPage() {
   const router = useRouter();
 
-  // ── Stores ──
-  const displayName = useUserStore((s) => s.displayName) || 'Adventurer';
+  // ── User store ──
+  const displayName = useUserStore((s) => s.displayName) ?? 'Adventurer';
+  const walletAddress = useUserStore((s) => s.walletAddress);
   const authToken = useUserStore((s) => s.authToken);
+  const disconnect = useUserStore((s) => s.disconnect);
 
+  const truncatedWallet = walletAddress
+    ? `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}`
+    : 'Not connected';
+
+  // ── Course store ──
   const activeCourseId = useCourseStore((s) => s.activeCourseId);
   const courseStates = useCourseStore((s) => s.courseStates);
   const courses = useCourseStore((s) => s.courses);
   const lessons = useCourseStore((s) => s.lessons);
   const lessonProgress = useCourseStore((s) => s.lessonProgress);
   const enrolledCourseIds = useCourseStore((s) => s.enrolledCourseIds);
+  const setActiveCourse = useCourseStore((s) => s.setActiveCourse);
 
   // ── XP from API ──
   const [xpData, setXpData] = useState<{ xpTotal: number; xpLevel: number; thresholds: number[] }>({
@@ -705,7 +886,7 @@ export default function DashboardPage() {
   }, [authToken]);
 
   // ── Derived values ──
-  const activeState = activeCourseId ? courseStates[activeCourseId] ?? null : null;
+  const activeState = activeCourseId ? (courseStates[activeCourseId] ?? null) : null;
 
   const level = Math.max(1, xpData.xpLevel);
   const levelName = LEVEL_NAMES[level - 1] ?? `Level ${level}`;
@@ -735,27 +916,39 @@ export default function DashboardPage() {
   const totalIchorProduced = activeState?.totalIchorProduced ?? 0;
   const { tier: ichorTier, tierMax: ichorTierMax } = deriveIchorTier(totalIchorProduced);
 
-  // ── Active courses (only those with a real lock account) ──
-  const activeCourses: ActiveCourseRow[] = useMemo(() => {
-    return enrolledCourseIds
-      .filter((id) => Boolean(courseStates[id]?.lockAccountAddress))
+  // ── Locked course IDs (have a lockAccountAddress) ──
+  const lockedCourseIds = useMemo(
+    () => enrolledCourseIds.filter((id) => Boolean(courseStates[id]?.lockAccountAddress)),
+    [enrolledCourseIds, courseStates],
+  );
+
+  // ── Active course row (for the hero card with switcher) ──
+  const activeCourseRow: ActiveCourseRow | null = useMemo(() => {
+    if (!activeCourseId) return null;
+    if (!lockedCourseIds.includes(activeCourseId)) return null;
+    const course = courses.find((c) => c.id === activeCourseId);
+    const courseLessons = lessons[activeCourseId] ?? [];
+    const completedCount = courseLessons.filter((l) => lessonProgress[l.id]?.completed).length;
+    const nextLesson = courseLessons.find((l) => !lessonProgress[l.id]?.completed);
+    const nextLessonTitle = nextLesson?.title ?? course?.title ?? 'Continue';
+    return {
+      id: activeCourseId,
+      title: course?.title ?? activeCourseId,
+      completedLessons: completedCount,
+      totalLessons: courseLessons.length || course?.totalLessons || 0,
+      nextLessonTitle,
+    };
+  }, [activeCourseId, lockedCourseIds, courses, lessons, lessonProgress]);
+
+  // ── Switch options: locked courses excluding the currently active one ──
+  const switchOptions: SwitchOption[] = useMemo(() => {
+    return lockedCourseIds
+      .filter((id) => id !== activeCourseId)
       .map((id) => {
         const course = courses.find((c) => c.id === id);
-        const courseLessons = lessons[id] ?? [];
-        const completedCount = courseLessons.filter(
-          (l) => lessonProgress[l.id]?.completed,
-        ).length;
-        const nextLesson = courseLessons.find((l) => !lessonProgress[l.id]?.completed);
-        const nextLessonTitle = nextLesson?.title ?? course?.title ?? 'Continue';
-        return {
-          id,
-          title: course?.title ?? id,
-          completedLessons: completedCount,
-          totalLessons: courseLessons.length || course?.totalLessons || 0,
-          nextLessonTitle,
-        };
+        return { id, title: course?.title ?? id };
       });
-  }, [enrolledCourseIds, courseStates, courses, lessons, lessonProgress]);
+  }, [lockedCourseIds, activeCourseId, courses]);
 
   // ── Recent activity (top 5 most recently completed lessons) ──
   const recentActivity: RecentActivityRow[] = useMemo(() => {
@@ -769,7 +962,6 @@ export default function DashboardPage() {
       .slice(0, 5);
 
     return completed.map((p) => {
-      // Locate lesson title by scanning lessons across all courses
       let lessonTitle: string | null = null;
       for (const arr of Object.values(lessons)) {
         const found = arr.find((l) => l.id === p.lessonId);
@@ -800,7 +992,14 @@ export default function DashboardPage() {
     [lessonProgress],
   );
 
-  // ── Stat tiles for pips row (Bold variant: Fuel + Ichor) ──
+  // ── Journey-stat counts ──
+  const lessonsCompleted = useMemo(
+    () => Object.values(lessonProgress).filter((lp) => lp.completed).length,
+    [lessonProgress],
+  );
+  const coursesEnrolled = enrolledCourseIds.length;
+
+  // ── Stat tiles for pips row (Fuel + Ichor) ──
   const fuelTile: StatTile = {
     key: 'fuel',
     label: 'Fuel',
@@ -825,14 +1024,27 @@ export default function DashboardPage() {
         : `Tier ${ichorTier} (max)`,
   };
 
-  // ── Course click handler ──
-  const handleCourseClick = (courseId: string) => {
-    useCourseStore.getState().setActiveCourse(courseId);
+  // ── Handlers ──
+  const handleContinueCourse = (courseId: string) => {
+    setActiveCourse(courseId);
     router.push('/village');
+  };
+
+  const handleSwitchCourse = (courseId: string) => {
+    setActiveCourse(courseId);
+  };
+
+  const handleDisconnect = () => {
+    if (typeof window === 'undefined') return;
+    if (window.confirm('Disconnect wallet? This clears your local session.')) {
+      disconnect();
+      router.push('/');
+    }
   };
 
   return (
     <div className="min-h-screen relative" style={{ backgroundColor: T.bg }}>
+      {/* Cottage interior backdrop with gradient overlay. */}
       <div aria-hidden className="fixed inset-0 z-0 pointer-events-none">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -860,17 +1072,16 @@ export default function DashboardPage() {
         <div className="pt-20" />
 
         <h1
-          className="text-3xl font-bold tracking-wide font-pixel mb-1"
+          className="text-3xl font-bold tracking-wide font-pixel mb-5"
           style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
         >
           Dashboard
         </h1>
-        <p className="text-sm leading-[18px] mb-5" style={{ color: 'rgba(255,255,255,0.6)' }}>
-          Today&apos;s pulse — your streak, fuel, courses, and activity
-        </p>
 
+        {/* 1. Hero — identity (avatar + name + wallet) + streak chip + Lv chip + XP bar */}
         <HeroBold
           displayName={displayName}
+          truncatedWallet={truncatedWallet}
           level={level}
           levelName={levelName}
           xpInLevel={xpInLevel}
@@ -878,10 +1089,13 @@ export default function DashboardPage() {
           currentStreak={currentStreak}
         />
 
+        {/* 2. Pips row (Fuel + Ichor) */}
         <PipsRow tiles={[fuelTile, ichorTile]} />
 
+        {/* 3. Heatmap */}
         <HeatmapSection yearActivity={yearActivity} longestStreak={longestStreak} />
 
+        {/* 4. Flame management */}
         <FlameManagement
           flameState={flameState}
           saversTotal={saversTotal}
@@ -890,11 +1104,26 @@ export default function DashboardPage() {
           recoveryMode={recoveryMode}
         />
 
-        <CoursesAndActivity
-          activeCourses={activeCourses}
-          recentActivity={recentActivity}
-          onCourseClick={handleCourseClick}
+        {/* 5. Active course + inline switcher */}
+        <ActiveCourseWithSwitcher
+          activeCourse={activeCourseRow}
+          switchOptions={switchOptions}
+          onContinue={handleContinueCourse}
+          onSwitch={handleSwitchCourse}
         />
+
+        {/* 6. Journey */}
+        <JourneySection
+          lessonsCompleted={lessonsCompleted}
+          longestStreak={longestStreak}
+          coursesEnrolled={coursesEnrolled}
+        />
+
+        {/* 7. Recent activity */}
+        <RecentActivity rows={recentActivity} />
+
+        {/* 8. Footer disconnect */}
+        <DisconnectFooter onDisconnect={handleDisconnect} />
       </div>
     </div>
   );

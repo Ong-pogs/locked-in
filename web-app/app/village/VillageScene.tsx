@@ -25,20 +25,27 @@ type Building = {
   label: string;
 };
 
-// Active interactable buildings only. The remaining masks (clock tower, well,
-// storage, notice board, awning stall) are decoration — they don't hover-glow
-// or click. The mapping below pairs each route with the painted building that
-// best fits visually; the mask_id is just the asset filename, the label is
-// what users see, the route is where they land on click.
+// All 9 painted buildings now interactable. Mask filenames (id) are the
+// silhouette assets; label is what the user sees on hover; route is where
+// they land. Awning stall ('market' mask) is left decorative for now —
+// /shop already lives on the left-middle tudor.
 const BUILDINGS: Building[] = [
-  // Far-left tudor (biggest)  → Academy
+  // Far-left tudor (biggest)        → Courses (Academy)
   { id: 'academy', outline: '/images/village/outlines/outline-academy.png', route: '/courses', label: 'Academy' },
-  // Left-middle tudor          → Market (Trader's Stall)
+  // Left-middle tudor                → Shop (Market)
   { id: 'cottage', outline: '/images/village/outlines/outline-cottage.png', route: '/shop', label: 'Market' },
-  // Right-center building      → Tavern (community pot)
+  // Small painted notice board       → Leaderboard
+  { id: 'notice', outline: '/images/village/outlines/outline-notice.png', route: '/leaderboard', label: 'Leaderboard' },
+  // Clock tower                      → Dashboard (clock = time = daily)
+  { id: 'clock', outline: '/images/village/outlines/outline-clock.png', route: '/dashboard', label: 'Dashboard' },
+  // Wishing well / lantern beacon    → History (chronicles & wishes)
+  { id: 'lantern', outline: '/images/village/outlines/outline-lantern.png', route: '/history', label: 'History' },
+  // Right-center building            → Tavern (community pot)
   { id: 'tavern', outline: '/images/village/outlines/outline-tavern.png', route: '/community-pot', label: 'Tavern' },
-  // Far-right church-like      → Apothecary (alchemy)
+  // Far-right church-like            → Apothecary (alchemy)
   { id: 'forge', outline: '/images/village/outlines/outline-forge.png', route: '/alchemy', label: 'Apothecary' },
+  // Far-right small structure        → Inventory (literal storage shed)
+  { id: 'storage', outline: '/images/village/outlines/outline-storage.png', route: '/inventory', label: 'Storage' },
 ];
 
 // Cozy palette — pulled from the painted village's own colors so the UI
@@ -289,13 +296,13 @@ export default function VillageScene() {
             icon={<Sparkles size={14} color={COZY_TEXT} strokeWidth={2.5} />}
             value={`Lvl ${level}`}
             ariaLabel={`Level ${level}`}
-            onClick={() => router.push('/profile')}
+            onClick={() => router.push('/dashboard')}
           />
         </div>
 
         {/* Profile button — separate because it's navigation, not a stat */}
         <button
-          onClick={() => router.push('/profile')}
+          onClick={() => router.push('/dashboard')}
           aria-label="Profile"
           className="flex items-center justify-center cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
           style={{

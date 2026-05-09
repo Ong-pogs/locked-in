@@ -98,7 +98,7 @@ export const NAV_ITEMS: { href: string; label: string; icon: (props: { color: st
   { href: '/inventory', label: 'Inventory', icon: IconInventory, group: 'economy', isNew: true },
   { href: '/leaderboard', label: 'Leaderboard', icon: IconLeaderboard, group: 'social' },
   { href: '/community-pot', label: 'Community', icon: IconCommunity, group: 'social' },
-  { href: '/profile', label: 'Profile', icon: IconProfile, group: 'social' },
+  // Profile folded into /dashboard.
 ];
 
 /** Primary 5 tabs for mobile bottom bar */
@@ -107,5 +107,4 @@ export const BOTTOM_NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: IconFlame },
   { href: '/alchemy', label: 'Alchemy', icon: IconAlchemy },
   { href: '/shop', label: 'Rewards', icon: IconRewards },
-  { href: '/profile', label: 'Profile', icon: IconProfile },
 ];
