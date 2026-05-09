@@ -268,7 +268,7 @@ export default function VillageScene() {
             icon={<Flame size={14} color={COZY_TEXT} strokeWidth={2.5} />}
             value={`${streak}d`}
             ariaLabel={`Streak ${streak} days`}
-            onClick={() => router.push('/streaks')}
+            onClick={() => router.push('/dashboard')}
           />
           <SegmentDivider />
           <StatSegment

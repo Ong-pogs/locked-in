@@ -91,7 +91,8 @@ export type NavGroup = 'learn' | 'economy' | 'social';
 export const NAV_ITEMS: { href: string; label: string; icon: (props: { color: string; size?: number }) => ReactNode; group: NavGroup; isNew?: boolean }[] = [
   { href: '/courses', label: 'Courses', icon: IconCourses, group: 'learn' },
   { href: '/dashboard', label: 'Dashboard', icon: IconFlame, group: 'learn' },
-  { href: '/streaks', label: 'Streaks', icon: IconStreaks, group: 'learn', isNew: true },
+  // Streaks folded into /dashboard. Sidebar/BottomNav are also disabled
+  // app-wide (showChrome=false in AppShell) — kept here in case re-enabled.
   { href: '/alchemy', label: 'Alchemy', icon: IconAlchemy, group: 'economy' },
   { href: '/shop', label: 'Rewards', icon: IconRewards, group: 'economy' },
   { href: '/inventory', label: 'Inventory', icon: IconInventory, group: 'economy', isNew: true },

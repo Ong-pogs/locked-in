@@ -297,10 +297,10 @@ function CottageLayout(props: Props) {
         className="text-3xl font-bold tracking-wide mb-1 font-pixel"
         style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
       >
-        Your Cottage
+        Profile
       </h1>
       <p className="text-sm leading-[18px] mb-5" style={{ color: 'rgba(255,255,255,0.6)' }}>
-        Your private quarters in the village
+        Your identity and active course
       </p>
 
       {/* Two-column grid */}
@@ -591,10 +591,10 @@ function CodexLayout(props: Props) {
         className="text-3xl font-bold tracking-wide mb-1 font-pixel"
         style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
       >
-        Adventurer&apos;s Codex
+        Profile
       </h1>
       <p className="text-sm leading-[18px] mb-5" style={{ color: 'rgba(255,255,255,0.6)' }}>
-        Who you are in the village
+        Your identity and active course
       </p>
 
       <div className="grid md:grid-cols-2 gap-5">

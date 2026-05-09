@@ -130,7 +130,7 @@ export default function DungeonPage() {
             case 'oil_lamp_left':
             case 'oil_lamp_center':
             case 'oil_lamp_right':
-              router.push('/streaks');
+              router.push('/dashboard');
               break;
           }
           break;
