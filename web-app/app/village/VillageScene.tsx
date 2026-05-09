@@ -25,10 +25,9 @@ type Building = {
   label: string;
 };
 
-// All 9 painted buildings now interactable. Mask filenames (id) are the
-// silhouette assets; label is what the user sees on hover; route is where
-// they land. Awning stall ('market' mask) is left decorative for now —
-// /shop already lives on the left-middle tudor.
+// Interactable village hotspots. Masks not listed here (clock, storage) are
+// decorative — they don't hover-glow or click. The dashboard is reachable
+// from any page via the top-bar profile button + Lvl segment.
 const BUILDINGS: Building[] = [
   // Far-left tudor (biggest)        → Courses (Academy)
   { id: 'academy', outline: '/images/village/outlines/outline-academy.png', route: '/courses', label: 'Academy' },
@@ -36,16 +35,14 @@ const BUILDINGS: Building[] = [
   { id: 'cottage', outline: '/images/village/outlines/outline-cottage.png', route: '/shop', label: 'Market' },
   // Small painted notice board       → Leaderboard
   { id: 'notice', outline: '/images/village/outlines/outline-notice.png', route: '/leaderboard', label: 'Leaderboard' },
-  // Clock tower                      → Dashboard (clock = time = daily)
-  { id: 'clock', outline: '/images/village/outlines/outline-clock.png', route: '/dashboard', label: 'Dashboard' },
-  // Wishing well / lantern beacon    → History (chronicles & wishes)
+  // Center awning stall              → Inventory
+  { id: 'inventory', outline: '/images/village/outlines/outline-inventory.png', route: '/inventory', label: 'Inventory' },
+  // Wishing well                     → History
   { id: 'lantern', outline: '/images/village/outlines/outline-lantern.png', route: '/history', label: 'History' },
   // Right-center building            → Tavern (community pot)
   { id: 'tavern', outline: '/images/village/outlines/outline-tavern.png', route: '/community-pot', label: 'Tavern' },
   // Far-right church-like            → Apothecary (alchemy)
   { id: 'forge', outline: '/images/village/outlines/outline-forge.png', route: '/alchemy', label: 'Apothecary' },
-  // Far-right small structure        → Inventory (literal storage shed)
-  { id: 'storage', outline: '/images/village/outlines/outline-storage.png', route: '/inventory', label: 'Storage' },
 ];
 
 // Cozy palette — pulled from the painted village's own colors so the UI

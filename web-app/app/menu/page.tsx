@@ -33,7 +33,7 @@ type Entry = {
 
 const HUB_PAGES: Entry[] = [
   { route: '/village', label: 'Village Hub', blurb: 'Painted hub with hover-glow buildings', Icon: Home, status: 'live' },
-  { route: '/dashboard', label: 'Dashboard', blurb: 'Identity + streak + fuel + ichor + heatmap + flame mgmt + courses + activity (merged from /profile)', Icon: LayoutDashboard, building: 'Clock tower', status: 'live' },
+  { route: '/dashboard', label: 'Dashboard', blurb: 'Identity + streak + fuel + ichor + heatmap + flame mgmt + courses + activity (merged from /profile). Reached via top-bar profile button.', Icon: LayoutDashboard, status: 'live' },
 ];
 
 const BUILDING_PAGES: Entry[] = [
@@ -44,7 +44,7 @@ const BUILDING_PAGES: Entry[] = [
 ];
 
 const PLAYER_PAGES: Entry[] = [
-  { route: '/inventory', label: 'Inventory', blurb: 'Categorized — Coffers / Consumables / Achievements', Icon: Backpack, building: 'Storage shed (far-right)', status: 'live' },
+  { route: '/inventory', label: 'Inventory', blurb: 'Categorized — Coffers / Consumables / Achievements', Icon: Backpack, building: 'Center awning stall', status: 'live' },
   { route: '/leaderboard', label: 'Leaderboard', blurb: 'Podium — top 3 hero + ranks 4-10', Icon: Trophy, building: 'Notice board', status: 'live' },
   { route: '/history', label: 'History', blurb: 'Past lesson activity (still on old theme)', Icon: History, building: 'Wishing well', status: 'live' },
 ];
@@ -58,14 +58,10 @@ const LEGACY_PAGES: Entry[] = [
   { route: '/dungeon', label: 'Dungeon (legacy)', blurb: '3D Babylon iframe scene — kept for fallback', Icon: Home, status: 'legacy' },
 ];
 
-// Buildings in the painted village that are currently NOT mapped to any route.
-// User can choose what to assign here.
+// Decorative-only village masks (no route, no hover-glow).
 const UNUSED_BUILDINGS = [
-  { id: 'market', label: 'Awning stall (center)', mask: 'mask-market.png', suggestion: '/dashboard?' },
-  { id: 'clock', label: 'Clock tower', mask: 'mask-clock.png', suggestion: '/dashboard (clock = time)' },
-  { id: 'lantern', label: 'Wishing well', mask: 'mask-lantern.png', suggestion: '/history (now mapped)' },
-  { id: 'storage', label: 'Storage shed', mask: 'mask-storage.png', suggestion: '/inventory (literal)' },
-  { id: 'notice', label: 'Notice board', mask: 'mask-notice.png', suggestion: '/leaderboard (public notices)' },
+  { id: 'clock', label: 'Clock tower', mask: 'mask-clock.png', suggestion: 'decorative' },
+  { id: 'storage', label: 'Far-right tall structure', mask: 'mask-storage.png', suggestion: 'decorative (was wrong building for inventory)' },
 ];
 
 export default function MenuPage() {
