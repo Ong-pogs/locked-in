@@ -358,7 +358,7 @@ function DepositContent() {
       <div aria-hidden className="fixed inset-0 z-0 pointer-events-none">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/images/vault/vault.png"
+          src="/images/vault/vaultbg.png"
           alt=""
           draggable={false}
           className="w-full h-full object-cover select-none"
