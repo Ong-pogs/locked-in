@@ -233,9 +233,7 @@ export default function ShopPage() {
         >
           Shop
         </h1>
-        <p className="text-sm leading-[18px] mb-5" style={{ color: 'rgba(255,255,255,0.6)' }}>
-          Spend ichor on coin pouches and rare goods
-        </p>
+        <div className="mb-5" />
 
         {/* Ichor balance hero — your purse */}
         <PurseHero balance={ichorBalance} tierLabel={tierLabel} rate={rate} />

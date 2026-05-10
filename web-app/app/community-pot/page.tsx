@@ -136,12 +136,7 @@ export default function CommunityPotPage() {
         >
           Community Pot
         </h1>
-        <p
-          className="text-sm leading-[18px] mb-5"
-          style={{ color: 'rgba(255,255,255,0.6)' }}
-        >
-          Shared yield pool from broken streaks
-        </p>
+        <div className="mb-5" />
 
         {/* Hero strip: pot + per-course chips */}
         <CozyCard className="mb-5" style={{ padding: 20 }}>

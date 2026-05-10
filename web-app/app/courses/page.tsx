@@ -464,15 +464,7 @@ export default function CoursesPage() {
           >
             Courses
           </h1>
-          <p
-            className="text-sm mt-1 mb-4"
-            style={{
-              color: 'rgba(255,255,255,0.7)',
-              textShadow: '0 1px 2px rgba(0,0,0,0.85)',
-            }}
-          >
-            Continue your journey or start a new path
-          </p>
+          <div className="mb-4" />
 
           {/* XP bar (real values from store) */}
           <div className="max-w-xs mx-auto">

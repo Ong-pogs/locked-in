@@ -209,9 +209,7 @@ export default function InventoryPage() {
         >
           Inventory
         </h1>
-        <p className="text-sm leading-[18px] mb-5" style={{ color: 'rgba(255,255,255,0.6)' }}>
-          Currencies, consumables, and earned trinkets
-        </p>
+        <div className="mb-5" />
 
         {/* Coffers — currency = stat-box style */}
         <CozySectionLabel>Coffers</CozySectionLabel>

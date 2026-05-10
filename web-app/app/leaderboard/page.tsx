@@ -171,9 +171,7 @@ export default function LeaderboardPage() {
         >
           Leaderboard
         </h1>
-        <p className="text-sm leading-[18px] mb-5" style={{ color: 'rgba(255,255,255,0.6)' }}>
-          Top players by streak, XP, and ichor
-        </p>
+        <div className="mb-5" />
 
         <MetricTabs selected={selectedMetric} onChange={setSelectedMetric} />
         <SectionHeader>The Champions</SectionHeader>

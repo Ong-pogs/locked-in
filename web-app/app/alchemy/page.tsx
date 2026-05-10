@@ -128,9 +128,7 @@ export default function AlchemyPage() {
         >
           Brewery
         </h1>
-        <p className="text-sm mt-1 mb-5" style={{ color: 'rgba(255,255,255,0.6)' }}>
-          Brew fuel into ichor tokens
-        </p>
+        <div className="mb-5" />
 
         <div className="flex flex-col items-center gap-5">
           <CozyCard className="w-full max-w-[560px]" style={{ padding: 32 }}>
@@ -376,52 +374,36 @@ export default function AlchemyPage() {
             </div>
           </CozyCard>
 
-          {/* 3-up stat row */}
-          <div className="w-full grid grid-cols-3 gap-3">
-            <CozyStatBox
-              label="Available Fuel"
-              value={`${fuelBalance}/${fuelCap}`}
-              color={T.rust}
-            />
+          {/* 2-up stat row. Daily fuel earned shows as a subline on Available Fuel. */}
+          <div className="w-full grid grid-cols-2 gap-3">
+            <CozyCard className="flex-1 flex flex-col items-center" style={{ padding: 14 }}>
+              <span
+                className="font-pixel-mono text-[10px] uppercase tracking-[1px] whitespace-nowrap"
+                style={{ color: AMBER, opacity: 0.75, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
+              >
+                Available Fuel
+              </span>
+              <span
+                className="font-pixel-mono text-xl font-bold mt-1"
+                style={{ color: T.rust, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
+              >
+                {fuelBalance}/{fuelCap}
+              </span>
+              <span
+                className="font-pixel-mono text-[10px] mt-1"
+                style={{
+                  color: fuelFragments >= 1 ? T.green : T.textMuted,
+                  opacity: fuelFragments > 0 ? 1 : 0.6,
+                }}
+              >
+                +{fuelFragments.toFixed(2)} today {fuelFragments >= 1 ? '· cap reached' : `· ${(1 - fuelFragments).toFixed(2)} left`}
+              </span>
+            </CozyCard>
             <CozyStatBox
               label="Ichor Balance"
               value={Math.floor(ichorBalance)}
               color={T.green}
             />
-            <CozyCard style={{ padding: 12 }}>
-              <p
-                className="font-pixel-mono text-[9px] font-bold uppercase tracking-[1.5px] mb-1.5"
-                style={{ color: T.textMuted }}
-              >
-                Today&apos;s Progress
-              </p>
-              <div className="flex items-center justify-between mb-1.5">
-                <span
-                  className="text-[18px] font-pixel-mono font-bold"
-                  style={{
-                    color: fuelFragments >= 1 ? T.green : AMBER,
-                    textShadow: '0 1px 2px rgba(0,0,0,0.85)',
-                  }}
-                >
-                  {Math.floor(fuelFragments * 100)}%
-                </span>
-                <span className="text-[10px] font-pixel-mono" style={{ color: T.textMuted }}>
-                  {fuelFragments.toFixed(2)}/1.00
-                </span>
-              </div>
-              <div
-                className="w-full h-1.5 rounded-full overflow-hidden"
-                style={{ backgroundColor: 'rgba(255,255,255,0.06)' }}
-              >
-                <div
-                  className="h-full rounded-full transition-all duration-500"
-                  style={{
-                    width: `${Math.min(100, fuelFragments * 100)}%`,
-                    backgroundColor: fuelFragments >= 1 ? T.green : AMBER,
-                  }}
-                />
-              </div>
-            </CozyCard>
           </div>
         </div>
       </div>
