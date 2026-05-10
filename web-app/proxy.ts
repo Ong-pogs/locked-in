@@ -22,6 +22,11 @@ const PUBLIC_ROUTES = [
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Root → village hub (handled at the edge so the / page never renders).
+  if (pathname === '/') {
+    return NextResponse.redirect(new URL('/village', request.url));
+  }
+
   // Allow public routes and static assets
   if (
     PUBLIC_ROUTES.includes(pathname) ||
@@ -35,7 +40,7 @@ export function proxy(request: NextRequest) {
   // Check for auth cookie (set client-side after wallet connect)
   const hasAuth = request.cookies.get('locked-in-auth');
   if (!hasAuth) {
-    return NextResponse.redirect(new URL('/', request.url));
+    return NextResponse.redirect(new URL('/village', request.url));
   }
 
   return NextResponse.next();
