@@ -1,22 +1,8 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  User,
-  Flame,
-  FlaskConical,
-  Droplet,
-  Sparkles,
-  BookOpen,
-  ShoppingBag,
-  Trophy,
-  Backpack,
-  History as HistoryIcon,
-  Beer,
-  type LucideIcon,
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { User, Flame, FlaskConical, Droplet, Sparkles } from 'lucide-react';
 import { T } from '@/components/theme';
 import { useCourseStore } from '@/stores/courseStore';
 import boundsData from '@/public/images/village/masks/bounds.json';
@@ -36,7 +22,6 @@ type Building = {
   outline: string;
   route: string;
   label: string;
-  Icon: LucideIcon;
 };
 
 // Interactable village hotspots. Masks not listed here (clock, storage) are
@@ -44,19 +29,19 @@ type Building = {
 // from any page via the top-bar profile button + Lvl segment.
 const BUILDINGS: Building[] = [
   // Far-left tudor (biggest)        → Courses (Academy)
-  { id: 'academy', outline: '/images/village/outlines/outline-academy.png', route: '/courses', label: 'Academy', Icon: BookOpen },
+  { id: 'academy', outline: '/images/village/outlines/outline-academy.png', route: '/courses', label: 'Academy' },
   // Left-middle tudor                → Shop (Market)
-  { id: 'cottage', outline: '/images/village/outlines/outline-cottage.png', route: '/shop', label: 'Market', Icon: ShoppingBag },
+  { id: 'cottage', outline: '/images/village/outlines/outline-cottage.png', route: '/shop', label: 'Market' },
   // Small painted notice board       → Leaderboard
-  { id: 'notice', outline: '/images/village/outlines/outline-notice.png', route: '/leaderboard', label: 'Leaderboard', Icon: Trophy },
+  { id: 'notice', outline: '/images/village/outlines/outline-notice.png', route: '/leaderboard', label: 'Leaderboard' },
   // Center awning stall              → Inventory
-  { id: 'inventory', outline: '/images/village/outlines/outline-inventory.png', route: '/inventory', label: 'Inventory', Icon: Backpack },
+  { id: 'inventory', outline: '/images/village/outlines/outline-inventory.png', route: '/inventory', label: 'Inventory' },
   // Wishing well                     → History
-  { id: 'lantern', outline: '/images/village/outlines/outline-lantern.png', route: '/history', label: 'History', Icon: HistoryIcon },
+  { id: 'lantern', outline: '/images/village/outlines/outline-lantern.png', route: '/history', label: 'History' },
   // Right-center building            → Tavern (community pot)
-  { id: 'tavern', outline: '/images/village/outlines/outline-tavern.png', route: '/community-pot', label: 'Tavern', Icon: Beer },
+  { id: 'tavern', outline: '/images/village/outlines/outline-tavern.png', route: '/community-pot', label: 'Tavern' },
   // Far-right church-like            → Brewery (alchemy route)
-  { id: 'forge', outline: '/images/village/outlines/outline-forge.png', route: '/alchemy', label: 'Brewery', Icon: FlaskConical },
+  { id: 'forge', outline: '/images/village/outlines/outline-forge.png', route: '/alchemy', label: 'Brewery' },
 ];
 
 // Cozy palette — pulled from the painted village's own colors so the UI
@@ -84,11 +69,6 @@ const COZY_TEXT_SHADOW = '0 1px 2px rgba(0,0,0,0.85)';
 export default function VillageScene() {
   const router = useRouter();
   const [hovered, setHovered] = useState<string | null>(null);
-
-  const hoveredBuilding = useMemo(
-    () => BUILDINGS.find((b) => b.id === hovered) ?? null,
-    [hovered],
-  );
 
   // Top-bar stat values — pulled from the active course state when available.
   // Fallback to 0 when there's no active course (e.g. unauthenticated test view).
@@ -182,104 +162,75 @@ export default function VillageScene() {
           );
         })}
 
-        {/* 4. Always-on bobbing icon markers above each building.
-               Discoverability cue — tells the user "these are interactive"
-               at a glance without cluttering the painted scene with text. */}
+        {/* 4. Always-on bobbing TEXT markers — small amber pills with the
+               building name. Smart anchor: float above if there's space,
+               otherwise mount at the top of the building silhouette. */}
         {BUILDINGS.map((b, i) => {
           const bb = BOUNDS[b.id];
           if (!bb) return null;
           const isHovered = hovered === b.id;
           // Stagger bob start times so they don't sync mechanically.
           const delay = (i * 0.35) % 2.4;
+          // Smart anchor: if there's room above the building, float above.
+          // Otherwise (e.g. Academy with bb.y ≈ 0.02), mount the label AT the
+          // top edge of the silhouette so it doesn't get clipped by the canvas.
+          const hasRoomAbove = bb.y > 0.1;
+          // Position anchor + transform so the label is either fully above or
+          // sitting just inside the top edge of the bbox.
+          const anchorTop = hasRoomAbove ? `${(bb.y - 0.005) * 100}%` : `${bb.y * 100}%`;
+          const anchorTransform = hasRoomAbove
+            ? 'translate(-50%, -100%)'
+            : 'translate(-50%, 6px)';
           return (
             <div
               key={`marker-${b.id}`}
               className="absolute pointer-events-none flex items-center justify-center"
               style={{
                 left: `${(bb.x + bb.w / 2) * 100}%`,
-                top: `${bb.y * 100}%`,
-                transform: 'translate(-50%, -100%)',
+                top: anchorTop,
+                transform: anchorTransform,
+                zIndex: isHovered ? 5 : 4,
               }}
             >
               <div
                 className="village-marker-bob"
                 style={{
                   animationDelay: `${delay.toFixed(2)}s`,
-                  // Pause bob while user hovers this specific building so the
-                  // plaque underneath stays still + readable.
                   animationPlayState: isHovered ? 'paused' : 'running',
                 }}
               >
                 <div
-                  className="flex items-center justify-center rounded-full transition-all duration-200"
+                  className="flex items-center justify-center rounded-md transition-all duration-200"
                   style={{
-                    width: 32,
-                    height: 32,
+                    padding: '5px 11px',
                     backgroundColor: isHovered
                       ? 'rgba(255,213,128,0.95)'
-                      : 'rgba(14, 14, 28, 0.78)',
+                      : 'rgba(14, 14, 28, 0.82)',
                     border: `1px solid ${isHovered ? COZY_TEXT : COZY_BORDER}`,
                     boxShadow: isHovered
-                      ? `0 0 16px ${COZY_TEXT}, 0 4px 10px rgba(0,0,0,0.55)`
-                      : `0 4px 10px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,213,128,0.18)`,
+                      ? `0 0 14px ${COZY_TEXT}, 0 4px 10px rgba(0,0,0,0.55)`
+                      : `0 4px 10px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,213,128,0.15)`,
                     backdropFilter: 'blur(6px)',
                     WebkitBackdropFilter: 'blur(6px)',
                   }}
                 >
-                  <b.Icon
-                    size={16}
-                    color={isHovered ? '#1A1000' : COZY_TEXT}
-                    strokeWidth={2.5}
-                  />
+                  <span
+                    className="font-pixel font-bold uppercase"
+                    style={{
+                      fontSize: 11,
+                      letterSpacing: 1,
+                      color: isHovered ? '#1A1000' : COZY_TEXT,
+                      textShadow: isHovered ? 'none' : COZY_TEXT_SHADOW,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {b.label}
+                  </span>
                 </div>
               </div>
             </div>
           );
         })}
-
-        {/* 5. Floating name plaque — anchors just BELOW the marker icon so the
-               vertical stack stays consistent on hover (icon → plaque). */}
-        <AnimatePresence>
-          {hoveredBuilding && BOUNDS[hoveredBuilding.id] && (
-            <motion.div
-              key={`plaque-${hoveredBuilding.id}`}
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.14, ease: 'easeOut' }}
-              className="absolute pointer-events-none"
-              style={{
-                left: `${(BOUNDS[hoveredBuilding.id].x + BOUNDS[hoveredBuilding.id].w / 2) * 100}%`,
-                top: `${BOUNDS[hoveredBuilding.id].y * 100}%`,
-                // marker sits at translate(-50%, -100%) at top of bbox,
-                // approximate marker height ≈ 32px; offset plaque a bit
-                // further up so it doesn't overlap the icon.
-                transform: 'translate(-50%, calc(-100% - 44px))',
-              }}
-            >
-              <div
-                style={{
-                  fontFamily: 'var(--font-pixel), Georgia, serif',
-                  fontWeight: 600,
-                  fontSize: 14,
-                  letterSpacing: 0.5,
-                  color: COZY_TEXT,
-                  backgroundColor: COZY_BG,
-                  border: `1px solid ${COZY_BORDER}`,
-                  borderRadius: 8,
-                  padding: '6px 14px',
-                  boxShadow: COZY_SHADOW,
-                  textShadow: COZY_TEXT_SHADOW,
-                  backdropFilter: 'blur(10px)',
-                  WebkitBackdropFilter: 'blur(10px)',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {hoveredBuilding.label}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
 
       <style jsx global>{`
