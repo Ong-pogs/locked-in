@@ -53,9 +53,6 @@ const ONBOARDING_PAGES: Entry[] = [
   { route: '/onboarding/tutorial', label: 'Onboarding · Tutorial', blurb: 'New-user tutorial', Icon: GraduationCap, status: 'live' },
 ];
 
-const PROTOTYPE_PAGES: Entry[] = [
-  { route: '/lock-prototypes', label: 'Lock Funds · Prototypes', blurb: 'Pick a layout for /onboarding/deposit redesign — Ledger / Stepper / Sheet / Pact (switcher pill bottom-left)', Icon: Coins, status: 'live' },
-];
 
 const LEGACY_PAGES: Entry[] = [
   { route: '/dungeon', label: 'Dungeon (legacy)', blurb: '3D Babylon iframe scene — kept for fallback', Icon: Home, status: 'legacy' },
@@ -144,9 +141,6 @@ export default function MenuPage() {
 
         <CozySectionLabel>Onboarding</CozySectionLabel>
         <Grid entries={ONBOARDING_PAGES} />
-
-        <CozySectionLabel>Prototypes — pick a variant</CozySectionLabel>
-        <Grid entries={PROTOTYPE_PAGES} />
 
         <CozySectionLabel>Legacy</CozySectionLabel>
         <Grid entries={LEGACY_PAGES} />

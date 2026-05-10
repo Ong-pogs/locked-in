@@ -18,7 +18,6 @@ const PUBLIC_ROUTES = [
   '/courses',
   '/village',
   '/menu',
-  '/lock-prototypes',
   '/dashboard',
   '/shop',
   '/alchemy',

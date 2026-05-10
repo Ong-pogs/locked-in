@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { Minus, Plus } from 'lucide-react';
 import { usePrivy } from '@privy-io/react-auth';
 import { useWallets, useSignTransaction } from '@privy-io/react-auth/solana';
 import { useCourseStore, useUserStore } from '@/stores';
@@ -13,16 +14,18 @@ import {
   fetchWalletDepositBalances,
   type LockDurationDays as SolanaLockDuration,
 } from '@/services/solana';
+import { CLUSTER } from '@/services/solana/connection';
 import { claimFaucet } from '@/services/api/faucet/faucetApi';
 import { fetchWithAuth } from '@/services/api/httpClient';
 import { connection } from '@/services/solana/connection';
-import {
-  ScreenBackground,
-  ParchmentCard,
-  SectionLabel,
-  PrimaryButton,
-  T,
-} from '@/components/theme';
+import { T } from '@/components/theme';
+import { CozyCard, CozySectionLabel } from '@/components/cozy';
+import { HubButton } from '@/components/HubButton';
+
+// Cozy palette constants — match the Sheet prototype exactly
+const AMBER = '#FFD580';
+const COZY_BORDER = 'rgba(58, 143, 168, 0.45)';
+const COZY_TEXT_SHADOW = '0 1px 2px rgba(0,0,0,0.85)';
 
 const DIFFICULTY_COLORS: Record<CourseDifficulty, string> = {
   beginner: T.green,
@@ -43,18 +46,24 @@ type LockDurationDays = 14 | 30 | 45 | 60 | 90 | 180 | 365;
 const LOCK_DURATIONS: LockDurationDays[] = [14, 30, 45, 60, 90, 180, 365];
 const PRINCIPAL_PRESETS = [1, 5, 10, 25, 50, 100, 250, 500];
 
+const IS_DEVNET = CLUSTER === 'devnet';
+
 // Wrap in Suspense — useSearchParams requires it in Next.js 16
 export default function OnboardingDepositPage() {
   return (
     <Suspense
       fallback={
-        <ScreenBackground>
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <p style={{ color: T.textSecondary }} className="text-sm font-mono">
-              Loading...
-            </p>
-          </div>
-        </ScreenBackground>
+        <div
+          className="min-h-screen flex items-center justify-center"
+          style={{ backgroundColor: T.bg }}
+        >
+          <p
+            className="font-pixel-mono text-sm"
+            style={{ color: T.textSecondary }}
+          >
+            Loading...
+          </p>
+        </div>
       }
     >
       <DepositContent />
@@ -139,6 +148,7 @@ function DepositContent() {
   const [skrAmount, setSkrAmount] = useState('0');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   // Faucet state
   const [faucetClaiming, setFaucetClaiming] = useState(false);
@@ -189,6 +199,23 @@ function DepositContent() {
       return availableLockDurations[0] ?? 30;
     });
   }, [availableLockDurations]);
+
+  // Find nearest preset index for slider — keeps slider in sync if user types a custom amount
+  const sliderIdx = useMemo(() => {
+    const amountNum = Number(principalAmount) || 0;
+    const exact = principalPresets.findIndex((p) => p === amountNum);
+    if (exact >= 0) return exact;
+    let nearest = 0;
+    let best = Infinity;
+    for (let i = 0; i < principalPresets.length; i++) {
+      const d = Math.abs(principalPresets[i] - amountNum);
+      if (d < best) {
+        best = d;
+        nearest = i;
+      }
+    }
+    return nearest;
+  }, [principalAmount, principalPresets]);
 
   // Build on-chain lock transaction, sign with wallet, send to network
   const handleDeposit = async () => {
@@ -311,305 +338,405 @@ function DepositContent() {
 
   const isDisabled = isSubmitting;
 
-  // --- MOCKUP PICKER (remove after choosing) ---
   const diffColor = DIFFICULTY_COLORS[course?.difficulty ?? 'beginner'];
   const catColor = CATEGORY_COLORS[course?.category ?? 'solana'] ?? T.teal;
   const courseTitle = course?.title ?? 'Selected Course';
   const lessonCount = course?.totalLessons ?? 0;
+  const courseTagline =
+    course?.description ?? 'Create the on-chain lock to start learning.';
+
+  const amountNum = Number(principalAmount) || 0;
+
+  const handleAmountStep = (delta: number) => {
+    const next = Math.max(0, amountNum + delta);
+    setPrincipalAmount(String(next));
+  };
 
   return (
-    <ScreenBackground>
-      <button
-        onClick={() => router.back()}
-        className="mt-2 mb-2 px-4 py-2 rounded-lg border text-[12px] font-mono font-bold tracking-[1px] transition-opacity hover:opacity-80"
-        style={{
-          color: T.textPrimary,
-          borderColor: T.borderDormant,
-          backgroundColor: 'rgba(255,255,255,0.04)',
-        }}
-      >
-        ← Back
-      </button>
-
-      {/* Header — Minimal with glowing underline */}
-      <div className="mb-6 px-1">
-        <h1 className="text-2xl font-bold tracking-wide mb-3" style={{ fontFamily: 'Georgia, serif', color: T.textPrimary }}>
-          Lock Your <span style={{ color: T.amber }}>Funds</span>
-        </h1>
-        <p className="text-[17px] font-semibold" style={{ color: T.textPrimary }}>{courseTitle}</p>
-        <div className="h-[2px] w-[60px] rounded-full mt-1.5 mb-2" style={{ background: `linear-gradient(90deg, ${catColor}, transparent)`, boxShadow: `0 0 8px ${catColor}40` }} />
-        <div className="flex items-center gap-2 mb-2">
-          {course?.difficulty && (
-            <span
-              className="text-[9px] font-mono font-bold uppercase tracking-[1px] px-1.5 py-[2px] rounded"
-              style={{ color: diffColor, backgroundColor: `${diffColor}15`, border: `1px solid ${diffColor}25` }}
-            >
-              {course.difficulty}
-            </span>
-          )}
-          {course?.category && (
-            <span
-              className="text-[9px] font-mono font-bold uppercase tracking-[1px] px-1.5 py-[2px] rounded"
-              style={{ color: catColor, backgroundColor: `${catColor}15`, border: `1px solid ${catColor}25` }}
-            >
-              {course.category}
-            </span>
-          )}
-          <span className="text-[10px] font-mono" style={{ color: T.textMuted }}>
-            {lessonCount} lessons
-          </span>
-        </div>
-        <p className="text-sm" style={{ color: 'rgba(255,255,255,0.55)' }}>Create the on-chain lock to start learning.</p>
+    <div className="min-h-screen relative" style={{ backgroundColor: T.bg }}>
+      {/* Bg layer — vault.png with onError fallback + 3-stop indigo gradient overlay */}
+      <div aria-hidden className="fixed inset-0 z-0 pointer-events-none">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/images/vault/vault.png"
+          alt=""
+          draggable={false}
+          className="w-full h-full object-cover select-none"
+          style={{ imageRendering: 'pixelated' }}
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).style.display = 'none';
+          }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              'linear-gradient(180deg, rgba(14,14,28,0.30) 0%, rgba(14,14,28,0.55) 60%, rgba(14,14,28,0.78) 100%)',
+          }}
+        />
       </div>
 
-      {/* Two-column layout: form left, info right */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-4">
-        {/* Left column — Form */}
-        <div>
-          <ParchmentCard>
-            {/* Principal Amount */}
-            <SectionLabel>Amount</SectionLabel>
-            <label htmlFor="principal-amount" className="sr-only">USDC deposit amount</label>
+      <HubButton />
+
+      <div className="relative z-10 max-w-[1100px] mx-auto px-[18px] pb-24">
+        <div className="pt-20" />
+
+        {/* Course header */}
+        <div className="mb-6">
+          <h1
+            className="font-pixel text-3xl md:text-4xl font-bold tracking-wide mb-3"
+            style={{ color: AMBER, textShadow: COZY_TEXT_SHADOW }}
+          >
+            {courseTitle}
+          </h1>
+          <div className="flex items-center gap-2 flex-wrap mb-2">
+            {course?.difficulty && (
+              <span
+                className="font-pixel-mono text-[10px] font-bold uppercase tracking-[1.5px] px-2 py-[3px] rounded"
+                style={{
+                  color: diffColor,
+                  backgroundColor: `${diffColor}15`,
+                  border: `1px solid ${diffColor}30`,
+                }}
+              >
+                {course.difficulty}
+              </span>
+            )}
+            {course?.category && (
+              <span
+                className="font-pixel-mono text-[10px] font-bold uppercase tracking-[1.5px] px-2 py-[3px] rounded"
+                style={{
+                  color: catColor,
+                  backgroundColor: `${catColor}15`,
+                  border: `1px solid ${catColor}30`,
+                }}
+              >
+                {course.category}
+              </span>
+            )}
+            {lessonCount > 0 && (
+              <span
+                className="font-pixel-mono text-[10px] uppercase tracking-[1.5px]"
+                style={{ color: T.textMuted }}
+              >
+                {lessonCount} lessons
+              </span>
+            )}
+          </div>
+          <p
+            className="font-pixel-mono text-[12px]"
+            style={{ color: T.textSecondary }}
+          >
+            {courseTagline}
+          </p>
+        </div>
+
+        {/* Single CozyCard wrapping the whole form */}
+        <CozyCard>
+          {/* Amount section */}
+          <CozySectionLabel>Amount (USDC)</CozySectionLabel>
+          <div className="flex items-center gap-2 mb-3">
+            <button
+              type="button"
+              onClick={() => handleAmountStep(-1)}
+              className="w-11 h-11 rounded-lg flex items-center justify-center transition-colors hover:brightness-125 cursor-pointer"
+              style={{
+                backgroundColor: 'rgba(0,0,0,0.35)',
+                border: `1px solid ${COZY_BORDER}`,
+                color: AMBER,
+              }}
+              aria-label="Decrease amount"
+            >
+              <Minus size={18} />
+            </button>
             <input
-              id="principal-amount"
               type="number"
               inputMode="decimal"
               value={principalAmount}
               onChange={(e) => setPrincipalAmount(e.target.value)}
               placeholder={courseLockPolicy.minPrincipalAmountUi}
-              className="w-full px-3.5 py-3.5 rounded-lg border text-2xl font-bold bg-transparent outline-none mt-1.5 transition-colors focus:border-[rgba(212,160,74,0.3)]"
+              aria-label="USDC deposit amount"
+              className="font-pixel-mono flex-1 text-center text-2xl font-bold py-2.5 rounded-lg outline-none"
               style={{
-                color: T.textPrimary,
-                borderColor: T.borderDormant,
-                backgroundColor: 'rgba(0,0,0,0.3)',
+                color: AMBER,
+                backgroundColor: 'rgba(0,0,0,0.35)',
+                border: `1px solid ${COZY_BORDER}`,
+                textShadow: COZY_TEXT_SHADOW,
               }}
             />
+            <button
+              type="button"
+              onClick={() => handleAmountStep(1)}
+              className="w-11 h-11 rounded-lg flex items-center justify-center transition-colors hover:brightness-125 cursor-pointer"
+              style={{
+                backgroundColor: 'rgba(0,0,0,0.35)',
+                border: `1px solid ${COZY_BORDER}`,
+                color: AMBER,
+              }}
+              aria-label="Increase amount"
+            >
+              <Plus size={18} />
+            </button>
+          </div>
 
-            {/* Preset pills */}
-            <div className="flex flex-wrap gap-2 mt-2.5">
-              {principalPresets.map((value) => {
-                const selected = Number(principalAmount) === value;
-                return (
-                  <button
-                    key={value}
-                    onClick={() => setPrincipalAmount(String(value))}
-                    className="px-4 py-3 rounded-full border text-[13px] font-semibold transition-colors"
+          {/* Slider bound to principalPresets */}
+          {principalPresets.length > 1 && (
+            <div className="mb-3">
+              <input
+                type="range"
+                min={0}
+                max={principalPresets.length - 1}
+                value={sliderIdx}
+                onChange={(e) =>
+                  setPrincipalAmount(String(principalPresets[Number(e.target.value)]))
+                }
+                aria-label="Quick amount slider"
+                className="w-full"
+                style={{ accentColor: AMBER }}
+              />
+              <div className="flex justify-between mt-1 px-0.5">
+                {principalPresets.map((p) => (
+                  <span
+                    key={p}
+                    className="font-pixel-mono text-[10px]"
                     style={{
-                      borderColor: selected ? T.amber : T.borderDormant,
-                      backgroundColor: selected
-                        ? `${T.amber}15`
-                        : 'rgba(0,0,0,0.2)',
-                      color: selected ? T.amber : T.textSecondary,
+                      color: amountNum === p ? AMBER : T.textMuted,
+                      textShadow: amountNum === p ? COZY_TEXT_SHADOW : undefined,
                     }}
                   >
-                    {value} USDC
+                    {p}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Preset pills (highlighted when matching) */}
+          <div className="flex flex-wrap gap-1.5 mt-1">
+            {principalPresets.map((value) => {
+              const selected = amountNum === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setPrincipalAmount(String(value))}
+                  className="px-3 py-1.5 rounded-full text-[12px] font-bold transition-colors cursor-pointer"
+                  style={{
+                    fontFamily: 'var(--font-pixel-mono), monospace',
+                    border: `1px solid ${selected ? AMBER : COZY_BORDER}`,
+                    backgroundColor: selected
+                      ? `${AMBER}22`
+                      : 'rgba(0,0,0,0.25)',
+                    color: selected ? AMBER : T.textSecondary,
+                  }}
+                >
+                  {value}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Duration segmented pill toggle */}
+          <div className="mt-5">
+            <CozySectionLabel>Duration</CozySectionLabel>
+            <div
+              className="grid gap-1 p-1 rounded-lg"
+              style={{
+                gridTemplateColumns: `repeat(${Math.max(1, availableLockDurations.length)}, minmax(0, 1fr))`,
+                backgroundColor: 'rgba(0,0,0,0.35)',
+                border: `1px solid ${COZY_BORDER}`,
+              }}
+              role="radiogroup"
+              aria-label="Lock duration"
+            >
+              {availableLockDurations.map((d) => {
+                const sel = lockDuration === d;
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    role="radio"
+                    aria-checked={sel}
+                    onClick={() => setLockDuration(d)}
+                    className="py-2.5 rounded-md transition-all cursor-pointer"
+                    style={{
+                      fontFamily: 'var(--font-pixel-mono), monospace',
+                      backgroundColor: sel ? AMBER : 'transparent',
+                      color: sel ? '#1a1408' : T.textPrimary,
+                      fontWeight: 700,
+                      fontSize: 13,
+                      letterSpacing: '1.5px',
+                      boxShadow: sel
+                        ? `0 0 14px ${AMBER}55, inset 0 1px 0 rgba(255,255,255,0.25)`
+                        : 'none',
+                    }}
+                  >
+                    {d}d
                   </button>
                 );
               })}
             </div>
+          </div>
 
-            {/* Hint text */}
-            <p className="text-[11px] mt-1.5" style={{ color: T.textMuted }}>
-              {courseLockPolicy.demoPrincipalAmountUi
-                ? `Demo preset: ${courseLockPolicy.demoPrincipalAmountUi} USDC`
-                : 'Course minimums apply to all lock amounts.'}
-            </p>
-
-            {/* SKR Boost */}
-            <div className="mt-5">
-              <SectionLabel>SKR Boost (optional)</SectionLabel>
-              <label htmlFor="skr-boost" className="sr-only">SKR boost amount</label>
+          {/* Advanced collapsible — SKR boost */}
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={() => setAdvancedOpen((v) => !v)}
+              aria-expanded={advancedOpen}
+              className="font-pixel-mono w-full flex items-center justify-between text-[11px] uppercase tracking-[1.5px] py-2 hover:opacity-80 cursor-pointer"
+              style={{ color: T.textSecondary }}
+            >
+              <span>Advanced · SKR boost</span>
+              <span style={{ color: AMBER }}>{advancedOpen ? '−' : '+'}</span>
+            </button>
+            {advancedOpen && (
               <input
-                id="skr-boost"
                 type="number"
                 inputMode="decimal"
                 value={skrAmount}
                 onChange={(e) => setSkrAmount(e.target.value)}
                 placeholder="0"
-                className="w-full px-3.5 py-3.5 rounded-lg border text-[17px] bg-transparent outline-none mt-1.5 transition-colors focus:border-[rgba(212,160,74,0.3)]"
+                aria-label="SKR boost amount"
+                className="font-pixel-mono w-full px-3 py-2.5 rounded-lg outline-none text-[14px] mt-1"
                 style={{
                   color: T.textPrimary,
-                  borderColor: T.borderDormant,
-                  backgroundColor: 'rgba(0,0,0,0.3)',
+                  backgroundColor: 'rgba(0,0,0,0.32)',
+                  border: `1px solid ${COZY_BORDER}`,
                 }}
               />
-            </div>
+            )}
+          </div>
 
-            {/* Lock Duration */}
-            <fieldset className="mt-5 border-none p-0 m-0">
-              <legend className="sr-only">Lock duration</legend>
-              <SectionLabel>Lock Duration</SectionLabel>
-              <div className="flex gap-2.5 mt-1.5" role="radiogroup" aria-label="Lock duration">
-                {availableLockDurations.map((duration) => {
-                  const selected = lockDuration === duration;
-                  return (
-                    <button
-                      key={duration}
-                      role="radio"
-                      aria-checked={selected}
-                      onClick={() => setLockDuration(duration)}
-                      className="flex-1 py-2.5 rounded-lg border text-sm font-semibold text-center transition-colors"
-                      style={{
-                        borderColor: selected ? T.teal : T.borderDormant,
-                        backgroundColor: selected
-                          ? `${T.teal}12`
-                          : 'rgba(0,0,0,0.2)',
-                        color: selected ? T.teal : T.textPrimary,
-                      }}
-                    >
-                      {duration}d
-                    </button>
-                  );
-                })}
-              </div>
-            </fieldset>
-          </ParchmentCard>
-
-          {/* Status message */}
+          {/* Status message — inline */}
           {statusMessage && (
-            <ParchmentCard className="mt-4">
-              <p className="text-[13px]" style={{ color: T.textSecondary }}>
+            <div
+              className="mt-4 px-3 py-2 rounded-lg"
+              style={{
+                backgroundColor: 'rgba(0,0,0,0.32)',
+                border: `1px solid ${COZY_BORDER}`,
+              }}
+            >
+              <p
+                className="font-pixel-mono text-[12px]"
+                style={{ color: T.textSecondary }}
+              >
                 {statusMessage}
               </p>
-            </ParchmentCard>
+            </div>
           )}
 
-          {/* Deposit button */}
-          <div className="mt-4">
-            <PrimaryButton onClick={handleDeposit} disabled={isDisabled}>
-              {isSubmitting ? (
-                <>
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Creating Lock...
-                </>
-              ) : 'Deposit & Start Learning'}
-            </PrimaryButton>
-          </div>
-        </div>
-
-        {/* Right column — Info */}
-        <div>
-          <ParchmentCard>
-            {/* Course Policy */}
-            <SectionLabel>Course Policy</SectionLabel>
+          {/* Wallet inline strip */}
+          <div className="mt-5 mb-4">
             <div
-              className="rounded-lg border px-3.5 py-3"
+              className="flex items-center justify-center gap-3 px-3 py-2 rounded-lg flex-wrap"
               style={{
-                backgroundColor: 'rgba(0,0,0,0.3)',
-                borderColor: T.borderDormant,
+                backgroundColor: 'rgba(0,0,0,0.32)',
+                border: `1px solid ${COZY_BORDER}`,
               }}
             >
-              <p className="text-[13px]" style={{ color: T.textSecondary }}>
-                Min deposit: {courseLockPolicy.minPrincipalAmountUi} USDC
-              </p>
-              <p className="text-[13px] mt-1" style={{ color: T.textSecondary }}>
-                Max deposit:{' '}
-                {courseLockPolicy.maxPrincipalAmountUi
-                  ? `${courseLockPolicy.maxPrincipalAmountUi} USDC`
-                  : 'No course max'}
-              </p>
-              <p className="text-[13px] mt-1" style={{ color: T.textSecondary }}>
-                Duration: {courseLockPolicy.minLockDurationDays}-
-                {courseLockPolicy.maxLockDurationDays} days
-              </p>
-              <p className="text-[13px] mt-1" style={{ color: T.textMuted }}>
-                Presets:{' '}
-                {availableLockDurations.length > 0
-                  ? availableLockDurations.map((d) => `${d}d`).join(' / ')
-                  : 'None yet'}
-              </p>
+              {[
+                { label: 'USDC', value: balances?.stableBalanceUi ?? '...' },
+                { label: 'SKR', value: balances?.skrBalanceUi ?? '...' },
+                { label: 'SOL', value: balances?.solBalanceUi ?? '...' },
+              ].map((it, i, arr) => (
+                <div key={it.label} className="flex items-center gap-1.5">
+                  <span
+                    className="font-pixel-mono text-[10px] uppercase tracking-[1.5px]"
+                    style={{ color: T.textMuted }}
+                  >
+                    {it.label}
+                  </span>
+                  <span
+                    className="font-pixel-mono text-[12px] font-bold"
+                    style={{ color: AMBER, textShadow: COZY_TEXT_SHADOW }}
+                  >
+                    {it.value}
+                  </span>
+                  {i < arr.length - 1 && (
+                    <span style={{ color: T.borderDormant }}> · </span>
+                  )}
+                </div>
+              ))}
             </div>
+          </div>
 
-            {/* Stablecoin */}
-            <div className="mt-5">
-              <SectionLabel>Stablecoin</SectionLabel>
-              <div
-                className="rounded-lg border py-2.5 text-center"
+          {/* Claim Test Tokens — devnet only */}
+          {IS_DEVNET && (
+            <div className="mb-4 text-center">
+              <button
+                type="button"
+                onClick={handleClaimFaucet}
+                disabled={faucetDisabled}
+                className="text-[11px] underline-offset-2 hover:underline transition-opacity hover:opacity-80 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{
-                  backgroundColor: `${T.green}12`,
-                  borderColor: `${T.green}30`,
+                  fontFamily: 'var(--font-pixel-mono), monospace',
+                  color: faucetClaimed ? T.textMuted : T.teal,
+                  letterSpacing: '0.5px',
                 }}
               >
-                <span className="text-sm font-semibold" style={{ color: T.green }}>
-                  USDC only
-                </span>
-              </div>
+                {faucetClaiming
+                  ? 'Claiming test tokens...'
+                  : faucetClaimed
+                    ? 'Test tokens claimed'
+                    : 'Need test tokens? Claim Test Tokens →'}
+              </button>
+              {faucetMessage && (
+                <p
+                  className="font-pixel-mono text-[10px] mt-1"
+                  style={{ color: faucetClaimed ? T.green : AMBER }}
+                >
+                  {faucetMessage}
+                </p>
+              )}
             </div>
+          )}
 
-            {/* Wallet Balances */}
-            <div className="mt-5">
-              <SectionLabel>Wallet</SectionLabel>
-              <div
-                className="rounded-lg border px-3.5 py-3"
-                style={{
-                  backgroundColor: 'rgba(0,0,0,0.3)',
-                  borderColor: T.borderDormant,
-                }}
-              >
-                <div className="flex justify-between py-1.5" style={{ borderBottom: `1px solid ${T.borderDormant}` }}>
-                  <span className="text-[13px]" style={{ color: T.textSecondary }}>USDC</span>
-                  <span className="text-[13px] font-semibold" style={{ color: T.textPrimary }}>{balances?.stableBalanceUi ?? '...'}</span>
-                </div>
-                <div className="flex justify-between py-1.5" style={{ borderBottom: `1px solid ${T.borderDormant}` }}>
-                  <span className="text-[13px]" style={{ color: T.textSecondary }}>SKR</span>
-                  <span className="text-[13px] font-semibold" style={{ color: T.textPrimary }}>{balances?.skrBalanceUi ?? '...'}</span>
-                </div>
-                <div className="flex justify-between py-1.5">
-                  <span className="text-[13px]" style={{ color: T.textSecondary }}>SOL</span>
-                  <span className="text-[13px] font-semibold" style={{ color: T.textPrimary }}>{balances?.solBalanceUi ?? '...'}</span>
-                </div>
-              </div>
-            </div>
-          </ParchmentCard>
-
-          {/* Faucet — Get Test Tokens */}
-          <ParchmentCard
-            className="mt-4"
-            style={{ padding: 20, borderLeftWidth: 3, borderLeftColor: faucetClaimed ? T.textMuted : T.teal }}
+          {/* Deposit CTA */}
+          <button
+            type="button"
+            onClick={handleDeposit}
+            disabled={isDisabled}
+            className="w-full py-3.5 rounded-lg font-bold text-sm transition-all hover:brightness-110 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              fontFamily: 'var(--font-pixel), Georgia, serif',
+              background: `linear-gradient(135deg, ${AMBER}, #d4a04a)`,
+              color: '#1a1408',
+              letterSpacing: '1.5px',
+              boxShadow:
+                '0 4px 16px rgba(255,213,128,0.35), inset 0 1px 0 rgba(255,255,255,0.25)',
+            }}
           >
-            <p
-              className="text-[15px] font-bold"
-              style={{ fontFamily: 'Georgia, serif', color: faucetClaimed ? T.textMuted : T.teal }}
-            >
-              {faucetClaimed ? 'Test tokens claimed' : 'Need test tokens?'}
-            </p>
-            <p className="text-[12px] mt-1 leading-relaxed" style={{ color: T.textSecondary }}>
-              {faucetClaimed
-                ? 'You\'ve already claimed your test tokens.'
-                : 'This is Solana devnet. Claim free SOL & USDC to try the platform.'}
-            </p>
-            <button
-              onClick={handleClaimFaucet}
-              disabled={faucetDisabled}
-              className="w-full mt-3 py-3 rounded-lg font-bold text-sm transition-opacity"
-              style={{
-                background: faucetDisabled
-                  ? 'rgba(255,255,255,0.06)'
-                  : `linear-gradient(135deg, ${T.teal}, ${T.teal}cc)`,
-                color: faucetDisabled ? T.textMuted : '#0e0e1c',
-                opacity: faucetDisabled ? 0.5 : 1,
-                cursor: faucetDisabled ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {faucetClaiming
-                ? 'Claiming...'
-                : faucetClaimed
-                  ? 'Claimed'
-                  : 'Claim Test Tokens'}
-            </button>
-            {faucetMessage && (
-              <p className="text-[11px] mt-2 text-center" style={{ color: faucetClaimed ? T.green : T.amber }}>
-                {faucetMessage}
-              </p>
+            {isSubmitting ? (
+              <>
+                <svg
+                  className="animate-spin -ml-1 mr-2 h-4 w-4 inline"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
+                </svg>
+                Creating Lock...
+              </>
+            ) : (
+              <>◆ DEPOSIT &amp; START LEARNING ◆</>
             )}
-          </ParchmentCard>
-        </div>
+          </button>
+        </CozyCard>
       </div>
-
-      <div className="mb-8" />
-    </ScreenBackground>
+    </div>
   );
 }

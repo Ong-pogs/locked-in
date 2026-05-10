@@ -6,7 +6,6 @@ const PUBLIC_ROUTES = [
   '/manifest.webmanifest',
   '/village',
   '/menu',
-  '/lock-prototypes',
   '/dashboard',
   '/courses',
   '/shop',
