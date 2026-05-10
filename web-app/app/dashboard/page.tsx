@@ -458,7 +458,7 @@ function FlameManagement(props: {
         className="font-pixel-mono text-[10px] font-bold uppercase tracking-[2px] mb-3"
         style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
       >
-        Flame Management
+        Streak
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start">
         <div>
@@ -555,156 +555,113 @@ type ActiveCourseRow = {
   completedLessons: number;
   totalLessons: number;
   nextLessonTitle: string;
+  isActive: boolean;
 };
 
-type SwitchOption = { id: string; title: string };
-
-function ActiveCourseWithSwitcher({
-  activeCourse,
-  switchOptions,
+function AllActiveCourses({
+  rows,
   onContinue,
-  onSwitch,
+  onSetActive,
 }: {
-  activeCourse: ActiveCourseRow | null;
-  switchOptions: SwitchOption[];
+  rows: ActiveCourseRow[];
   onContinue: (id: string) => void;
-  onSwitch: (id: string) => void;
+  onSetActive: (id: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-
-  if (!activeCourse) {
+  if (rows.length === 0) {
     return (
       <CozyCard className="mb-5">
         <p
           className="font-pixel-mono text-[10px] font-bold uppercase tracking-[2px] mb-2"
           style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
         >
-          Active Course
+          Your Courses
         </p>
         <p className="font-pixel-mono text-[11px]" style={{ color: T.textMuted }}>
-          No active course yet — head to the bookshelf to enroll.
+          No active courses yet — head to the bookshelf to enroll.
         </p>
       </CozyCard>
     );
   }
 
-  const pct =
-    activeCourse.totalLessons > 0
-      ? (activeCourse.completedLessons / activeCourse.totalLessons) * 100
-      : 0;
-
   return (
     <CozyCard className="mb-5">
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <p
-          className="font-pixel-mono text-[10px] font-bold uppercase tracking-[2px]"
-          style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
-        >
-          Active Course
-        </p>
-        {switchOptions.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setOpen((v) => !v)}
-            className="font-pixel-mono text-[10px] uppercase tracking-[1.5px] flex items-center gap-1 px-2.5 py-1 rounded-full transition-colors cursor-pointer"
-            style={{
-              color: AMBER,
-              backgroundColor: open ? 'rgba(255,213,128,0.14)' : 'rgba(255,213,128,0.06)',
-              border: `1px solid ${open ? AMBER : 'rgba(255,213,128,0.22)'}`,
-            }}
-            aria-expanded={open}
-          >
-            Switch
-            <ChevronRight
-              size={11}
-              color={AMBER}
-              strokeWidth={2.5}
-              style={{
-                transform: open ? 'rotate(90deg)' : 'rotate(0deg)',
-                transition: 'transform 150ms ease',
-              }}
-            />
-          </button>
-        )}
-      </div>
-
-      <button
-        type="button"
-        onClick={() => onContinue(activeCourse.id)}
-        className="w-full text-left cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 rounded"
+      <p
+        className="font-pixel-mono text-[10px] font-bold uppercase tracking-[2px] mb-3"
+        style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
       >
-        <div className="flex items-center justify-between gap-2 mb-1.5">
-          <p
-            className="text-[14px] font-bold font-pixel truncate"
-            style={{ color: T.textPrimary }}
-          >
-            {activeCourse.title}
-          </p>
-          <span
-            className="font-pixel-mono text-[10px] flex items-center gap-0.5 shrink-0"
-            style={{ color: AMBER }}
-          >
-            Continue <ChevronRight size={12} color={AMBER} strokeWidth={2.5} />
-          </span>
-        </div>
-        <div
-          className="w-full h-1.5 rounded-full overflow-hidden"
-          style={{ backgroundColor: 'rgba(255,255,255,0.06)' }}
-        >
-          <div
-            className="h-full rounded-full transition-all duration-500"
-            style={{
-              width: `${pct}%`,
-              background: `linear-gradient(90deg, ${AMBER}66 0%, ${AMBER} 100%)`,
-              boxShadow: `0 0 6px ${AMBER}55`,
-            }}
-          />
-        </div>
-        <p className="text-[10px] mt-1 font-pixel-mono" style={{ color: T.textMuted }}>
-          {activeCourse.completedLessons}/{activeCourse.totalLessons} lessons · next:{' '}
-          {activeCourse.nextLessonTitle}
-        </p>
-      </button>
-
-      {open && switchOptions.length > 0 && (
-        <div
-          className="mt-3 pt-3 flex flex-col gap-2"
-          style={{ borderTop: `1px dashed ${COZY_BORDER}` }}
-        >
-          <p
-            className="font-pixel-mono text-[9px] uppercase tracking-[1.5px]"
-            style={{ color: T.textMuted }}
-          >
-            Switch to another locked course
-          </p>
-          {switchOptions.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => {
-                onSwitch(c.id);
-                setOpen(false);
-              }}
-              className="flex items-center justify-between gap-2 py-2 px-3 rounded-lg transition-colors text-left cursor-pointer"
+        Your Courses
+      </p>
+      <div className="flex flex-col gap-3">
+        {rows.map((row) => {
+          const pct = row.totalLessons > 0 ? (row.completedLessons / row.totalLessons) * 100 : 0;
+          return (
+            <div
+              key={row.id}
+              className="rounded-lg p-3 transition-colors"
               style={{
-                backgroundColor: 'rgba(14,14,28,0.40)',
-                border: `1px solid ${COZY_BORDER}`,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = AMBER;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = COZY_BORDER;
+                backgroundColor: row.isActive ? 'rgba(255,213,128,0.06)' : 'rgba(14,14,28,0.30)',
+                border: row.isActive
+                  ? `1px solid ${AMBER}55`
+                  : `1px solid ${COZY_BORDER}`,
+                boxShadow: row.isActive ? `0 0 12px rgba(255,213,128,0.12)` : 'none',
               }}
             >
-              <span className="font-pixel text-[12px]" style={{ color: T.textPrimary }}>
-                {c.title}
-              </span>
-              <ChevronRight size={12} color={T.textMuted} strokeWidth={2.5} />
-            </button>
-          ))}
-        </div>
-      )}
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <p
+                    className="text-[13px] font-bold font-pixel truncate"
+                    style={{ color: T.textPrimary }}
+                  >
+                    {row.title}
+                  </p>
+                  {row.isActive && (
+                    <span
+                      className="font-pixel-mono text-[8px] uppercase tracking-[1px] px-1.5 py-0.5 rounded shrink-0"
+                      style={{
+                        color: AMBER,
+                        border: `1px solid ${AMBER}55`,
+                        backgroundColor: 'rgba(255,213,128,0.10)',
+                      }}
+                    >
+                      Active
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => (row.isActive ? onContinue(row.id) : onSetActive(row.id))}
+                  className="font-pixel-mono text-[10px] uppercase tracking-[1px] flex items-center gap-0.5 shrink-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 rounded px-1"
+                  style={{ color: row.isActive ? AMBER : T.textSecondary }}
+                >
+                  {row.isActive ? 'Continue' : 'Set Active'}
+                  <ChevronRight
+                    size={12}
+                    color={row.isActive ? AMBER : T.textSecondary}
+                    strokeWidth={2.5}
+                  />
+                </button>
+              </div>
+              <div
+                className="w-full h-1.5 rounded-full overflow-hidden"
+                style={{ backgroundColor: 'rgba(255,255,255,0.06)' }}
+              >
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${pct}%`,
+                    background: `linear-gradient(90deg, ${AMBER}66 0%, ${AMBER} 100%)`,
+                    boxShadow: row.isActive ? `0 0 6px ${AMBER}55` : 'none',
+                    opacity: row.isActive ? 1 : 0.6,
+                  }}
+                />
+              </div>
+              <p className="text-[10px] mt-1 font-pixel-mono" style={{ color: T.textMuted }}>
+                {row.completedLessons}/{row.totalLessons} lessons · next: {row.nextLessonTitle}
+              </p>
+            </div>
+          );
+        })}
+      </div>
     </CozyCard>
   );
 }
@@ -922,33 +879,24 @@ export default function DashboardPage() {
     [enrolledCourseIds, courseStates],
   );
 
-  // ── Active course row (for the hero card with switcher) ──
-  const activeCourseRow: ActiveCourseRow | null = useMemo(() => {
-    if (!activeCourseId) return null;
-    if (!lockedCourseIds.includes(activeCourseId)) return null;
-    const course = courses.find((c) => c.id === activeCourseId);
-    const courseLessons = lessons[activeCourseId] ?? [];
-    const completedCount = courseLessons.filter((l) => lessonProgress[l.id]?.completed).length;
-    const nextLesson = courseLessons.find((l) => !lessonProgress[l.id]?.completed);
-    const nextLessonTitle = nextLesson?.title ?? course?.title ?? 'Continue';
-    return {
-      id: activeCourseId,
-      title: course?.title ?? activeCourseId,
-      completedLessons: completedCount,
-      totalLessons: courseLessons.length || course?.totalLessons || 0,
-      nextLessonTitle,
-    };
-  }, [activeCourseId, lockedCourseIds, courses, lessons, lessonProgress]);
-
-  // ── Switch options: locked courses excluding the currently active one ──
-  const switchOptions: SwitchOption[] = useMemo(() => {
-    return lockedCourseIds
-      .filter((id) => id !== activeCourseId)
-      .map((id) => {
-        const course = courses.find((c) => c.id === id);
-        return { id, title: course?.title ?? id };
-      });
-  }, [lockedCourseIds, activeCourseId, courses]);
+  // ── All locked courses (each rendered as its own row, status visible at once) ──
+  const allActiveCourseRows: ActiveCourseRow[] = useMemo(() => {
+    return lockedCourseIds.map((id) => {
+      const course = courses.find((c) => c.id === id);
+      const courseLessons = lessons[id] ?? [];
+      const completedCount = courseLessons.filter((l) => lessonProgress[l.id]?.completed).length;
+      const nextLesson = courseLessons.find((l) => !lessonProgress[l.id]?.completed);
+      const nextLessonTitle = nextLesson?.title ?? course?.title ?? 'Continue';
+      return {
+        id,
+        title: course?.title ?? id,
+        completedLessons: completedCount,
+        totalLessons: courseLessons.length || course?.totalLessons || 0,
+        nextLessonTitle,
+        isActive: id === activeCourseId,
+      };
+    });
+  }, [lockedCourseIds, activeCourseId, courses, lessons, lessonProgress]);
 
   // ── Recent activity (top 5 most recently completed lessons) ──
   const recentActivity: RecentActivityRow[] = useMemo(() => {
@@ -1104,12 +1052,11 @@ export default function DashboardPage() {
           recoveryMode={recoveryMode}
         />
 
-        {/* 5. Active course + inline switcher */}
-        <ActiveCourseWithSwitcher
-          activeCourse={activeCourseRow}
-          switchOptions={switchOptions}
+        {/* 5. All locked courses — status visible at once, no switching needed */}
+        <AllActiveCourses
+          rows={allActiveCourseRows}
           onContinue={handleContinueCourse}
-          onSwitch={handleSwitchCourse}
+          onSetActive={handleSwitchCourse}
         />
 
         {/* 6. Journey */}
