@@ -2,7 +2,40 @@
 
 import { useState } from 'react';
 import type { Question } from '@/types';
-import { T, ParchmentCard, PrimaryButton } from './theme';
+import { T } from './theme';
+import { CozyCard } from './cozy';
+
+const AMBER = '#FFD580';
+const COZY_BORDER = 'rgba(58, 143, 168, 0.45)';
+
+function CozyPrimary({
+  children,
+  onClick,
+  disabled,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="w-full py-3 rounded-lg text-center font-bold uppercase tracking-[1.5px] font-pixel text-[12px] transition-colors"
+      style={{
+        border: `1px solid ${disabled ? COZY_BORDER : AMBER}`,
+        background: disabled ? 'transparent' : 'rgba(255,213,128,0.12)',
+        color: disabled ? T.textMuted : AMBER,
+        boxShadow: disabled ? 'none' : `0 0 12px ${AMBER}55`,
+        opacity: disabled ? 0.4 : 1,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+      }}
+    >
+      {children}
+    </button>
+  );
+}
 
 interface RecallQuestionProps {
   question: Question;
@@ -64,24 +97,24 @@ export function RecallQuestion({ question, lessonTitle, onComplete }: RecallQues
             />
           </svg>
           <span
-            className="font-mono text-[10px] uppercase tracking-[2px] font-bold"
-            style={{ color: T.amber }}
+            className="font-pixel-mono text-[10px] uppercase tracking-[2px] font-bold"
+            style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
           >
             Quick Recall
           </span>
         </div>
-        <p className="text-[13px]" style={{ color: T.textSecondary }}>
+        <p className="text-[13px] font-pixel" style={{ color: T.textSecondary }}>
           Before we continue, let&apos;s revisit something from{' '}
-          <span style={{ color: T.amber }}>{lessonTitle}</span>
+          <span style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}>{lessonTitle}</span>
         </p>
       </div>
 
       {/* Question card */}
       <div className="w-full max-w-lg">
-        <ParchmentCard className="p-5">
+        <CozyCard style={{ padding: 20 }}>
           {/* Prompt */}
           <p
-            className="text-[15px] font-semibold leading-[22px] mb-4"
+            className="text-[15px] font-semibold font-pixel leading-[22px] mb-4"
             style={{ color: T.textPrimary }}
           >
             {question.prompt}
@@ -97,17 +130,21 @@ export function RecallQuestion({ question, lessonTitle, onComplete }: RecallQues
                 const showResult = hasChecked;
                 const isCorrectOption = optText === question.correctAnswer || optId === question.correctAnswer;
 
-                let borderColor = T.borderDormant;
-                let bgColor = 'transparent';
+                let borderColor = COZY_BORDER;
+                let bgColor = 'rgba(14,14,28,0.30)';
+                let glow = 'none';
                 if (showResult && isCorrectOption) {
                   borderColor = T.green;
                   bgColor = `${T.green}10`;
+                  glow = `0 0 12px ${T.green}55`;
                 } else if (showResult && isSelected && !isCorrectOption) {
                   borderColor = T.crimson;
                   bgColor = `${T.crimson}10`;
+                  glow = `0 0 12px ${T.crimson}55`;
                 } else if (isSelected) {
-                  borderColor = T.amber;
-                  bgColor = `${T.amber}08`;
+                  borderColor = AMBER;
+                  bgColor = 'rgba(255,213,128,0.10)';
+                  glow = `0 0 10px ${AMBER}55`;
                 }
 
                 return (
@@ -116,10 +153,11 @@ export function RecallQuestion({ question, lessonTitle, onComplete }: RecallQues
                     onClick={() => !hasChecked && setSelectedOption(optId)}
                     disabled={hasChecked}
                     aria-label={optText}
-                    className="w-full text-left px-4 py-3 rounded-lg border text-[13px] transition-colors"
+                    className="w-full text-left px-4 py-3 rounded-lg border text-[13px] font-pixel transition-colors"
                     style={{
                       borderColor,
                       backgroundColor: bgColor,
+                      boxShadow: glow,
                       color: T.textPrimary,
                       opacity: hasChecked && !isSelected && !isCorrectOption ? 0.4 : 1,
                     }}
@@ -139,11 +177,12 @@ export function RecallQuestion({ question, lessonTitle, onComplete }: RecallQues
               disabled={hasChecked}
               placeholder="Type your answer..."
               rows={3}
-              className="w-full px-4 py-3 rounded-lg border text-[13px] bg-transparent outline-none resize-none"
+              className="w-full px-4 py-3 rounded-lg border text-[13px] font-pixel-mono outline-none resize-none"
               style={{
+                backgroundColor: 'rgba(0,0,0,0.30)',
                 borderColor: hasChecked
                   ? isCorrect ? T.green : T.crimson
-                  : T.borderDormant,
+                  : COZY_BORDER,
                 color: T.textPrimary,
               }}
             />
@@ -152,31 +191,33 @@ export function RecallQuestion({ question, lessonTitle, onComplete }: RecallQues
           {/* Result feedback */}
           {hasChecked && (
             <div
-              className="mt-3 px-4 py-2.5 rounded-lg text-[12px] font-semibold"
+              className="mt-3 px-4 py-2.5 rounded-lg text-[12px] font-semibold font-pixel"
               style={{
                 backgroundColor: isCorrect ? `${T.green}10` : `${T.crimson}10`,
+                border: `1px solid ${isCorrect ? T.green : T.crimson}55`,
                 color: isCorrect ? T.green : T.crimson,
+                textShadow: '0 1px 2px rgba(0,0,0,0.85)',
               }}
             >
               {isCorrect ? 'Correct! Great recall.' : 'Not quite — but that\'s okay, that\'s why we review.'}
             </div>
           )}
-        </ParchmentCard>
+        </CozyCard>
 
         {/* Action button */}
         <div className="mt-4">
           {!hasChecked ? (
-            <PrimaryButton onClick={handleCheck} disabled={!canCheck}>
+            <CozyPrimary onClick={handleCheck} disabled={!canCheck}>
               Check Answer
-            </PrimaryButton>
+            </CozyPrimary>
           ) : (
-            <PrimaryButton onClick={onComplete}>
+            <CozyPrimary onClick={onComplete}>
               Continue to Lesson
-            </PrimaryButton>
+            </CozyPrimary>
           )}
         </div>
 
-        <p className="text-center text-[10px] mt-2" style={{ color: T.textMuted }}>
+        <p className="text-center text-[10px] mt-2 font-pixel-mono" style={{ color: T.textMuted }}>
           Recall questions help strengthen your memory — they don&apos;t affect your score.
         </p>
       </div>

@@ -3,12 +3,14 @@
 import { Suspense, use, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCourseStore } from '@/stores';
-import {
-  ScreenBackground,
-  ParchmentCard,
-  PrimaryButton,
-  T,
-} from '@/components/theme';
+import { T } from '@/components/theme';
+import { CozyCard } from '@/components/cozy';
+import { HubButton } from '@/components/HubButton';
+
+// ── Cozy palette constants (mirror /courses, /dashboard, lesson player) ──
+const AMBER = '#FFD580';
+const COZY_BORDER = 'rgba(58, 143, 168, 0.45)';
+const COZY_TEXT_SHADOW = '0 1px 2px rgba(0,0,0,0.85)';
 
 interface QuizReviewData {
   questions: {
@@ -28,17 +30,84 @@ interface QuizReviewData {
   }[];
 }
 
+// ── Shared cozy shell — academy backdrop + indigo gradient + Hub ──
+function CozyResultShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen relative" style={{ backgroundColor: T.bg }}>
+      <div aria-hidden className="fixed inset-0 z-0 pointer-events-none">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/images/academy/course.png"
+          alt=""
+          draggable={false}
+          className="w-full h-full object-cover select-none"
+          style={{ imageRendering: 'pixelated' }}
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).style.display = 'none';
+          }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              'linear-gradient(180deg, rgba(14,14,28,0.30) 0%, rgba(14,14,28,0.55) 60%, rgba(14,14,28,0.78) 100%)',
+          }}
+        />
+      </div>
+      <HubButton />
+      <div className="relative z-10 max-w-[760px] mx-auto px-[18px] pb-10 pt-20">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ── Cozy primary CTA — same treatment as lesson player ──
+function CozyPrimary({
+  children,
+  onClick,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full py-3.5 rounded-[10px] text-center transition-all duration-150 cursor-pointer hover:brightness-110"
+      style={{
+        backgroundColor: AMBER,
+        border: `1px solid ${AMBER}80`,
+        boxShadow: `0 0 16px ${AMBER}33`,
+        fontFamily: 'var(--font-pixel), Georgia, serif',
+        fontSize: 13,
+        fontWeight: 800,
+        color: '#1A1000',
+        letterSpacing: 2.5,
+        textTransform: 'uppercase',
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 export default function LessonResultPage(props: {
   params: Promise<{ id: string }>;
 }) {
   return (
     <Suspense
       fallback={
-        <ScreenBackground>
+        <CozyResultShell>
           <div className="flex items-center justify-center min-h-[60vh]">
-            <p style={{ color: T.textSecondary }} className="text-sm font-mono">Loading...</p>
+            <p
+              className="text-sm font-pixel"
+              style={{ color: T.textSecondary, textShadow: COZY_TEXT_SHADOW }}
+            >
+              Loading...
+            </p>
           </div>
-        </ScreenBackground>
+        </CozyResultShell>
       }
     >
       <ResultContent params={props.params} />
@@ -67,7 +136,7 @@ function ResultContent({ params }: { params: Promise<{ id: string }> }) {
   const streak = activeState?.currentStreak ?? 0;
   const correctCount = Math.round((score / 100) * totalQuestions);
 
-  const scoreColor = score >= 80 ? T.green : score >= 50 ? T.amber : T.crimson;
+  const scoreColor = score >= 80 ? T.green : score >= 50 ? AMBER : T.crimson;
 
   const LEVEL_NAMES = ['Novice', 'Apprentice', 'Scholar', 'Adept', 'Master', 'Sage', 'Legend'];
   const levelName = xpLevel > 0 ? (LEVEL_NAMES[xpLevel - 1] ?? `Level ${xpLevel}`) : '';
@@ -83,87 +152,152 @@ function ResultContent({ params }: { params: Promise<{ id: string }> }) {
   const [showReview, setShowReview] = useState(false);
 
   return (
-    <ScreenBackground>
-      <div className="flex flex-col items-center justify-center min-h-[80vh] px-6">
-        {/* Score */}
+    <CozyResultShell>
+      <div className="flex flex-col items-center w-full">
+        {/* Page label / title */}
+        <div className="flex items-center justify-center gap-2 mb-3 mt-1">
+          <div className="w-[30px] h-px" style={{ backgroundColor: `${AMBER}30` }} />
+          <span className="text-[7px]" style={{ color: `${AMBER}50` }}>{'◆'}</span>
+          <div className="w-[30px] h-px" style={{ backgroundColor: `${AMBER}30` }} />
+        </div>
+        <h1
+          className="text-2xl font-bold tracking-wide font-pixel"
+          style={{ color: AMBER, textShadow: COZY_TEXT_SHADOW }}
+        >
+          Lesson Result
+        </h1>
+
+        {/* Hero score */}
         <p
-          className="text-[56px] font-bold tracking-wide"
-          style={{ color: scoreColor, fontFamily: 'Georgia, serif' }}
+          className="mt-6 text-[64px] font-bold leading-none font-pixel-mono"
+          style={{
+            color: scoreColor,
+            textShadow: `${COZY_TEXT_SHADOW}, 0 0 24px ${scoreColor}55`,
+          }}
         >
           {score}%
         </p>
-        <p className="mt-2 text-base" style={{ color: T.textSecondary }}>
+        <p
+          className="mt-2 text-[13px] font-pixel-mono uppercase tracking-[1.5px]"
+          style={{ color: T.textSecondary, textShadow: COZY_TEXT_SHADOW }}
+        >
           {correctCount}/{totalQuestions} Questions Correct
         </p>
 
         {/* Reward cards */}
         <div className="mt-7 w-full flex flex-col gap-3">
           {/* Status */}
-          <ParchmentCard className="p-[18px]">
-            <p className="font-mono text-[10px] uppercase tracking-[1px]" style={{ color: T.textSecondary }}>
+          <CozyCard>
+            <p
+              className="font-pixel-mono text-[10px] uppercase tracking-[1.5px]"
+              style={{ color: AMBER, opacity: 0.75, textShadow: COZY_TEXT_SHADOW }}
+            >
               Lesson Status
             </p>
-            <p className="text-[22px] font-bold mt-1" style={{ color: accepted ? T.green : T.amber }}>
+            <p
+              className="text-[22px] font-bold mt-1 font-pixel"
+              style={{
+                color: accepted ? T.green : AMBER,
+                textShadow: COZY_TEXT_SHADOW,
+              }}
+            >
               {accepted ? 'Verified' : 'Needs Improvement'}
             </p>
-          </ParchmentCard>
+          </CozyCard>
 
           {/* Rewards row */}
           <div className="flex gap-3">
             {/* Streak */}
-            <ParchmentCard className="p-[18px] flex-1">
-              <p className="font-mono text-[10px] uppercase tracking-[1px]" style={{ color: T.textSecondary }}>
-                Streak
-              </p>
-              <p className="text-[20px] font-bold mt-1" style={{ color: T.amber }}>
-                {streak} day{streak !== 1 ? 's' : ''}
-              </p>
-            </ParchmentCard>
+            <div className="flex-1">
+              <CozyCard>
+                <p
+                  className="font-pixel-mono text-[10px] uppercase tracking-[1.5px]"
+                  style={{ color: AMBER, opacity: 0.75, textShadow: COZY_TEXT_SHADOW }}
+                >
+                  Streak
+                </p>
+                <p
+                  className="text-[20px] font-bold mt-1 font-pixel-mono"
+                  style={{ color: AMBER, textShadow: COZY_TEXT_SHADOW }}
+                >
+                  {streak} day{streak !== 1 ? 's' : ''}
+                </p>
+              </CozyCard>
+            </div>
 
             {/* Fuel earned */}
             {fuelAwarded > 0 && (
-              <ParchmentCard className="p-[18px] flex-1">
-                <p className="font-mono text-[10px] uppercase tracking-[1px]" style={{ color: T.textSecondary }}>
-                  Fuel Earned
-                </p>
-                <p className="text-[20px] font-bold mt-1" style={{ color: T.rust }}>
-                  +{fuelAwarded.toFixed(2)}
-                </p>
-                <div className="mt-2 w-full h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(255,255,255,0.06)' }}>
+              <div className="flex-1">
+                <CozyCard>
+                  <p
+                    className="font-pixel-mono text-[10px] uppercase tracking-[1.5px]"
+                    style={{ color: AMBER, opacity: 0.75, textShadow: COZY_TEXT_SHADOW }}
+                  >
+                    Fuel Earned
+                  </p>
+                  <p
+                    className="text-[20px] font-bold mt-1 font-pixel-mono"
+                    style={{ color: T.rust, textShadow: COZY_TEXT_SHADOW }}
+                  >
+                    +{fuelAwarded.toFixed(2)}
+                  </p>
                   <div
-                    className="h-full rounded-full"
-                    style={{ width: `${Math.min(100, fuelTotal * 100)}%`, backgroundColor: fuelTotal >= 1 ? T.green : T.amber }}
-                  />
-                </div>
-                <p className="text-[9px] font-mono mt-1" style={{ color: T.textMuted }}>
-                  {fuelTotal.toFixed(2)} / 1.00 today
-                </p>
-              </ParchmentCard>
+                    className="mt-2 w-full h-1.5 rounded-full overflow-hidden"
+                    style={{ backgroundColor: 'rgba(255,255,255,0.06)' }}
+                  >
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${Math.min(100, fuelTotal * 100)}%`,
+                        backgroundColor: fuelTotal >= 1 ? T.green : AMBER,
+                      }}
+                    />
+                  </div>
+                  <p
+                    className="text-[9px] font-pixel-mono mt-1"
+                    style={{ color: T.textMuted }}
+                  >
+                    {fuelTotal.toFixed(2)} / 1.00 today
+                  </p>
+                </CozyCard>
+              </div>
             )}
           </div>
 
           {/* XP earned */}
           {xpAwarded > 0 && (
-            <ParchmentCard className="p-[18px]">
+            <CozyCard>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-mono text-[10px] uppercase tracking-[1px]" style={{ color: T.textSecondary }}>
+                  <p
+                    className="font-pixel-mono text-[10px] uppercase tracking-[1.5px]"
+                    style={{ color: AMBER, opacity: 0.75, textShadow: COZY_TEXT_SHADOW }}
+                  >
                     XP Earned
                   </p>
-                  <p className="text-[20px] font-bold mt-1" style={{ color: T.violet }}>
+                  <p
+                    className="text-[20px] font-bold mt-1 font-pixel-mono"
+                    style={{ color: T.violet, textShadow: COZY_TEXT_SHADOW }}
+                  >
                     +{xpAwarded} XP
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-[11px] font-mono font-bold" style={{ color: T.amber }}>
+                  <p
+                    className="text-[11px] font-pixel-mono font-bold"
+                    style={{ color: AMBER, textShadow: COZY_TEXT_SHADOW }}
+                  >
                     Lv.{xpLevel} {levelName}
                   </p>
-                  <p className="text-[10px] font-mono" style={{ color: T.textMuted }}>
+                  <p
+                    className="text-[10px] font-pixel-mono"
+                    style={{ color: T.textMuted }}
+                  >
                     {xpTotal} XP total
                   </p>
                 </div>
               </div>
-            </ParchmentCard>
+            </CozyCard>
           )}
         </div>
 
@@ -172,11 +306,12 @@ function ResultContent({ params }: { params: Promise<{ id: string }> }) {
           <div className="mt-5 w-full">
             <button
               onClick={() => setShowReview(!showReview)}
-              className="w-full py-3 rounded-lg border text-center font-mono text-xs font-semibold tracking-[1px] transition-all duration-150 hover:border-[rgba(212,160,74,0.18)] hover:bg-[rgba(255,255,255,0.06)]"
+              className="w-full py-3 rounded-[10px] border text-center font-pixel-mono text-[11px] font-bold uppercase tracking-[1.5px] transition-all duration-150 cursor-pointer hover:brightness-110"
               style={{
-                backgroundColor: 'rgba(255,255,255,0.04)',
-                borderColor: T.borderDormant,
-                color: T.textSecondary,
+                backgroundColor: 'rgba(14,14,28,0.5)',
+                borderColor: COZY_BORDER,
+                color: AMBER,
+                textShadow: COZY_TEXT_SHADOW,
               }}
             >
               {showReview ? 'Hide Review' : 'Review Answers'}
@@ -193,31 +328,55 @@ function ResultContent({ params }: { params: Promise<{ id: string }> }) {
                       ? userAnswer === q.correctAnswer
                       : null;
 
+                  const accentColor =
+                    isCorrect === null ? AMBER : isCorrect ? T.green : T.crimson;
+
                   return (
-                    <ParchmentCard key={q.id} className="p-4">
+                    <CozyCard
+                      key={q.id}
+                      style={{
+                        borderColor: `${accentColor}55`,
+                      }}
+                    >
                       <div className="flex items-start gap-2 mb-2">
                         <span
-                          className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5"
+                          className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 mt-0.5 font-pixel-mono"
                           style={{
-                            backgroundColor: isCorrect === null ? `${T.amber}20` : isCorrect ? `${T.green}20` : `${T.crimson}20`,
-                            color: isCorrect === null ? T.amber : isCorrect ? T.green : T.crimson,
+                            backgroundColor: `${accentColor}22`,
+                            color: accentColor,
+                            border: `1px solid ${accentColor}55`,
+                            textShadow: COZY_TEXT_SHADOW,
                           }}
                         >
                           {idx + 1}
                         </span>
-                        <p className="text-[13px] font-semibold leading-[18px]" style={{ color: T.textPrimary }}>
+                        <p
+                          className="text-[14px] font-bold leading-[20px] font-pixel"
+                          style={{ color: T.textPrimary, textShadow: COZY_TEXT_SHADOW }}
+                        >
                           {q.prompt}
                         </p>
                       </div>
 
                       {/* User's answer */}
-                      <div className="ml-7">
-                        <p className="text-[11px] font-mono uppercase tracking-[1px] mb-1" style={{ color: T.textMuted }}>
+                      <div className="ml-8">
+                        <p
+                          className="text-[10px] font-pixel-mono uppercase tracking-[1.5px] mb-1"
+                          style={{ color: T.textMuted }}
+                        >
                           Your answer
                         </p>
                         <p
-                          className="text-[13px] mb-2"
-                          style={{ color: isCorrect === false ? T.crimson : isCorrect === true ? T.green : T.textSecondary }}
+                          className="text-[13px] mb-2 font-pixel"
+                          style={{
+                            color:
+                              isCorrect === false
+                                ? T.crimson
+                                : isCorrect === true
+                                  ? T.green
+                                  : T.textPrimary,
+                            textShadow: COZY_TEXT_SHADOW,
+                          }}
                         >
                           {userAnswer || '(no answer)'}
                         </p>
@@ -225,10 +384,16 @@ function ResultContent({ params }: { params: Promise<{ id: string }> }) {
                         {/* Correct answer if wrong */}
                         {isCorrect === false && q.correctAnswer && (
                           <>
-                            <p className="text-[11px] font-mono uppercase tracking-[1px] mb-1" style={{ color: T.textMuted }}>
+                            <p
+                              className="text-[10px] font-pixel-mono uppercase tracking-[1.5px] mb-1"
+                              style={{ color: T.textMuted }}
+                            >
                               Correct answer
                             </p>
-                            <p className="text-[13px]" style={{ color: T.green }}>
+                            <p
+                              className="text-[13px] font-pixel"
+                              style={{ color: T.green, textShadow: COZY_TEXT_SHADOW }}
+                            >
                               {q.correctAnswer}
                             </p>
                           </>
@@ -236,12 +401,15 @@ function ResultContent({ params }: { params: Promise<{ id: string }> }) {
 
                         {/* Backend feedback */}
                         {backendResult?.feedbackSummary && (
-                          <p className="text-[12px] mt-2 leading-[17px]" style={{ color: T.textSecondary }}>
+                          <p
+                            className="text-[12px] mt-2 leading-[17px] font-pixel"
+                            style={{ color: T.textSecondary }}
+                          >
                             {backendResult.feedbackSummary}
                           </p>
                         )}
                       </div>
-                    </ParchmentCard>
+                    </CozyCard>
                   );
                 })}
               </div>
@@ -250,12 +418,12 @@ function ResultContent({ params }: { params: Promise<{ id: string }> }) {
         )}
 
         {/* Return button */}
-        <div className="mt-5 w-full">
-          <PrimaryButton onClick={() => router.push('/courses')}>
+        <div className="mt-6 w-full">
+          <CozyPrimary onClick={() => router.push('/courses')}>
             Continue
-          </PrimaryButton>
+          </CozyPrimary>
         </div>
       </div>
-    </ScreenBackground>
+    </CozyResultShell>
   );
 }
