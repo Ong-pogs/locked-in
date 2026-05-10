@@ -66,7 +66,8 @@ export function RecallQuestion({ question, lessonTitle, onComplete }: RecallQues
 
   const handleCheck = () => {
     if (!hasAnswerKey) {
-      setIsCorrect(true);
+      // No grading possible — answer key isn't shipped to the client.
+      // Don't claim correct or wrong; just acknowledge and continue.
       setHasChecked(true);
       return;
     }
@@ -208,9 +209,15 @@ export function RecallQuestion({ question, lessonTitle, onComplete }: RecallQues
             <div
               className="mt-3 px-4 py-2.5 rounded-lg text-[12px] font-semibold font-pixel"
               style={{
-                backgroundColor: isCorrect ? `${T.green}10` : `${T.crimson}10`,
-                border: `1px solid ${isCorrect ? T.green : T.crimson}55`,
-                color: isCorrect ? T.green : T.crimson,
+                backgroundColor: !hasAnswerKey
+                  ? 'rgba(255,213,128,0.08)'
+                  : isCorrect
+                    ? `${T.green}10`
+                    : `${T.crimson}10`,
+                border: `1px solid ${
+                  !hasAnswerKey ? AMBER : isCorrect ? T.green : T.crimson
+                }55`,
+                color: !hasAnswerKey ? AMBER : isCorrect ? T.green : T.crimson,
                 textShadow: '0 1px 2px rgba(0,0,0,0.85)',
               }}
             >
@@ -218,7 +225,7 @@ export function RecallQuestion({ question, lessonTitle, onComplete }: RecallQues
                 ? isCorrect
                   ? 'Correct! Great recall.'
                   : "Not quite — but that's okay, that's why we review."
-                : 'Thanks for thinking it through — let\'s continue.'}
+                : "Recall locked in. The lesson will refresh the answer for you."}
             </div>
           )}
         </CozyCard>

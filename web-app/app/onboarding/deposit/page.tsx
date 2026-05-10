@@ -326,7 +326,10 @@ function DepositContent() {
 
       setStatusMessage('Lock created successfully!');
       useUserStore.getState().setOnboardingPhase('main');
-      router.push('/village');
+      // Send the user to /courses so they can confirm their enrollment
+      // (now Active) and pick the next move — start the lesson, see other
+      // courses, etc. The village hub doesn't add anything actionable here.
+      router.push('/courses');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Transaction failed';
       console.error('[deposit] Lock transaction failed:', error);
