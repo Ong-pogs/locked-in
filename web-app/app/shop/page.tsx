@@ -8,7 +8,7 @@ import type { YieldHistoryResponse } from '@/services/api/types';
 import { T } from '@/components/theme';
 import { CozyCard } from '@/components/cozy';
 import { HubButton } from '@/components/HubButton';
-import { Coins, Wallet, Package, Crown, Shield, Droplet, Zap } from 'lucide-react';
+import { Coins, Wallet, Package, Crown } from 'lucide-react';
 
 /* ── Helpers ────────────────────────────────────────────────────────── */
 
@@ -99,42 +99,6 @@ const USDC_ITEMS: ShopItem[] = [
     category: 'usdc',
     spriteSrc: '/images/shop/items/coin-stash.png',
     rarity: 'legendary',
-  },
-];
-
-const UTILITY_ITEMS: ShopItem[] = [
-  {
-    id: 'streak-saver',
-    name: 'Streak Saver',
-    description: 'Banks one missed day',
-    cost: 500,
-    Icon: Shield,
-    iconColor: '#3EE68A',
-    category: 'utility',
-    comingSoon: true,
-    spriteSrc: '/images/shop/items/streak-saver.png',
-  },
-  {
-    id: 'fuel-vial',
-    name: 'Fuel Vial',
-    description: 'Instant fuel refill',
-    cost: 200,
-    Icon: Droplet,
-    iconColor: '#E8845A',
-    category: 'utility',
-    comingSoon: true,
-    spriteSrc: '/images/shop/items/fuel-vial.png',
-  },
-  {
-    id: 'daily-boost',
-    name: 'Daily Boost',
-    description: '2x fuel for 24 hours',
-    cost: 2000,
-    Icon: Zap,
-    iconColor: '#2AE8D4',
-    category: 'utility',
-    comingSoon: true,
-    spriteSrc: '/images/shop/items/daily-boost.png',
   },
 ];
 
@@ -242,14 +206,6 @@ export default function ShopPage() {
         <SectionHeader>On Offer</SectionHeader>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-6">
           {USDC_ITEMS.map((item) => (
-            <TradingCard key={item.id} item={item} balance={ichorBalance} rate={rate} />
-          ))}
-        </div>
-
-        {/* Coming Soon — utility items */}
-        <SectionHeader muted>Coming Soon</SectionHeader>
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          {UTILITY_ITEMS.map((item) => (
             <TradingCard key={item.id} item={item} balance={ichorBalance} rate={rate} />
           ))}
         </div>
