@@ -378,7 +378,18 @@ export default function CoursesPage() {
 
   const handleActiveCoursePress = (courseId: string) => {
     useCourseStore.getState().setActiveCourse(courseId);
-    router.push('/village');
+    // Jump to the next incomplete lesson; fall back to the first lesson if
+    // every lesson is already done. Only return to /village if the course
+    // has no lessons at all (shouldn't happen for a locked course).
+    const courseLessons = useCourseStore.getState().lessons[courseId] ?? [];
+    const progress = useCourseStore.getState().lessonProgress;
+    const next =
+      courseLessons.find((l) => !progress[l.id]?.completed) ?? courseLessons[0];
+    if (next) {
+      router.push(`/lessons/${next.id}`);
+    } else {
+      router.push('/village');
+    }
   };
 
   const handleSignIn = async () => {

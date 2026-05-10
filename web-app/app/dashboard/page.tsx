@@ -1013,7 +1013,17 @@ export default function DashboardPage() {
   // ── Handlers ──
   const handleContinueCourse = (courseId: string) => {
     setActiveCourse(courseId);
-    router.push('/village');
+    // Jump to the next incomplete lesson; fall back to the first lesson if
+    // all are done. Only land on /village if the course has zero lessons.
+    const courseLessons = lessons[courseId] ?? [];
+    const next =
+      courseLessons.find((l) => !lessonProgress[l.id]?.completed) ??
+      courseLessons[0];
+    if (next) {
+      router.push(`/lessons/${next.id}`);
+    } else {
+      router.push('/village');
+    }
   };
 
   const handleSwitchCourse = (courseId: string) => {
