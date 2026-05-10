@@ -49,8 +49,12 @@ const PLAYER_PAGES: Entry[] = [
 ];
 
 const ONBOARDING_PAGES: Entry[] = [
-  { route: '/onboarding/deposit', label: 'Onboarding · Deposit', blurb: 'First-lock deposit flow', Icon: Coins, status: 'live' },
+  { route: '/onboarding/deposit', label: 'Onboarding · Deposit', blurb: 'First-lock deposit flow (production, current wood/parchment styling)', Icon: Coins, status: 'live' },
   { route: '/onboarding/tutorial', label: 'Onboarding · Tutorial', blurb: 'New-user tutorial', Icon: GraduationCap, status: 'live' },
+];
+
+const PROTOTYPE_PAGES: Entry[] = [
+  { route: '/lock-prototypes', label: 'Lock Funds · Prototypes', blurb: 'Pick a layout for /onboarding/deposit redesign — Ledger / Stepper / Sheet / Pact (switcher pill bottom-left)', Icon: Coins, status: 'live' },
 ];
 
 const LEGACY_PAGES: Entry[] = [
@@ -140,6 +144,9 @@ export default function MenuPage() {
 
         <CozySectionLabel>Onboarding</CozySectionLabel>
         <Grid entries={ONBOARDING_PAGES} />
+
+        <CozySectionLabel>Prototypes — pick a variant</CozySectionLabel>
+        <Grid entries={PROTOTYPE_PAGES} />
 
         <CozySectionLabel>Legacy</CozySectionLabel>
         <Grid entries={LEGACY_PAGES} />
