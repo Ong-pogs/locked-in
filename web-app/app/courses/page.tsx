@@ -115,6 +115,7 @@ function CourseCard({
   showEnrollButton,
   onEnroll,
   forceComingSoon,
+  onLock,
 }: {
   course: Course;
   actualLessonCount: number;
@@ -123,6 +124,10 @@ function CourseCard({
   showEnrollButton?: boolean;
   onEnroll?: () => void;
   forceComingSoon?: boolean;
+  // When provided AND the card is selected, the StatsRow footer is swapped
+  // for an inline "Lock Funds & Continue" CTA (Expand variant). This is the
+  // onboarding-mode path; post-onboarding cards use showEnrollButton instead.
+  onLock?: () => void;
 }) {
   const difficultyLevel =
     course.difficulty === 'beginner' ? 1 : course.difficulty === 'intermediate' ? 2 : 3;
@@ -130,6 +135,7 @@ function CourseCard({
   const catColor = CATEGORY_COLORS[course.category] ?? T.teal;
   const isComingSoon =
     forceComingSoon ?? (actualLessonCount === 0 && course.totalLessons === 0);
+  const showInlineLockCta = !!onLock && !!selected && !isComingSoon && !showEnrollButton;
 
   return (
     <div
@@ -146,9 +152,15 @@ function CourseCard({
         style={{
           borderColor: isComingSoon
             ? T.borderDormant
-            : selected
-              ? `${accentColor}55`
-              : `${accentColor}35`,
+            : showInlineLockCta
+              ? `${T.amber}80`
+              : selected
+                ? `${accentColor}55`
+                : `${accentColor}35`,
+          boxShadow: showInlineLockCta
+            ? '0 0 24px rgba(212,160,74,0.35), 0 6px 20px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,213,128,0.18)'
+            : undefined,
+          transition: 'border-color 200ms ease, box-shadow 200ms ease',
         }}
       >
         {selected && <CornerMarks />}
@@ -205,7 +217,46 @@ function CourseCard({
           )
         )}
 
-        <StatsRow course={course} accentColor={accentColor} />
+        {/* Footer area: StatsRow OR (if selected in onboarding mode) inline CTA */}
+        {showInlineLockCta ? (
+          <div
+            className="pt-3 mt-3"
+            style={{
+              borderTop: `1px dashed ${T.amber}40`,
+              animation: 'courses-cta-fade 220ms ease',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={onLock}
+              className="w-full py-3 rounded-[10px] cursor-pointer text-center"
+              style={{
+                backgroundColor: T.amber,
+                border: `1px solid ${T.amber}`,
+                boxShadow: `0 0 12px ${T.amber}80`,
+              }}
+            >
+              <span
+                className="text-[13px] font-bold uppercase tracking-[2.5px]"
+                style={{
+                  color: T.bg,
+                  fontFamily: 'var(--font-pixel), Georgia, serif',
+                }}
+              >
+                {'◆'}  LOCK FUNDS & CONTINUE  {'◆'}
+              </span>
+            </button>
+            <p
+              className="text-center mt-2 font-pixel-mono text-[10px] uppercase tracking-[1px]"
+              style={{ color: `${T.amber}80` }}
+            >
+              or pick a different course
+            </p>
+          </div>
+        ) : (
+          <StatsRow course={course} accentColor={accentColor} />
+        )}
       </CozyCard>
     </div>
   );
@@ -635,6 +686,9 @@ export default function CoursesPage() {
                   }
                   showEnrollButton={!isOnboardingMode}
                   onEnroll={() => handleEnroll(course.id)}
+                  onLock={
+                    isOnboardingMode ? () => handleEnroll(course.id) : undefined
+                  }
                 />
               ))}
             </div>
@@ -669,35 +723,15 @@ export default function CoursesPage() {
         )}
       </div>
 
-      {/* Fixed CTA — onboarding mode only */}
-      {isOnboardingMode && selectedCourse && (
-        <div
-          className="fixed bottom-0 left-0 right-0 px-[18px] pb-8 pt-4"
-          style={{
-            backgroundColor: `${T.bg}F5`,
-            paddingBottom: 'calc(2rem + env(safe-area-inset-bottom, 0px))',
-          }}
-        >
-          <div className="max-w-[1100px] mx-auto">
-            <button
-              onClick={() => handleEnroll(selectedCourse.id)}
-              className="w-full py-4 rounded-[10px] text-center cursor-pointer"
-              style={{
-                backgroundColor: T.amber,
-                border: `1px solid ${T.amber}50`,
-                boxShadow: '0 0 16px rgba(212,160,74,0.2)',
-              }}
-            >
-              <span
-                className="text-[13px] font-bold uppercase tracking-[3px]"
-                style={{ color: T.bg, fontFamily: 'var(--font-pixel), Georgia, serif' }}
-              >
-                {'◆'}  LOCK FUNDS & CONTINUE  {'◆'}
-              </span>
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Inline CTA lives inside the selected card now (Expand variant).
+          See CourseCard's `onLock` branch above. No fixed bottom bar. */}
+
+      <style jsx global>{`
+        @keyframes courses-cta-fade {
+          from { opacity: 0; transform: translateY(4px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </div>
   );
 }
