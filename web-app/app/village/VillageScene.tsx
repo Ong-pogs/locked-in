@@ -6,6 +6,7 @@ import { User, Flame, FlaskConical, Droplet, Sparkles } from 'lucide-react';
 import { T } from '@/components/theme';
 import { useCourseStore } from '@/stores/courseStore';
 import boundsData from '@/public/images/village/masks/bounds.json';
+import { VillageTour } from './VillageTour';
 
 // Source asset is 1024x576 — keep ratio for letterboxing.
 const ART_WIDTH = 1024;
@@ -247,6 +248,10 @@ export default function VillageScene() {
           }
         }
       `}</style>
+
+      {/* First-time walkthrough — auto-shows once, then never again
+          (persisted in localStorage). Includes a Skip button + an X. */}
+      <VillageTour bounds={BOUNDS} />
 
       {/* Top-left: logo + wordmark — clicking goes back */}
       <button
