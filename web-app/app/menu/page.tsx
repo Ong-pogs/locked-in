@@ -39,9 +39,10 @@ const HUB_PAGES: Entry[] = [
 const BUILDING_PAGES: Entry[] = [
   { route: '/courses', label: 'Courses', blurb: 'Cozy course list on academy interior', Icon: BookOpen, building: 'Academy (left tudor)', status: 'live' },
   { route: '/community-pot', label: 'Community Pot', blurb: 'Yield distribution from broken streaks', Icon: Beer, building: 'Tavern (right-center)', status: 'live' },
-  { route: '/alchemy', label: 'Alchemy', blurb: 'Brew fuel into ichor', Icon: FlaskConical, building: 'Apothecary (right-end church)', status: 'live' },
+  { route: '/alchemy', label: 'Brewery', blurb: 'Brew fuel into ichor', Icon: FlaskConical, building: 'Apothecary (right-end church)', status: 'live' },
   { route: '/shop', label: 'Shop', blurb: 'Cards (TCG) variant on market interior', Icon: ShoppingBag, building: 'Cottage (left-middle tudor)', status: 'live' },
 ];
+
 
 const PLAYER_PAGES: Entry[] = [
   { route: '/inventory', label: 'Inventory', blurb: 'Categorized — Coffers / Consumables / Achievements', Icon: Backpack, building: 'Center awning stall', status: 'live' },

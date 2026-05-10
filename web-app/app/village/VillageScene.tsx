@@ -41,8 +41,8 @@ const BUILDINGS: Building[] = [
   { id: 'lantern', outline: '/images/village/outlines/outline-lantern.png', route: '/history', label: 'History' },
   // Right-center building            → Tavern (community pot)
   { id: 'tavern', outline: '/images/village/outlines/outline-tavern.png', route: '/community-pot', label: 'Tavern' },
-  // Far-right church-like            → Apothecary (alchemy)
-  { id: 'forge', outline: '/images/village/outlines/outline-forge.png', route: '/alchemy', label: 'Apothecary' },
+  // Far-right church-like            → Brewery (alchemy route)
+  { id: 'forge', outline: '/images/village/outlines/outline-forge.png', route: '/alchemy', label: 'Brewery' },
 ];
 
 // Cozy palette — pulled from the painted village's own colors so the UI
