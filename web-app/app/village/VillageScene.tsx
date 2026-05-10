@@ -36,8 +36,7 @@ const BUILDINGS: Building[] = [
   { id: 'notice', outline: '/images/village/outlines/outline-notice.png', route: '/leaderboard', label: 'Leaderboard' },
   // Center awning stall              → Inventory
   { id: 'inventory', outline: '/images/village/outlines/outline-inventory.png', route: '/inventory', label: 'Inventory' },
-  // Wishing well                     → History
-  { id: 'lantern', outline: '/images/village/outlines/outline-lantern.png', route: '/history', label: 'History' },
+  // Wishing well — decorative (history folded into dashboard activity log)
   // Right-center building            → Tavern (community pot)
   { id: 'tavern', outline: '/images/village/outlines/outline-tavern.png', route: '/community-pot', label: 'Tavern' },
   // Far-right church-like            → Brewery (alchemy route)
@@ -217,8 +216,8 @@ export default function VillageScene() {
                   <span
                     className="font-pixel font-bold uppercase"
                     style={{
-                      fontSize: 11,
-                      letterSpacing: 1,
+                      fontSize: 16.5,
+                      letterSpacing: 2.3,
                       color: isHovered ? '#1A1000' : COZY_TEXT,
                       textShadow: isHovered ? 'none' : COZY_TEXT_SHADOW,
                       whiteSpace: 'nowrap',

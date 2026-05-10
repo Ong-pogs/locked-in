@@ -12,7 +12,6 @@ import {
   ShoppingBag,
   Backpack,
   Trophy,
-  History,
   Coins,
   GraduationCap,
 } from 'lucide-react';
@@ -47,7 +46,6 @@ const BUILDING_PAGES: Entry[] = [
 const PLAYER_PAGES: Entry[] = [
   { route: '/inventory', label: 'Inventory', blurb: 'Categorized — Coffers / Consumables / Achievements', Icon: Backpack, building: 'Center awning stall', status: 'live' },
   { route: '/leaderboard', label: 'Leaderboard', blurb: 'Podium — top 3 hero + ranks 4-10', Icon: Trophy, building: 'Notice board', status: 'live' },
-  { route: '/history', label: 'History', blurb: 'Past lesson activity (still on old theme)', Icon: History, building: 'Wishing well', status: 'live' },
 ];
 
 const ONBOARDING_PAGES: Entry[] = [

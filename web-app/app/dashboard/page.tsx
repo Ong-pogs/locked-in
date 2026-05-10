@@ -722,22 +722,53 @@ type RecentActivityRow = {
   color: string;
 };
 
-function RecentActivity({ rows }: { rows: RecentActivityRow[] }) {
+const ACTIVITY_PREVIEW_COUNT = 5;
+
+function ActivityLog({ rows }: { rows: RecentActivityRow[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? rows : rows.slice(0, ACTIVITY_PREVIEW_COUNT);
+  const hiddenCount = rows.length - ACTIVITY_PREVIEW_COUNT;
   return (
     <CozyCard className="mb-5">
-      <p
-        className="font-pixel-mono text-[10px] font-bold uppercase tracking-[2px] mb-3"
-        style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
-      >
-        Recent Activity
-      </p>
+      <div className="flex items-center justify-between mb-3 gap-2">
+        <p
+          className="font-pixel-mono text-[10px] font-bold uppercase tracking-[2px]"
+          style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
+        >
+          Activity
+        </p>
+        {rows.length > ACTIVITY_PREVIEW_COUNT && (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="font-pixel-mono text-[10px] uppercase tracking-[1.5px] flex items-center gap-1 px-2.5 py-1 rounded-full transition-colors cursor-pointer"
+            style={{
+              color: AMBER,
+              backgroundColor: expanded ? 'rgba(255,213,128,0.14)' : 'rgba(255,213,128,0.06)',
+              border: `1px solid ${expanded ? AMBER : 'rgba(255,213,128,0.22)'}`,
+            }}
+            aria-expanded={expanded}
+          >
+            {expanded ? 'Show less' : `Show all (${rows.length})`}
+            <ChevronRight
+              size={11}
+              color={AMBER}
+              strokeWidth={2.5}
+              style={{
+                transform: expanded ? 'rotate(-90deg)' : 'rotate(90deg)',
+                transition: 'transform 150ms ease',
+              }}
+            />
+          </button>
+        )}
+      </div>
       {rows.length === 0 ? (
         <p className="font-pixel-mono text-[11px]" style={{ color: T.textMuted }}>
           No activity yet — complete a lesson to see it here.
         </p>
       ) : (
         <div className="flex flex-col gap-2">
-          {rows.map((a) => (
+          {visible.map((a) => (
             <div
               key={a.id}
               className="flex items-center gap-2.5 py-1.5"
@@ -758,6 +789,14 @@ function RecentActivity({ rows }: { rows: RecentActivityRow[] }) {
               </span>
             </div>
           ))}
+          {!expanded && hiddenCount > 0 && (
+            <p
+              className="font-pixel-mono text-[10px] mt-1"
+              style={{ color: T.textMuted, opacity: 0.7 }}
+            >
+              {hiddenCount} more entries hidden
+            </p>
+          )}
         </div>
       )}
     </CozyCard>
@@ -898,7 +937,7 @@ export default function DashboardPage() {
     });
   }, [lockedCourseIds, activeCourseId, courses, lessons, lessonProgress]);
 
-  // ── Recent activity (top 5 most recently completed lessons) ──
+  // ── Activity log (all completed lessons, newest first; preview vs expanded handled in ActivityLog) ──
   const recentActivity: RecentActivityRow[] = useMemo(() => {
     const completed = Object.values(lessonProgress)
       .filter((p) => p.completed && p.completedAt)
@@ -906,8 +945,7 @@ export default function DashboardPage() {
         const aT = a.completedAt ? Date.parse(a.completedAt) : 0;
         const bT = b.completedAt ? Date.parse(b.completedAt) : 0;
         return bT - aT;
-      })
-      .slice(0, 5);
+      });
 
     return completed.map((p) => {
       let lessonTitle: string | null = null;
@@ -1067,7 +1105,7 @@ export default function DashboardPage() {
         />
 
         {/* 7. Recent activity */}
-        <RecentActivity rows={recentActivity} />
+        <ActivityLog rows={recentActivity} />
 
         {/* 8. Footer disconnect */}
         <DisconnectFooter onDisconnect={handleDisconnect} />
