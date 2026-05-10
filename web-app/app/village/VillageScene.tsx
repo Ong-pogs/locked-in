@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, Flame, FlaskConical, Droplet, Sparkles } from 'lucide-react';
+import { User, Wallet } from 'lucide-react';
+import { useLogin } from '@privy-io/react-auth';
 import { T } from '@/components/theme';
-import { useCourseStore } from '@/stores/courseStore';
+import { useAuth } from '@/hooks/useAuth';
 import boundsData from '@/public/images/village/masks/bounds.json';
 import { VillageTour } from './VillageTour';
 
@@ -69,16 +70,27 @@ const COZY_TEXT_SHADOW = '0 1px 2px rgba(0,0,0,0.85)';
 export default function VillageScene() {
   const router = useRouter();
   const [hovered, setHovered] = useState<string | null>(null);
+  const { isAuthenticated, ensureFreshSession, markFreshLogin } = useAuth();
+  const { login } = useLogin();
 
-  // Top-bar stat values — pulled from the active course state when available.
-  // Fallback to 0 when there's no active course (e.g. unauthenticated test view).
-  const activeCourseId = useCourseStore((s) => s.activeCourseId);
-  const courseStates = useCourseStore((s) => s.courseStates);
-  const activeState = activeCourseId ? courseStates[activeCourseId] : null;
-  const streak = activeState?.currentStreak ?? 0;
-  const fuel = activeState?.fuelCounter ?? 0;
-  const ichor = activeState?.ichorBalance ?? 0;
-  const level = 1; // TODO: replace with real XP-derived level once API is wired
+  // Trigger Privy login modal. Used by the top-right Connect Wallet pill
+  // and by every building hotspot when the user isn't authenticated yet —
+  // "wander first, connect when you want to do something".
+  const promptConnect = async () => {
+    await ensureFreshSession();
+    markFreshLogin();
+    login({ loginMethods: ['google', 'wallet'] });
+  };
+
+  // Click handler for a building. Authed users navigate; unauth'd ones get
+  // the Privy modal so they can sign in before going deeper.
+  const handleBuildingClick = (route: string) => {
+    if (isAuthenticated) {
+      router.push(route);
+    } else {
+      void promptConnect();
+    }
+  };
 
   return (
     <div
@@ -147,7 +159,7 @@ export default function VillageScene() {
               onMouseLeave={() => setHovered((h) => (h === b.id ? null : h))}
               onFocus={() => setHovered(b.id)}
               onBlur={() => setHovered((h) => (h === b.id ? null : h))}
-              onClick={() => router.push(b.route)}
+              onClick={() => handleBuildingClick(b.route)}
               className="absolute cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
               style={{
                 left: `${bb.x * 100}%`,
@@ -295,132 +307,52 @@ export default function VillageScene() {
         </span>
       </button>
 
-      {/* Top-right: grouped stats cluster + separate profile button.
-          One container with internal dividers reads as a single HUD element
-          instead of 5 floating pills (Hades / Genshin / Diablo HUD pattern). */}
-      <div className="fixed top-4 right-4 z-30 flex items-center gap-2">
-        <div
-          className="hidden md:flex items-stretch"
-          style={{
-            height: 36,
-            borderRadius: 18,
-            backgroundColor: COZY_BG,
-            border: `1px solid ${COZY_BORDER}`,
-            boxShadow: COZY_SHADOW,
-            backdropFilter: 'blur(10px)',
-            WebkitBackdropFilter: 'blur(10px)',
-            overflow: 'hidden',
-          }}
-        >
-          <StatSegment
-            icon={<Flame size={14} color={COZY_TEXT} strokeWidth={2.5} />}
-            value={`${streak}d`}
-            ariaLabel={`Streak ${streak} days`}
+      {/* Top-right: single button. Authed → profile (→ /dashboard).
+          Unauthed → Connect Wallet pill that triggers Privy login. */}
+      <div className="fixed top-4 right-4 z-30">
+        {isAuthenticated ? (
+          <button
             onClick={() => router.push('/dashboard')}
-          />
-          <SegmentDivider />
-          <StatSegment
-            icon={<Droplet size={14} color={COZY_TEXT} strokeWidth={2.5} />}
-            value={`${fuel}`}
-            ariaLabel={`Fuel ${fuel}`}
-            onClick={() => router.push('/alchemy')}
-          />
-          <SegmentDivider />
-          <StatSegment
-            icon={<FlaskConical size={14} color={COZY_TEXT} strokeWidth={2.5} />}
-            value={`${ichor}`}
-            ariaLabel={`Ichor ${ichor}`}
-            onClick={() => router.push('/shop')}
-          />
-          <SegmentDivider />
-          <StatSegment
-            icon={<Sparkles size={14} color={COZY_TEXT} strokeWidth={2.5} />}
-            value={`Lvl ${level}`}
-            ariaLabel={`Level ${level}`}
-            onClick={() => router.push('/dashboard')}
-          />
-        </div>
-
-        {/* Profile button — separate because it's navigation, not a stat */}
-        <button
-          onClick={() => router.push('/dashboard')}
-          aria-label="Profile"
-          className="flex items-center justify-center cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 18,
-            backgroundColor: COZY_BG,
-            border: `1px solid ${COZY_BORDER}`,
-            boxShadow: COZY_SHADOW,
-            backdropFilter: 'blur(10px)',
-            WebkitBackdropFilter: 'blur(10px)',
-          }}
-        >
-          <User size={16} color={COZY_TEXT} strokeWidth={2.5} />
-        </button>
+            aria-label="Profile"
+            className="flex items-center justify-center cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: COZY_BG,
+              border: `1px solid ${COZY_BORDER}`,
+              boxShadow: COZY_SHADOW,
+              backdropFilter: 'blur(10px)',
+              WebkitBackdropFilter: 'blur(10px)',
+            }}
+          >
+            <User size={16} color={COZY_TEXT} strokeWidth={2.5} />
+          </button>
+        ) : (
+          <button
+            onClick={() => void promptConnect()}
+            aria-label="Connect wallet"
+            className="flex items-center gap-2 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+            style={{
+              padding: '8px 16px 8px 14px',
+              borderRadius: 12,
+              backgroundColor: COZY_TEXT,
+              border: `1px solid ${COZY_TEXT}`,
+              boxShadow: `0 0 14px ${COZY_TEXT}aa, 0 6px 20px rgba(0,0,0,0.55)`,
+              color: '#1A1000',
+            }}
+          >
+            <Wallet size={15} color="#1A1000" strokeWidth={2.6} />
+            <span
+              className="font-pixel font-bold uppercase"
+              style={{ fontSize: 12, letterSpacing: 1.2 }}
+            >
+              Connect
+            </span>
+          </button>
+        )}
       </div>
-
     </div>
   );
 }
 
-/** One segment of the grouped stats pill — no own border/bg, just padding +
- *  hover affordance. Several share a single container with dividers between. */
-function StatSegment({
-  icon,
-  value,
-  ariaLabel,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  value: string;
-  ariaLabel: string;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={ariaLabel}
-      className="flex items-center gap-1.5 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 transition-colors hover:bg-white/5"
-      style={{
-        padding: '0 12px',
-        background: 'transparent',
-        border: 'none',
-      }}
-    >
-      {icon}
-      <span
-        style={{
-          // Silkscreen — actual pixel-art font, lining figures by default,
-          // legible at small sizes. Matches the painted village aesthetic.
-          fontFamily: 'var(--font-pixel-mono), ui-monospace, monospace',
-          fontSize: 12,
-          fontWeight: 700,
-          letterSpacing: 0.5,
-          color: COZY_TEXT,
-          textShadow: COZY_TEXT_SHADOW,
-          fontVariantNumeric: 'tabular-nums',
-        }}
-      >
-        {value}
-      </span>
-    </button>
-  );
-}
-
-/** Thin teal-aurora vertical divider between stat segments inside the grouped pill. */
-function SegmentDivider() {
-  return (
-    <div
-      aria-hidden
-      className="self-center"
-      style={{
-        width: 1,
-        height: 18,
-        backgroundColor: 'rgba(58, 143, 168, 0.6)',
-      }}
-    />
-  );
-}
