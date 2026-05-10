@@ -340,6 +340,11 @@ export default function CoursesPage() {
 
   const authToken = useUserStore((s) => s.authToken);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Course the user wants to enroll in — captured BEFORE the Privy login
+  // modal opens so we can resume the flow once the user signs in. Cleared
+  // after we route them, so a second click after a partial sign-in won't
+  // bounce them back.
+  const [pendingEnrollCourseId, setPendingEnrollCourseId] = useState<string | null>(null);
   const [xp, setXp] = useState({
     xpTotal: 0,
     xpLevel: 1,
@@ -403,11 +408,25 @@ export default function CoursesPage() {
 
   const handleEnroll = (courseId: string) => {
     if (!isAuthenticated) {
+      // Park the enrollment intent + open Privy. The useEffect below
+      // resumes the flow once isAuthenticated flips.
+      setPendingEnrollCourseId(courseId);
       handleSignIn();
       return;
     }
     router.push(`/onboarding/deposit?courseId=${courseId}`);
   };
+
+  // Resume a pending enrollment after the user signs in. Watches
+  // isAuthenticated; when it flips true and a course was parked,
+  // routes to deposit and clears the parked id.
+  useEffect(() => {
+    if (isAuthenticated && pendingEnrollCourseId) {
+      const id = pendingEnrollCourseId;
+      setPendingEnrollCourseId(null);
+      router.push(`/onboarding/deposit?courseId=${id}`);
+    }
+  }, [isAuthenticated, pendingEnrollCourseId, router]);
 
   // Split available into ready vs coming-soon
   const readyCourses = availableCourses.filter(
@@ -673,7 +692,7 @@ export default function CoursesPage() {
                 className="text-[13px] font-bold uppercase tracking-[3px]"
                 style={{ color: T.bg, fontFamily: 'var(--font-pixel), Georgia, serif' }}
               >
-                {'◆'}  BEGIN DESCENT  {'◆'}
+                {'◆'}  LOCK FUNDS & CONTINUE  {'◆'}
               </span>
             </button>
           </div>
