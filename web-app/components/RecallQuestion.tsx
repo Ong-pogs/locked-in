@@ -56,7 +56,20 @@ export function RecallQuestion({ question, lessonTitle, onComplete }: RecallQues
 
   const isMcq = question.type === 'mcq';
 
+  // Recall questions aren't graded — they're spaced-retrieval reminders,
+  // explicitly not scored. The cached lesson payload omits `correctAnswer`
+  // (security: don't ship the answer key to the client), so when it's
+  // missing we just treat any submission as "you engaged, well done" and
+  // move on. When it IS present, we still show correct/incorrect feedback
+  // so the learner gets useful confirmation.
+  const hasAnswerKey = typeof question.correctAnswer === 'string' && question.correctAnswer.length > 0;
+
   const handleCheck = () => {
+    if (!hasAnswerKey) {
+      setIsCorrect(true);
+      setHasChecked(true);
+      return;
+    }
     if (isMcq) {
       // correctAnswer may be option text OR option id — check both
       const selected = question.options?.find((opt) => {
@@ -133,11 +146,13 @@ export function RecallQuestion({ question, lessonTitle, onComplete }: RecallQues
                 let borderColor = COZY_BORDER;
                 let bgColor = 'rgba(14,14,28,0.30)';
                 let glow = 'none';
-                if (showResult && isCorrectOption) {
+                // Only color-code correct/incorrect when we actually have an
+                // answer key. Otherwise just keep amber selection styling.
+                if (showResult && hasAnswerKey && isCorrectOption) {
                   borderColor = T.green;
                   bgColor = `${T.green}10`;
                   glow = `0 0 12px ${T.green}55`;
-                } else if (showResult && isSelected && !isCorrectOption) {
+                } else if (showResult && hasAnswerKey && isSelected && !isCorrectOption) {
                   borderColor = T.crimson;
                   bgColor = `${T.crimson}10`;
                   glow = `0 0 12px ${T.crimson}55`;
@@ -199,7 +214,11 @@ export function RecallQuestion({ question, lessonTitle, onComplete }: RecallQues
                 textShadow: '0 1px 2px rgba(0,0,0,0.85)',
               }}
             >
-              {isCorrect ? 'Correct! Great recall.' : 'Not quite — but that\'s okay, that\'s why we review.'}
+              {hasAnswerKey
+                ? isCorrect
+                  ? 'Correct! Great recall.'
+                  : "Not quite — but that's okay, that's why we review."
+                : 'Thanks for thinking it through — let\'s continue.'}
             </div>
           )}
         </CozyCard>
