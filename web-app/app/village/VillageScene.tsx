@@ -82,14 +82,20 @@ export default function VillageScene() {
     login({ loginMethods: ['google', 'wallet'] });
   };
 
-  // Click handler for a building. Authed users navigate; unauth'd ones get
-  // the Privy modal so they can sign in before going deeper.
+  // Visible buildings depend on auth state. Anonymous visitors only see the
+  // Academy (so they can browse /courses without committing). Once they sign
+  // in, the rest of the village wakes up. Other building pages are still
+  // browsable by direct URL — this just controls the discoverable hotspots
+  // on the hub itself.
+  const visibleBuildings = isAuthenticated
+    ? BUILDINGS
+    : BUILDINGS.filter((b) => b.id === 'academy');
+
+  // Click handler — visibility already enforces auth gating, so this just
+  // navigates. (Defense-in-depth: the academy is in PUBLIC_ROUTES, so even
+  // unauth'd users can land on /courses.)
   const handleBuildingClick = (route: string) => {
-    if (isAuthenticated) {
-      router.push(route);
-    } else {
-      void promptConnect();
-    }
+    router.push(route);
   };
 
   return (
@@ -126,7 +132,7 @@ export default function VillageScene() {
         {/* 2. Pre-computed outline PNGs — 9 stacked <img>s, opacity toggled by
                CSS transition. Zero runtime filter work; browsers blit static
                bitmaps efficiently. */}
-        {BUILDINGS.map((b) => (
+        {visibleBuildings.map((b) => (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             key={`outline-${b.id}`}
@@ -147,7 +153,7 @@ export default function VillageScene() {
                that costs a per-button mask computation and we're optimizing
                for performance). Click area is rectangular but tightly fitted
                to each building's bbox. */}
-        {BUILDINGS.map((b) => {
+        {visibleBuildings.map((b) => {
           const bb = BOUNDS[b.id];
           if (!bb) return null;
           return (
@@ -177,7 +183,7 @@ export default function VillageScene() {
         {/* 4. Always-on bobbing TEXT markers — small amber pills with the
                building name. Smart anchor: float above if there's space,
                otherwise mount at the top of the building silhouette. */}
-        {BUILDINGS.map((b, i) => {
+        {visibleBuildings.map((b, i) => {
           const bb = BOUNDS[b.id];
           if (!bb) return null;
           const isHovered = hovered === b.id;
