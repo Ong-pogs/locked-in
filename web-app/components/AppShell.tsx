@@ -12,7 +12,20 @@ import { getUserEnrollments } from '@/services/api/progress/progressApi';
 import { T } from './theme';
 
 // Routes that don't require authentication
-const PUBLIC_ROUTES = ['/courses', '/village', '/menu'];
+// Pages new users can browse without a wallet connected. Only "do something"
+// flows (deposit / brew / redeem / lessons) gate on auth.
+const PUBLIC_ROUTES = [
+  '/courses',
+  '/village',
+  '/menu',
+  '/lock-prototypes',
+  '/dashboard',
+  '/shop',
+  '/alchemy',
+  '/community-pot',
+  '/inventory',
+  '/leaderboard',
+];
 
 // Routes allowed during onboarding (before active lock)
 const ONBOARDING_ROUTES = ['/courses', '/onboarding/deposit', '/onboarding/tutorial'];
@@ -46,15 +59,15 @@ function useFlowGuard() {
     // Skip guard on public routes
     if (PUBLIC_ROUTES.includes(pathname)) return;
 
-    // Gate 1: No wallet/JWT → courses (they can browse without auth)
+    // Gate 1: No wallet/JWT → village hub (they can browse without auth)
     if (!walletAddress || !isAuthenticated) {
-      router.replace('/courses');
+      router.replace('/village');
       return;
     }
 
-    // Gate 2: phase 'auth' → courses
+    // Gate 2: phase 'auth' → village
     if (phase === 'auth') {
-      router.replace('/courses');
+      router.replace('/village');
       return;
     }
 
