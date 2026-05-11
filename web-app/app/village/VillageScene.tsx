@@ -100,22 +100,17 @@ export default function VillageScene() {
 
   return (
     <div
-      className="fixed inset-0 z-0 overflow-hidden flex items-center justify-center"
+      className="village-scene-outer fixed inset-0 z-0"
       style={{ backgroundColor: T.bg }}
     >
       {/*
-        Aspect-ratio container: width fills viewport up to whatever fits
-        height-wise. CSS aspect-ratio + max-w/h = uniform letterbox/pillarbox.
+        Desktop: aspect-ratio fit (letterbox/pillarbox to 16:9 of art).
+        Mobile: image fills viewport HEIGHT (~16:9 = wider than the phone),
+        outer container becomes a horizontal scroller so the player can pan
+        across the village. Both modes share the same inner DOM — only the
+        sizing differs (handled in styled-jsx below).
       */}
-      <div
-        className="relative"
-        style={{
-          width: '100vw',
-          height: '100vh',
-          maxWidth: `calc(100vh * ${ART_RATIO})`,
-          maxHeight: `calc(100vw / ${ART_RATIO})`,
-        }}
-      >
+      <div className="village-scene-inner relative">
         {/* 1. Painted village background */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -252,6 +247,45 @@ export default function VillageScene() {
       </div>
 
       <style jsx global>{`
+        /* Desktop default: uniform letterbox fit. */
+        .village-scene-outer {
+          overflow: hidden;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .village-scene-inner {
+          width: 100vw;
+          height: 100vh;
+          max-width: calc(100vh * ${ART_RATIO});
+          max-height: calc(100vw / ${ART_RATIO});
+          flex-shrink: 0;
+        }
+        /* Mobile (< 768px): scroll the painted village horizontally.
+           The inner is sized so its HEIGHT matches the viewport, which
+           makes the WIDTH overflow on a portrait phone — the outer becomes
+           a momentum-scroll container. dvh handles iOS browser chrome. */
+        @media (max-width: 767px) {
+          .village-scene-outer {
+            overflow-x: auto;
+            overflow-y: hidden;
+            justify-content: flex-start;
+            -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
+            /* Hide scrollbar — interaction is by touch swipe. */
+            scrollbar-width: none;
+          }
+          .village-scene-outer::-webkit-scrollbar {
+            display: none;
+          }
+          .village-scene-inner {
+            width: calc(100dvh * ${ART_RATIO});
+            height: 100dvh;
+            max-width: none;
+            max-height: none;
+          }
+        }
+
         @keyframes village-marker-bob {
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(-5px); }
