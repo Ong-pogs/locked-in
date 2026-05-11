@@ -531,38 +531,65 @@ export default function CoursesPage() {
         <div className="pt-20" />
 
         {/* Hero — Library variant header */}
-        <div className="text-center pb-6">
-          <div className="flex items-center justify-center gap-2 mb-3.5">
-            <div className="w-[30px] h-px" style={{ backgroundColor: `${AMBER}30` }} />
-            <span className="text-[7px]" style={{ color: `${AMBER}50` }}>
-              {'◆'}
-            </span>
-            <div className="w-[30px] h-px" style={{ backgroundColor: `${AMBER}30` }} />
-          </div>
-          <h1
-            className="text-3xl font-bold tracking-wide font-pixel"
-            style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
-          >
-            Courses
-          </h1>
-          <div className="mb-4" />
-
-          {/* XP bar (real values from store) */}
-          <div className="max-w-xs mx-auto">
-            <div className="flex items-center justify-between mb-1">
-              <span
-                className="text-[10px] font-pixel-mono font-bold uppercase tracking-[1px]"
-                style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
-              >
-                Lv.{xp.xpLevel} {levelName}
+        <div className="relative text-center pb-6">
+          {/* Soft radial scrim behind the hero text — keeps the painted
+              backdrop on the rest of the page but kills its noise where text
+              sits. Sized to comfortably wrap the heading + xp bar + button. */}
+          <div
+            aria-hidden
+            className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
+            style={{
+              top: -10,
+              width: 'min(560px, 92%)',
+              height: 'calc(100% + 20px)',
+              background:
+                'radial-gradient(ellipse at center, rgba(14,14,28,0.93) 0%, rgba(14,14,28,0.78) 45%, rgba(14,14,28,0.32) 75%, rgba(14,14,28,0) 100%)',
+              filter: 'blur(2px)',
+              zIndex: 0,
+            }}
+          />
+          <div className="relative" style={{ zIndex: 1 }}>
+            <div className="flex items-center justify-center gap-2 mb-3.5">
+              <div className="w-[30px] h-px" style={{ backgroundColor: `${AMBER}55` }} />
+              <span className="text-[7px]" style={{ color: `${AMBER}80` }}>
+                {'◆'}
               </span>
-              <span
-                className="text-[10px] font-pixel-mono"
-                style={{ color: T.textMuted, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
-              >
-                {xp.xpTotal} / {nextThreshold} XP
-              </span>
+              <div className="w-[30px] h-px" style={{ backgroundColor: `${AMBER}55` }} />
             </div>
+            <h1
+              className="text-3xl font-bold tracking-wide font-pixel"
+              style={{
+                color: AMBER,
+                textShadow:
+                  '0 0 10px rgba(0,0,0,0.95), 0 2px 0 rgba(0,0,0,0.95), 0 4px 12px rgba(0,0,0,0.85)',
+              }}
+            >
+              Courses
+            </h1>
+            <div className="mb-4" />
+
+            {/* XP bar (real values from store) */}
+            <div className="max-w-xs mx-auto">
+              <div className="flex items-center justify-between mb-1">
+                <span
+                  className="text-[10px] font-pixel-mono font-bold uppercase tracking-[1px]"
+                  style={{
+                    color: AMBER,
+                    textShadow: '0 0 6px rgba(0,0,0,0.95), 0 1px 2px rgba(0,0,0,0.95)',
+                  }}
+                >
+                  Lv.{xp.xpLevel} {levelName}
+                </span>
+                <span
+                  className="text-[10px] font-pixel-mono"
+                  style={{
+                    color: 'rgba(255,255,255,0.78)',
+                    textShadow: '0 0 6px rgba(0,0,0,0.95), 0 1px 2px rgba(0,0,0,0.95)',
+                  }}
+                >
+                  {xp.xpTotal} / {nextThreshold} XP
+                </span>
+              </div>
             <div
               className="w-full h-1.5 rounded-full overflow-hidden"
               style={{ backgroundColor: 'rgba(255,255,255,0.06)' }}
@@ -586,8 +613,11 @@ export default function CoursesPage() {
                   className="px-5 py-2 rounded-lg border text-[11px] font-pixel-mono font-bold uppercase tracking-[1.5px] transition-opacity hover:opacity-80 cursor-pointer"
                   style={{
                     color: T.crimson,
-                    borderColor: `${T.crimson}30`,
-                    backgroundColor: `${T.crimson}0a`,
+                    borderColor: `${T.crimson}55`,
+                    backgroundColor: 'rgba(14,14,28,0.55)',
+                    backdropFilter: 'blur(6px)',
+                    WebkitBackdropFilter: 'blur(6px)',
+                    textShadow: '0 1px 2px rgba(0,0,0,0.85)',
                   }}
                 >
                   Disconnect Wallet
@@ -598,8 +628,11 @@ export default function CoursesPage() {
                   className="px-5 py-2 rounded-lg border text-[11px] font-pixel-mono font-bold uppercase tracking-[1.5px] transition-opacity hover:opacity-80 cursor-pointer"
                   style={{
                     color: T.amber,
-                    borderColor: `${T.amber}30`,
-                    backgroundColor: `${T.amber}0a`,
+                    borderColor: `${T.amber}55`,
+                    backgroundColor: 'rgba(14,14,28,0.55)',
+                    backdropFilter: 'blur(6px)',
+                    WebkitBackdropFilter: 'blur(6px)',
+                    textShadow: '0 1px 2px rgba(0,0,0,0.85)',
                   }}
                 >
                   Sign In
@@ -607,6 +640,7 @@ export default function CoursesPage() {
               )}
             </div>
           )}
+          </div>
         </div>
 
         {/* Loading */}

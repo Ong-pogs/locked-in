@@ -1,139 +1,64 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Flame, Sparkles, Droplet } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Flame } from 'lucide-react';
 import { T } from '@/components/theme';
 import { CozyCard } from '@/components/cozy';
 import { HubButton } from '@/components/HubButton';
-import { useCourseStore, useUserStore } from '@/stores';
-import { fetchWithAuth } from '@/services/api/httpClient';
-import { getUserXp } from '@/services/api/progress/progressApi';
+import { fetchWithAuth, AuthExpiredError } from '@/services/api/httpClient';
+import { getLeaderboard } from '@/services/api/progress/progressApi';
+import type { LeaderboardEntry } from '@/services/api/types';
 
 const AMBER = '#FFD580';
-const COZY_BORDER = 'rgba(58, 143, 168, 0.45)';
 
 /* ──────────────────────────────────────────────────────────────────────
-   Player + metric types
-   ────────────────────────────────────────────────────────────────────── */
-
-type Player = {
-  rank: number;
-  handle: string;
-  streak: number;
-  xp: number;
-  ichor: number;
-  isMe?: boolean;
-};
-
-type Metric = 'streak' | 'xp' | 'ichor';
-
-const METRIC_OPTIONS: {
-  id: Metric;
-  label: string;
-  Icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
-  color: string;
-}[] = [
-  { id: 'streak', label: 'Streak', Icon: Flame, color: '#E8845A' },
-  { id: 'xp', label: 'XP', Icon: Sparkles, color: '#FFD580' },
-  { id: 'ichor', label: 'Ichor', Icon: Droplet, color: '#2AE8D4' },
-];
-
-// TODO: replace with real leaderboard API once backend exposes streak/xp/ichor
-// ranking endpoint. Existing GET /v1/progress/leaderboard returns streak +
-// locked-principal data only — no XP or ichor totals — so the top-10 list
-// here is mocked. The user's own row pulls live data from Zustand + getUserXp.
-const MOCK_TOP_10: Player[] = [
-  { rank: 1, handle: 'EmberKnight', streak: 124, xp: 14820, ichor: 9300 },
-  { rank: 2, handle: 'mossbinder', streak: 98, xp: 13100, ichor: 7400 },
-  { rank: 3, handle: 'lanternFox', streak: 87, xp: 11200, ichor: 6850 },
-  { rank: 4, handle: 'wickwitch', streak: 72, xp: 9800, ichor: 5500 },
-  { rank: 5, handle: 'cinderscholar', streak: 64, xp: 8420, ichor: 4900 },
-  { rank: 6, handle: 'pyrekeeper', streak: 51, xp: 7300, ichor: 4100 },
-  { rank: 7, handle: 'ashveil', streak: 47, xp: 6200, ichor: 3550 },
-  { rank: 8, handle: 'tindersprite', streak: 42, xp: 5800, ichor: 3210 },
-  { rank: 9, handle: 'flickerquill', streak: 38, xp: 5100, ichor: 2980 },
-  { rank: 10, handle: 'kindlemoth', streak: 34, xp: 4700, ichor: 2700 },
-];
-
-/* ──────────────────────────────────────────────────────────────────────
-   Helpers
-   ────────────────────────────────────────────────────────────────────── */
-
-function metricValue(p: Player, m: Metric) {
-  return p[m];
-}
-
-function metricColor(m: Metric) {
-  return METRIC_OPTIONS.find((o) => o.id === m)!.color;
-}
-
-function metricLabel(m: Metric) {
-  return METRIC_OPTIONS.find((o) => o.id === m)!.label;
-}
-
-function truncateWallet(addr: string | null): string {
-  if (!addr) return 'you (Adventurer)';
-  return `${addr.slice(0, 4)}...${addr.slice(-4)}`;
-}
-
-/* ──────────────────────────────────────────────────────────────────────
-   Page
+   Streak-only leaderboard. The backend's /v1/progress/leaderboard returns
+   real users sorted by streakLength (with currentUser pre-extracted).
+   XP and Ichor totals aren't in that endpoint — those tabs were dropped
+   until the backend exposes per-user aggregates.
    ────────────────────────────────────────────────────────────────────── */
 
 export default function LeaderboardPage() {
-  const [selectedMetric, setSelectedMetric] = useState<Metric>('streak');
+  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [currentUser, setCurrentUser] = useState<LeaderboardEntry | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Real user data
-  const displayName = useUserStore((s) => s.displayName);
-  const walletAddress = useUserStore((s) => s.walletAddress);
-  const courseStates = useCourseStore((s) => s.courseStates);
-
-  const [xpTotal, setXpTotal] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchWithAuth(getUserXp)
-      .then((data) => {
-        if (!cancelled && data) setXpTotal(data.xpTotal);
-      })
-      .catch(() => {
-        /* leave xpTotal at 0 if call fails */
-      });
-    return () => {
-      cancelled = true;
-    };
+  const fetchBoard = useCallback(async (signal?: AbortSignal) => {
+    setLoading(true);
+    try {
+      const resp = await fetchWithAuth((token) =>
+        getLeaderboard(token, { page: 1, pageSize: 10 }),
+      );
+      if (signal?.aborted) return;
+      setEntries(resp.entries);
+      setCurrentUser(resp.currentUser);
+      setError(null);
+      setLoading(false);
+    } catch (err) {
+      if (signal?.aborted) return;
+      if (err instanceof AuthExpiredError) {
+        setError('Connect your wallet to see the leaderboard.');
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to load.');
+      }
+      setEntries([]);
+      setCurrentUser(null);
+      setLoading(false);
+    }
   }, []);
 
-  // Streak: longest across all course states
-  const userStreak = Math.max(
-    0,
-    ...Object.values(courseStates).map((s) => s?.longestStreak ?? 0),
-  );
+  useEffect(() => {
+    const controller = new AbortController();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchBoard(controller.signal);
+    return () => {
+      controller.abort();
+    };
+  }, [fetchBoard]);
 
-  // Ichor: sum across all course states
-  const userIchor = Object.values(courseStates).reduce(
-    (acc, s) => acc + (s?.ichorBalance ?? 0),
-    0,
-  );
-
-  const userHandle = displayName || truncateWallet(walletAddress);
-
-  // TODO: replace with real backend rank lookup once leaderboard API
-  // returns a per-user rank for arbitrary metrics.
-  const ME: Player = {
-    rank: 47,
-    handle: userHandle,
-    streak: userStreak,
-    xp: xpTotal,
-    ichor: userIchor,
-    isMe: true,
-  };
-
-  const sorted = [...MOCK_TOP_10].sort(
-    (a, b) => metricValue(b, selectedMetric) - metricValue(a, selectedMetric),
-  );
-  const top3 = sorted.slice(0, 3).map((p, i) => ({ ...p, rank: i + 1 }));
-  const rest = sorted.slice(3, 10).map((p, i) => ({ ...p, rank: i + 4 }));
+  const top3 = entries.slice(0, 3);
+  const rest = entries.slice(3, 10);
   const [first, second, third] = top3;
 
   return (
@@ -173,76 +98,128 @@ export default function LeaderboardPage() {
         </h1>
         <div className="mb-5" />
 
-        <MetricTabs selected={selectedMetric} onChange={setSelectedMetric} />
-        <SectionHeader>The Champions</SectionHeader>
+        {loading ? (
+          <CozyCard>
+            <p className="font-pixel-mono text-[12px]" style={{ color: T.textSecondary }}>
+              Reading the rolls of honor...
+            </p>
+          </CozyCard>
+        ) : error ? (
+          <CozyCard>
+            <p className="font-pixel-mono text-[12px]" style={{ color: AMBER }}>
+              {error}
+            </p>
+            <button
+              onClick={() => {
+                setError(null);
+                void fetchBoard();
+              }}
+              className="mt-3 px-4 py-2 rounded-md border text-[11px] font-semibold uppercase tracking-wide font-pixel cursor-pointer"
+              style={{
+                borderColor: 'rgba(255,213,128,0.45)',
+                backgroundColor: 'rgba(255,213,128,0.10)',
+                color: AMBER,
+              }}
+            >
+              Retry
+            </button>
+          </CozyCard>
+        ) : entries.length === 0 ? (
+          <CozyCard>
+            <p className="font-pixel-mono text-[12px]" style={{ color: T.textSecondary }}>
+              No streaks recorded yet. Be the first.
+            </p>
+          </CozyCard>
+        ) : (
+          <>
+            <SectionHeader>The Champions</SectionHeader>
 
-        {/* Podium row — silver | gold (center, tallest) | bronze */}
-        <div className="grid grid-cols-3 gap-3 mb-6 items-end">
-          <PodiumCard player={second} metric={selectedMetric} place="silver" height={220} />
-          <PodiumCard player={first} metric={selectedMetric} place="gold" height={260} />
-          <PodiumCard player={third} metric={selectedMetric} place="bronze" height={200} />
-        </div>
-
-        <SectionHeader muted>The Pursuers</SectionHeader>
-        <CozyCard style={{ padding: 0, overflow: 'hidden' }} className="mb-5">
-          {rest.map((p, i) => (
-            <PodiumListRow
-              key={p.handle}
-              player={p}
-              metric={selectedMetric}
-              alt={i % 2 === 0}
-            />
-          ))}
-        </CozyCard>
-
-        <SectionHeader muted>Your Standing</SectionHeader>
-        <CozyCard
-          style={{
-            padding: 16,
-            border: `2px solid ${AMBER}`,
-            boxShadow:
-              '0 6px 20px rgba(0,0,0,0.45), 0 0 24px rgba(255,213,128,0.20), inset 0 1px 0 rgba(255,213,128,0.20)',
-          }}
-        >
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-3 min-w-0">
-              <span
-                className="font-pixel-mono text-[18px] font-bold shrink-0"
-                style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
-              >
-                #{ME.rank}
-              </span>
-              <p
-                className="text-[14px] font-bold font-pixel truncate"
-                style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
-              >
-                {ME.handle}
-              </p>
-              <span
-                className="font-pixel-mono text-[8px] uppercase tracking-[1px] px-1.5 py-0.5 rounded shrink-0"
-                style={{ color: '#1A1000', backgroundColor: AMBER }}
-              >
-                you
-              </span>
+            {/* Podium row — silver | gold (center, tallest) | bronze. Each
+                slot only renders if there's an entry for that rank, so an
+                under-3-entry leaderboard still looks intentional. */}
+            <div className="grid grid-cols-3 gap-3 mb-6 items-end">
+              {second ? (
+                <PodiumCard entry={second} place="silver" height={220} />
+              ) : (
+                <div />
+              )}
+              {first ? (
+                <PodiumCard entry={first} place="gold" height={260} />
+              ) : (
+                <div />
+              )}
+              {third ? (
+                <PodiumCard entry={third} place="bronze" height={200} />
+              ) : (
+                <div />
+              )}
             </div>
-            <div className="flex items-center gap-4">
-              {METRIC_OPTIONS.map((opt) => {
-                const Icon = opt.Icon;
-                return (
-                  <div key={opt.id} className="flex items-center gap-1.5">
-                    <Icon size={12} color={opt.color} strokeWidth={2.5} />
-                    <span
-                      className="font-pixel-mono text-[13px] font-bold"
-                      style={{ color: opt.color, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
-                    >
-                      {ME[opt.id].toLocaleString()}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </CozyCard>
+
+            {rest.length > 0 && (
+              <>
+                <SectionHeader muted>The Pursuers</SectionHeader>
+                <CozyCard style={{ padding: 0, overflow: 'hidden' }} className="mb-5">
+                  {rest.map((entry, i) => (
+                    <PursuerRow key={entry.walletAddress} entry={entry} alt={i % 2 === 0} />
+                  ))}
+                </CozyCard>
+              </>
+            )}
+          </>
+        )}
+
+        {/* Your Standing — only show when current user is on the board */}
+        {currentUser && (
+          <>
+            <SectionHeader muted>Your Standing</SectionHeader>
+            <CozyCard
+              style={{
+                padding: 16,
+                border: `2px solid ${AMBER}`,
+                boxShadow:
+                  '0 6px 20px rgba(0,0,0,0.45), 0 0 24px rgba(255,213,128,0.20), inset 0 1px 0 rgba(255,213,128,0.20)',
+              }}
+            >
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span
+                    className="font-pixel-mono text-[18px] font-bold shrink-0"
+                    style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
+                  >
+                    #{currentUser.rank}
+                  </span>
+                  <p
+                    className="text-[14px] font-bold font-pixel truncate"
+                    style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
+                  >
+                    {currentUser.displayIdentity}
+                  </p>
+                  <span
+                    className="font-pixel-mono text-[8px] uppercase tracking-[1px] px-1.5 py-0.5 rounded shrink-0"
+                    style={{ color: '#1A1000', backgroundColor: AMBER }}
+                  >
+                    you
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Flame size={14} color="#E8845A" strokeWidth={2.5} />
+                  <span
+                    className="font-pixel-mono text-[14px] font-bold"
+                    style={{ color: '#E8845A', textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
+                  >
+                    {currentUser.streakLength}
+                  </span>
+                  <span
+                    className="font-pixel-mono text-[10px] uppercase tracking-[1px]"
+                    style={{ color: T.textMuted }}
+                  >
+                    {currentUser.streakStatus === 'broken' ? 'broken' : 'day streak'}
+                  </span>
+                </div>
+              </div>
+            </CozyCard>
+          </>
+        )}
       </div>
     </div>
   );
@@ -251,41 +228,6 @@ export default function LeaderboardPage() {
 /* ──────────────────────────────────────────────────────────────────────
    Shared bits
    ────────────────────────────────────────────────────────────────────── */
-
-function MetricTabs({
-  selected,
-  onChange,
-}: {
-  selected: Metric;
-  onChange: (m: Metric) => void;
-}) {
-  return (
-    <div className="flex items-center gap-2 mb-4 flex-wrap">
-      {METRIC_OPTIONS.map((opt) => {
-        const active = selected === opt.id;
-        const Icon = opt.Icon;
-        return (
-          <button
-            key={opt.id}
-            type="button"
-            onClick={() => onChange(opt.id)}
-            className="flex items-center gap-2 px-4 py-2 rounded-full text-[11px] font-bold uppercase tracking-[1.5px] font-pixel-mono transition-colors cursor-pointer"
-            style={{
-              color: active ? '#1A1000' : AMBER,
-              backgroundColor: active ? AMBER : 'rgba(14,14,28,0.50)',
-              border: `1px solid ${active ? AMBER : COZY_BORDER}`,
-              backdropFilter: 'blur(10px)',
-              WebkitBackdropFilter: 'blur(10px)',
-            }}
-          >
-            <Icon size={12} color={active ? '#1A1000' : opt.color} strokeWidth={2.5} />
-            {opt.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 function SectionHeader({ children, muted }: { children: React.ReactNode; muted?: boolean }) {
   return (
@@ -302,31 +244,44 @@ function SectionHeader({ children, muted }: { children: React.ReactNode; muted?:
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────────
-   Podium card (top-3 hero) + list row (4-10)
-   ────────────────────────────────────────────────────────────────────── */
-
 const PLACE_THEME: Record<
   'gold' | 'silver' | 'bronze',
-  { stripe: string; glow: string; rank: number; medal: string }
+  { stripe: string; glow: string; rank: number; medal: string; label: string }
 > = {
-  gold: { stripe: '#FFD700', glow: 'rgba(255,215,0,0.35)', rank: 1, medal: '🥇' },
-  silver: { stripe: '#C0C0C0', glow: 'rgba(192,192,192,0.30)', rank: 2, medal: '🥈' },
-  bronze: { stripe: '#CD7F32', glow: 'rgba(205,127,50,0.30)', rank: 3, medal: '🥉' },
+  gold: {
+    stripe: '#FFD700',
+    glow: 'rgba(255,215,0,0.35)',
+    rank: 1,
+    medal: '🥇',
+    label: 'Champion',
+  },
+  silver: {
+    stripe: '#C0C0C0',
+    glow: 'rgba(192,192,192,0.30)',
+    rank: 2,
+    medal: '🥈',
+    label: 'Runner-up',
+  },
+  bronze: {
+    stripe: '#CD7F32',
+    glow: 'rgba(205,127,50,0.30)',
+    rank: 3,
+    medal: '🥉',
+    label: 'Third',
+  },
 };
 
 function PodiumCard({
-  player,
-  metric,
+  entry,
   place,
   height,
 }: {
-  player: Player;
-  metric: Metric;
+  entry: LeaderboardEntry;
   place: 'gold' | 'silver' | 'bronze';
   height: number;
 }) {
   const theme = PLACE_THEME[place];
+  const broken = entry.streakStatus === 'broken';
   return (
     <CozyCard
       className="flex flex-col items-center text-center"
@@ -346,7 +301,7 @@ function PodiumCard({
           backgroundColor: theme.stripe,
         }}
       >
-        {place === 'gold' ? 'Champion' : place === 'silver' ? 'Runner-up' : 'Third'}
+        {theme.label}
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center px-3 py-4 gap-2">
@@ -355,29 +310,29 @@ function PodiumCard({
           className="font-pixel-mono text-[36px] font-bold leading-none"
           style={{ color: theme.stripe, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
         >
-          #{theme.rank}
+          #{entry.rank}
         </span>
         <p
           className="text-[13px] font-bold font-pixel truncate w-full"
           style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
         >
-          {player.handle}
+          {entry.displayIdentity}
         </p>
         <div className="mt-1 flex flex-col items-center">
           <span
             className="font-pixel-mono text-[9px] uppercase tracking-[1.5px]"
             style={{ color: T.textMuted }}
           >
-            {metricLabel(metric)}
+            {broken ? 'Streak broken' : 'Streak'}
           </span>
           <span
             className="font-pixel-mono text-[18px] font-bold"
             style={{
-              color: metricColor(metric),
+              color: broken ? T.crimson : '#E8845A',
               textShadow: '0 1px 2px rgba(0,0,0,0.85)',
             }}
           >
-            {metricValue(player, metric).toLocaleString()}
+            {entry.streakLength}
           </span>
         </div>
       </div>
@@ -385,15 +340,8 @@ function PodiumCard({
   );
 }
 
-function PodiumListRow({
-  player,
-  metric,
-  alt,
-}: {
-  player: Player;
-  metric: Metric;
-  alt?: boolean;
-}) {
+function PursuerRow({ entry, alt }: { entry: LeaderboardEntry; alt?: boolean }) {
+  const broken = entry.streakStatus === 'broken';
   return (
     <div
       className="grid items-center gap-3 px-4 py-2.5"
@@ -407,23 +355,34 @@ function PodiumListRow({
         className="font-pixel-mono text-[13px] font-bold"
         style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
       >
-        #{player.rank}
+        #{entry.rank}
       </span>
       <p
         className="text-[12px] font-bold font-pixel truncate"
-        style={{ color: 'rgba(255,255,255,0.92)', textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
+        style={{
+          color: entry.isCurrentUser ? AMBER : 'rgba(255,255,255,0.92)',
+          textShadow: '0 1px 2px rgba(0,0,0,0.85)',
+        }}
       >
-        {player.handle}
+        {entry.displayIdentity}
+        {entry.isCurrentUser && (
+          <span
+            className="font-pixel-mono text-[8px] uppercase tracking-[1px] px-1.5 py-0.5 rounded ml-2"
+            style={{ color: '#1A1000', backgroundColor: AMBER }}
+          >
+            you
+          </span>
+        )}
       </p>
       <div className="text-right">
         <span
           className="font-pixel-mono text-[13px] font-bold"
           style={{
-            color: metricColor(metric),
+            color: broken ? T.crimson : '#E8845A',
             textShadow: '0 1px 2px rgba(0,0,0,0.85)',
           }}
         >
-          {metricValue(player, metric).toLocaleString()}
+          {entry.streakLength}
         </span>
       </div>
     </div>

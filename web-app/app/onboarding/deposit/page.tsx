@@ -385,53 +385,83 @@ function DepositContent() {
         <div className="pt-20" />
 
         {/* Course header */}
-        <div className="mb-6">
-          <h1
-            className="font-pixel text-3xl md:text-4xl font-bold tracking-wide mb-3"
-            style={{ color: AMBER, textShadow: COZY_TEXT_SHADOW }}
-          >
-            {courseTitle}
-          </h1>
-          <div className="flex items-center gap-2 flex-wrap mb-2">
-            {course?.difficulty && (
-              <span
-                className="font-pixel-mono text-[10px] font-bold uppercase tracking-[1.5px] px-2 py-[3px] rounded"
-                style={{
-                  color: diffColor,
-                  backgroundColor: `${diffColor}15`,
-                  border: `1px solid ${diffColor}30`,
-                }}
-              >
-                {course.difficulty}
-              </span>
-            )}
-            {course?.category && (
-              <span
-                className="font-pixel-mono text-[10px] font-bold uppercase tracking-[1.5px] px-2 py-[3px] rounded"
-                style={{
-                  color: catColor,
-                  backgroundColor: `${catColor}15`,
-                  border: `1px solid ${catColor}30`,
-                }}
-              >
-                {course.category}
-              </span>
-            )}
-            {lessonCount > 0 && (
-              <span
-                className="font-pixel-mono text-[10px] uppercase tracking-[1.5px]"
-                style={{ color: T.textMuted }}
-              >
-                {lessonCount} lessons
-              </span>
-            )}
+        <div className="relative mb-6">
+          {/* Soft radial scrim — kills the pixel-noise behind the header text
+              while letting the vault bg breathe through the rest of the page. */}
+          <div
+            aria-hidden
+            className="absolute pointer-events-none"
+            style={{
+              top: -16,
+              left: -24,
+              right: -24,
+              bottom: -16,
+              background:
+                'radial-gradient(ellipse at 30% 50%, rgba(14,14,28,0.93) 0%, rgba(14,14,28,0.78) 45%, rgba(14,14,28,0.32) 75%, rgba(14,14,28,0) 100%)',
+              filter: 'blur(2px)',
+              zIndex: 0,
+            }}
+          />
+          <div className="relative" style={{ zIndex: 1 }}>
+            <h1
+              className="font-pixel text-3xl md:text-4xl font-bold tracking-wide mb-3"
+              style={{
+                color: AMBER,
+                textShadow:
+                  '0 0 10px rgba(0,0,0,0.95), 0 2px 0 rgba(0,0,0,0.95), 0 4px 12px rgba(0,0,0,0.85)',
+              }}
+            >
+              {courseTitle}
+            </h1>
+            <div className="flex items-center gap-2 flex-wrap mb-2">
+              {course?.difficulty && (
+                <span
+                  className="font-pixel-mono text-[10px] font-bold uppercase tracking-[1.5px] px-2 py-[3px] rounded"
+                  style={{
+                    color: diffColor,
+                    backgroundColor: `${diffColor}22`,
+                    border: `1px solid ${diffColor}55`,
+                    textShadow: '0 1px 2px rgba(0,0,0,0.85)',
+                  }}
+                >
+                  {course.difficulty}
+                </span>
+              )}
+              {course?.category && (
+                <span
+                  className="font-pixel-mono text-[10px] font-bold uppercase tracking-[1.5px] px-2 py-[3px] rounded"
+                  style={{
+                    color: catColor,
+                    backgroundColor: `${catColor}22`,
+                    border: `1px solid ${catColor}55`,
+                    textShadow: '0 1px 2px rgba(0,0,0,0.85)',
+                  }}
+                >
+                  {course.category}
+                </span>
+              )}
+              {lessonCount > 0 && (
+                <span
+                  className="font-pixel-mono text-[10px] uppercase tracking-[1.5px]"
+                  style={{
+                    color: 'rgba(255,255,255,0.78)',
+                    textShadow: '0 0 6px rgba(0,0,0,0.95), 0 1px 2px rgba(0,0,0,0.95)',
+                  }}
+                >
+                  {lessonCount} lessons
+                </span>
+              )}
+            </div>
+            <p
+              className="font-pixel-mono text-[12px]"
+              style={{
+                color: 'rgba(255,255,255,0.82)',
+                textShadow: '0 0 8px rgba(0,0,0,0.95), 0 1px 2px rgba(0,0,0,0.95)',
+              }}
+            >
+              {courseTagline}
+            </p>
           </div>
-          <p
-            className="font-pixel-mono text-[12px]"
-            style={{ color: T.textSecondary }}
-          >
-            {courseTagline}
-          </p>
         </div>
 
         {/* Single CozyCard wrapping the whole form */}

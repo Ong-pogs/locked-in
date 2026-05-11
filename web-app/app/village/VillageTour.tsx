@@ -148,28 +148,10 @@ export function VillageTour({ bounds }: { bounds: BoundsMap }) {
     };
   })();
 
-  // Tooltip placement: prefer below the spotlight, but flip above if it would
-  // run off the bottom of the viewport.
-  const tooltip = (() => {
-    if (!viewport) return { left: 24, top: 24 } as const;
-    const TOOL_W = 360;
-    const TOOL_GAP = 16;
-    if (!spotlight) {
-      // Welcome / done — center the bubble.
-      return {
-        left: Math.max(16, viewport.w / 2 - TOOL_W / 2),
-        top: Math.max(16, viewport.h / 2 - 110),
-        anchor: 'center' as const,
-      };
-    }
-    const wantBelow = spotlight.top + spotlight.height + TOOL_GAP + 200 < viewport.h;
-    const top = wantBelow
-      ? spotlight.top + spotlight.height + TOOL_GAP
-      : Math.max(16, spotlight.top - TOOL_GAP - 180);
-    const centerX = spotlight.left + spotlight.width / 2;
-    const left = Math.max(16, Math.min(viewport.w - TOOL_W - 16, centerX - TOOL_W / 2));
-    return { left, top, anchor: wantBelow ? ('below' as const) : ('above' as const) };
-  })();
+  // Pin the tooltip to a fixed slot at the bottom of the viewport on every
+  // step. Earlier versions flew the bubble around to anchor next to each
+  // spotlight; users found that disorienting. The spotlight provides the
+  // "where" — the bubble just stays put as the "what / why."
 
   // Title for the bubble
   const title =
@@ -220,13 +202,14 @@ export function VillageTour({ bounds }: { bounds: BoundsMap }) {
         />
       )}
 
-      {/* Tooltip bubble */}
+      {/* Tooltip bubble — fixed bottom-center, never moves between steps. */}
       <div
         className="fixed rounded-lg p-4"
         style={{
-          left: tooltip.left,
-          top: tooltip.top,
-          width: 360,
+          left: '50%',
+          bottom: 'calc(24px + env(safe-area-inset-bottom, 0px))',
+          transform: 'translateX(-50%)',
+          width: 'min(360px, calc(100vw - 32px))',
           backgroundColor: COZY_BG,
           border: `1px solid ${COZY_BORDER}`,
           boxShadow: `0 12px 40px rgba(0,0,0,0.6), 0 0 16px ${AMBER}40, inset 0 1px 0 rgba(255,213,128,0.15)`,
