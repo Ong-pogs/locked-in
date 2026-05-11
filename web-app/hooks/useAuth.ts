@@ -152,6 +152,22 @@ export function useAuth() {
     }
   }, [solanaWallet, signMessage, setWallet, setAuthSession]);
 
+  // Keep the proxy auth cookie in sync with the Zustand JWT.
+  // Without this, an expired/cleared cookie + still-valid JWT in localStorage
+  // wedges the user on '/' because the proxy bounces every other route, while
+  // the sidebar still renders (driven by isAuthenticated). The cookie is the
+  // server-side source of truth, but Zustand is the client-side one — they
+  // must match.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const hasCookie = document.cookie.includes('locked-in-auth=1');
+    if (accessToken && !hasCookie) {
+      setAuthCookie(true);
+    } else if (!accessToken && hasCookie) {
+      setAuthCookie(false);
+    }
+  }, [accessToken]);
+
   // Track whether user just logged in this session (not a page reload)
   // Backed by sessionStorage so it survives page reloads within the same tab
   const [freshLogin, setFreshLoginState] = useState(() => {
