@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 
 const TOUR_STORAGE_KEY = 'locked-in:village-tour-completed';
 
@@ -66,17 +67,20 @@ const STEPS: Step[] = [
 ];
 
 export function VillageTour({ bounds }: { bounds: BoundsMap }) {
-  // Initialize active state from localStorage at mount via a lazy initializer
-  // (rather than reading it inside an effect, which would trigger a cascading
-  // render). Returns false during SSR so first paint is consistent.
-  const [active, setActive] = useState(() => {
-    if (typeof window === 'undefined') return false;
+  // Tour gating: anonymous browsers should be able to look around the
+  // village without the tour overlay popping up. The walkthrough only fires
+  // AFTER wallet connect, and only once per device (persisted in
+  // localStorage). Re-renders when isAuthenticated flips true.
+  const { isAuthenticated } = useAuth();
+  const [completed, setCompleted] = useState(() => {
+    if (typeof window === 'undefined') return true;
     try {
-      return window.localStorage.getItem(TOUR_STORAGE_KEY) !== '1';
+      return window.localStorage.getItem(TOUR_STORAGE_KEY) === '1';
     } catch {
-      return true;
+      return false;
     }
   });
+  const active = isAuthenticated && !completed;
   const [stepIdx, setStepIdx] = useState(0);
   // Track viewport for letterbox math (the painted scene is letterboxed within the viewport).
   const [viewport, setViewport] = useState<{ w: number; h: number } | null>(null);
@@ -111,7 +115,7 @@ export function VillageTour({ bounds }: { bounds: BoundsMap }) {
     } catch {
       /* ignore */
     }
-    setActive(false);
+    setCompleted(true);
   };
 
   const next = () => {
