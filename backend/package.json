@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@fastify/cors": "^11.2.0",
+    "@fastify/rate-limit": "^10.3.0",
     "@kamino-finance/klend-sdk": "^7.3.20",
     "@solana/kit": "^2.3.0",
     "@solana/spl-token": "^0.4.14",

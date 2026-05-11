@@ -65,6 +65,9 @@ export const useYieldStore = create<YieldStore>()(
     {
       name: 'locked-in-yield',
       storage: createJSONStorage(() => webStorageAdapter),
+      version: 1,
+      // Stub migrator — see courseStore.ts for rationale.
+      migrate: (persistedState) => persistedState,
     },
   ),
 );

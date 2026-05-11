@@ -2,12 +2,23 @@ import { config as loadEnv } from 'dotenv';
 
 loadEnv();
 
+// In production we fail fast when a required env var is missing, even if a
+// dev fallback is supplied — otherwise the server boots with hardcoded dev
+// secrets like 'dev-only-please-change' and tokens become forgeable. In dev
+// (NODE_ENV !== 'production') we keep the fallback so `npm run dev` works
+// without a full .env.
 function required(name, fallback = '') {
-  const value = process.env[name] ?? fallback;
-  if (!value) {
+  const value = process.env[name];
+  if (value) return value;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      `Missing required environment variable in production: ${name}`,
+    );
+  }
+  if (!fallback) {
     throw new Error(`Missing required environment variable: ${name}`);
   }
-  return value;
+  return fallback;
 }
 
 function optionalInt(name, fallback) {

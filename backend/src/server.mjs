@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import { appConfig } from './config.mjs';
 import { HttpError } from './lib/errors.mjs';
 import { getPool, hasDatabase } from './lib/db.mjs';

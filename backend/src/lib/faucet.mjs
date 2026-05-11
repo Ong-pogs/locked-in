@@ -143,6 +143,64 @@ export async function transferUsdc(walletAddress, amountUi) {
   return { signature, amountAtomic };
 }
 
+/**
+ * Atomically reserve a faucet claim slot. Returns a reservation id on
+ * success, or null if the wallet has already claimed for this round.
+ *
+ * This replaces the old checkCooldown + recordClaim two-step which was
+ * vulnerable to TOCTOU: two parallel requests could both pass cooldown,
+ * both run Solana transfers, both insert rows. With the UNIQUE constraint
+ * on (wallet_address, round) added in migration 0034, the ON CONFLICT
+ * DO NOTHING here guarantees only one reservation wins.
+ *
+ * Callers MUST call `recordClaimSignatures` after the transfers complete,
+ * or `releaseReservation` on failure (so a botched attempt doesn't lock
+ * the wallet out until the next round bump).
+ */
+export async function reserveClaim(walletAddress) {
+  const pool = getPool();
+  if (!pool) {
+    throw new Error('Faucet requires DATABASE_URL to be configured');
+  }
+  const { rows } = await pool.query(
+    `INSERT INTO lesson.faucet_claims
+       (wallet_address, sol_signature, usdc_signature, sol_amount_lamports, usdc_amount_atomic, round)
+     VALUES ($1, '', '', 0, 0, $2)
+     ON CONFLICT (wallet_address, round) DO NOTHING
+     RETURNING id`,
+    [walletAddress, appConfig.faucetRound],
+  );
+  return rows.length > 0 ? rows[0].id : null;
+}
+
+export async function recordClaimSignatures(reservationId, solSignature, usdcSignature, solLamports, usdcAtomic) {
+  const pool = getPool();
+  if (!pool) {
+    throw new Error('Faucet requires DATABASE_URL to be configured');
+  }
+  await pool.query(
+    `UPDATE lesson.faucet_claims
+       SET sol_signature = $1,
+           usdc_signature = $2,
+           sol_amount_lamports = $3,
+           usdc_amount_atomic = $4
+     WHERE id = $5`,
+    [solSignature, usdcSignature, solLamports, usdcAtomic, reservationId],
+  );
+}
+
+export async function releaseReservation(reservationId) {
+  const pool = getPool();
+  if (!pool) return;
+  await pool.query(
+    `DELETE FROM lesson.faucet_claims WHERE id = $1`,
+    [reservationId],
+  );
+}
+
+// Legacy exports kept so any unused-imports check doesn't break callers
+// that haven't migrated yet. Marked deprecated.
+/** @deprecated use reserveClaim instead — racy by design */
 export async function checkCooldown(walletAddress) {
   const pool = getPool();
   if (!pool) {
@@ -162,6 +220,7 @@ export async function checkCooldown(walletAddress) {
   return { eligible: false };
 }
 
+/** @deprecated use recordClaimSignatures after reserveClaim */
 export async function recordClaim(walletAddress, solSignature, usdcSignature, solLamports, usdcAtomic) {
   const pool = getPool();
   if (!pool) {

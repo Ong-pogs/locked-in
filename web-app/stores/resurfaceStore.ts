@@ -41,6 +41,9 @@ export const useResurfaceStore = create<ResurfaceStore>()(
     {
       name: 'locked-in-resurface-receipts',
       storage: createJSONStorage(() => webStorageAdapter),
+      version: 1,
+      // Stub migrator — see courseStore.ts for rationale.
+      migrate: (persistedState) => persistedState,
     },
   ),
 );

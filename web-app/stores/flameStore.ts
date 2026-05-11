@@ -67,6 +67,9 @@ export const useFlameStore = create<FlameStore>()(
     {
       name: 'locked-in-flame',
       storage: createJSONStorage(() => webStorageAdapter),
+      version: 1,
+      // Stub migrator — see courseStore.ts for rationale.
+      migrate: (persistedState) => persistedState,
     },
   ),
 );

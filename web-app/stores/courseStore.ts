@@ -782,6 +782,11 @@ export const useCourseStore = create<CourseStore>()(
     {
       name: 'locked-in-courses',
       storage: createJSONStorage(() => webStorageAdapter),
+      version: 1,
+      // Stub migrator — no schema changes between v0 and v1, but adding
+      // `version` now means future bumps have a hook to land migrations
+      // instead of silently wiping returning users' state.
+      migrate: (persistedState) => persistedState,
       merge: (persisted, current) => {
         const mergedState = {
           ...current,

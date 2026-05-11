@@ -161,18 +161,82 @@ export default function LessonPage(props: {
 
   const shouldShowRecall = recallData !== null;
 
-  // Local state
-  const [phase, setPhase] = useState<Phase>(shouldShowRecall ? 'recall' : 'reading');
-  const [startSynced, setStartSynced] = useState(false);
-  const [attemptId, setAttemptId] = useState<string | null>(null);
-  const [attemptStartedAt, setAttemptStartedAt] = useState<string | null>(null);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  // Persist the current attempt to sessionStorage so a page reload mid-quiz
+  // doesn't regenerate attemptId — without this, the backend (which only
+  // knows the original attemptId from startLesson) would reject the submit.
+  const ATTEMPT_STORAGE_KEY = `lesson-attempt::${lessonId}`;
+  type StoredAttempt = {
+    attemptId: string;
+    startedAt: string;
+    phase: 'reading' | 'questions';
+    currentQuestionIndex: number;
+    submittedAnswers: Record<string, string>;
+    correctCount: number;
+  };
+  const restored: StoredAttempt | null = (() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = window.sessionStorage.getItem(ATTEMPT_STORAGE_KEY);
+      return raw ? (JSON.parse(raw) as StoredAttempt) : null;
+    } catch {
+      return null;
+    }
+  })();
+
+  // Local state — initialized from sessionStorage when an attempt was in
+  // flight at refresh time.
+  const [phase, setPhase] = useState<Phase>(() => {
+    if (restored) return restored.phase;
+    return shouldShowRecall ? 'recall' : 'reading';
+  });
+  // Once an attempt is restored we've already called startLesson — record
+  // that so we don't re-sync, which would 409 against the existing attempt.
+  const [startSynced, setStartSynced] = useState<boolean>(restored !== null);
+  const [attemptId, setAttemptId] = useState<string | null>(restored?.attemptId ?? null);
+  const [attemptStartedAt, setAttemptStartedAt] = useState<string | null>(
+    restored?.startedAt ?? null,
+  );
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(
+    restored?.currentQuestionIndex ?? 0,
+  );
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [textAnswer, setTextAnswer] = useState('');
-  const [submittedAnswers, setSubmittedAnswers] = useState<Record<string, string>>({});
+  const [submittedAnswers, setSubmittedAnswers] = useState<Record<string, string>>(
+    restored?.submittedAnswers ?? {},
+  );
   const [hasChecked, setHasChecked] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
-  const [correctCount, setCorrectCount] = useState(0);
+  const [correctCount, setCorrectCount] = useState(restored?.correctCount ?? 0);
+
+  // Persist the attempt state to sessionStorage whenever it changes. Cleared
+  // on successful lesson completion (in applyLessonCompletion). Scoped to
+  // sessionStorage (not local) so it auto-clears when the tab closes.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!attemptId || !attemptStartedAt) return;
+    if (phase !== 'reading' && phase !== 'questions') return;
+    try {
+      const payload: StoredAttempt = {
+        attemptId,
+        startedAt: attemptStartedAt,
+        phase,
+        currentQuestionIndex,
+        submittedAnswers,
+        correctCount,
+      };
+      window.sessionStorage.setItem(ATTEMPT_STORAGE_KEY, JSON.stringify(payload));
+    } catch {
+      /* sessionStorage may be unavailable */
+    }
+  }, [
+    ATTEMPT_STORAGE_KEY,
+    attemptId,
+    attemptStartedAt,
+    phase,
+    currentQuestionIndex,
+    submittedAnswers,
+    correctCount,
+  ]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [inputFocused, setInputFocused] = useState(false);
@@ -249,11 +313,13 @@ export default function LessonPage(props: {
       }
       const newStreak = useCourseStore.getState().courseStates[courseId]?.currentStreak ?? 0;
       useFlameStore.getState().updateFromStreak(newStreak);
-      // Reading is done — clear the persisted section index so a future
-      // revisit (e.g., review) starts at section 1 instead of resuming
-      // at the last block.
+      // Lesson is done — clear the persisted section index AND the
+      // in-flight attempt cache so a future revisit (e.g., review) starts
+      // at section 1 with a fresh attempt instead of resuming the just-
+      // completed one.
       try {
         window.localStorage.removeItem(`locked-in:reading-section::${lessonId}`);
+        window.sessionStorage.removeItem(`lesson-attempt::${lessonId}`);
       } catch {
         /* ignore */
       }
