@@ -41,10 +41,9 @@ test.describe('Courses page', () => {
     await coursesPage.goto();
     await coursesPage.waitForContent();
 
-    // Unauthenticated users see "Choose Your Path" heading
+    // Post-pivot heading is just "Courses" (was "Choose Your Path")
     const heading = await coursesPage.heading.textContent();
-    expect(heading).toContain('Choose Your');
-    expect(heading).toContain('Path');
+    expect(heading).toContain('Courses');
   });
 
   test('shows Sign In button for unauthenticated users', async ({ page }) => {

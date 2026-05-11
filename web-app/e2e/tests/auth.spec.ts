@@ -1,14 +1,15 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * Auth flow tests — verifies access control.
+ * Auth flow tests — verifies public access to /courses.
  *
- * The app uses a flow guard (AppShell):
- * - PUBLIC_ROUTES: /, /courses — accessible without auth
- * - Protected routes redirect to /courses when unauthenticated
+ * Most routes became public after the village-hub pivot — /village, /menu,
+ * /dashboard, /courses, /shop, /alchemy, /community-pot, /inventory,
+ * /leaderboard. The flow guard only redirects auth-required action flows
+ * (deposit, lessons, brew, redeem).
  *
- * Note: Authenticated access tests require a real Privy session which can't
- * be mocked in E2E. Those are covered by Vitest component tests instead.
+ * Authenticated UI is covered by Vitest component tests since Privy can't
+ * be mocked end-to-end.
  */
 
 test.describe('Unauthenticated access', () => {
@@ -27,29 +28,10 @@ test.describe('Unauthenticated access', () => {
   test('/courses is accessible without auth', async ({ page }) => {
     await page.goto('/courses');
 
-    // Should show the courses heading
     const heading = page.locator('h1');
     await expect(heading).toBeVisible({ timeout: 15_000 });
     const text = await heading.textContent();
-    expect(text).toContain('Choose Your');
-  });
-
-  test('protected route /dashboard shows courses content after redirect', async ({ page }) => {
-    await page.goto('/dashboard');
-    // Flow guard redirects unauth users — they end up seeing courses content
-    const heading = page.locator('h1');
-    await expect(heading).toBeVisible({ timeout: 15_000 });
-    const text = await heading.textContent();
-    // Should see "Choose Your Path" (courses page), not dashboard content
-    expect(text).toContain('Choose Your');
-  });
-
-  test('protected route /profile shows courses content after redirect', async ({ page }) => {
-    await page.goto('/profile');
-    const heading = page.locator('h1');
-    await expect(heading).toBeVisible({ timeout: 15_000 });
-    const text = await heading.textContent();
-    expect(text).toContain('Choose Your');
+    expect(text).toContain('Courses');
   });
 
   test('shows Sign In button on courses page', async ({ page }) => {
