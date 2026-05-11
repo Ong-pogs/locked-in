@@ -15,18 +15,19 @@ export function getPool() {
   }
 
   if (!pool) {
+    // Skip SSL for local connections (CI's docker-compose Postgres doesn't
+    // serve TLS) but enforce it for everything else. Managed providers
+    // (Render, Supabase, Heroku, RDS) all serve self-signed certs over an
+    // encrypted channel — rejectUnauthorized:false keeps the wire encrypted
+    // but skips chain validation, which is the standard pattern there.
+    const dbUrl = appConfig.databaseUrl;
+    const isLocalDb = /@(?:localhost|127\.0\.0\.1|\[::1\])(?::|\/)/i.test(dbUrl);
     pool = new Pool({
-      connectionString: appConfig.databaseUrl,
+      connectionString: dbUrl,
       max: 10,
       idleTimeoutMillis: 30_000,
       statement_timeout: 10_000,
-      // Managed Postgres providers (Render, Supabase, Heroku, RDS) all serve
-      // self-signed certs over the encrypted channel — there's no CA chain
-      // to verify against. rejectUnauthorized:false keeps TLS on (the wire
-      // is encrypted) but skips chain validation, which matches the standard
-      // pattern for these platforms. If you ever move to a DB with a public
-      // CA, swap to `ssl: { ca: <pem> }`.
-      ssl: { rejectUnauthorized: false },
+      ssl: isLocalDb ? false : { rejectUnauthorized: false },
     });
     // Without this listener, an idle-client error (e.g. Supabase pooler dropping
     // an idle connection, EADDRNOTAVAIL during a network blip) becomes an
