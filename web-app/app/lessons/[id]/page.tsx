@@ -5,13 +5,9 @@ import { useRouter } from 'next/navigation';
 import { useCourseStore, useUserStore, useFlameStore } from '@/stores';
 import { hasRemoteLessonApi, startLesson, submitLesson, fetchWithAuth } from '@/services/api';
 import type { Question, Lesson } from '@/types';
-import {
-  T,
-  ScreenBackground,
-  BackButton,
-  PrimaryButton,
-  ProgressBar,
-} from '@/components/theme';
+import { T } from '@/components/theme';
+import { CozyCard } from '@/components/cozy';
+import { HubButton } from '@/components/HubButton';
 import { RecallQuestion } from '@/components/RecallQuestion';
 import { LessonBlockRenderer } from '@/components/LessonBlocks';
 
@@ -30,6 +26,102 @@ function safeRandomUUID(): string {
   const hex: string[] = [];
   for (let i = 0; i < bytes.length; i += 1) hex.push(bytes[i].toString(16).padStart(2, '0'));
   return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10, 16).join('')}`;
+}
+
+// ── Cozy palette constants (mirror /courses, /dashboard) ──
+const AMBER = '#FFD580';
+const COZY_BORDER = 'rgba(58, 143, 168, 0.45)';
+const COZY_TEXT_SHADOW = '0 1px 2px rgba(0,0,0,0.85)';
+
+// ── Shared layout shell — academy backdrop + indigo gradient + Hub ──
+function CozyLessonShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen relative" style={{ backgroundColor: T.bg }}>
+      <div aria-hidden className="fixed inset-0 z-0 pointer-events-none">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/images/academy/course.png"
+          alt=""
+          draggable={false}
+          className="w-full h-full object-cover select-none"
+          style={{ imageRendering: 'pixelated' }}
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).style.display = 'none';
+          }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              'linear-gradient(180deg, rgba(14,14,28,0.30) 0%, rgba(14,14,28,0.55) 60%, rgba(14,14,28,0.78) 100%)',
+          }}
+        />
+      </div>
+      <HubButton />
+      <div className="relative z-10 max-w-[760px] mx-auto px-[18px] pb-10 pt-20">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ── Cozy progress bar — amber gradient + glow ──
+function CozyProgressBar({ progress, color }: { progress: number; color?: string }) {
+  const pct = Math.min(100, Math.max(0, progress * 100));
+  const fill = color ?? AMBER;
+  return (
+    <div
+      className="h-2 rounded-full overflow-hidden"
+      style={{
+        backgroundColor: 'rgba(255,255,255,0.06)',
+        border: `1px solid ${COZY_BORDER}`,
+      }}
+    >
+      <div
+        className="h-full rounded-full transition-all duration-300"
+        style={{
+          width: `${pct}%`,
+          background: `linear-gradient(90deg, ${fill}aa 0%, ${fill} 100%)`,
+          boxShadow: pct > 0 ? `0 0 10px ${fill}80` : 'none',
+        }}
+      />
+    </div>
+  );
+}
+
+// ── Cozy primary CTA (amber) — replaces wood-textured PrimaryButton on these pages ──
+function CozyPrimary({
+  children,
+  onClick,
+  disabled = false,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`w-full py-3.5 rounded-[10px] text-center transition-all duration-150 cursor-pointer ${
+        disabled ? 'opacity-40 cursor-not-allowed' : 'hover:brightness-110'
+      }`}
+      style={{
+        backgroundColor: AMBER,
+        border: `1px solid ${AMBER}80`,
+        boxShadow: disabled ? 'none' : `0 0 16px ${AMBER}33`,
+        fontFamily: 'var(--font-pixel), Georgia, serif',
+        fontSize: 13,
+        fontWeight: 800,
+        color: '#1A1000',
+        letterSpacing: 2.5,
+        textTransform: 'uppercase',
+      }}
+    >
+      {children}
+    </button>
+  );
 }
 
 export default function LessonPage(props: {
@@ -77,6 +169,7 @@ export default function LessonPage(props: {
   const [correctCount, setCorrectCount] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [inputFocused, setInputFocused] = useState(false);
 
   // Derived values
   const questions = useMemo(() => lesson?.questions ?? [], [lesson?.questions]);
@@ -309,26 +402,29 @@ export default function LessonPage(props: {
   // Not found
   if (!lesson) {
     return (
-      <ScreenBackground>
+      <CozyLessonShell>
         <div className="flex items-center justify-center min-h-[60vh]">
-          <p className="text-sm" style={{ color: T.textSecondary }}>
+          <p
+            className="text-sm font-pixel"
+            style={{ color: T.textSecondary, textShadow: COZY_TEXT_SHADOW }}
+          >
             Lesson not found
           </p>
         </div>
-      </ScreenBackground>
+      </CozyLessonShell>
     );
   }
 
-  // Recall phase — spaced retrieval before new lesson
+  // Recall phase — spaced retrieval before new lesson (delegated component)
   if (phase === 'recall' && recallData) {
     return (
-      <ScreenBackground>
+      <CozyLessonShell>
         <RecallQuestion
           question={recallData.question}
           lessonTitle={recallData.lessonTitle}
           onComplete={() => setPhase('reading')}
         />
-      </ScreenBackground>
+      </CozyLessonShell>
     );
   }
 
@@ -337,22 +433,20 @@ export default function LessonPage(props: {
     const currentBlock = hasBlocks ? sortedBlocks[sectionIndex] : null;
 
     return (
-      <ScreenBackground>
-        <BackButton onClick={() => {
-          if (sectionIndex > 0) {
-            setSectionIndex(sectionIndex - 1);
-          } else {
-            router.back();
-          }
-        }} />
-
+      <CozyLessonShell>
         {/* Lesson + section counter */}
         <div className="flex items-center justify-between mt-1">
-          <p className="text-xs" style={{ color: T.textMuted }}>
+          <p
+            className="text-[11px] font-pixel-mono uppercase tracking-[1.5px]"
+            style={{ color: T.textMuted, textShadow: COZY_TEXT_SHADOW }}
+          >
             Lesson {lessonOrder} of {totalLessonsInCourse}
           </p>
           {hasBlocks && totalSections > 1 && (
-            <p className="text-xs font-mono" style={{ color: T.amber }}>
+            <p
+              className="text-[11px] font-pixel-mono"
+              style={{ color: AMBER, textShadow: COZY_TEXT_SHADOW }}
+            >
               {sectionIndex + 1} / {totalSections}
             </p>
           )}
@@ -361,65 +455,83 @@ export default function LessonPage(props: {
         {/* Section progress bar */}
         {hasBlocks && totalSections > 1 && (
           <div className="mt-2">
-            <ProgressBar
-              progress={(sectionIndex + 1) / totalSections}
-              color={T.amber}
-            />
+            <CozyProgressBar progress={(sectionIndex + 1) / totalSections} />
           </div>
         )}
 
         {/* Title */}
         <h1
-          className="text-2xl font-bold tracking-wide mt-3 mb-0"
-          style={{ fontFamily: 'Georgia, serif', color: T.textPrimary }}
+          className="text-2xl md:text-3xl font-bold tracking-wide mt-4 mb-0 font-pixel"
+          style={{ color: AMBER, textShadow: COZY_TEXT_SHADOW }}
         >
           {lesson.title}
         </h1>
 
         {/* Single section content */}
-        <div className="mt-4 space-y-5 min-h-[40vh]">
-          {hasBlocks && currentBlock ? (
-            <LessonBlockRenderer block={currentBlock} />
-          ) : (
-            legacyContent.split('\n\n').map((paragraph, i) => (
-              <p
-                key={i}
-                className="text-[15px] leading-[22px]"
-                style={{ color: T.textSecondary }}
-              >
-                {paragraph}
-              </p>
-            ))
-          )}
+        <div className="mt-4">
+          <CozyCard>
+            <div className="space-y-5 min-h-[40vh]">
+              {hasBlocks && currentBlock ? (
+                <LessonBlockRenderer block={currentBlock} />
+              ) : (
+                legacyContent.split('\n\n').map((paragraph, i) => (
+                  <p
+                    key={i}
+                    className="text-[15px] leading-[22px] font-pixel"
+                    style={{ color: T.textPrimary }}
+                  >
+                    {paragraph}
+                  </p>
+                ))
+              )}
+            </div>
+          </CozyCard>
         </div>
 
         {/* Navigation */}
-        <div className="mt-6 mb-8">
-          {hasBlocks && !isLastSection ? (
-            <PrimaryButton onClick={() => setSectionIndex(sectionIndex + 1)}>
-              Next
-            </PrimaryButton>
-          ) : questions.length > 0 ? (
-            <PrimaryButton onClick={handleStartQuestions}>
-              Start Questions
-            </PrimaryButton>
-          ) : (
-            <PrimaryButton
-              onClick={() => {
-                applyLessonCompletion(100);
-                const params = new URLSearchParams({
-                  score: '100',
-                  total: '0',
-                  accepted: 'true',
-                });
-                router.push(`/lessons/${lessonId}/result?${params.toString()}`);
+        <div className="mt-6 mb-8 flex gap-3">
+          {sectionIndex > 0 && hasBlocks && (
+            <button
+              type="button"
+              onClick={() => setSectionIndex(sectionIndex - 1)}
+              className="px-5 py-3 rounded-[10px] border text-[12px] font-pixel-mono font-bold uppercase tracking-[1.5px] transition-opacity hover:opacity-80 cursor-pointer"
+              style={{
+                color: AMBER,
+                borderColor: COZY_BORDER,
+                backgroundColor: 'rgba(14,14,28,0.5)',
+                textShadow: COZY_TEXT_SHADOW,
               }}
             >
-              Complete Lesson
-            </PrimaryButton>
+              Back
+            </button>
           )}
+          <div className="flex-1">
+            {hasBlocks && !isLastSection ? (
+              <CozyPrimary onClick={() => setSectionIndex(sectionIndex + 1)}>
+                Next
+              </CozyPrimary>
+            ) : questions.length > 0 ? (
+              <CozyPrimary onClick={handleStartQuestions}>
+                Start Questions
+              </CozyPrimary>
+            ) : (
+              <CozyPrimary
+                onClick={() => {
+                  applyLessonCompletion(100);
+                  const params = new URLSearchParams({
+                    score: '100',
+                    total: '0',
+                    accepted: 'true',
+                  });
+                  router.push(`/lessons/${lessonId}/result?${params.toString()}`);
+                }}
+              >
+                Complete Lesson
+              </CozyPrimary>
+            )}
+          </div>
         </div>
-      </ScreenBackground>
+      </CozyLessonShell>
     );
   }
 
@@ -436,33 +548,43 @@ export default function LessonPage(props: {
     submitting || (!supportsLocalChecking && !canContinue);
 
   return (
-    <ScreenBackground>
+    <CozyLessonShell>
       {/* Question header */}
       <div className="flex items-center gap-3 mt-2">
-        {/* Exit button */}
+        {/* Exit button — diegetic X to bail on attempt (Hub button still in top-left) */}
         <button
           onClick={() => {
             if (confirm('Leave lesson? Your progress on this attempt will be lost.')) {
               router.back();
             }
           }}
-          className="w-9 h-9 rounded-full flex items-center justify-center border"
+          className="w-9 h-9 rounded-full flex items-center justify-center border transition-opacity hover:opacity-80 cursor-pointer"
           style={{
-            backgroundColor: 'rgba(255,255,255,0.06)',
-            borderColor: T.borderDormant,
+            backgroundColor: 'rgba(14,14,28,0.6)',
+            borderColor: COZY_BORDER,
           }}
+          aria-label="Exit lesson"
         >
-          <span className="text-base font-semibold" style={{ color: T.textMuted }}>
-            {'\u2715'}
+          <span
+            className="text-base font-pixel-mono font-bold"
+            style={{ color: AMBER, textShadow: COZY_TEXT_SHADOW }}
+          >
+            {'✕'}
           </span>
         </button>
 
         <div className="flex-1 flex items-center justify-between">
-          <span className="text-xs" style={{ color: T.textSecondary }}>
+          <span
+            className="text-[11px] font-pixel-mono uppercase tracking-[1.5px]"
+            style={{ color: AMBER, textShadow: COZY_TEXT_SHADOW }}
+          >
             Question {currentQuestionIndex + 1} of {totalQuestions}
           </span>
           {usesRemoteVerification && (
-            <span className="text-[11px]" style={{ color: T.textMuted }}>
+            <span
+              className="text-[10px] font-pixel-mono"
+              style={{ color: T.textMuted, textShadow: COZY_TEXT_SHADOW }}
+            >
               Scored on submit
             </span>
           )}
@@ -471,168 +593,178 @@ export default function LessonPage(props: {
 
       {/* Progress bar */}
       <div className="mt-2">
-        <ProgressBar progress={progressPercent / 100} />
+        <CozyProgressBar progress={progressPercent / 100} />
       </div>
 
-      {/* Question prompt */}
-      <h2
-        className="text-lg font-bold mt-6 mb-0"
-        style={{ fontFamily: 'Georgia, serif', color: T.textPrimary }}
-      >
-        {currentQuestion?.prompt}
-      </h2>
+      {/* Question card */}
+      <div className="mt-5">
+        <CozyCard>
+          {/* Prompt */}
+          <h2
+            className="text-[18px] md:text-xl font-bold leading-[26px] font-pixel"
+            style={{ color: AMBER, textShadow: COZY_TEXT_SHADOW }}
+          >
+            {currentQuestion?.prompt}
+          </h2>
 
-      {/* MCQ options */}
-      {currentQuestion?.type === 'mcq' && (
-        <div className="mt-4 flex flex-col gap-3">
-          {currentQuestion.options?.map((option) => {
-            const optionId = typeof option === 'string' ? option : option.id;
-            const optionText = typeof option === 'string' ? option : option.text;
+          {/* MCQ options */}
+          {currentQuestion?.type === 'mcq' && (
+            <div className="mt-5 flex flex-col gap-3">
+              {currentQuestion.options?.map((option) => {
+                const optionId = typeof option === 'string' ? option : option.id;
+                const optionText = typeof option === 'string' ? option : option.text;
 
-            let borderColor = T.borderDormant;
-            let bgColor = T.bgCard;
+                let borderColor = COZY_BORDER;
+                let bgColor = 'rgba(14,14,28,0.55)';
+                let glow = 'none';
 
-            if (supportsLocalChecking && hasChecked && currentQuestion.correctAnswer) {
-              if (optionText === currentQuestion.correctAnswer) {
-                borderColor = T.green;
-                bgColor = 'rgba(62,230,138,0.08)';
-              } else if (
-                optionText === selectedOption &&
-                optionText !== currentQuestion.correctAnswer
-              ) {
-                borderColor = T.crimson;
-                bgColor = 'rgba(255,68,102,0.08)';
-              }
-            } else if (optionText === selectedOption) {
-              borderColor = T.amber;
-              bgColor = T.bgCardActive;
-            }
+                if (supportsLocalChecking && hasChecked && currentQuestion.correctAnswer) {
+                  if (optionText === currentQuestion.correctAnswer) {
+                    borderColor = T.green;
+                    bgColor = 'rgba(62,230,138,0.10)';
+                    glow = `0 0 12px ${T.green}40`;
+                  } else if (
+                    optionText === selectedOption &&
+                    optionText !== currentQuestion.correctAnswer
+                  ) {
+                    borderColor = T.crimson;
+                    bgColor = 'rgba(255,68,102,0.10)';
+                    glow = `0 0 12px ${T.crimson}40`;
+                  }
+                } else if (optionText === selectedOption) {
+                  borderColor = AMBER;
+                  bgColor = `${AMBER}14`;
+                  glow = `0 0 14px ${AMBER}40`;
+                }
 
-            return (
-              <button
-                key={optionId}
-                onClick={() => {
+                return (
+                  <button
+                    key={optionId}
+                    type="button"
+                    onClick={() => {
+                      if (!hasChecked || !supportsLocalChecking) {
+                        setSelectedOption(optionText);
+                      }
+                    }}
+                    disabled={supportsLocalChecking && hasChecked}
+                    className="w-full text-left p-4 rounded-[10px] border transition-all duration-150 cursor-pointer hover:brightness-110"
+                    style={{
+                      borderColor,
+                      backgroundColor: bgColor,
+                      boxShadow: glow,
+                    }}
+                  >
+                    <span
+                      className="text-[14px] font-pixel"
+                      style={{
+                        color: T.textPrimary,
+                        textShadow: COZY_TEXT_SHADOW,
+                      }}
+                    >
+                      {optionText}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Short text input */}
+          {currentQuestion?.type === 'short_text' && (
+            <div className="mt-5">
+              <input
+                type="text"
+                placeholder="Type your answer..."
+                value={textAnswer}
+                onChange={(e) => {
                   if (!hasChecked || !supportsLocalChecking) {
-                    setSelectedOption(optionText);
+                    setTextAnswer(e.target.value);
                   }
                 }}
-                disabled={supportsLocalChecking && hasChecked}
-                className="w-full text-left p-4 rounded-[10px] border transition-colors"
-                style={{ borderColor, backgroundColor: bgColor }}
-              >
-                <span className="text-[15px]" style={{ color: T.textPrimary }}>
-                  {optionText}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+                onFocus={() => setInputFocused(true)}
+                onBlur={() => setInputFocused(false)}
+                readOnly={supportsLocalChecking && hasChecked}
+                className="w-full p-4 rounded-[10px] border text-[14px] outline-none transition-all duration-150"
+                style={{
+                  backgroundColor: 'rgba(0,0,0,0.30)',
+                  borderColor:
+                    supportsLocalChecking && hasChecked
+                      ? isCorrect
+                        ? T.green
+                        : T.crimson
+                      : inputFocused
+                        ? AMBER
+                        : COZY_BORDER,
+                  color: T.textPrimary,
+                  fontFamily: 'var(--font-pixel-mono), monospace',
+                  boxShadow: inputFocused ? `0 0 14px ${AMBER}33` : 'none',
+                }}
+              />
+              {supportsLocalChecking && hasChecked && !isCorrect && currentQuestion.correctAnswer && (
+                <p className="mt-2 text-[12px] font-pixel" style={{ color: T.textSecondary }}>
+                  Correct answer:{' '}
+                  <span className="font-bold" style={{ color: T.green }}>
+                    {currentQuestion.correctAnswer}
+                  </span>
+                </p>
+              )}
+            </div>
+          )}
 
-      {/* Short text input */}
-      {currentQuestion?.type === 'short_text' && (
-        <div className="mt-4">
-          <input
-            type="text"
-            placeholder="Type your answer..."
-            value={textAnswer}
-            onChange={(e) => {
-              if (!hasChecked || !supportsLocalChecking) {
-                setTextAnswer(e.target.value);
-              }
-            }}
-            readOnly={supportsLocalChecking && hasChecked}
-            className="w-full p-4 rounded-[10px] border text-[15px] outline-none transition-colors"
-            style={{
-              backgroundColor: T.bgCard,
-              borderColor:
-                supportsLocalChecking && hasChecked
-                  ? isCorrect
-                    ? T.green
-                    : T.crimson
-                  : T.borderDormant,
-              color: T.textPrimary,
-            }}
-          />
-          {supportsLocalChecking && hasChecked && !isCorrect && currentQuestion.correctAnswer && (
-            <p className="mt-2 text-[13px]" style={{ color: T.textSecondary }}>
-              Correct answer:{' '}
-              <span className="font-semibold" style={{ color: T.green }}>
-                {currentQuestion.correctAnswer}
-              </span>
+          {/* Local check feedback */}
+          {supportsLocalChecking && hasChecked && (
+            <p
+              className="mt-4 text-[14px] font-bold font-pixel"
+              style={{
+                color: isCorrect ? T.green : T.crimson,
+                textShadow: COZY_TEXT_SHADOW,
+              }}
+            >
+              {isCorrect ? 'Correct!' : 'Incorrect'}
             </p>
           )}
-        </div>
-      )}
 
-      {/* Local check feedback */}
-      {supportsLocalChecking && hasChecked && (
-        <p
-          className="mt-4 text-[15px] font-semibold"
-          style={{ color: isCorrect ? T.green : T.crimson }}
-        >
-          {isCorrect ? 'Correct!' : 'Incorrect'}
-        </p>
-      )}
-
-      {/* Remote verification info */}
-      {usesRemoteVerification && (
-        <p className="mt-4 text-[13px]" style={{ color: T.textMuted }}>
-          Answers are verified by the lesson API after you finish the lesson.
-        </p>
-      )}
+          {/* Remote verification info */}
+          {usesRemoteVerification && (
+            <p
+              className="mt-4 text-[11px] font-pixel-mono"
+              style={{ color: T.textMuted }}
+            >
+              Answers are verified by the lesson API after you finish the lesson.
+            </p>
+          )}
+        </CozyCard>
+      </div>
 
       {/* Error message */}
       {error && (
-        <p className="mt-3 text-sm" style={{ color: T.crimson }}>
+        <p
+          className="mt-3 text-[13px] font-pixel"
+          style={{ color: T.crimson, textShadow: COZY_TEXT_SHADOW }}
+        >
           {error}
         </p>
       )}
 
       {/* Action button */}
-      <div className="mt-6 mb-8">
+      <div className="mt-5 mb-8">
         {supportsLocalChecking && !hasChecked ? (
-          <button
-            onClick={handleCheck}
-            disabled={!canContinue}
-            className="w-full py-3.5 rounded-lg border text-center transition-opacity"
-            style={{
-              backgroundColor: canContinue ? T.amber : 'rgba(255,255,255,0.04)',
-              borderColor: canContinue ? '#E8B860' : 'transparent',
-              fontFamily: 'Georgia, serif',
-              fontSize: 14,
-              fontWeight: 800,
-              color: canContinue ? '#1A1000' : T.textMuted,
-              letterSpacing: 2.5,
-              textTransform: 'uppercase',
-            }}
-          >
+          <CozyPrimary onClick={handleCheck} disabled={!canContinue}>
             {currentQuestion?.type === 'mcq' ? 'Check Answer' : 'Submit'}
-          </button>
+          </CozyPrimary>
         ) : (
-          <button
+          <CozyPrimary
             onClick={() => void handleAdvance()}
-            disabled={isAdvanceDisabled}
-            className="w-full py-3.5 rounded-lg border text-center transition-opacity"
-            style={{
-              backgroundColor: isActionEnabled ? T.amber : 'rgba(255,255,255,0.04)',
-              borderColor: isActionEnabled ? '#E8B860' : 'transparent',
-              fontFamily: 'Georgia, serif',
-              fontSize: 14,
-              fontWeight: 800,
-              color: isActionEnabled ? '#1A1000' : T.textMuted,
-              letterSpacing: 2.5,
-              textTransform: 'uppercase',
-            }}
+            disabled={isAdvanceDisabled || !isActionEnabled}
           >
             {submitting
               ? 'Submitting...'
               : isLastQuestion
                 ? 'See Results'
                 : 'Next Question'}
-          </button>
+          </CozyPrimary>
         )}
       </div>
-    </ScreenBackground>
+    </CozyLessonShell>
   );
 }

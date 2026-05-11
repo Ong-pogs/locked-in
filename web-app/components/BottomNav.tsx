@@ -10,7 +10,11 @@ export function BottomNav() {
   const pathname = usePathname();
 
   // Hide on immersive/focused routes
-  if (pathname.startsWith('/dungeon') || pathname.startsWith('/lessons/')) {
+  if (
+    pathname.startsWith('/dungeon') ||
+    pathname.startsWith('/village') ||
+    pathname.startsWith('/lessons/')
+  ) {
     return null;
   }
 

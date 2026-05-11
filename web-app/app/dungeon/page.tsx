@@ -130,7 +130,7 @@ export default function DungeonPage() {
             case 'oil_lamp_left':
             case 'oil_lamp_center':
             case 'oil_lamp_right':
-              router.push('/streaks');
+              router.push('/dashboard');
               break;
           }
           break;
@@ -220,7 +220,7 @@ export default function DungeonPage() {
 
       {/* Floating profile button — matches Android UndergroundHubScreen overlay (mobile only, desktop has sidebar) */}
       <button
-        onClick={() => router.push('/profile')}
+        onClick={() => router.push('/dashboard')}
         className="fixed top-4 right-4 z-30 flex items-center justify-center md:hidden"
         style={{
           width: 40,

@@ -1,13 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // Public routes that don't require authentication
-const PUBLIC_ROUTES = ['/', '/manifest.webmanifest'];
+const PUBLIC_ROUTES = [
+  '/',
+  '/manifest.webmanifest',
+  '/village',
+  '/menu',
+  '/dashboard',
+  '/courses',
+  '/shop',
+  '/alchemy',
+  '/community-pot',
+  '/inventory',
+  '/leaderboard',
+];
 
 // Auth guard — redirects unauthenticated users to landing page
 // JWT is stored in localStorage (client-side), so proxy checks for
 // a lightweight cookie flag set after wallet connection
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // Root → village hub (handled at the edge so the / page never renders).
+  if (pathname === '/') {
+    return NextResponse.redirect(new URL('/village', request.url));
+  }
 
   // Allow public routes and static assets
   if (
@@ -22,7 +39,7 @@ export function proxy(request: NextRequest) {
   // Check for auth cookie (set client-side after wallet connect)
   const hasAuth = request.cookies.get('locked-in-auth');
   if (!hasAuth) {
-    return NextResponse.redirect(new URL('/', request.url));
+    return NextResponse.redirect(new URL('/village', request.url));
   }
 
   return NextResponse.next();

@@ -12,7 +12,19 @@ import { getUserEnrollments } from '@/services/api/progress/progressApi';
 import { T } from './theme';
 
 // Routes that don't require authentication
-const PUBLIC_ROUTES = ['/courses'];
+// Pages new users can browse without a wallet connected. Only "do something"
+// flows (deposit / brew / redeem / lessons) gate on auth.
+const PUBLIC_ROUTES = [
+  '/courses',
+  '/village',
+  '/menu',
+  '/dashboard',
+  '/shop',
+  '/alchemy',
+  '/community-pot',
+  '/inventory',
+  '/leaderboard',
+];
 
 // Routes allowed during onboarding (before active lock)
 const ONBOARDING_ROUTES = ['/courses', '/onboarding/deposit', '/onboarding/tutorial'];
@@ -46,15 +58,15 @@ function useFlowGuard() {
     // Skip guard on public routes
     if (PUBLIC_ROUTES.includes(pathname)) return;
 
-    // Gate 1: No wallet/JWT → courses (they can browse without auth)
+    // Gate 1: No wallet/JWT → village hub (they can browse without auth)
     if (!walletAddress || !isAuthenticated) {
-      router.replace('/courses');
+      router.replace('/village');
       return;
     }
 
-    // Gate 2: phase 'auth' → courses
+    // Gate 2: phase 'auth' → village
     if (phase === 'auth') {
-      router.replace('/courses');
+      router.replace('/village');
       return;
     }
 
@@ -123,6 +135,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const phase = useUserStore((s) => s.onboardingPhase);
   const activeCourseIds = useCourseStore((s) => s.activeCourseIds);
   const courseStates = useCourseStore((s) => s.courseStates);
+  const pathname = usePathname();
 
   // Enforce flow
   useFlowGuard();
@@ -176,15 +189,24 @@ export function AppShell({ children }: { children: ReactNode }) {
     (courseId: string) => Boolean(courseStates[courseId]?.lockAccountAddress),
   );
   const hasActiveLock = activeLockCourseIds.length > 0;
+  const isVillageRoute = pathname.startsWith('/village');
   const isInMainApp =
     isAuthenticated &&
     (phase === 'main' || (phase === 'onboarding' && hasActiveLock));
 
+  // Village hub IS the navigation. Sidebar + BottomNav are dropped across the
+  // whole app to commit to the diegetic pattern (Hades / Stardew / Spiritfarer).
+  // Each inner page provides its own "↩ Hub" floating button back to /village.
+  const showChrome = false;
+  // Suppress unused-var warnings while the chrome flags stick around.
+  void isInMainApp;
+  void isVillageRoute;
+
   return (
     <>
-      {isInMainApp && <Sidebar />}
-      {isInMainApp && <BottomNav />}
-      <main className={`flex-1 ${isInMainApp ? 'md:ml-[240px] pb-[calc(72px_+_env(safe-area-inset-bottom,0px))] md:pb-0' : ''}`}>
+      {showChrome && <Sidebar />}
+      {showChrome && <BottomNav />}
+      <main className={`flex-1 ${showChrome ? 'md:ml-[240px] pb-[calc(72px_+_env(safe-area-inset-bottom,0px))] md:pb-0' : ''}`}>
         {children}
       </main>
     </>
