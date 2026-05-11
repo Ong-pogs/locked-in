@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState, use } from 'react';
+import { useCallback, useEffect, useMemo, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCourseStore, useUserStore, useFlameStore } from '@/stores';
 import { hasRemoteLessonApi, startLesson, submitLesson, fetchWithAuth } from '@/services/api';
@@ -198,8 +198,35 @@ export default function LessonPage(props: {
   // Get sorted lesson blocks
   const sortedBlocks = lesson?.blocks?.sort((a, b) => a.order - b.order) ?? [];
   const hasBlocks = sortedBlocks.length > 0;
-  const [sectionIndex, setSectionIndex] = useState(0);
+  // Reading-section progress is persisted per-lesson so a user who reads
+  // through 3/5 sections, bails to the hub, and comes back resumes where
+  // they left off instead of restarting at section 1.
+  const READING_SECTION_KEY = `locked-in:reading-section::${lessonId}`;
+  const [sectionIndex, setSectionIndex] = useState<number>(() => {
+    if (typeof window === 'undefined') return 0;
+    try {
+      const raw = window.localStorage.getItem(READING_SECTION_KEY);
+      const parsed = raw ? Number.parseInt(raw, 10) : 0;
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+    } catch {
+      return 0;
+    }
+  });
   const totalSections = sortedBlocks.length || 1;
+  // Clamp out-of-range restored values (content may have shrunk since the
+  // last visit). Runs once after totalSections is known.
+  useEffect(() => {
+    if (sectionIndex >= totalSections) setSectionIndex(0);
+  }, [sectionIndex, totalSections]);
+  // Persist on every change.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(READING_SECTION_KEY, String(sectionIndex));
+    } catch {
+      /* localStorage may be unavailable in private mode */
+    }
+  }, [READING_SECTION_KEY, sectionIndex]);
   const isLastSection = sectionIndex >= totalSections - 1;
   // Fallback for legacy lessons without blocks
   const legacyContent = lesson?.content ?? '';
@@ -216,6 +243,14 @@ export default function LessonPage(props: {
       useCourseStore.getState().completeDayForCourse(courseId);
       const newStreak = useCourseStore.getState().courseStates[courseId]?.currentStreak ?? 0;
       useFlameStore.getState().updateFromStreak(newStreak);
+      // Reading is done — clear the persisted section index so a future
+      // revisit (e.g., review) starts at section 1 instead of resuming
+      // at the last block.
+      try {
+        window.localStorage.removeItem(`locked-in:reading-section::${lessonId}`);
+      } catch {
+        /* ignore */
+      }
     },
     [courseId, lessonId],
   );
@@ -495,7 +530,7 @@ export default function LessonPage(props: {
         </div>
 
         {/* Navigation */}
-        <div className="mt-6 mb-8 flex gap-3">
+        <div className="mt-6 mb-8 flex gap-3 flex-wrap">
           {sectionIndex > 0 && hasBlocks && (
             <button
               type="button"
@@ -511,7 +546,25 @@ export default function LessonPage(props: {
               Back
             </button>
           )}
-          <div className="flex-1">
+          {/* Skip to Quiz — returning users / fast readers can bypass the
+              remaining sections and go straight to the graded questions.
+              Only shown when there's content left AND questions to skip to. */}
+          {hasBlocks && !isLastSection && questions.length > 0 && (
+            <button
+              type="button"
+              onClick={handleStartQuestions}
+              className="px-5 py-3 rounded-[10px] border text-[12px] font-pixel-mono font-bold uppercase tracking-[1.5px] transition-opacity hover:opacity-80 cursor-pointer"
+              style={{
+                color: AMBER,
+                borderColor: COZY_BORDER,
+                backgroundColor: 'rgba(14,14,28,0.5)',
+                textShadow: COZY_TEXT_SHADOW,
+              }}
+            >
+              Skip to Quiz
+            </button>
+          )}
+          <div className="flex-1 min-w-[140px]">
             {hasBlocks && !isLastSection ? (
               <CozyPrimary onClick={() => setSectionIndex(sectionIndex + 1)}>
                 Next
