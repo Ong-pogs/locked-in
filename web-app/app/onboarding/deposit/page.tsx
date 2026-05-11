@@ -573,9 +573,8 @@ function DepositContent() {
           <div className="mt-5">
             <CozySectionLabel>Duration</CozySectionLabel>
             <div
-              className="grid gap-1 p-1 rounded-lg"
+              className="flex flex-wrap gap-1 p-1 rounded-lg"
               style={{
-                gridTemplateColumns: `repeat(${Math.max(1, availableLockDurations.length)}, minmax(0, 1fr))`,
                 backgroundColor: 'rgba(0,0,0,0.35)',
                 border: `1px solid ${COZY_BORDER}`,
               }}
@@ -591,7 +590,7 @@ function DepositContent() {
                     role="radio"
                     aria-checked={sel}
                     onClick={() => setLockDuration(d)}
-                    className="py-2.5 rounded-md transition-all cursor-pointer"
+                    className="py-2.5 rounded-md transition-all cursor-pointer flex-1 basis-[calc(25%-3px)] sm:basis-0 min-w-[60px]"
                     style={{
                       fontFamily: 'var(--font-pixel-mono), monospace',
                       backgroundColor: sel ? AMBER : 'transparent',

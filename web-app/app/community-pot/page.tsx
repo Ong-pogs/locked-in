@@ -270,12 +270,11 @@ export default function CommunityPotPage() {
             </p>
           </CozyCard>
         ) : (
-          <div className="relative pl-[120px] md:pl-[140px]">
+          <div className="relative pl-[80px] md:pl-[140px]">
             {/* Vertical rail */}
             <div
-              className="absolute top-2 bottom-2 w-px"
+              className="absolute top-2 bottom-2 w-px left-[60px] md:left-[90px]"
               style={{
-                left: 90,
                 backgroundColor: `${AMBER}30`,
               }}
               aria-hidden
@@ -294,7 +293,7 @@ export default function CommunityPotPage() {
                 <div key={`event-${w.windowId}`} className="relative mb-5">
                   {/* Date marker (left of rail) */}
                   <div
-                    className="absolute -left-[120px] md:-left-[140px] top-2 w-[80px] md:w-[100px] text-right"
+                    className="absolute -left-[80px] md:-left-[140px] top-2 w-[56px] md:w-[100px] text-right"
                     style={{ color: T.textSecondary }}
                   >
                     <p
@@ -313,9 +312,8 @@ export default function CommunityPotPage() {
 
                   {/* Dot on rail */}
                   <div
-                    className="absolute w-3 h-3 rounded-full"
+                    className="absolute w-3 h-3 rounded-full -left-[24px] md:-left-[36px]"
                     style={{
-                      left: -36,
                       top: 8,
                       backgroundColor: dotColor,
                       boxShadow: `0 0 0 3px rgba(14,14,28,0.85), 0 0 8px ${dotColor}80`,
@@ -374,7 +372,7 @@ export default function CommunityPotPage() {
                         )}
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2 mt-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
                       <div>
                         <p
                           className="font-pixel-mono text-[9px] uppercase tracking-[1px]"

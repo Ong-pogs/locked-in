@@ -131,10 +131,10 @@ export default function AlchemyPage() {
         <div className="mb-5" />
 
         <div className="flex flex-col items-center gap-5">
-          <CozyCard className="w-full max-w-[560px]" style={{ padding: 32 }}>
+          <CozyCard className="w-full max-w-[560px] !p-4 sm:!p-8">
             <div className="flex flex-col items-center">
               {/* Hero — runic circle + steam + cauldron */}
-              <div className="relative w-[260px] h-[260px] flex items-center justify-center mb-4">
+              <div className="relative w-[220px] h-[220px] sm:w-[260px] sm:h-[260px] flex items-center justify-center mb-4">
                 {/* Steam particles (rendered above cauldron) */}
                 <div
                   className="absolute pointer-events-none"
