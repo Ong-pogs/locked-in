@@ -51,47 +51,16 @@ interface RecallQuestionProps {
 export function RecallQuestion({ question, lessonTitle, onComplete }: RecallQuestionProps) {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [textAnswer, setTextAnswer] = useState('');
-  const [hasChecked, setHasChecked] = useState(false);
-  const [isCorrect, setIsCorrect] = useState(false);
 
   const isMcq = question.type === 'mcq';
 
-  // Recall questions aren't graded — they're spaced-retrieval reminders,
-  // explicitly not scored. The cached lesson payload omits `correctAnswer`
-  // (security: don't ship the answer key to the client), so when it's
-  // missing we just treat any submission as "you engaged, well done" and
-  // move on. When it IS present, we still show correct/incorrect feedback
-  // so the learner gets useful confirmation.
-  const hasAnswerKey = typeof question.correctAnswer === 'string' && question.correctAnswer.length > 0;
-
-  const handleCheck = () => {
-    if (!hasAnswerKey) {
-      // No grading possible — answer key isn't shipped to the client.
-      // Don't claim correct or wrong; just acknowledge and continue.
-      setHasChecked(true);
-      return;
-    }
-    if (isMcq) {
-      // correctAnswer may be option text OR option id — check both
-      const selected = question.options?.find((opt) => {
-        const id = typeof opt === 'string' ? opt : opt.id;
-        return id === selectedOption;
-      });
-      const selectedId = selected ? (typeof selected === 'string' ? selected : selected.id) : '';
-      const selectedText = selected ? (typeof selected === 'string' ? selected : selected.text) : '';
-      const correct = selectedText === question.correctAnswer || selectedId === question.correctAnswer;
-      setIsCorrect(correct);
-    } else {
-      // Simple keyword check for short_text (client-side approximation)
-      const answer = textAnswer.trim().toLowerCase();
-      const keywords = (question.correctAnswer ?? '').toLowerCase().split(/\s+/);
-      const matchCount = keywords.filter((kw) => answer.includes(kw)).length;
-      setIsCorrect(matchCount >= Math.ceil(keywords.length * 0.5));
-    }
-    setHasChecked(true);
-  };
-
-  const canCheck =
+  // Recall is spaced-retrieval, not graded. Backend deliberately omits the
+  // answer key from the cached lesson payload, so we can't verify locally.
+  // The interaction is therefore: pick an answer (engages memory), then
+  // continue. No fake "Check Answer" step, no green/red theater. If the
+  // payload does ship correctAnswer (local dev / mocks), we still don't
+  // grade — keeping the flow consistent everywhere.
+  const hasSelection =
     (isMcq && Boolean(selectedOption)) ||
     (!isMcq && textAnswer.trim().length > 0);
 
@@ -141,41 +110,23 @@ export function RecallQuestion({ question, lessonTitle, onComplete }: RecallQues
                 const optText = typeof opt === 'string' ? opt : opt.text;
                 const optId = typeof opt === 'string' ? opt : opt.id;
                 const isSelected = selectedOption === optId;
-                const showResult = hasChecked;
-                const isCorrectOption = optText === question.correctAnswer || optId === question.correctAnswer;
-
-                let borderColor = COZY_BORDER;
-                let bgColor = 'rgba(14,14,28,0.30)';
-                let glow = 'none';
-                // Only color-code correct/incorrect when we actually have an
-                // answer key. Otherwise just keep amber selection styling.
-                if (showResult && hasAnswerKey && isCorrectOption) {
-                  borderColor = T.green;
-                  bgColor = `${T.green}10`;
-                  glow = `0 0 12px ${T.green}55`;
-                } else if (showResult && hasAnswerKey && isSelected && !isCorrectOption) {
-                  borderColor = T.crimson;
-                  bgColor = `${T.crimson}10`;
-                  glow = `0 0 12px ${T.crimson}55`;
-                } else if (isSelected) {
-                  borderColor = AMBER;
-                  bgColor = 'rgba(255,213,128,0.10)';
-                  glow = `0 0 10px ${AMBER}55`;
-                }
+                const borderColor = isSelected ? AMBER : COZY_BORDER;
+                const bgColor = isSelected
+                  ? 'rgba(255,213,128,0.10)'
+                  : 'rgba(14,14,28,0.30)';
+                const glow = isSelected ? `0 0 10px ${AMBER}55` : 'none';
 
                 return (
                   <button
                     key={optId}
-                    onClick={() => !hasChecked && setSelectedOption(optId)}
-                    disabled={hasChecked}
+                    onClick={() => setSelectedOption(optId)}
                     aria-label={optText}
-                    className="w-full text-left px-4 py-3 rounded-lg border text-[13px] font-pixel transition-colors"
+                    className="w-full text-left px-4 py-3 rounded-lg border text-[13px] font-pixel transition-colors cursor-pointer"
                     style={{
                       borderColor,
                       backgroundColor: bgColor,
                       boxShadow: glow,
                       color: T.textPrimary,
-                      opacity: hasChecked && !isSelected && !isCorrectOption ? 0.4 : 1,
                     }}
                   >
                     {optText}
@@ -189,58 +140,25 @@ export function RecallQuestion({ question, lessonTitle, onComplete }: RecallQues
           {!isMcq && (
             <textarea
               value={textAnswer}
-              onChange={(e) => !hasChecked && setTextAnswer(e.target.value)}
-              disabled={hasChecked}
+              onChange={(e) => setTextAnswer(e.target.value)}
               placeholder="Type your answer..."
               rows={3}
               className="w-full px-4 py-3 rounded-lg border text-[13px] font-pixel-mono outline-none resize-none"
               style={{
                 backgroundColor: 'rgba(0,0,0,0.30)',
-                borderColor: hasChecked
-                  ? isCorrect ? T.green : T.crimson
-                  : COZY_BORDER,
+                borderColor: textAnswer.trim().length > 0 ? AMBER : COZY_BORDER,
                 color: T.textPrimary,
               }}
             />
           )}
-
-          {/* Result feedback */}
-          {hasChecked && (
-            <div
-              className="mt-3 px-4 py-2.5 rounded-lg text-[12px] font-semibold font-pixel"
-              style={{
-                backgroundColor: !hasAnswerKey
-                  ? 'rgba(255,213,128,0.08)'
-                  : isCorrect
-                    ? `${T.green}10`
-                    : `${T.crimson}10`,
-                border: `1px solid ${
-                  !hasAnswerKey ? AMBER : isCorrect ? T.green : T.crimson
-                }55`,
-                color: !hasAnswerKey ? AMBER : isCorrect ? T.green : T.crimson,
-                textShadow: '0 1px 2px rgba(0,0,0,0.85)',
-              }}
-            >
-              {hasAnswerKey
-                ? isCorrect
-                  ? 'Correct! Great recall.'
-                  : "Not quite — but that's okay, that's why we review."
-                : "Recall locked in. The lesson will refresh the answer for you."}
-            </div>
-          )}
         </CozyCard>
 
-        {/* Action button */}
+        {/* Action button — always Continue. Disabled until an answer is
+            selected. Recall isn't graded, so there's no Check step. */}
         <div className="mt-4">
-          {!hasChecked ? (
-            <CozyPrimary onClick={handleCheck} disabled={!canCheck}>
-              Check Answer
-            </CozyPrimary>
-          ) : (
-            <CozyPrimary onClick={onComplete}>
-              Continue to Lesson
-            </CozyPrimary>
-          )}
+          <CozyPrimary onClick={onComplete} disabled={!hasSelection}>
+            Continue to Lesson
+          </CozyPrimary>
         </div>
 
         <p className="text-center text-[10px] mt-2 font-pixel-mono" style={{ color: T.textMuted }}>

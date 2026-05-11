@@ -136,6 +136,21 @@ function ResultContent({ params }: { params: Promise<{ id: string }> }) {
   const streak = activeState?.currentStreak ?? 0;
   const correctCount = Math.round((score / 100) * totalQuestions);
 
+  // Find the next incomplete lesson in the same course so we can offer
+  // a direct "Next Lesson" CTA instead of bouncing back to /courses.
+  const nextLessonId = useCourseStore((s) => {
+    const finishedLesson = s.getLesson(_lessonId);
+    const courseId = finishedLesson?.courseId;
+    if (!courseId) return null;
+    const lessons = s.getLessonsForCourse(courseId);
+    const justFinishedOrder = finishedLesson?.order ?? 0;
+    // First lesson at a higher order that isn't yet completed.
+    const next = lessons.find(
+      (l) => l.order > justFinishedOrder && !s.lessonProgress[l.id]?.completed,
+    );
+    return next?.id ?? null;
+  });
+
   const scoreColor = score >= 80 ? T.green : score >= 50 ? AMBER : T.crimson;
 
   const LEVEL_NAMES = ['Novice', 'Apprentice', 'Scholar', 'Adept', 'Master', 'Sage', 'Legend'];
@@ -417,11 +432,34 @@ function ResultContent({ params }: { params: Promise<{ id: string }> }) {
           </div>
         )}
 
-        {/* Return button */}
-        <div className="mt-6 w-full">
-          <CozyPrimary onClick={() => router.push('/courses')}>
-            Continue
-          </CozyPrimary>
+        {/* Continue CTAs — Next Lesson is the primary if there is one. */}
+        <div className="mt-6 w-full flex flex-col gap-3">
+          {nextLessonId ? (
+            <>
+              <CozyPrimary onClick={() => router.push(`/lessons/${nextLessonId}`)}>
+                Next Lesson
+              </CozyPrimary>
+              <button
+                type="button"
+                onClick={() => router.push('/courses')}
+                className="w-full py-3 rounded-[10px] text-center transition-opacity hover:opacity-80 cursor-pointer font-pixel-mono font-bold uppercase tracking-[1.5px] text-[11px]"
+                style={{
+                  color: AMBER,
+                  border: `1px solid ${COZY_BORDER}`,
+                  backgroundColor: 'rgba(14,14,28,0.5)',
+                  textShadow: COZY_TEXT_SHADOW,
+                }}
+              >
+                Back to Courses
+              </button>
+            </>
+          ) : (
+            <CozyPrimary onClick={() => router.push('/courses')}>
+              {/* No next lesson found — either course complete or already
+                  all done. */}
+              Back to Courses
+            </CozyPrimary>
+          )}
         </div>
       </div>
     </CozyResultShell>

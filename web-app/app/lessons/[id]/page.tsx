@@ -134,15 +134,17 @@ export default function LessonPage(props: {
   const lesson = useCourseStore((s) => s.getLesson(lessonId));
   const walletAddress = useUserStore((s) => s.walletAddress);
 
-  // Recall: pick a random question from completed previous lessons
+  // Recall: pick a random question from completed previous lessons.
+  // Memoized so the random pick is stable per lesson — without this, the
+  // IIFE re-ran on every render and Math.random() swapped the recall
+  // question mid-attempt whenever React re-rendered.
   const lessonProgress = useCourseStore((s) => s.lessonProgress);
   const allLessons = useCourseStore((s) => s.getLessonsForCourse(lesson?.courseId ?? ''));
-  const recallData = (() => {
+  const recallData = useMemo(() => {
     if (!lesson) return null;
     const previousLessons = allLessons
       .filter((l: Lesson) => l.order < lesson.order && lessonProgress[l.id]?.completed);
     if (previousLessons.length === 0) return null;
-    // Gather all questions from completed previous lessons
     const pool: Array<{ question: Question; lessonTitle: string }> = [];
     for (const prev of previousLessons) {
       for (const q of prev.questions ?? []) {
@@ -151,7 +153,11 @@ export default function LessonPage(props: {
     }
     if (pool.length === 0) return null;
     return pool[Math.floor(Math.random() * pool.length)];
-  })();
+    // Intentionally key on lessonId only — we want a fresh pick per lesson
+    // visit, but stable within that visit. Re-running on every progress
+    // update would swap the question while the user is mid-recall.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lessonId]);
 
   const shouldShowRecall = recallData !== null;
 
