@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLogin } from '@privy-io/react-auth';
 import { Flame, ChevronRight } from 'lucide-react';
@@ -395,7 +395,10 @@ export default function CoursesPage() {
   // modal opens so we can resume the flow once the user signs in. Cleared
   // after we route them, so a second click after a partial sign-in won't
   // bounce them back.
-  const [pendingEnrollCourseId, setPendingEnrollCourseId] = useState<string | null>(null);
+  // Parked course id while Privy login is in flight. Stored in a ref because
+  // we don't need a re-render when it changes — only the auth-state useEffect
+  // below reads it, and that effect re-runs on isAuthenticated changes anyway.
+  const pendingEnrollRef = useRef<string | null>(null);
   const [xp, setXp] = useState({
     xpTotal: 0,
     xpLevel: 1,
@@ -430,7 +433,6 @@ export default function CoursesPage() {
   const availableCourses = courses.filter((c) => !activeCourseIds.includes(c.id));
 
   const isOnboardingMode = activeCourses.length === 0;
-  const selectedCourse = selectedId ? courses.find((c) => c.id === selectedId) : null;
 
   const handleActiveCoursePress = (courseId: string) => {
     useCourseStore.getState().setActiveCourse(courseId);
@@ -461,7 +463,7 @@ export default function CoursesPage() {
     if (!isAuthenticated) {
       // Park the enrollment intent + open Privy. The useEffect below
       // resumes the flow once isAuthenticated flips.
-      setPendingEnrollCourseId(courseId);
+      pendingEnrollRef.current = courseId;
       handleSignIn();
       return;
     }
@@ -472,12 +474,12 @@ export default function CoursesPage() {
   // isAuthenticated; when it flips true and a course was parked,
   // routes to deposit and clears the parked id.
   useEffect(() => {
-    if (isAuthenticated && pendingEnrollCourseId) {
-      const id = pendingEnrollCourseId;
-      setPendingEnrollCourseId(null);
+    const id = pendingEnrollRef.current;
+    if (isAuthenticated && id) {
+      pendingEnrollRef.current = null;
       router.push(`/onboarding/deposit?courseId=${id}`);
     }
-  }, [isAuthenticated, pendingEnrollCourseId, router]);
+  }, [isAuthenticated, router]);
 
   // Split available into ready vs coming-soon
   const readyCourses = availableCourses.filter(

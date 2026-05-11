@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 const TOUR_STORAGE_KEY = 'locked-in:village-tour-completed';
@@ -66,22 +66,27 @@ const STEPS: Step[] = [
 ];
 
 export function VillageTour({ bounds }: { bounds: BoundsMap }) {
-  const [active, setActive] = useState(false);
+  // Initialize active state from localStorage at mount via a lazy initializer
+  // (rather than reading it inside an effect, which would trigger a cascading
+  // render). Returns false during SSR so first paint is consistent.
+  const [active, setActive] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return window.localStorage.getItem(TOUR_STORAGE_KEY) !== '1';
+    } catch {
+      return true;
+    }
+  });
   const [stepIdx, setStepIdx] = useState(0);
   // Track viewport for letterbox math (the painted scene is letterboxed within the viewport).
   const [viewport, setViewport] = useState<{ w: number; h: number } | null>(null);
   // Cache the painted-scene rect so the spotlight aligns with it, not the raw viewport.
-  const containerRef = useRef<DOMRect | null>(null);
+  // Stored in state (not a ref) so the spotlight repositions when the rect
+  // changes on resize without us having to read refs during render.
+  const [containerRect, setContainerRect] = useState<DOMRect | null>(null);
 
-  // Show on first visit only.
+  // Sync viewport + container rect on mount and on resize.
   useEffect(() => {
-    try {
-      const completed = window.localStorage.getItem(TOUR_STORAGE_KEY) === '1';
-      if (!completed) setActive(true);
-    } catch {
-      setActive(true);
-    }
-
     const update = () => {
       setViewport({ w: window.innerWidth, h: window.innerHeight });
       // The painted village container is `.relative` inside `flex items-center
@@ -89,7 +94,7 @@ export function VillageTour({ bounds }: { bounds: BoundsMap }) {
       const img = document.querySelector<HTMLImageElement>(
         'img[alt="Painted village"]',
       );
-      if (img) containerRef.current = img.getBoundingClientRect();
+      if (img) setContainerRect(img.getBoundingClientRect());
     };
     update();
     window.addEventListener('resize', update);
@@ -138,7 +143,7 @@ export function VillageTour({ bounds }: { bounds: BoundsMap }) {
     // Building step — convert normalized bounds → viewport pixels.
     const bb = bounds[step.target];
     if (!bb) return null;
-    const c = containerRef.current;
+    const c = containerRect;
     if (!c) return null;
     return {
       left: c.left + bb.x * c.width,

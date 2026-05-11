@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // One-off Node CLI scripts run via `node scripts/foo.js` — not part of
+    // the app bundle, so they can use require() and other CJS patterns.
+    "scripts/**",
   ]),
 ]);
 
