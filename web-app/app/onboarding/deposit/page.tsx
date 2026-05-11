@@ -106,6 +106,21 @@ function DepositContent() {
     [courses, courseId],
   );
 
+  // Guard: never let the user lock funds against a missing or unknown
+  // courseId. Without this, /onboarding/deposit?courseId=anything would
+  // render and call activateCourse('', ...) — corrupting the store under
+  // key "". Wait until the courses array has loaded so we don't bounce
+  // on a transient empty list.
+  useEffect(() => {
+    if (!courseId) {
+      router.replace('/courses');
+      return;
+    }
+    if (courses.length > 0 && !course) {
+      router.replace('/courses');
+    }
+  }, [courseId, course, courses.length, router]);
+
   // Resolve lock policy from course or defaults
   const courseLockPolicy: CourseLockPolicy = useMemo(
     () =>

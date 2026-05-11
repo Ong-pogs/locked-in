@@ -236,11 +236,17 @@ export default function LessonPage(props: {
   const lessonOrder = lesson?.order ?? 0;
   const totalLessonsInCourse = courseLessons.length;
 
-  // Lesson completion
+  // Lesson completion. `serverHandled` tells us whether the backend already
+  // applied today's streak increment via syncCourseRuntime — in that case
+  // we skip completeDayForCourse to avoid double-incrementing (server says
+  // streak=5, local sync writes 5, completeDayForCourse would push it to 6
+  // because it doesn't read syncCourseRuntime's date stamp).
   const applyLessonCompletion = useCallback(
-    (score: number) => {
+    (score: number, serverHandled = false) => {
       useCourseStore.getState().completeLesson(lessonId, courseId, score);
-      useCourseStore.getState().completeDayForCourse(courseId);
+      if (!serverHandled) {
+        useCourseStore.getState().completeDayForCourse(courseId);
+      }
       const newStreak = useCourseStore.getState().courseStates[courseId]?.currentStreak ?? 0;
       useFlameStore.getState().updateFromStreak(newStreak);
       // Reading is done — clear the persisted section index so a future
@@ -330,7 +336,9 @@ export default function LessonPage(props: {
             useCourseStore.getState().syncCourseRuntime(courseId, result.courseRuntime);
           }
           if (result.accepted) {
-            applyLessonCompletion(result.score);
+            // Server already incremented today's streak — pass serverHandled
+            // so we don't double-count locally.
+            applyLessonCompletion(result.score, Boolean(result.courseRuntime));
           }
           const params = new URLSearchParams({
             score: String(result.score),

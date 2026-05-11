@@ -8,6 +8,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserStore } from '@/stores/userStore';
 import { useCourseStore } from '@/stores/courseStore';
 import { useFlameStore } from '@/stores/flameStore';
+import { useYieldStore } from '@/stores/yieldStore';
+import { useResurfaceStore } from '@/stores/resurfaceStore';
 import { getUserEnrollments } from '@/services/api/progress/progressApi';
 import { T } from './theme';
 
@@ -95,7 +97,9 @@ function useFlowGuard() {
   }, [pathname, walletAddress, isAuthenticated, phase, hasActiveLock, router]);
 }
 
-/** Block rendering until persisted Zustand stores have rehydrated from localStorage */
+/** Block rendering until persisted Zustand stores have rehydrated from localStorage.
+ * Includes flame/yield/resurface — without them, UI mounted with default-zero
+ * flame intensity / yield totals before the real persisted state landed. */
 function useStoresHydrated(): boolean {
   const [ready, setReady] = useState(false);
 
@@ -103,19 +107,23 @@ function useStoresHydrated(): boolean {
     const check = () => {
       if (
         useUserStore.persist.hasHydrated() &&
-        useCourseStore.persist.hasHydrated()
+        useCourseStore.persist.hasHydrated() &&
+        useFlameStore.persist.hasHydrated() &&
+        useYieldStore.persist.hasHydrated() &&
+        useResurfaceStore.persist.hasHydrated()
       ) {
         setReady(true);
       }
     };
 
-    // Check immediately
     check();
 
-    // Listen for hydration
     const unsubs = [
       useUserStore.persist.onFinishHydration(check),
       useCourseStore.persist.onFinishHydration(check),
+      useFlameStore.persist.onFinishHydration(check),
+      useYieldStore.persist.onFinishHydration(check),
+      useResurfaceStore.persist.onFinishHydration(check),
     ];
 
     return () => unsubs.forEach((u) => u());

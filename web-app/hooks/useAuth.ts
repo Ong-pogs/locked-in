@@ -6,12 +6,21 @@ import { useWallets, useSignMessage } from '@privy-io/react-auth/solana';
 import { useUserStore, useCourseStore } from '@/stores';
 import { createAuthChallenge, verifyAuthChallenge } from '@/services/api/auth/authApi';
 
-// Cookie flag for proxy auth guard (server-side check)
+// Cookie flag for proxy auth guard (server-side check).
+// Adds Secure in HTTPS contexts so the cookie never transmits over plain
+// HTTP. Conditional on protocol — local dev runs on http://localhost where
+// Secure would silently drop the cookie. This is a defense-in-depth layer;
+// real authn still happens at the API via Authorization: Bearer.
 function setAuthCookie(value: boolean) {
+  if (typeof document === 'undefined') return;
+  const secure =
+    typeof window !== 'undefined' && window.location.protocol === 'https:'
+      ? '; secure'
+      : '';
   if (value) {
-    document.cookie = 'locked-in-auth=1; path=/; max-age=604800; samesite=lax';
+    document.cookie = `locked-in-auth=1; path=/; max-age=604800; samesite=lax${secure}`;
   } else {
-    document.cookie = 'locked-in-auth=; path=/; max-age=0';
+    document.cookie = `locked-in-auth=; path=/; max-age=0${secure}`;
   }
 }
 

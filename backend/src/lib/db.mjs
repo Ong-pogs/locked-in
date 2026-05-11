@@ -20,6 +20,13 @@ export function getPool() {
       max: 10,
       idleTimeoutMillis: 30_000,
       statement_timeout: 10_000,
+      // Managed Postgres providers (Render, Supabase, Heroku, RDS) all serve
+      // self-signed certs over the encrypted channel — there's no CA chain
+      // to verify against. rejectUnauthorized:false keeps TLS on (the wire
+      // is encrypted) but skips chain validation, which matches the standard
+      // pattern for these platforms. If you ever move to a DB with a public
+      // CA, swap to `ssl: { ca: <pem> }`.
+      ssl: { rejectUnauthorized: false },
     });
     // Without this listener, an idle-client error (e.g. Supabase pooler dropping
     // an idle connection, EADDRNOTAVAIL during a network blip) becomes an

@@ -398,7 +398,9 @@ export default function CoursesPage() {
   // Parked course id while Privy login is in flight. Stored in a ref because
   // we don't need a re-render when it changes — only the auth-state useEffect
   // below reads it, and that effect re-runs on isAuthenticated changes anyway.
-  const pendingEnrollRef = useRef<string | null>(null);
+  // Timestamped so a stale park from a dismissed Privy modal can't reroute the
+  // user when they later sign in via the standalone Sign In button.
+  const pendingEnrollRef = useRef<{ courseId: string; at: number } | null>(null);
   const [xp, setXp] = useState({
     xpTotal: 0,
     xpLevel: 1,
@@ -463,7 +465,8 @@ export default function CoursesPage() {
     if (!isAuthenticated) {
       // Park the enrollment intent + open Privy. The useEffect below
       // resumes the flow once isAuthenticated flips.
-      pendingEnrollRef.current = courseId;
+      // eslint-disable-next-line react-hooks/purity -- click handler, runs outside render
+      pendingEnrollRef.current = { courseId, at: Date.now() };
       handleSignIn();
       return;
     }
@@ -471,14 +474,16 @@ export default function CoursesPage() {
   };
 
   // Resume a pending enrollment after the user signs in. Watches
-  // isAuthenticated; when it flips true and a course was parked,
-  // routes to deposit and clears the parked id.
+  // isAuthenticated; when it flips true and a course was parked recently,
+  // routes to deposit. Stale parks (>2 min, e.g. user dismissed Privy then
+  // signed in later via the standalone Sign In button) are discarded so the
+  // user lands on /courses instead of being teleported to a stale intent.
   useEffect(() => {
-    const id = pendingEnrollRef.current;
-    if (isAuthenticated && id) {
-      pendingEnrollRef.current = null;
-      router.push(`/onboarding/deposit?courseId=${id}`);
-    }
+    const parked = pendingEnrollRef.current;
+    if (!isAuthenticated || !parked) return;
+    pendingEnrollRef.current = null;
+    if (Date.now() - parked.at > 120_000) return;
+    router.push(`/onboarding/deposit?courseId=${parked.courseId}`);
   }, [isAuthenticated, router]);
 
   // Split available into ready vs coming-soon
