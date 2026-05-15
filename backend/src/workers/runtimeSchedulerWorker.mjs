@@ -38,7 +38,8 @@ function lockStartDayFromSnapshot(snapshot) {
 }
 
 function deriveDueBurn(runtime, snapshot, now) {
-  if (!snapshot.gauntletComplete || snapshot.fuelCounter <= 0) {
+  // Gauntlet dropped — fuel burns from day 1 once any fuel exists.
+  if (snapshot.fuelCounter <= 0) {
     return null;
   }
 
@@ -61,10 +62,7 @@ function deriveDueBurn(runtime, snapshot, now) {
 }
 
 function deriveDueMiss(runtime, snapshot, now) {
-  if (!snapshot.gauntletComplete) {
-    return null;
-  }
-
+  // Gauntlet dropped — miss penalties apply from the day after lock-up.
   const today = isoDate(now);
   const baseDay = maxIsoDate(
     runtime.lastCompletedDay,
@@ -84,10 +82,7 @@ function deriveDueMiss(runtime, snapshot, now) {
 }
 
 async function deriveDueHarvest(runtime, snapshot, now, strategy) {
-  if (!snapshot.gauntletComplete) {
-    return null;
-  }
-
+  // Gauntlet dropped — yield accrues from day 1.
   const intervalSeconds = strategy.intervalSeconds;
   const intervalMs = intervalSeconds * 1000;
   const lastHarvestedAt = runtime.lastHarvestedAt

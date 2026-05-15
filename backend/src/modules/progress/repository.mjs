@@ -1409,7 +1409,11 @@ export async function syncCourseRuntimeStateWithLockSnapshot(
         courseId,
         snapshot.currentStreak,
         snapshot.longestStreak,
-        !snapshot.gauntletComplete,
+        // Gauntlet dropped — force gauntlet_active=false in the DB so every
+        // downstream behavioural gate (miss consequence, fuel burn, fuel→ichor)
+        // sees a post-gauntlet world. The on-chain program still tracks
+        // gauntletComplete/gauntletDay; we just stop honouring them off-chain.
+        false,
         snapshot.gauntletDay,
         saverCount,
         snapshot.saverRecoveryMode,
@@ -1591,7 +1595,8 @@ export async function getCourseRuntimeSnapshot(walletAddress, courseId) {
       courseId,
       currentStreak: 0,
       longestStreak: 0,
-      gauntletActive: true,
+      // Gauntlet dropped — no-db fallback also reports post-gauntlet state.
+      gauntletActive: false,
       gauntletDay: 1,
       saverCount: 0,
       saverRecoveryMode: false,
@@ -2688,7 +2693,8 @@ export async function publishHarvestSplitReceipt(
       harvestId,
       grossYieldAmount: claim.receipt.grossYieldAmount,
       redirectBps: snapshotBefore.currentYieldRedirectBps,
-      brewerActive: snapshotBefore.gauntletComplete && snapshotBefore.fuelCounter > 0,
+      // Gauntlet dropped — brewer is active whenever fuel exists.
+      brewerActive: snapshotBefore.fuelCounter > 0,
       skrTier: snapshotBefore.skrTier,
       processedAt: claim.receipt.harvestedAt,
     });
