@@ -211,6 +211,35 @@ function tokenizeNormalized(value) {
     .filter(Boolean);
 }
 
+// English stopwords filtered from auto-generated rubric keywords. Author-
+// supplied keyword lists are NOT filtered through this — if an author
+// explicitly added "of" to a criterion, that was intentional. This list
+// only applies when we tokenize a model answer into keywords ourselves.
+const RUBRIC_STOPWORDS = new Set([
+  'a', 'an', 'and', 'are', 'as', 'at', 'be', 'been', 'but', 'by', 'do',
+  'does', 'for', 'from', 'had', 'has', 'have', 'he', 'her', 'his', 'i',
+  'if', 'in', 'is', 'it', 'its', 'of', 'on', 'or', 'our', 'she', 'so',
+  'than', 'that', 'the', 'their', 'them', 'then', 'they', 'this', 'to',
+  'too', 'was', 'we', 'were', 'when', 'where', 'which', 'who', 'will',
+  'with', 'would', 'you', 'your',
+]);
+
+function tokenizeMeaningful(value) {
+  return tokenizeNormalized(value).filter((token) => !RUBRIC_STOPWORDS.has(token));
+}
+
+// What fraction of a criterion's keywords must match for it to count
+// as passed. Lowered from 1.0 (every keyword required) so that learners
+// can rephrase using synonyms and still pass — e.g. answering "validators
+// stake tokens" for a model answer of "validators stake tokens to secure
+// the network" should not fail on the missing "to secure the network"
+// words. 0.6 is a starting point — increase if cheating becomes a thing.
+const RUBRIC_KEYWORD_MATCH_RATIO = 0.6;
+// Auto-generated rubric (when an author did not supply explicit criteria)
+// uses this lower acceptance threshold to match the relaxed keyword rule.
+// Author rubrics keep whatever acceptThreshold they declared.
+const AUTO_RUBRIC_ACCEPT_THRESHOLD = 60;
+
 function diffDays(fromDay, toDay) {
   const from = new Date(`${fromDay}T00:00:00.000Z`).getTime();
   const to = new Date(`${toDay}T00:00:00.000Z`).getTime();
@@ -666,8 +695,10 @@ function extractRubricConfig(question) {
     };
   }
 
-  const tokens = tokenizeNormalized(question.correctAnswer);
-  if (tokens.length <= 1) {
+  const meaningfulTokens = tokenizeMeaningful(question.correctAnswer);
+  // Single-word answers stay strict — there's nothing to be lenient about.
+  // Fall back to all-tokens if stopword filtering left nothing meaningful.
+  if (meaningfulTokens.length <= 1) {
     return {
       mode: 'rubric_v1',
       acceptThreshold: 100,
@@ -689,18 +720,18 @@ function extractRubricConfig(question) {
 
   return {
     mode: 'rubric_v1',
-    acceptThreshold: 100,
+    acceptThreshold: AUTO_RUBRIC_ACCEPT_THRESHOLD,
     criteria: [
       {
         id: 'key-concepts',
-        label: 'Includes all key concepts',
+        label: 'Includes the key concepts',
         kind: 'keywords',
         expected: null,
-        keywords: tokens,
+        keywords: meaningfulTokens,
         weight: 100,
         required: true,
         feedbackPass: 'Covered the expected key concepts.',
-        feedbackMiss: `Include these key concepts: ${tokens.join(', ')}.`,
+        feedbackMiss: `Try to mention concepts like: ${meaningfulTokens.join(', ')}.`,
       },
     ],
   };
@@ -754,9 +785,12 @@ function evaluateRubricCriterion(criterion, answerText) {
 
   const answerTokens = new Set(tokenizeNormalized(answerText));
   const matched = criterion.keywords.filter((keyword) => answerTokens.has(normalizeKeyword(keyword)));
-  const passed =
-    criterion.keywords.length > 0 &&
-    matched.length === criterion.keywords.length;
+  // A criterion now passes when a meaningful fraction of its keywords are
+  // present in the answer, not when every single one is. This lets a
+  // learner rephrase using synonyms and still get credit for the concept.
+  const matchRatio =
+    criterion.keywords.length > 0 ? matched.length / criterion.keywords.length : 0;
+  const passed = matchRatio >= RUBRIC_KEYWORD_MATCH_RATIO;
   return {
     criterionId: criterion.id,
     label: criterion.label,
