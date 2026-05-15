@@ -1433,6 +1433,37 @@ export async function syncCourseRuntimeStateWithLockSnapshot(
   });
 }
 
+/**
+ * List the most recent harvest receipts across all wallets. Operator-only
+ * (the public endpoint truncates wallet addresses). Used to verify that
+ * the runtime scheduler is actually firing harvests in production.
+ */
+export async function listRecentHarvestReceipts(limit = 20) {
+  if (!hasDatabase()) {
+    return [];
+  }
+
+  const safeLimit = Math.min(100, Math.max(1, Number(limit) || 20));
+  const result = await query(
+    `
+      select
+        wallet_address as "walletAddress",
+        course_id as "courseId",
+        harvest_id as "harvestId",
+        harvested_at as "harvestedAt",
+        gross_yield_amount::text as "grossYieldAmount",
+        applied,
+        yield_splitter_status as "yieldSplitterStatus"
+      from lesson.harvest_result_receipts
+      order by harvested_at desc
+      limit $1
+    `,
+    [safeLimit],
+  );
+
+  return result.rows;
+}
+
 export async function listRuntimeSchedulerCandidates(limit = 10) {
   if (!hasDatabase()) {
     return [];
