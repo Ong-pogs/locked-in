@@ -16,6 +16,7 @@ import { CozyCard, CozySectionLabel } from '@/components/cozy';
 import { HubButton } from '@/components/HubButton';
 import { useCourseStore, useUserStore } from '@/stores';
 import { getUserXp } from '@/services/api/progress/progressApi';
+import { LiveApyChip } from '@/components/LiveApyChip';
 
 /* ──────────────────────────────────────────────────────────────────────
    Constants
@@ -1090,6 +1091,11 @@ export default function DashboardPage() {
 
         {/* 3. Heatmap */}
         <HeatmapSection yearActivity={yearActivity} longestStreak={longestStreak} />
+
+        {/* Live yield rate pill (sourced from /v1/yield/current-apy) */}
+        <div className="mb-5">
+          <LiveApyChip />
+        </div>
 
         {/* 4. Flame management */}
         <FlameManagement

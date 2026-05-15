@@ -52,23 +52,33 @@ function sanitizeOrigins(origins) {
   return origins.map((o) => o.replace(/\/+$/, ''));
 }
 
-// Yield-strategy profiles. Pick one via YIELD_STRATEGY_PROFILE env var; the
-// rest of the YIELD_* env vars become overrides. Three modes:
+// Yield-strategy profiles. Pick one via YIELD_STRATEGY_PROFILE env var; any
+// YIELD_* env var still wins over the profile default. Four modes:
 //
 //  - fixed_apy_dev          → devnet default. Mock 8% APY, no on-chain reads.
+//                             Hourly harvest so dashboards move.
 //  - kamino_surfpool        → local demo. Real Kamino program + main market,
 //                             read through a locally-running Surfpool mainnet
 //                             fork at 127.0.0.1:8899. See
 //                             backend/scripts/README-SURFPOOL.md for setup.
 //                             Surfpool is a dev-only RPC; this profile is NOT
 //                             safe for production deploys.
+//  - kamino_devnet_demo     → production-safe "real-APY simulation" profile.
+//                             Reads live Kamino USDC reserve APY from
+//                             mainnet RPC (~6-8% typical). Applies that rate
+//                             to user locks on DEVNET — no real USDC ever
+//                             touches Kamino's reserves. Hourly harvest so
+//                             dashboards reflect the rate within minutes.
+//                             Set YIELD_KAMINO_RPC_URL to a Helius/Triton URL
+//                             to avoid public-RPC rate limits.
 //  - kamino_usdc_mainnet    → real mainnet, real funds. Production path once
-//                             the lock vault holds real SOL/USDC.
+//                             the lock vault holds real SOL/USDC. Weekly
+//                             harvest cadence keeps small locks above
+//                             integer rounding noise.
 //
-// Production at lockedin.ong runs fixed_apy_dev by default because Render
-// can't reach localhost (Surfpool) and we don't want to spend real mainnet
-// SOL/USDC on devnet test traffic. To demo real Kamino numbers, run the
-// stack locally with YIELD_STRATEGY_PROFILE=kamino_surfpool.
+// Production at lockedin.ong runs fixed_apy_dev unless YIELD_STRATEGY_PROFILE
+// is set in Render's env. For a real-APY demo without spending real funds,
+// switch Render to kamino_devnet_demo and add a Helius URL.
 function resolveYieldStrategyProfile(profile) {
   switch ((profile ?? '').trim()) {
     case 'fixed_apy_dev':
@@ -88,6 +98,16 @@ function resolveYieldStrategyProfile(profile) {
         fixedApyBps: 800,
         harvestIntervalSeconds: 7 * 24 * 60 * 60,
         kaminoRpcUrl: 'http://127.0.0.1:8899',
+        kaminoMarketAddress: '7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF',
+        kaminoReserveSymbol: 'USDC',
+      };
+    case 'kamino_devnet_demo':
+      return {
+        enabled: true,
+        kind: 'kamino_klend_reserve_v1',
+        fixedApyBps: 800,
+        harvestIntervalSeconds: 3600, // hourly so devnet dashboards move
+        kaminoRpcUrl: 'https://api.mainnet-beta.solana.com',
         kaminoMarketAddress: '7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF',
         kaminoReserveSymbol: 'USDC',
       };
@@ -172,6 +192,12 @@ export const appConfig = {
   yieldStrategyEnabled: isYieldProfileActive
     ? yieldStrategyProfileDefaults.enabled
     : optionalBool('YIELD_STRATEGY_ENABLED', false),
+  // When a profile is active, profile values win for the strategy shape
+  // (kind, harvest interval, fixed APY, market address, reserve symbol) so
+  // stale individual YIELD_* env vars from earlier setups can't poison a
+  // profile switch. The one exception is YIELD_KAMINO_RPC_URL — that's where
+  // Helius/Triton API keys live and ops needs to swap it without forking
+  // the profile definition.
   yieldStrategyKind: isYieldProfileActive
     ? yieldStrategyProfileDefaults.kind
     : process.env.YIELD_STRATEGY_KIND ?? 'fixed_apy_v1',
@@ -181,9 +207,11 @@ export const appConfig = {
   yieldHarvestIntervalSeconds: isYieldProfileActive
     ? yieldStrategyProfileDefaults.harvestIntervalSeconds
     : optionalInt('YIELD_HARVEST_INTERVAL_SECONDS', 86_400),
-  yieldKaminoRpcUrl: isYieldProfileActive
-    ? yieldStrategyProfileDefaults.kaminoRpcUrl
-    : process.env.YIELD_KAMINO_RPC_URL ?? 'https://api.mainnet-beta.solana.com',
+  yieldKaminoRpcUrl:
+    process.env.YIELD_KAMINO_RPC_URL ??
+    (isYieldProfileActive
+      ? yieldStrategyProfileDefaults.kaminoRpcUrl
+      : 'https://api.mainnet-beta.solana.com'),
   yieldKaminoMarketAddress: isYieldProfileActive
     ? yieldStrategyProfileDefaults.kaminoMarketAddress
     : process.env.YIELD_KAMINO_MARKET_ADDRESS ?? '',

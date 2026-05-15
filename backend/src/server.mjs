@@ -8,6 +8,7 @@ import { contentRoutes } from './modules/content/routes.mjs';
 import { authRoutes } from './modules/auth/routes.mjs';
 import { progressRoutes } from './modules/progress/routes.mjs';
 import { faucetRoutes } from './modules/faucet/routes.mjs';
+import { yieldRoutes } from './modules/yield/routes.mjs';
 import { registerLeaderboardSnapshotWorker } from './workers/leaderboardSnapshotWorker.mjs';
 import { registerLockVaultRelayWorker } from './workers/lockVaultRelayWorker.mjs';
 import { registerRedemptionVaultAutofundWorker } from './workers/redemptionVaultAutofundWorker.mjs';
@@ -114,6 +115,7 @@ export function buildServer() {
   app.register(authRoutes);
   app.register(progressRoutes);
   app.register(faucetRoutes);
+  app.register(yieldRoutes);
   registerLeaderboardSnapshotWorker(app);
   registerLockVaultRelayWorker(app);
   registerRedemptionVaultAutofundWorker(app);

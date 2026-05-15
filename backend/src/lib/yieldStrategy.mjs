@@ -76,7 +76,7 @@ export function computeQuotedYieldFromApy({
   return (principal * rate * elapsed) / (BPS_DENOMINATOR * YEAR_SECONDS);
 }
 
-async function readKaminoSupplyApyBps() {
+export async function readKaminoSupplyApyBps() {
   const now = Date.now();
   const marketAddressValue = getKaminoMarketAddressValue();
   const reserveSymbol = appConfig.yieldKaminoReserveSymbol.trim().toUpperCase();
@@ -118,10 +118,68 @@ async function readKaminoSupplyApyBps() {
     marketAddress: marketAddressValue,
     reserveSymbol,
     apyBps,
+    fetchedAt: new Date(now).toISOString(),
     expiresAt: now + Math.max(1_000, Number(appConfig.yieldStrategyApyCacheMs ?? 60_000)),
   };
 
   return apyBps;
+}
+
+/**
+ * Like readKaminoSupplyApyBps but never throws — returns null when no APY
+ * can be determined (no profile active, fixed APY mode, or RPC failure
+ * without a previously-cached value). Callers (e.g. the worker) decide what
+ * to do with null. UI endpoints prefer this so a Helius blip doesn't take
+ * down the dashboard.
+ */
+export async function readKaminoSupplyApyBpsSafe() {
+  if (appConfig.yieldStrategyKind !== 'kamino_klend_reserve_v1') {
+    return null;
+  }
+  try {
+    return await readKaminoSupplyApyBps();
+  } catch (err) {
+    if (cachedKaminoApy?.apyBps != null) {
+      return cachedKaminoApy.apyBps;
+    }
+    return null;
+  }
+}
+
+/**
+ * Introspect the strategy + last Kamino read for observability endpoints.
+ * Never throws — returns shape with nulls when unavailable.
+ */
+export function getYieldStrategyInfo() {
+  const usingKamino = appConfig.yieldStrategyKind === 'kamino_klend_reserve_v1';
+  return {
+    profile: appConfig.yieldStrategyProfile ?? null,
+    kind: appConfig.yieldStrategyKind,
+    harvestIntervalSeconds: appConfig.yieldHarvestIntervalSeconds,
+    fixedApyBps: appConfig.yieldStrategyKind === 'fixed_apy_v1'
+      ? Number(appConfig.yieldFixedApyBps)
+      : null,
+    kamino: usingKamino
+      ? {
+          // Strip any query string (Helius API keys live in ?api-key=).
+          rpcHost: sanitizeRpcUrl(appConfig.yieldKaminoRpcUrl),
+          marketAddress: getKaminoMarketAddressValue(),
+          reserveSymbol: appConfig.yieldKaminoReserveSymbol,
+          lastApyBps: cachedKaminoApy?.apyBps ?? null,
+          lastFetchedAt: cachedKaminoApy?.fetchedAt ?? null,
+        }
+      : null,
+  };
+}
+
+function sanitizeRpcUrl(url) {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    return `${u.protocol}//${u.host}${u.pathname.length > 1 ? u.pathname : ''}`;
+  } catch {
+    return url.split('?')[0] || null;
+  }
 }
 
 export function createFixedApyStrategyAdapter() {
