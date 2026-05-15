@@ -8,12 +8,23 @@
 //
 // Run: cd backend && node scripts/test-surfpool-kamino.mjs
 
-// Set the profile BEFORE importing anything that reads config. Everything
-// else (RPC URL, market address, reserve symbol) is resolved from the
-// profile in backend/src/config.mjs — nothing hardcoded in this script.
-process.env.YIELD_STRATEGY_PROFILE = 'kamino_surfpool';
-
+// Resolve config from backend/.env via dotenv (called inside config.mjs).
+// Nothing is hardcoded in this script — everything (profile, RPC URL,
+// market address, reserve symbol) comes from the resolved profile in
+// appConfig. To run against a different profile without editing .env:
+//   YIELD_STRATEGY_PROFILE=kamino_usdc_mainnet node scripts/test-surfpool-kamino.mjs
+// Shell env always wins over .env values.
 const { appConfig } = await import('../src/config.mjs');
+
+if (appConfig.yieldStrategyProfile !== 'kamino_surfpool') {
+  console.error(
+    `\n⚠️  This test expects YIELD_STRATEGY_PROFILE=kamino_surfpool in backend/.env.\n` +
+    `   Current resolved profile: ${appConfig.yieldStrategyProfile ?? '(none)'}\n` +
+    `   Either set it in .env or pass via shell env:\n` +
+    `   YIELD_STRATEGY_PROFILE=kamino_surfpool node scripts/test-surfpool-kamino.mjs\n`,
+  );
+  process.exit(1);
+}
 
 const t0 = Date.now();
 
