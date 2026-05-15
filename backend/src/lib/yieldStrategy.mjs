@@ -92,10 +92,16 @@ export async function readKaminoSupplyApyBps() {
 
   const rpc = createSolanaRpc(appConfig.yieldKaminoRpcUrl);
   const marketAddress = address(marketAddressValue);
+  // The Kamino SDK uses recentSlotDurationMs as a physical constant of the
+  // Solana chain (one slot ≈ 400ms). It feeds into the interest-accrual
+  // math as 1000 / SLOTS_PER_SECOND / recentSlotDurationMs. Passing the
+  // wrong value collapses APY by the same ratio — e.g. passing 30000
+  // instead of 400 turns a real 6.95% APY into 0.09% (10 bps). Always use
+  // the SDK's exported constant.
   const market = await KaminoMarket.load(
     rpc,
     marketAddress,
-    appConfig.yieldKaminoRecentSlotDurationMs || DEFAULT_RECENT_SLOT_DURATION_MS,
+    DEFAULT_RECENT_SLOT_DURATION_MS,
     KAMINO_PROGRAM_ID,
   );
 

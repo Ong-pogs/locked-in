@@ -218,10 +218,6 @@ export const appConfig = {
   yieldKaminoReserveSymbol: isYieldProfileActive
     ? yieldStrategyProfileDefaults.kaminoReserveSymbol
     : process.env.YIELD_KAMINO_RESERVE_SYMBOL ?? 'USDC',
-  yieldKaminoRecentSlotDurationMs: optionalInt(
-    'YIELD_KAMINO_RECENT_SLOT_DURATION_MS',
-    30_000,
-  ),
   yieldStrategyApyCacheMs: optionalInt('YIELD_STRATEGY_APY_CACHE_MS', 60_000),
   solanaRpcUrl:
     process.env.SOLANA_RPC_URL ??
