@@ -1,0 +1,20 @@
+{
+  "name": "locked-in-programs-tests",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Integration tests for lock_vault + yield_splitter + community_pot Anchor programs. Runs against in-process LiteSVM.",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@coral-xyz/anchor": "0.31.1",
+    "@solana/spl-token": "^0.4.14",
+    "@solana/web3.js": "^1.98.0",
+    "anchor-litesvm": "0.2.1",
+    "bn.js": "^5.2.1",
+    "litesvm": "0.3.3",
+    "vitest": "4.1.6"
+  }
+}
