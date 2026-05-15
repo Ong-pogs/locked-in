@@ -52,6 +52,23 @@ function sanitizeOrigins(origins) {
   return origins.map((o) => o.replace(/\/+$/, ''));
 }
 
+// Yield-strategy profiles. Pick one via YIELD_STRATEGY_PROFILE env var; the
+// rest of the YIELD_* env vars become overrides. Three modes:
+//
+//  - fixed_apy_dev          → devnet default. Mock 8% APY, no on-chain reads.
+//  - kamino_surfpool        → local demo. Real Kamino program + main market,
+//                             read through a locally-running Surfpool mainnet
+//                             fork at 127.0.0.1:8899. See
+//                             backend/scripts/README-SURFPOOL.md for setup.
+//                             Surfpool is a dev-only RPC; this profile is NOT
+//                             safe for production deploys.
+//  - kamino_usdc_mainnet    → real mainnet, real funds. Production path once
+//                             the lock vault holds real SOL/USDC.
+//
+// Production at lockedin.ong runs fixed_apy_dev by default because Render
+// can't reach localhost (Surfpool) and we don't want to spend real mainnet
+// SOL/USDC on devnet test traffic. To demo real Kamino numbers, run the
+// stack locally with YIELD_STRATEGY_PROFILE=kamino_surfpool.
 function resolveYieldStrategyProfile(profile) {
   switch ((profile ?? '').trim()) {
     case 'fixed_apy_dev':
@@ -61,6 +78,16 @@ function resolveYieldStrategyProfile(profile) {
         fixedApyBps: 800,
         harvestIntervalSeconds: 3600,
         kaminoRpcUrl: 'https://api.mainnet-beta.solana.com',
+        kaminoMarketAddress: '7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF',
+        kaminoReserveSymbol: 'USDC',
+      };
+    case 'kamino_surfpool':
+      return {
+        enabled: true,
+        kind: 'kamino_klend_reserve_v1',
+        fixedApyBps: 800,
+        harvestIntervalSeconds: 7 * 24 * 60 * 60,
+        kaminoRpcUrl: 'http://127.0.0.1:8899',
         kaminoMarketAddress: '7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF',
         kaminoReserveSymbol: 'USDC',
       };

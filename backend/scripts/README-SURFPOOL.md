@@ -54,19 +54,26 @@ numbers come back, the path is working.
 
 ## Point the backend at Surfpool
 
-In `backend/.env` (or a `.env.surfpool` you swap in for demo recordings):
+Set one env var in `backend/.env` (or a `.env.surfpool` you swap in for
+demo recordings):
 
 ```
-YIELD_STRATEGY_ENABLED=true
-YIELD_STRATEGY_KIND=kamino_klend_reserve_v1
-YIELD_KAMINO_RPC_URL=http://127.0.0.1:8899
-YIELD_KAMINO_MARKET_ADDRESS=7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF
-YIELD_KAMINO_RESERVE_SYMBOL=USDC
+YIELD_STRATEGY_PROFILE=kamino_surfpool
 ```
+
+The `kamino_surfpool` profile is defined in `backend/src/config.mjs` and
+locks in the localhost RPC + Kamino main-market address + USDC reserve
+symbol. No individual override needed.
+
+Available profiles:
+
+- `fixed_apy_dev` — devnet default, mock 8% APY
+- `kamino_surfpool` — local Surfpool fork, real Kamino mainnet state
+- `kamino_usdc_mainnet` — real mainnet, real funds
 
 Restart the backend. The dashboard's APY display now reads from real
-Kamino state. The lock-vault relay and faucet still run against devnet —
-only the yield reads use Surfpool.
+Kamino state via Surfpool. The lock-vault relay and faucet still run
+against devnet — only the yield reads use Surfpool.
 
 ## After the demo
 
