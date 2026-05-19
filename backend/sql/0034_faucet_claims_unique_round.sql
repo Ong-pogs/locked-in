@@ -13,6 +13,8 @@ WHERE a.wallet_address = b.wallet_address
   AND a.round = b.round
   AND a.created_at > b.created_at;
 
-ALTER TABLE lesson.faucet_claims
-  ADD CONSTRAINT faucet_claims_wallet_round_unique
-  UNIQUE (wallet_address, round);
+-- Use CREATE UNIQUE INDEX IF NOT EXISTS instead of ADD CONSTRAINT.
+-- Postgres treats a unique index as a valid target for ON CONFLICT,
+-- and this form is idempotent — re-running the migration won't error.
+CREATE UNIQUE INDEX IF NOT EXISTS faucet_claims_wallet_round_unique
+  ON lesson.faucet_claims (wallet_address, round);
