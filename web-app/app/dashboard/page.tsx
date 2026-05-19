@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Flame,
-  FlaskConical,
   Droplet,
   Sparkles,
   Shield,
@@ -62,12 +61,6 @@ function relativeTime(iso: string | null | undefined): string {
   return `${Math.floor(day / 365)}y ago`;
 }
 
-function deriveIchorTier(totalProduced: number): { tier: number; tierMax: number } {
-  if (totalProduced <= 9999) return { tier: 1, tierMax: 10000 };
-  if (totalProduced <= 49999) return { tier: 2, tierMax: 50000 };
-  if (totalProduced <= 99999) return { tier: 3, tierMax: 100000 };
-  return { tier: 4, tierMax: 999999 };
-}
 
 /* ──────────────────────────────────────────────────────────────────────
    Year-activity heatmap derivation (365 days from lesson completions)
@@ -263,7 +256,9 @@ function PipTile({ s }: { s: StatTile }) {
 
 function PipsRow({ tiles }: { tiles: StatTile[] }) {
   return (
-    <div className="grid grid-cols-2 gap-3 mb-5">
+    <div
+      className={`grid gap-3 mb-5 ${tiles.length >= 2 ? 'grid-cols-2' : 'grid-cols-1'}`}
+    >
       {tiles.map((t) => (
         <PipTile key={t.key} s={t} />
       ))}
@@ -909,10 +904,6 @@ export default function DashboardPage() {
   const fuelBalance = activeState?.fuelCounter ?? 0;
   const fuelCap = activeState?.fuelCap ?? 7;
 
-  const ichorBalance = activeState?.ichorBalance ?? 0;
-  const totalIchorProduced = activeState?.totalIchorProduced ?? 0;
-  const { tier: ichorTier, tierMax: ichorTierMax } = deriveIchorTier(totalIchorProduced);
-
   // ── Locked course IDs (have a lockAccountAddress) ──
   const lockedCourseIds = useMemo(
     () => enrolledCourseIds.filter((id) => Boolean(courseStates[id]?.lockAccountAddress)),
@@ -997,20 +988,6 @@ export default function DashboardPage() {
     Icon: Droplet,
     hint: `+${fuelToday.toFixed(1)} today`,
   };
-  const ichorTile: StatTile = {
-    key: 'ichor',
-    label: 'Ichor',
-    value: ichorBalance,
-    cap: ichorTierMax,
-    display: Math.floor(ichorBalance).toLocaleString(),
-    color: '#3EE68A',
-    Icon: FlaskConical,
-    hint:
-      ichorTier < 4
-        ? `${(ichorTierMax - ichorBalance).toLocaleString()} to Tier ${ichorTier + 1}`
-        : `Tier ${ichorTier} (max)`,
-  };
-
   // ── Handlers ──
   const handleContinueCourse = (courseId: string) => {
     setActiveCourse(courseId);
@@ -1087,7 +1064,7 @@ export default function DashboardPage() {
         />
 
         {/* 2. Pips row (Fuel + Ichor) */}
-        <PipsRow tiles={[fuelTile, ichorTile]} />
+        <PipsRow tiles={[fuelTile]} />
 
         {/* 3. Heatmap */}
         <HeatmapSection yearActivity={yearActivity} longestStreak={longestStreak} />

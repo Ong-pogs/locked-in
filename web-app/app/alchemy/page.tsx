@@ -1,101 +1,140 @@
 'use client';
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
-import { FlaskConical } from 'lucide-react';
-import { useCourseStore, useUserStore } from '@/stores';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Flame, Coins, Droplet } from 'lucide-react';
+import { useCourseStore } from '@/stores';
 import { T } from '@/components/theme';
-import { CozyCard, CozyStatBox, CozySectionLabel } from '@/components/cozy';
+import { CozyCard, CozySectionLabel } from '@/components/cozy';
 import { HubButton } from '@/components/HubButton';
+import { fetchWithAuth, AuthExpiredError } from '@/services/api/httpClient';
+import {
+  getBreweryState,
+  feedFire,
+  claimYield,
+} from '@/services/api/progress/progressApi';
+import type {
+  BreweryStateResponse,
+  BreweryDayStripEntry,
+} from '@/services/api/types';
 
 const AMBER = '#FFD580';
-const ICHOR_PER_FUEL = 100;
+const RUST = '#E8845A';
+const GREEN = '#3EE68A';
+const USDC_DECIMALS = 1_000_000; // base units per USDC
 
-export default function AlchemyPage() {
+function formatUsdc(baseUnits: string | number): string {
+  const n = typeof baseUnits === 'string' ? Number(baseUnits) : baseUnits;
+  if (!Number.isFinite(n) || n <= 0) return '0.000000';
+  return (n / USDC_DECIMALS).toFixed(6);
+}
+
+function formatRemaining(ms: number): string {
+  if (ms <= 0) return 'Out';
+  const totalSeconds = Math.floor(ms / 1000);
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function formatDayLabel(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  return d.toLocaleDateString(undefined, { weekday: 'short' });
+}
+
+export default function BreweryPage() {
   const activeCourseId = useCourseStore((s) => s.activeCourseId);
-  const courseStates = useCourseStore((s) => s.courseStates);
-  const convertFuelForCourse = useCourseStore((s) => s.convertFuelForCourse);
-  const authToken = useUserStore((s) => s.authToken);
-  const [convertAmount, setConvertAmount] = useState(1);
-  const [justConverted, setJustConverted] = useState<number | null>(null);
-  const [isConverting, setIsConverting] = useState(false);
+
+  const [state, setState] = useState<BreweryStateResponse | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [feedingBusy, setFeedingBusy] = useState(false);
+  const [claimingBusy, setClaimingBusy] = useState(false);
+  const [justClaimed, setJustClaimed] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
 
-  const activeState = activeCourseId ? courseStates[activeCourseId] ?? null : null;
-  const fuelBalance = activeState?.fuelCounter ?? 0;
-  const fuelCap = activeState?.fuelCap ?? 7;
-  const ichorBalance = activeState?.ichorBalance ?? 0;
-  const fuelFragments = activeState?.fuelFragmentsToday ?? 0;
-  const canConvert = fuelBalance > 0 && !isConverting;
-
-  // Clamp convertAmount when fuelBalance changes
+  // 1s tick for countdown re-render
   useEffect(() => {
-    if (fuelBalance > 0 && convertAmount > fuelBalance) {
-      setConvertAmount(fuelBalance);
-    }
-  }, [fuelBalance, convertAmount]);
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
 
-  const handleConvert = useCallback(async () => {
-    if (!activeCourseId || !canConvert) return;
-    const amount = Math.min(convertAmount, fuelBalance);
-    setIsConverting(true);
+  const fetchState = useCallback(async () => {
+    if (!activeCourseId) return;
+    try {
+      const data = await fetchWithAuth((token) => getBreweryState(activeCourseId, token));
+      setState(data);
+      setError(null);
+    } catch (err) {
+      if (err instanceof AuthExpiredError) {
+        setError('Connect your wallet to enter the brewery.');
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to load brewery.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [activeCourseId]);
+
+  useEffect(() => {
+    void fetchState();
+    const id = setInterval(fetchState, 60_000);
+    return () => clearInterval(id);
+  }, [fetchState]);
+
+  const handleFeed = useCallback(async () => {
+    if (!activeCourseId || feedingBusy) return;
+    setFeedingBusy(true);
     setError(null);
     try {
-      await convertFuelForCourse(activeCourseId, amount, authToken);
-      setJustConverted(amount * ICHOR_PER_FUEL);
-      setTimeout(() => setJustConverted(null), 4000);
+      const result = await fetchWithAuth((token) => feedFire(activeCourseId, token));
+      if (!result.applied) {
+        setError(result.reason === 'NO_FUEL' ? 'No fuel to feed the fire.' : 'Could not feed the fire.');
+      }
+      await fetchState();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Conversion failed');
+      setError(err instanceof Error ? err.message : 'Feed failed.');
     } finally {
-      setIsConverting(false);
+      setFeedingBusy(false);
     }
-  }, [activeCourseId, canConvert, convertAmount, fuelBalance, convertFuelForCourse, authToken]);
+  }, [activeCourseId, feedingBusy, fetchState]);
 
-  const effectiveAmount = Math.min(convertAmount, Math.max(1, fuelBalance));
-  const ichorOut = effectiveAmount * ICHOR_PER_FUEL;
-  const sliderMax = Math.max(1, fuelBalance);
+  const handleClaim = useCallback(async () => {
+    if (!activeCourseId || claimingBusy) return;
+    setClaimingBusy(true);
+    setError(null);
+    try {
+      const result = await fetchWithAuth((token) => claimYield(activeCourseId, token));
+      if (result.applied) {
+        setJustClaimed(formatUsdc(result.claimedAmount));
+        setTimeout(() => setJustClaimed(null), 4000);
+      } else if (result.reason === 'NOTHING_TO_CLAIM') {
+        setError('Nothing to claim yet.');
+      }
+      await fetchState();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Claim failed.');
+    } finally {
+      setClaimingBusy(false);
+    }
+  }, [activeCourseId, claimingBusy, fetchState]);
 
-  // Runic glyphs around the perimeter
-  const glyphs = ['⚯', '⚛', '✦', '✧', '✶', '✷', '✺', '❅'];
+  const fireRemainingMs = useMemo(() => {
+    if (!state?.fireLitUntil) return 0;
+    void tick; // re-evaluated each tick
+    return new Date(state.fireLitUntil).getTime() - Date.now();
+  }, [state, tick]);
 
-  // Steam particles — staggered start times + horizontal offsets
-  const steamParticles = useMemo(
-    () =>
-      Array.from({ length: 8 }, (_, i) => ({
-        id: i,
-        delay: (i * 0.45).toFixed(2),
-        duration: (3 + (i % 3) * 0.6).toFixed(2),
-        offsetX: ((i - 3.5) * 8).toFixed(0),
-        size: 6 + (i % 3) * 2,
-      })),
-    [],
-  );
-
-  // Quick-pick options: 1 / Half / All (deduped)
-  const quickPicks = useMemo(() => {
-    const picks: { value: number; label: string }[] = [];
-    picks.push({ value: 1, label: '1' });
-    if (fuelBalance > 2) picks.push({ value: Math.ceil(fuelBalance / 2), label: 'Half' });
-    if (fuelBalance > 1) picks.push({ value: fuelBalance, label: 'All' });
-    // dedupe by value
-    const seen = new Set<number>();
-    return picks.filter((p) => {
-      if (seen.has(p.value)) return false;
-      seen.add(p.value);
-      return true;
-    });
-  }, [fuelBalance]);
-
-  const sliderNotches = useMemo(() => {
-    const arr: number[] = [];
-    for (let i = 1; i <= sliderMax; i += 1) arr.push(i);
-    return arr;
-  }, [sliderMax]);
-
-  const denom = Math.max(1, sliderMax - 1);
+  const isLit = fireRemainingMs > 0;
+  const fuelCounter = state?.fuelCounter ?? 0;
+  const fuelCap = state?.fuelCap ?? 7;
+  const unclaimedUsdc = state ? formatUsdc(state.unclaimedYieldAmount) : '0.000000';
+  const last7Days = state?.last7Days ?? [];
 
   return (
     <div className="min-h-screen relative" style={{ backgroundColor: T.bg }}>
-      {/* Apothecary interior backdrop. */}
       <div aria-hidden className="fixed inset-0 z-0 pointer-events-none">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -119,331 +158,245 @@ export default function AlchemyPage() {
 
       <HubButton />
 
-      <div className="relative z-10 max-w-[1100px] mx-auto px-[18px] pb-24">
+      <div className="relative z-10 max-w-[720px] mx-auto px-[18px] pb-24">
         <div className="pt-20" />
 
         <h1
-          className="text-3xl font-bold tracking-wide font-pixel"
+          className="text-3xl font-bold tracking-wide font-pixel mb-5"
           style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
         >
           Brewery
         </h1>
-        <div className="mb-5" />
 
-        <div className="flex flex-col items-center gap-5">
-          <CozyCard className="w-full max-w-[560px] !p-4 sm:!p-8">
-            <div className="flex flex-col items-center">
-              {/* Hero — runic circle + steam + cauldron */}
-              <div className="relative w-[220px] h-[220px] sm:w-[260px] sm:h-[260px] flex items-center justify-center mb-4">
-                {/* Steam particles (rendered above cauldron) */}
-                <div
-                  className="absolute pointer-events-none"
-                  style={{ inset: 0, zIndex: 3 }}
-                >
-                  {steamParticles.map((p) => (
-                    <div
-                      key={p.id}
-                      className="brewery-steam absolute rounded-full"
-                      style={{
-                        width: p.size,
-                        height: p.size,
-                        left: `calc(50% + ${p.offsetX}px)`,
-                        top: '52%',
-                        animationDelay: `${p.delay}s`,
-                        animationDuration: `${p.duration}s`,
-                      }}
-                    />
-                  ))}
-                </div>
-
-                {/* Rotating runic circle */}
-                <div
-                  className="absolute inset-0"
-                  style={{ animation: 'brewery-rune-spin 60s linear infinite' }}
-                >
-                  <svg
-                    width="100%"
-                    height="100%"
-                    viewBox="0 0 260 260"
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      filter: 'drop-shadow(0 0 8px rgba(255,213,128,0.35))',
-                    }}
-                  >
-                    <circle
-                      cx="130"
-                      cy="130"
-                      r="115"
-                      fill="none"
-                      stroke={AMBER}
-                      strokeOpacity="0.55"
-                      strokeWidth="1"
-                    />
-                    <circle
-                      cx="130"
-                      cy="130"
-                      r="100"
-                      fill="none"
-                      stroke={AMBER}
-                      strokeOpacity="0.30"
-                      strokeWidth="1"
-                      strokeDasharray="3 6"
-                    />
-                    <circle
-                      cx="130"
-                      cy="130"
-                      r="125"
-                      fill="none"
-                      stroke={AMBER}
-                      strokeOpacity="0.20"
-                      strokeWidth="1"
-                    />
-                    {glyphs.map((g, i) => {
-                      const angle = (i / glyphs.length) * Math.PI * 2 - Math.PI / 2;
-                      const r = 115;
-                      const x = 130 + Math.cos(angle) * r;
-                      const y = 130 + Math.sin(angle) * r;
-                      return (
-                        <text
-                          key={i}
-                          x={x}
-                          y={y}
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          fontSize="14"
-                          fill={AMBER}
-                          opacity="0.85"
-                          style={{ filter: 'drop-shadow(0 0 4px rgba(255,213,128,0.6))' }}
-                        >
-                          {g}
-                        </text>
-                      );
-                    })}
-                  </svg>
-                </div>
-
-                {/* Soft inner glow */}
+        {loading ? (
+          <CozyCard>
+            <p className="font-pixel-mono text-[12px]" style={{ color: T.textSecondary }}>
+              Stirring the embers...
+            </p>
+          </CozyCard>
+        ) : (
+          <>
+            {/* Hero: fire visualization + timer */}
+            <CozyCard className="mb-5 flex flex-col items-center" style={{ padding: 24 }}>
+              <div className="relative w-[180px] h-[180px] flex items-center justify-center mb-3">
                 <div
                   className="absolute rounded-full"
                   style={{
-                    inset: 50,
-                    background:
-                      'radial-gradient(circle, rgba(255,213,128,0.18) 0%, rgba(255,213,128,0) 70%)',
+                    inset: 30,
+                    background: isLit
+                      ? 'radial-gradient(circle, rgba(232,132,90,0.28) 0%, rgba(255,213,128,0.10) 50%, rgba(255,213,128,0) 80%)'
+                      : 'radial-gradient(circle, rgba(80,80,90,0.18) 0%, rgba(80,80,90,0) 70%)',
+                    transition: 'all 600ms',
                   }}
                 />
-
-                {/* Central cauldron */}
-                <FlaskConical
-                  size={80}
-                  color={AMBER}
-                  strokeWidth={1.6}
+                <Flame
+                  size={86}
+                  color={isLit ? RUST : T.textMuted}
+                  strokeWidth={1.8}
                   style={{
-                    position: 'relative',
-                    zIndex: 2,
-                    filter: 'drop-shadow(0 4px 14px rgba(255,213,128,0.45))',
+                    filter: isLit
+                      ? `drop-shadow(0 0 18px ${RUST}88) drop-shadow(0 4px 14px rgba(232,132,90,0.5))`
+                      : 'none',
+                    opacity: isLit ? 1 : 0.5,
+                    animation: isLit ? 'brewery-fire-flicker 1.8s ease-in-out infinite' : 'none',
                   }}
                 />
               </div>
 
-              <CozySectionLabel>Magic Cauldron</CozySectionLabel>
+              <p
+                className="font-pixel-mono text-[10px] uppercase tracking-[2px] mb-1"
+                style={{ color: isLit ? AMBER : T.textMuted, opacity: 0.85 }}
+              >
+                {isLit ? 'Fire burning' : 'Fire out'}
+              </p>
+              <p
+                className="font-pixel-mono text-2xl font-bold"
+                style={{
+                  color: isLit ? AMBER : T.textMuted,
+                  textShadow: isLit ? '0 1px 2px rgba(0,0,0,0.85)' : 'none',
+                }}
+              >
+                {formatRemaining(fireRemainingMs)}
+              </p>
+              <p
+                className="font-pixel-mono text-[10px] mt-1"
+                style={{ color: T.textMuted }}
+              >
+                {isLit ? "yield routing to your wallet" : 'yield routing to community pot'}
+              </p>
+            </CozyCard>
 
-              {/* Horizontal lever slider */}
-              <div className="w-full max-w-[420px] mt-3">
-                <div className="relative h-12">
-                  <div
-                    className="absolute top-1/2 left-0 right-0 h-3 -translate-y-1/2 rounded-full"
-                    style={{
-                      background:
-                        'linear-gradient(90deg, rgba(60,30,15,0.85) 0%, rgba(95,55,30,0.85) 50%, rgba(60,30,15,0.85) 100%)',
-                      border: '1px solid rgba(58, 143, 168, 0.45)',
-                      boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.6)',
-                    }}
-                  />
-                  {sliderNotches.map((n) => (
-                    <div
-                      key={n}
-                      className="absolute top-1/2 -translate-y-1/2 w-[2px] h-3.5"
-                      style={{
-                        left: `${((n - 1) / denom) * 100}%`,
-                        backgroundColor: n <= effectiveAmount ? AMBER : 'rgba(255,213,128,0.25)',
-                        boxShadow: n <= effectiveAmount ? '0 0 6px rgba(255,213,128,0.55)' : 'none',
-                      }}
-                    />
-                  ))}
-                  <input
-                    type="range"
-                    min={1}
-                    max={sliderMax}
-                    step={1}
-                    value={effectiveAmount}
-                    onChange={(e) => setConvertAmount(Number(e.target.value))}
-                    disabled={fuelBalance <= 0}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
-                    aria-label="Brew amount"
-                  />
-                  <div
-                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-8 h-8 rounded-full pointer-events-none"
-                    style={{
-                      left: `${((effectiveAmount - 1) / denom) * 100}%`,
-                      background: 'radial-gradient(circle at 35% 30%, #FFE9B3 0%, #FFD580 45%, #B7842D 100%)',
-                      border: '2px solid #2a1810',
-                      boxShadow: '0 2px 6px rgba(0,0,0,0.6), 0 0 12px rgba(255,213,128,0.55), inset 0 1px 0 rgba(255,255,255,0.3)',
-                    }}
-                  />
+            {/* Fuel + Feed */}
+            <CozyCard className="mb-5" style={{ padding: 18 }}>
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p
+                    className="font-pixel-mono text-[10px] uppercase tracking-[1.5px]"
+                    style={{ color: AMBER, opacity: 0.75 }}
+                  >
+                    Fuel
+                  </p>
+                  <p
+                    className="font-pixel-mono text-2xl font-bold"
+                    style={{ color: RUST, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
+                  >
+                    {fuelCounter}/{fuelCap}
+                  </p>
                 </div>
-                <div className="flex justify-between mt-1.5 px-0.5">
-                  <span className="font-pixel-mono text-[10px]" style={{ color: T.textMuted }}>
-                    1
-                  </span>
-                  <span className="font-pixel-mono text-[10px]" style={{ color: T.textMuted }}>
-                    {sliderMax}
-                  </span>
-                </div>
+                <Droplet size={28} color={RUST} strokeWidth={2.2} />
               </div>
 
-              {/* Quick-pick pills */}
-              {quickPicks.length > 0 && (
-                <div className="flex justify-center gap-2 mt-3">
-                  {quickPicks.map((pick) => {
-                    const active = effectiveAmount === pick.value;
-                    return (
-                      <button
-                        key={pick.label}
-                        type="button"
-                        onClick={() => setConvertAmount(pick.value)}
-                        disabled={fuelBalance <= 0}
-                        className="px-3.5 py-1.5 rounded-lg text-[11px] font-pixel-mono font-bold border transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
-                        style={{
-                          borderColor: active ? AMBER : 'rgba(58, 143, 168, 0.45)',
-                          color: active ? AMBER : T.textSecondary,
-                          backgroundColor: active ? 'rgba(255,213,128,0.10)' : 'transparent',
-                        }}
-                      >
-                        {pick.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Live preview */}
-              <div className="mt-5 text-center">
-                <p
-                  className="font-pixel-mono text-[18px]"
-                  style={{ color: T.textSecondary, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
-                >
-                  Brewing{' '}
-                  <span style={{ color: AMBER, fontWeight: 'bold' }}>{effectiveAmount} Fuel</span>
-                  {' → '}
-                  <span style={{ color: T.green, fontWeight: 'bold' }}>{ichorOut} Ichor</span>
-                </p>
+              <div className="flex items-center gap-1.5 mb-4">
+                {Array.from({ length: fuelCap }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="flex-1 h-2.5 rounded-sm"
+                    style={{
+                      backgroundColor:
+                        i < fuelCounter ? RUST : 'rgba(255,255,255,0.08)',
+                      boxShadow: i < fuelCounter ? `0 0 6px ${RUST}80` : undefined,
+                    }}
+                  />
+                ))}
               </div>
 
-              {/* Brew CTA */}
               <button
-                onClick={handleConvert}
-                disabled={!canConvert}
-                className="mt-5 px-10 py-4 rounded-lg text-center font-bold text-base uppercase tracking-[2px] transition-all font-pixel cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 hover:brightness-110"
+                onClick={handleFeed}
+                disabled={fuelCounter <= 0 || feedingBusy}
+                className="w-full py-3.5 rounded-lg font-bold text-base uppercase tracking-[2px] font-pixel cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 hover:brightness-110 transition-all"
                 style={{
                   border: `1px solid ${AMBER}`,
                   background:
                     'linear-gradient(180deg, rgba(255,213,128,0.22) 0%, rgba(255,213,128,0.10) 100%)',
                   color: AMBER,
                   textShadow: '0 1px 2px rgba(0,0,0,0.85)',
-                  boxShadow: '0 0 28px rgba(255,213,128,0.32), inset 0 1px 0 rgba(255,255,255,0.18)',
+                  boxShadow:
+                    '0 0 24px rgba(255,213,128,0.28), inset 0 1px 0 rgba(255,255,255,0.18)',
                 }}
               >
-                {isConverting
-                  ? 'Brewing...'
-                  : justConverted
-                    ? `+${justConverted} Ichor!`
-                    : fuelBalance <= 0
-                      ? '◆ No Fuel ◆'
-                      : '◆ Brew ◆'}
+                {feedingBusy
+                  ? 'Feeding...'
+                  : fuelCounter <= 0
+                    ? '◆ No Fuel ◆'
+                    : '🪵 Feed the Fire (−1 fuel, +24h)'}
               </button>
+            </CozyCard>
 
-              {error && (
-                <p
-                  className="text-[12px] text-center mt-3 font-pixel-mono"
-                  style={{ color: T.crimson }}
-                >
-                  {error}
-                </p>
-              )}
-            </div>
-          </CozyCard>
-
-          {/* 2-up stat row. Daily fuel earned shows as a subline on Available Fuel. */}
-          <div className="w-full grid grid-cols-2 gap-3">
-            <CozyCard className="flex-1 flex flex-col items-center" style={{ padding: 14 }}>
-              <span
-                className="font-pixel-mono text-[10px] uppercase tracking-[1px] whitespace-nowrap"
-                style={{ color: AMBER, opacity: 0.75, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
-              >
-                Available Fuel
-              </span>
-              <span
-                className="font-pixel-mono text-xl font-bold mt-1"
-                style={{ color: T.rust, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
-              >
-                {fuelBalance}/{fuelCap}
-              </span>
-              <span
-                className="font-pixel-mono text-[10px] mt-1"
+            {/* Unclaimed USDC + Claim */}
+            <CozyCard
+              className="mb-5"
+              style={{
+                padding: 18,
+                border: `2px solid ${GREEN}55`,
+                boxShadow: `0 0 24px rgba(62,230,138,0.10)`,
+              }}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p
+                    className="font-pixel-mono text-[10px] uppercase tracking-[1.5px]"
+                    style={{ color: AMBER, opacity: 0.75 }}
+                  >
+                    Unclaimed Yield
+                  </p>
+                  <p
+                    className="font-pixel-mono text-2xl font-bold"
+                    style={{ color: GREEN, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
+                  >
+                    {unclaimedUsdc} USDC
+                  </p>
+                </div>
+                <Coins size={28} color={GREEN} strokeWidth={2.2} />
+              </div>
+              <button
+                onClick={handleClaim}
+                disabled={Number(state?.unclaimedYieldAmount ?? '0') <= 0 || claimingBusy}
+                className="w-full py-3 rounded-lg font-bold text-sm uppercase tracking-[2px] font-pixel cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 hover:brightness-110 transition-all"
                 style={{
-                  color: fuelFragments >= 1 ? T.green : T.textMuted,
-                  opacity: fuelFragments > 0 ? 1 : 0.6,
+                  border: `1px solid ${GREEN}`,
+                  background:
+                    'linear-gradient(180deg, rgba(62,230,138,0.18) 0%, rgba(62,230,138,0.08) 100%)',
+                  color: GREEN,
+                  textShadow: '0 1px 2px rgba(0,0,0,0.85)',
                 }}
               >
-                +{fuelFragments.toFixed(2)} today {fuelFragments >= 1 ? '· cap reached' : `· ${(1 - fuelFragments).toFixed(2)} left`}
-              </span>
+                {claimingBusy
+                  ? 'Claiming...'
+                  : justClaimed
+                    ? `+${justClaimed} USDC claimed!`
+                    : 'Claim to Wallet'}
+              </button>
             </CozyCard>
-            <CozyStatBox
-              label="Ichor Balance"
-              value={Math.floor(ichorBalance)}
-              color={T.green}
-            />
-          </div>
-        </div>
+
+            {/* 7-day strip */}
+            {last7Days.length > 0 && (
+              <CozyCard className="mb-5" style={{ padding: 14 }}>
+                <CozySectionLabel>Last 7 Days</CozySectionLabel>
+                <div className="flex flex-col gap-1.5 mt-2">
+                  {last7Days.map((entry) => (
+                    <SevenDayRow key={entry.day} entry={entry} />
+                  ))}
+                </div>
+              </CozyCard>
+            )}
+
+            {error && (
+              <p
+                className="text-[12px] text-center mt-3 font-pixel-mono"
+                style={{ color: T.crimson }}
+              >
+                {error}
+              </p>
+            )}
+          </>
+        )}
       </div>
 
       <style jsx>{`
-        @keyframes brewery-rune-spin {
-          from {
-            transform: rotate(0deg);
-          }
-          to {
-            transform: rotate(360deg);
-          }
-        }
-        @keyframes brewery-steam-rise {
-          0% {
-            transform: translate(-50%, 0) scale(0.6);
-            opacity: 0;
-          }
-          15% {
-            opacity: 0.7;
-          }
-          100% {
-            transform: translate(-50%, -130px) scale(1.6);
-            opacity: 0;
-          }
-        }
-        :global(.brewery-steam) {
-          background: radial-gradient(
-            circle,
-            rgba(255, 240, 210, 0.85) 0%,
-            rgba(255, 240, 210, 0.25) 60%,
-            rgba(255, 240, 210, 0) 100%
-          );
-          transform: translate(-50%, 0);
-          animation-name: brewery-steam-rise;
-          animation-iteration-count: infinite;
-          animation-timing-function: ease-out;
-          filter: blur(1px);
+        @keyframes brewery-fire-flicker {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.05); opacity: 0.92; }
         }
       `}</style>
+    </div>
+  );
+}
+
+function SevenDayRow({ entry }: { entry: BreweryDayStripEntry }) {
+  const user = Number(entry.userAmount);
+  const pot = Number(entry.potAmount);
+  const total = user + pot;
+  const userPct = total > 0 ? (user / total) * 100 : 0;
+  const wasLit = user > 0;
+
+  return (
+    <div className="grid items-center gap-3" style={{ gridTemplateColumns: '50px 1fr 90px' }}>
+      <span
+        className="font-pixel-mono text-[10px] uppercase tracking-[1px]"
+        style={{ color: T.textMuted }}
+      >
+        {formatDayLabel(entry.day)}
+      </span>
+      <div
+        className="h-2 rounded-full overflow-hidden"
+        style={{ backgroundColor: 'rgba(255,255,255,0.06)' }}
+      >
+        <div
+          className="h-full"
+          style={{
+            width: `${Math.max(2, userPct)}%`,
+            background: `linear-gradient(90deg, ${GREEN}99 0%, ${GREEN} 100%)`,
+            boxShadow: wasLit ? `0 0 6px ${GREEN}55` : 'none',
+            transition: 'width 400ms',
+          }}
+        />
+      </div>
+      <span
+        className="font-pixel-mono text-[10px] text-right"
+        style={{ color: wasLit ? GREEN : T.textMuted }}
+      >
+        {wasLit ? `+$${formatUsdc(user)}` : '→ pot'}
+      </span>
     </div>
   );
 }

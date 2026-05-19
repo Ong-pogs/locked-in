@@ -218,6 +218,7 @@ export interface CourseRuntimeSnapshot {
   fuelFragmentAwarded: number;
   fuelFragmentsToday: number;
   fuelEarnStatus: ApiFuelEarnStatus;
+  fireLitUntil?: string | null;
 }
 
 export interface FuelConversionResponse {
@@ -232,6 +233,38 @@ export interface FuelConversionResponse {
     lockAccount?: string;
     error?: string;
   } | null;
+}
+
+/* ── Brewery (fire-timer model) ─────────────────────────────────────── */
+
+export interface BreweryDayStripEntry {
+  day: string; // YYYY-MM-DD UTC
+  userAmount: string; // USDC base units (6 decimals) as decimal string
+  potAmount: string;
+  harvestCount: number;
+}
+
+export interface BreweryStateResponse {
+  fuelCounter: number;
+  fuelCap: number;
+  fireLitUntil: string | null;
+  isLit: boolean;
+  unclaimedYieldAmount: string; // USDC base units
+  claimedYieldAmount: string;
+  last7Days: BreweryDayStripEntry[];
+}
+
+export interface BreweryFeedResponse {
+  applied: boolean;
+  reason: 'FIRE_FED' | 'NO_FUEL' | 'NO_DATABASE';
+  courseRuntime?: CourseRuntimeSnapshot;
+}
+
+export interface BreweryClaimResponse {
+  applied: boolean;
+  reason: 'CLAIMED' | 'NOTHING_TO_CLAIM' | 'NO_DATABASE';
+  claimedAmount: string; // USDC base units
+  receiptCount: number;
 }
 
 export interface XpSnapshot {

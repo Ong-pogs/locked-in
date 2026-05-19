@@ -1,5 +1,8 @@
 import { httpRequest } from '../httpClient';
 import type {
+  BreweryStateResponse,
+  BreweryFeedResponse,
+  BreweryClaimResponse,
   CourseRuntimeSnapshot,
   FuelConversionResponse,
   XpSnapshot,
@@ -54,6 +57,41 @@ export function convertFuel(
   return httpRequest<FuelConversionResponse>('/v1/progress/fuel/convert', {
     method: 'POST',
     body: { courseId, fuelAmount },
+    token,
+  });
+}
+
+/* ── Brewery (fire-timer model) ─────────────────────────────────────── */
+
+export function getBreweryState(
+  courseId: string,
+  token: string,
+): Promise<BreweryStateResponse> {
+  const query = new URLSearchParams({ courseId });
+  return httpRequest<BreweryStateResponse>(
+    `/v1/progress/brewery?${query.toString()}`,
+    { token },
+  );
+}
+
+export function feedFire(
+  courseId: string,
+  token: string,
+): Promise<BreweryFeedResponse> {
+  return httpRequest<BreweryFeedResponse>('/v1/progress/brewery/feed', {
+    method: 'POST',
+    body: { courseId },
+    token,
+  });
+}
+
+export function claimYield(
+  courseId: string,
+  token: string,
+): Promise<BreweryClaimResponse> {
+  return httpRequest<BreweryClaimResponse>('/v1/progress/brewery/claim', {
+    method: 'POST',
+    body: { courseId },
     token,
   });
 }
