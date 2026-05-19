@@ -44,7 +44,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
         },
         embeddedWallets: {
           solana: {
-            createOnLogin: 'all-users',
+            // Only mint an embedded wallet for users who logged in without
+            // one (e.g. Google login). External-wallet users (Phantom)
+            // already have a wallet — don't create dead-weight alongside.
+            createOnLogin: 'users-without-wallets',
           },
         },
       }}

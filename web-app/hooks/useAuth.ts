@@ -4,7 +4,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
 import { useWallets, useSignMessage } from '@privy-io/react-auth/solana';
 import { useUserStore, useCourseStore } from '@/stores';
-import { createAuthChallenge, verifyAuthChallenge } from '@/services/api/auth/authApi';
+import {
+  createAuthChallenge,
+  verifyAuthChallenge,
+  verifyPrivySession,
+} from '@/services/api/auth/authApi';
 
 // Cookie flag for proxy auth guard (server-side check).
 // Adds Secure in HTTPS contexts so the cookie never transmits over plain
@@ -75,7 +79,13 @@ function wipeClientAuthState() {
  * Backend doesn't know about Privy. It just sees an Ed25519 signature.
  */
 export function useAuth() {
-  const { ready: privyReady, authenticated: privyAuthenticated, logout: privyLogout, user: privyUser } = usePrivy();
+  const {
+    ready: privyReady,
+    authenticated: privyAuthenticated,
+    logout: privyLogout,
+    user: privyUser,
+    getAccessToken,
+  } = usePrivy();
   const { wallets, ready: walletsReady } = useWallets();
   const { signMessage } = useSignMessage();
   const [authError, setAuthError] = useState<string | null>(null);
@@ -112,7 +122,17 @@ export function useAuth() {
   const solanaWallet = isGoogleUser ? embeddedWallet : externalWallet;
   const connectedAddress = solanaWallet?.address ?? null;
 
-  // Authenticate with our backend using the Privy-managed wallet
+  // Authenticate with our backend.
+  //
+  // Preferred path: hand the backend Privy's session token, let it verify
+  // via Privy's public key + cross-check that the claimed wallet is linked
+  // to that Privy user. No extra signMessage prompt — the user already
+  // signed the Privy SIWS step.
+  //
+  // Fallback path (only fires if the Privy-session endpoint isn't
+  // configured on the backend, e.g. PRIVY_APP_SECRET missing on Render):
+  // the legacy challenge/signMessage/verify dance. Costs one extra
+  // signature prompt but keeps us functional during the rollout.
   const authenticate = useCallback(async () => {
     if (!solanaWallet) {
       setAuthError('No Solana wallet available. Please try again.');
@@ -125,29 +145,46 @@ export function useAuth() {
     try {
       const address = solanaWallet.address;
 
-      // 1. Request challenge from backend
-      const challenge = await createAuthChallenge({ walletAddress: address });
+      // --- Path A: Privy-session exchange (single signature in the flow) ---
+      try {
+        const privyAccessToken = await getAccessToken();
+        if (privyAccessToken) {
+          const authSession = await verifyPrivySession({
+            privyAccessToken,
+            walletAddress: address,
+          });
+          setWallet(address);
+          useCourseStore.getState().bindToWallet(address);
+          setAuthSession(authSession.accessToken, authSession.refreshToken);
+          setAuthCookie(true);
+          return;
+        }
+      } catch (err) {
+        // PRIVY_NOT_CONFIGURED / INVALID_PRIVY_SESSION → fall through to
+        // the legacy signMessage flow so the user can still log in.
+        const message = err instanceof Error ? err.message : '';
+        if (!/PRIVY_NOT_CONFIGURED|INVALID_PRIVY_SESSION|404/.test(message)) {
+          throw err;
+        }
+        console.warn('[auth] Privy-session path unavailable, falling back to signMessage:', message);
+      }
 
-      // 2. Sign the challenge message using Privy wallet
+      // --- Path B: legacy challenge + signMessage ---
+      const challenge = await createAuthChallenge({ walletAddress: address });
       const messageBytes = new TextEncoder().encode(challenge.message);
       const result = await signMessage({
         message: messageBytes,
         wallet: solanaWallet,
       });
-
-      // 3. Convert signature to base64 for backend verification
       const signature = btoa(
         String.fromCharCode(...result.signature),
       );
-
-      // 4. Verify with backend to get JWT
       const authSession = await verifyAuthChallenge({
         walletAddress: address,
         challengeId: challenge.challengeId,
         signature,
       });
 
-      // 5. Store in Zustand (persisted to localStorage)
       setWallet(address);
       useCourseStore.getState().bindToWallet(address);
       setAuthSession(authSession.accessToken, authSession.refreshToken);
@@ -159,7 +196,7 @@ export function useAuth() {
     } finally {
       setAuthInProgress(false);
     }
-  }, [solanaWallet, signMessage, setWallet, setAuthSession]);
+  }, [solanaWallet, signMessage, getAccessToken, setWallet, setAuthSession]);
 
   // Keep the proxy auth cookie in sync with the Zustand JWT.
   // Without this, an expired/cleared cookie + still-valid JWT in localStorage

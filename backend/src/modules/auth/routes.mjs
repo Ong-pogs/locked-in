@@ -9,6 +9,10 @@ import {
 } from '../../lib/jwt.mjs';
 import { verifySolanaChallengeSignature } from '../../lib/solanaAuth.mjs';
 import {
+  hasPrivyAuthConfig,
+  verifyPrivySessionForWallet,
+} from '../../lib/privyAuth.mjs';
+import {
   consumeChallenge,
   createChallenge,
   issueRefreshSession,
@@ -86,6 +90,39 @@ export async function authRoutes(app) {
     }
 
     return buildSession(walletAddress);
+  });
+
+  // Privy-session flow: skip the signMessage challenge entirely.
+  // Frontend sends the Privy access token from getAccessToken() plus the
+  // claimed walletAddress. We verify the token via Privy's server-auth
+  // SDK and cross-check that the wallet is linked to that Privy user.
+  // The user already signed the Privy SIWS prompt, so this avoids a
+  // second redundant signature request.
+  app.post('/v1/auth/privy-session', async (request) => {
+    if (!hasPrivyAuthConfig()) {
+      throw unauthorized(
+        'Privy session login is not configured on this backend.',
+        'PRIVY_NOT_CONFIGURED',
+      );
+    }
+
+    const privyAccessToken = request.body?.privyAccessToken;
+    const walletAddress = assertWalletAddress(request.body?.walletAddress);
+    if (typeof privyAccessToken !== 'string' || privyAccessToken.length === 0) {
+      throw badRequest('privyAccessToken is required', 'MISSING_PRIVY_TOKEN');
+    }
+
+    let verified;
+    try {
+      verified = await verifyPrivySessionForWallet(privyAccessToken, walletAddress);
+    } catch (error) {
+      throw unauthorized(
+        error instanceof Error ? error.message : 'Privy verification failed.',
+        'INVALID_PRIVY_SESSION',
+      );
+    }
+
+    return buildSession(verified.walletAddress);
   });
 
   app.post('/v1/auth/refresh', async (request) => {

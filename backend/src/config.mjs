@@ -188,6 +188,8 @@ export const appConfig = {
   openaiResponsesBaseUrl: process.env.OPENAI_RESPONSES_BASE_URL ?? 'https://api.openai.com/v1',
   openaiValidatorModel: process.env.OPENAI_VALIDATOR_MODEL ?? 'gpt-4o-mini',
   openaiValidatorTimeoutMs: optionalInt('OPENAI_VALIDATOR_TIMEOUT_MS', 4000),
+  privyAppId: process.env.PRIVY_APP_ID ?? '',
+  privyAppSecret: process.env.PRIVY_APP_SECRET ?? '',
   yieldStrategyProfile: yieldStrategyProfile || null,
   yieldStrategyEnabled: isYieldProfileActive
     ? yieldStrategyProfileDefaults.enabled

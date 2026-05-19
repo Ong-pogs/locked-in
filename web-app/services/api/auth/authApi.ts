@@ -29,3 +29,18 @@ export function refreshAuthSession(payload: AuthRefreshRequest): Promise<AuthSes
     body: payload,
   });
 }
+
+/**
+ * Exchange a Privy access token for our own JWT, skipping the
+ * signMessage challenge. The user already signed the Privy SIWS prompt,
+ * so this avoids a second redundant signature request.
+ */
+export function verifyPrivySession(payload: {
+  privyAccessToken: string;
+  walletAddress: string;
+}): Promise<AuthSession> {
+  return httpRequest<AuthSession>('/v1/auth/privy-session', {
+    method: 'POST',
+    body: payload,
+  });
+}
