@@ -1412,6 +1412,13 @@ export async function syncCourseRuntimeStateWithLockSnapshot(
 
   return withTransactionAsWallet(walletAddress, async (client) => {
     await ensureCourseRuntimeState(client, walletAddress, courseId);
+    // Fuel-related fields (fuel_counter, last_fuel_credit_day,
+    // last_brewer_burn_ts) are NOT synced from the on-chain snapshot in
+    // this dev phase — the off-chain code owns the fuel ledger and the
+    // lock-vault relay for fuel mutations isn't wired up yet. Without
+    // this carve-out, every 15s scheduler tick would overwrite a fresh
+    // brew (DB fuel = 0) with the stale on-chain value (fuel = 1),
+    // letting users mint infinite ichor.
     await client.query(
       `
         update lesson.user_course_runtime_state
@@ -1423,17 +1430,14 @@ export async function syncCourseRuntimeStateWithLockSnapshot(
             saver_recovery_mode = $8,
             current_yield_redirect_bps = $9,
             extension_days = $10,
-            fuel_counter = $11,
-            fuel_cap = $12,
-            last_completed_day = $13::date,
-            last_fuel_credit_day = $14::date,
-            last_brewer_burn_ts = $15::timestamptz,
-            lock_account_address = $16,
-            stable_mint = $17,
-            principal_amount = $18::bigint,
-            skr_locked_amount = $19::bigint,
-            lock_start_at = $20::timestamptz,
-            lock_end_at = $21::timestamptz,
+            fuel_cap = $11,
+            last_completed_day = $12::date,
+            lock_account_address = $13,
+            stable_mint = $14,
+            principal_amount = $15::bigint,
+            skr_locked_amount = $16::bigint,
+            lock_start_at = $17::timestamptz,
+            lock_end_at = $18::timestamptz,
             updated_at = now()
         where wallet_address = $1
           and course_id = $2
@@ -1453,11 +1457,8 @@ export async function syncCourseRuntimeStateWithLockSnapshot(
         snapshot.saverRecoveryMode,
         snapshot.currentYieldRedirectBps,
         extensionDays,
-        snapshot.fuelCounter,
         snapshot.fuelCap,
         epochDayToIsoDate(snapshot.lastCompletionDay),
-        epochDayToIsoDate(snapshot.lastFuelCreditDay),
-        unixTimestampSecondsToIso(snapshot.lastBrewerBurnTs),
         snapshot.lockAccount,
         snapshot.stableMint,
         snapshot.principalAmount,
