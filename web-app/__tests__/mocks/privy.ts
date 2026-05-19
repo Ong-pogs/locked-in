@@ -5,6 +5,11 @@ export const mockPrivy = {
   authenticated: false,
   logout: vi.fn(),
   user: null as { google?: { email: string }; wallet?: { address: string } } | null,
+  // Default: null token so the new Privy-session path short-circuits and
+  // the legacy signMessage flow runs (which the existing tests assert on).
+  // Individual tests can override with mockResolvedValueOnce to exercise
+  // the new path.
+  getAccessToken: vi.fn().mockResolvedValue(null),
 };
 
 export const mockLogin = {
@@ -47,6 +52,7 @@ export function resetPrivyMock() {
   mockPrivy.authenticated = false;
   mockPrivy.logout.mockClear();
   mockPrivy.user = null;
+  mockPrivy.getAccessToken.mockReset().mockResolvedValue(null);
   mockLogin.login.mockClear();
   mockWallets.wallets = [];
   mockWallets.ready = true;
