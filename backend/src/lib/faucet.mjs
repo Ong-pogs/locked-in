@@ -144,6 +144,75 @@ export async function transferUsdc(walletAddress, amountUi) {
 }
 
 /**
+ * Same as transferUsdc but accepts the raw base-unit amount (bigint or
+ * string) directly. Used by the brewery claim flow where we already have
+ * the amount as USDC base units from the harvest_result_receipts ledger
+ * and don't want to round-trip through a UI-decimal string.
+ */
+export async function transferUsdcAtomic(walletAddress, amountAtomic) {
+  const { connection, signer, usdcMint } = getClient();
+  const recipient = new PublicKey(walletAddress);
+
+  const amount = typeof amountAtomic === 'bigint' ? amountAtomic : BigInt(amountAtomic);
+  if (amount <= 0n) {
+    throw new Error('transferUsdcAtomic: amount must be > 0');
+  }
+
+  const sourceAta = getAssociatedTokenAddressSync(
+    usdcMint,
+    signer.publicKey,
+    false,
+    TOKEN_PROGRAM_ID,
+    ASSOCIATED_TOKEN_PROGRAM_ID,
+  );
+  const destAta = getAssociatedTokenAddressSync(
+    usdcMint,
+    recipient,
+    false,
+    TOKEN_PROGRAM_ID,
+    ASSOCIATED_TOKEN_PROGRAM_ID,
+  );
+
+  const mint = await getMint(connection, usdcMint, 'confirmed', TOKEN_PROGRAM_ID);
+
+  const instructions = [];
+  try {
+    await getAccount(connection, destAta, 'confirmed', TOKEN_PROGRAM_ID);
+  } catch {
+    instructions.push(
+      createAssociatedTokenAccountInstruction(
+        signer.publicKey,
+        destAta,
+        recipient,
+        usdcMint,
+        TOKEN_PROGRAM_ID,
+        ASSOCIATED_TOKEN_PROGRAM_ID,
+      ),
+    );
+  }
+
+  instructions.push(
+    createTransferCheckedInstruction(
+      sourceAta,
+      usdcMint,
+      destAta,
+      signer.publicKey,
+      amount,
+      mint.decimals,
+      [],
+      TOKEN_PROGRAM_ID,
+    ),
+  );
+
+  const transaction = new Transaction().add(...instructions);
+  const signature = await sendAndConfirmTransaction(connection, transaction, [signer], {
+    commitment: 'confirmed',
+  });
+
+  return { signature, amountAtomic: amount };
+}
+
+/**
  * Atomically reserve a faucet claim slot. Returns a reservation id on
  * success, or null if the wallet has already claimed for this round.
  *

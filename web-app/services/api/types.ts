@@ -265,6 +265,10 @@ export interface BreweryClaimResponse {
   reason: 'CLAIMED' | 'NOTHING_TO_CLAIM' | 'NO_DATABASE';
   claimedAmount: string; // USDC base units
   receiptCount: number;
+  transfer?: {
+    signature?: string; // Solana tx signature for the devnet USDC transfer
+    simulated?: boolean; // true when no treasury is configured (no transfer happened)
+  };
 }
 
 export interface XpSnapshot {

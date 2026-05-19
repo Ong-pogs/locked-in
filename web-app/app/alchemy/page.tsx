@@ -53,6 +53,7 @@ export default function BreweryPage() {
   const [feedingBusy, setFeedingBusy] = useState(false);
   const [claimingBusy, setClaimingBusy] = useState(false);
   const [justClaimed, setJustClaimed] = useState<string | null>(null);
+  const [claimSignature, setClaimSignature] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
 
   // 1s tick for countdown re-render
@@ -105,11 +106,18 @@ export default function BreweryPage() {
     if (!activeCourseId || claimingBusy) return;
     setClaimingBusy(true);
     setError(null);
+    setClaimSignature(null);
     try {
       const result = await fetchWithAuth((token) => claimYield(activeCourseId, token));
       if (result.applied) {
         setJustClaimed(formatUsdc(result.claimedAmount));
-        setTimeout(() => setJustClaimed(null), 4000);
+        if (result.transfer?.signature) {
+          setClaimSignature(result.transfer.signature);
+        }
+        setTimeout(() => {
+          setJustClaimed(null);
+          setClaimSignature(null);
+        }, 20_000);
       } else if (result.reason === 'NOTHING_TO_CLAIM') {
         setError('Nothing to claim yet.');
       }
@@ -326,6 +334,17 @@ export default function BreweryPage() {
                     ? `+${justClaimed} USDC claimed!`
                     : 'Claim to Wallet'}
               </button>
+              {claimSignature && (
+                <a
+                  href={`https://explorer.solana.com/tx/${claimSignature}?cluster=devnet`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block mt-2 text-center font-pixel-mono text-[10px] uppercase tracking-[1.5px] underline hover:brightness-125"
+                  style={{ color: GREEN }}
+                >
+                  View transaction ↗
+                </a>
+              )}
             </CozyCard>
 
             {/* 7-day strip */}

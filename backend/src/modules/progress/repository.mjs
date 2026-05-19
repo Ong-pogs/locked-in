@@ -37,6 +37,7 @@ import {
   readCommunityPotWindow,
 } from '../../lib/communityPot.mjs';
 import { enhanceValidatorFeedback } from '../../lib/answerValidator.mjs';
+import { hasFaucetConfig, transferUsdcAtomic } from '../../lib/faucet.mjs';
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -2640,49 +2641,111 @@ export async function feedFireForCourse(walletAddress, courseId) {
 }
 
 /**
- * Claim all unclaimed user-side yield for a (wallet, course). Marks the
- * matching harvest receipts as claimed and returns the total USDC base-unit
- * amount transferred. Pure ledger operation — no on-chain transfer yet.
+ * Claim all unclaimed user-side yield for a (wallet, course).
+ *
+ * Two-phase to keep the DB transaction short and the Solana transfer
+ * outside it:
+ *  1. Inside a DB tx: SELECT FOR UPDATE the unclaimed receipts, mark them
+ *     claimed_at = now(), commit. This locks them so a concurrent claim
+ *     sees nothing to do.
+ *  2. After commit: sign and send a USDC transfer from the treasury
+ *     (lockVaultWorkerPrivateKey) to the user's wallet.
+ *  3. If the transfer fails: revert claimed_at = null so the user can
+ *     retry. If it succeeds: return the signature so the UI can link to
+ *     Solana Explorer.
+ *
+ * Devnet-only path. Once Phase 2 wires lock_vault -> kamino_lending
+ * CPI deposits, this gets replaced with a kamino::withdraw CPI.
  */
 export async function claimUnclaimedYield(walletAddress, courseId) {
   if (!hasDatabase()) {
     return { applied: false, reason: 'NO_DATABASE', claimedAmount: '0', receiptCount: 0 };
   }
 
-  return withTransactionAsWallet(walletAddress, async (client) => {
-    const sumResult = await client.query(
+  // Phase 1: reserve the rows (mark claimed) and capture which ones.
+  const reservation = await withTransactionAsWallet(walletAddress, async (client) => {
+    const rowsResult = await client.query(
       `select
-         coalesce(sum(gross_yield_amount - coalesce(redirected_amount, gross_yield_amount)), 0)::text as "unclaimedAmount",
-         count(*)::int as "unclaimedCount"
+         harvest_id as "harvestId",
+         (gross_yield_amount - coalesce(redirected_amount, gross_yield_amount))::text as "amount"
        from lesson.harvest_result_receipts
-       where wallet_address = $1 and course_id = $2 and claimed_at is null`,
+       where wallet_address = $1 and course_id = $2 and claimed_at is null
+       for update`,
       [walletAddress, courseId],
     );
-    const unclaimedAmount = BigInt(sumResult.rows[0]?.unclaimedAmount ?? '0');
-    const unclaimedCount = sumResult.rows[0]?.unclaimedCount ?? 0;
-    if (unclaimedAmount <= 0n) {
-      return {
-        applied: false,
-        reason: 'NOTHING_TO_CLAIM',
-        claimedAmount: '0',
-        receiptCount: 0,
-      };
+    if (rowsResult.rowCount === 0) {
+      return { unclaimedAmount: 0n, harvestIds: [] };
     }
-
+    const harvestIds = [];
+    let total = 0n;
+    for (const row of rowsResult.rows) {
+      total += BigInt(row.amount ?? '0');
+      harvestIds.push(row.harvestId);
+    }
+    if (total <= 0n) {
+      return { unclaimedAmount: 0n, harvestIds: [] };
+    }
     await client.query(
       `update lesson.harvest_result_receipts
        set claimed_at = now()
-       where wallet_address = $1 and course_id = $2 and claimed_at is null`,
-      [walletAddress, courseId],
+       where wallet_address = $1 and course_id = $2 and harvest_id = any($3)`,
+      [walletAddress, courseId, harvestIds],
     );
+    return { unclaimedAmount: total, harvestIds };
+  });
 
+  if (reservation.unclaimedAmount <= 0n) {
+    return {
+      applied: false,
+      reason: 'NOTHING_TO_CLAIM',
+      claimedAmount: '0',
+      receiptCount: 0,
+    };
+  }
+
+  // Phase 2: send the devnet USDC transfer. If the faucet isn't
+  // configured (no treasury wallet), we still report success — the DB
+  // says claimed, no transfer happens. This matches the pre-Option-1
+  // behaviour and keeps local dev easy.
+  if (!hasFaucetConfig()) {
     return {
       applied: true,
       reason: 'CLAIMED',
-      claimedAmount: unclaimedAmount.toString(),
-      receiptCount: unclaimedCount,
+      claimedAmount: reservation.unclaimedAmount.toString(),
+      receiptCount: reservation.harvestIds.length,
+      transfer: { simulated: true },
     };
-  });
+  }
+
+  try {
+    const { signature } = await transferUsdcAtomic(
+      walletAddress,
+      reservation.unclaimedAmount,
+    );
+    return {
+      applied: true,
+      reason: 'CLAIMED',
+      claimedAmount: reservation.unclaimedAmount.toString(),
+      receiptCount: reservation.harvestIds.length,
+      transfer: { signature },
+    };
+  } catch (err) {
+    // Phase 3: rollback. The transfer failed, so put the receipts back
+    // into the unclaimed pool. Best-effort — if THIS update fails too,
+    // the receipts stay marked claimed and the user effectively loses
+    // that yield (rare but should monitor).
+    try {
+      await query(
+        `update lesson.harvest_result_receipts
+         set claimed_at = null
+         where wallet_address = $1 and course_id = $2 and harvest_id = any($3)`,
+        [walletAddress, courseId, reservation.harvestIds],
+      );
+    } catch {
+      // swallow — surface the original transfer error to the caller
+    }
+    throw err;
+  }
 }
 
 /**
