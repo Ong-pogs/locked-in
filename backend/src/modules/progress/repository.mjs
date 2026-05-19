@@ -515,7 +515,8 @@ async function ensureCourseRuntimeState(client, walletAddress, courseId) {
         last_fuel_credit_day::text as "lastFuelCreditDay",
         last_brewer_burn_ts as "lastBrewerBurnTs",
         coalesce(fuel_fragments_today, 0)::float as "fuelFragmentsToday",
-        fuel_fragments_day::text as "fuelFragmentsDay"
+        fuel_fragments_day::text as "fuelFragmentsDay",
+        fire_lit_until as "fireLitUntil"
       from lesson.user_course_runtime_state
       where wallet_address = $1
         and course_id = $2
@@ -1394,6 +1395,7 @@ export async function readCourseRuntimeState(client, walletAddress, courseId) {
     fuelFragmentAwarded: 0,
     fuelFragmentsToday: state.fuelFragmentsDay === referenceDay ? state.fuelFragmentsToday : 0,
     fuelEarnStatus: deriveFuelEarnStatus(state, referenceDay),
+    fireLitUntil: state.fireLitUntil ? new Date(state.fireLitUntil).toISOString() : null,
   };
 }
 
@@ -2516,6 +2518,7 @@ export async function recordHarvestResult(
   harvestId,
   grossYieldAmount,
   harvestedAt = null,
+  redirectedAmount = null,
 ) {
   if (!harvestId || typeof harvestId !== 'string') {
     throw badRequest('harvestId is required', 'MISSING_HARVEST_ID');
@@ -2529,6 +2532,23 @@ export async function recordHarvestResult(
     throw badRequest('grossYieldAmount must be a non-negative integer', 'INVALID_GROSS_YIELD');
   }
 
+  // redirected_amount = how much of this harvest went to the community pot
+  // instead of the user. With the fire-timer model: 0 when fire was lit at
+  // harvest moment, gross when fire was out. Old callers can leave it null;
+  // the column stays nullable for backwards compat.
+  const redirected =
+    redirectedAmount == null
+      ? null
+      : typeof redirectedAmount === 'string' || typeof redirectedAmount === 'number'
+        ? BigInt(redirectedAmount)
+        : null;
+  if (redirected != null && (redirected < 0n || redirected > amount)) {
+    throw badRequest(
+      'redirectedAmount must be between 0 and grossYieldAmount',
+      'INVALID_REDIRECTED_AMOUNT',
+    );
+  }
+
   const harvestedAtValue = harvestedAt ?? new Date().toISOString();
 
   if (!hasDatabase()) {
@@ -2536,6 +2556,7 @@ export async function recordHarvestResult(
       harvestId,
       harvestedAt: harvestedAtValue,
       grossYieldAmount: amount.toString(),
+      redirectedAmount: redirected != null ? redirected.toString() : null,
       yieldSplitterStatus: 'pending',
       lockVaultStatus: 'pending',
       communityPotStatus: 'pending',
@@ -2561,14 +2582,165 @@ export async function recordHarvestResult(
           course_id,
           harvest_id,
           harvested_at,
-          gross_yield_amount
+          gross_yield_amount,
+          redirected_amount
         )
-        values ($1, $2, $3, $4::timestamptz, $5::bigint)
+        values ($1, $2, $3, $4::timestamptz, $5::bigint, $6::bigint)
       `,
-      [walletAddress, courseId, harvestId, harvestedAtValue, amount.toString()],
+      [
+        walletAddress,
+        courseId,
+        harvestId,
+        harvestedAtValue,
+        amount.toString(),
+        redirected != null ? redirected.toString() : null,
+      ],
     );
 
     return readHarvestResultReceipt(client, walletAddress, courseId, harvestId);
+  });
+}
+
+/**
+ * Feed the fire: consume 1 fuel, extend fire_lit_until by 24 hours.
+ * Extension is additive — feeding while the fire is still burning stacks the
+ * timer (6h remaining + feed = 30h remaining). Caps naturally at 7×24h
+ * because fuel_counter itself caps at 7.
+ */
+export async function feedFireForCourse(walletAddress, courseId) {
+  if (!hasDatabase()) {
+    return { applied: false, reason: 'NO_DATABASE' };
+  }
+
+  return withTransactionAsWallet(walletAddress, async (client) => {
+    const state = await ensureCourseRuntimeState(client, walletAddress, courseId);
+    if (state.fuelCounter <= 0) {
+      const courseRuntime = await readCourseRuntimeState(client, walletAddress, courseId);
+      return { applied: false, reason: 'NO_FUEL', courseRuntime };
+    }
+
+    const now = new Date();
+    const currentFireLitUntil = state.fireLitUntil ? new Date(state.fireLitUntil) : null;
+    const baseTime =
+      currentFireLitUntil && currentFireLitUntil > now ? currentFireLitUntil : now;
+    const nextFireLitUntil = new Date(baseTime.getTime() + 24 * 60 * 60 * 1000);
+
+    await client.query(
+      `update lesson.user_course_runtime_state
+       set fuel_counter = $3,
+           fire_lit_until = $4::timestamptz,
+           updated_at = now()
+       where wallet_address = $1 and course_id = $2`,
+      [walletAddress, courseId, state.fuelCounter - 1, nextFireLitUntil.toISOString()],
+    );
+
+    const courseRuntime = await readCourseRuntimeState(client, walletAddress, courseId);
+    return { applied: true, reason: 'FIRE_FED', courseRuntime };
+  });
+}
+
+/**
+ * Claim all unclaimed user-side yield for a (wallet, course). Marks the
+ * matching harvest receipts as claimed and returns the total USDC base-unit
+ * amount transferred. Pure ledger operation — no on-chain transfer yet.
+ */
+export async function claimUnclaimedYield(walletAddress, courseId) {
+  if (!hasDatabase()) {
+    return { applied: false, reason: 'NO_DATABASE', claimedAmount: '0', receiptCount: 0 };
+  }
+
+  return withTransactionAsWallet(walletAddress, async (client) => {
+    const sumResult = await client.query(
+      `select
+         coalesce(sum(gross_yield_amount - coalesce(redirected_amount, gross_yield_amount)), 0)::text as "unclaimedAmount",
+         count(*)::int as "unclaimedCount"
+       from lesson.harvest_result_receipts
+       where wallet_address = $1 and course_id = $2 and claimed_at is null`,
+      [walletAddress, courseId],
+    );
+    const unclaimedAmount = BigInt(sumResult.rows[0]?.unclaimedAmount ?? '0');
+    const unclaimedCount = sumResult.rows[0]?.unclaimedCount ?? 0;
+    if (unclaimedAmount <= 0n) {
+      return {
+        applied: false,
+        reason: 'NOTHING_TO_CLAIM',
+        claimedAmount: '0',
+        receiptCount: 0,
+      };
+    }
+
+    await client.query(
+      `update lesson.harvest_result_receipts
+       set claimed_at = now()
+       where wallet_address = $1 and course_id = $2 and claimed_at is null`,
+      [walletAddress, courseId],
+    );
+
+    return {
+      applied: true,
+      reason: 'CLAIMED',
+      claimedAmount: unclaimedAmount.toString(),
+      receiptCount: unclaimedCount,
+    };
+  });
+}
+
+/**
+ * Brewery dashboard: fuel state, fire timer, claimable yield, and a 7-day
+ * strip showing per-day user vs pot yield split.
+ */
+export async function getBreweryState(walletAddress, courseId) {
+  if (!hasDatabase()) {
+    return {
+      fuelCounter: 0,
+      fuelCap: 7,
+      fireLitUntil: null,
+      isLit: false,
+      unclaimedYieldAmount: '0',
+      claimedYieldAmount: '0',
+      last7Days: [],
+    };
+  }
+
+  return withTransactionAsWallet(walletAddress, async (client) => {
+    const runtime = await readCourseRuntimeState(client, walletAddress, courseId);
+    const now = new Date();
+    const fireLitUntilDate = runtime.fireLitUntil ? new Date(runtime.fireLitUntil) : null;
+    const isLit = fireLitUntilDate != null && fireLitUntilDate > now;
+
+    const totalsResult = await client.query(
+      `select
+         coalesce(sum(case when claimed_at is null then gross_yield_amount - coalesce(redirected_amount, gross_yield_amount) else 0 end), 0)::text as "unclaimed",
+         coalesce(sum(case when claimed_at is not null then gross_yield_amount - coalesce(redirected_amount, gross_yield_amount) else 0 end), 0)::text as "claimed"
+       from lesson.harvest_result_receipts
+       where wallet_address = $1 and course_id = $2`,
+      [walletAddress, courseId],
+    );
+
+    const stripResult = await client.query(
+      `select
+         (harvested_at at time zone 'UTC')::date::text as "day",
+         coalesce(sum(gross_yield_amount - coalesce(redirected_amount, gross_yield_amount)), 0)::text as "userAmount",
+         coalesce(sum(coalesce(redirected_amount, 0)), 0)::text as "potAmount",
+         count(*)::int as "harvestCount"
+       from lesson.harvest_result_receipts
+       where wallet_address = $1
+         and course_id = $2
+         and harvested_at > now() - interval '7 days'
+       group by 1
+       order by 1 desc`,
+      [walletAddress, courseId],
+    );
+
+    return {
+      fuelCounter: runtime.fuelCounter ?? 0,
+      fuelCap: runtime.fuelCap ?? 7,
+      fireLitUntil: runtime.fireLitUntil,
+      isLit,
+      unclaimedYieldAmount: totalsResult.rows[0]?.unclaimed ?? '0',
+      claimedYieldAmount: totalsResult.rows[0]?.claimed ?? '0',
+      last7Days: stripResult.rows,
+    };
   });
 }
 

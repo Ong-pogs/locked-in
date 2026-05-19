@@ -31,6 +31,9 @@ import {
   recordHarvestResult,
   startLessonAttempt,
   submitLessonAttempt,
+  feedFireForCourse,
+  claimUnclaimedYield,
+  getBreweryState,
 } from './repository.mjs';
 
 function assertPathParam(value, fieldName) {
@@ -112,25 +115,49 @@ export async function progressRoutes(app) {
     },
   );
 
+  // Brewery (fire-timer model) -----------------------------------------
+  // Each fuel feeds the fire for 24h. While the fire burns, harvested yield
+  // routes to the user's unclaimed pool. When out, yield routes to the
+  // community pot. Feeding while lit stacks the timer additively.
+
+  app.get(
+    '/v1/progress/brewery',
+    { preHandler: requireAccessAuth },
+    async (request) => {
+      const courseId = assertPathParam(request.query?.courseId, 'courseId');
+      return getBreweryState(request.auth.walletAddress, courseId);
+    },
+  );
+
   app.post(
-    '/v1/progress/fuel/convert',
+    '/v1/progress/brewery/feed',
     { preHandler: requireAccessAuth },
     async (request) => {
       const courseId = assertBodyField(request.body?.courseId, 'courseId');
-      const rawFuelAmount = request.body?.fuelAmount;
-      const fuelAmount =
-        Number.isFinite(Number(rawFuelAmount)) && Number(rawFuelAmount) > 0
-          ? Math.floor(Number(rawFuelAmount))
-          : null;
-      if (!fuelAmount) {
-        throw badRequest('fuelAmount must be a positive integer', 'INVALID_FUEL_AMOUNT');
-      }
+      return feedFireForCourse(request.auth.walletAddress, courseId);
+    },
+  );
 
-      return convertFuelToIchor(
-        request.auth.walletAddress,
-        courseId,
-        fuelAmount,
-      );
+  app.post(
+    '/v1/progress/brewery/claim',
+    { preHandler: requireAccessAuth },
+    async (request) => {
+      const courseId = assertBodyField(request.body?.courseId, 'courseId');
+      return claimUnclaimedYield(request.auth.walletAddress, courseId);
+    },
+  );
+
+  // Deprecated fuel→ichor endpoint. Stays mounted for any cached clients
+  // still calling it — returns a 410 Gone with a hint to the new flow.
+  app.post(
+    '/v1/progress/fuel/convert',
+    { preHandler: requireAccessAuth },
+    async (_request, reply) => {
+      return reply.status(410).send({
+        message:
+          'Ichor conversion has been replaced. Feed the fire at /v1/progress/brewery/feed and claim USDC at /v1/progress/brewery/claim.',
+        code: 'ICHOR_CONVERSION_REMOVED',
+      });
     },
   );
 

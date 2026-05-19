@@ -1,3 +1,12 @@
+// Runtime scheduler: hourly harvest tick per active lock.
+//
+// Fire-timer model: each user runs a fire that burns for 24h per fuel
+// they feed (additive — feeding while lit stacks the timer). At each
+// harvest tick we check whether the fire was lit AT THE HARVEST MOMENT.
+// If yes, the gross yield routes to the user's unclaimed pool. If no,
+// it routes to the community pot. Fuel auto-burn and miss-consequence
+// flows from the gauntlet era have been removed — the fire timer is
+// now the sole "did the user show up?" signal.
 import { appConfig } from '../config.mjs';
 import { hasLockVaultRelayConfig, readLockAccountSnapshot } from '../lib/lockVault.mjs';
 import {
@@ -6,83 +15,14 @@ import {
   hasYieldStrategyConfig,
 } from '../lib/yieldStrategy.mjs';
 import {
-  consumeDailyFuel,
-  consumeSaverOrApplyFullConsequence,
   listRuntimeSchedulerCandidates,
   publishHarvestRedirectToCommunityPot,
   publishHarvestResultReceipt,
-  publishFuelBurnReceipt,
-  publishMissConsequenceReceipt,
   recordHarvestResult,
   syncCourseRuntimeStateWithLockSnapshot,
 } from '../modules/progress/repository.mjs';
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-const DAY_SECONDS = 24 * 60 * 60;
-
-function isoDate(value) {
-  return value.toISOString().slice(0, 10);
-}
-
-function addDays(dateText, delta) {
-  const date = new Date(`${dateText}T00:00:00.000Z`);
-  return new Date(date.getTime() + delta * DAY_MS).toISOString().slice(0, 10);
-}
-
-function maxIsoDate(...values) {
-  return values.filter(Boolean).sort().at(-1) ?? null;
-}
-
-function lockStartDayFromSnapshot(snapshot) {
-  return new Date(snapshot.lockStartTs * 1000).toISOString().slice(0, 10);
-}
-
-function deriveDueBurn(runtime, snapshot, now) {
-  // Gauntlet dropped — fuel burns from day 1 once any fuel exists.
-  if (snapshot.fuelCounter <= 0) {
-    return null;
-  }
-
-  if (snapshot.lastBrewerBurnTs > 0) {
-    const nextDueTs = snapshot.lastBrewerBurnTs + DAY_SECONDS;
-    if (nextDueTs > Math.floor(now.getTime() / 1000)) {
-      return null;
-    }
-
-    return {
-      cycleId: `auto-burn:${runtime.walletAddress}:${runtime.courseId}:${nextDueTs}`,
-      burnedAt: new Date(nextDueTs * 1000).toISOString(),
-    };
-  }
-
-  return {
-    cycleId: `auto-burn:${runtime.walletAddress}:${runtime.courseId}:initial`,
-    burnedAt: now.toISOString(),
-  };
-}
-
-function deriveDueMiss(runtime, snapshot, now) {
-  // Gauntlet dropped — miss penalties apply from the day after lock-up.
-  const today = isoDate(now);
-  const baseDay = maxIsoDate(
-    runtime.lastCompletedDay,
-    runtime.lastMissDay,
-    addDays(lockStartDayFromSnapshot(snapshot), -1),
-  );
-  const nextMissDay = addDays(baseDay, 1);
-
-  if (nextMissDay >= today) {
-    return null;
-  }
-
-  return {
-    missEventId: `auto-miss:${runtime.walletAddress}:${runtime.courseId}:${nextMissDay}`,
-    missDay: nextMissDay,
-  };
-}
-
 async function deriveDueHarvest(runtime, snapshot, now, strategy) {
-  // Gauntlet dropped — yield accrues from day 1.
   const intervalSeconds = strategy.intervalSeconds;
   const intervalMs = intervalSeconds * 1000;
   const lastHarvestedAt = runtime.lastHarvestedAt
@@ -130,6 +70,13 @@ async function deriveDueHarvest(runtime, snapshot, now, strategy) {
   };
 }
 
+function isFireLitAt(runtime, moment) {
+  if (!runtime?.fireLitUntil) return false;
+  const litUntil = new Date(runtime.fireLitUntil).getTime();
+  if (!Number.isFinite(litUntil)) return false;
+  return litUntil > moment.getTime();
+}
+
 async function processRuntimeCandidate(app, candidate, now) {
   let snapshot;
 
@@ -144,10 +91,7 @@ async function processRuntimeCandidate(app, candidate, now) {
       },
       'runtime_scheduler.lock_missing',
     );
-    return {
-      burnProcessed: 0,
-      missProcessed: 0,
-    };
+    return { harvestProcessed: 0 };
   }
 
   const runtime = await syncCourseRuntimeStateWithLockSnapshot(
@@ -156,153 +100,88 @@ async function processRuntimeCandidate(app, candidate, now) {
     snapshot,
   );
 
-  let burnProcessed = 0;
-  let missProcessed = 0;
   let harvestProcessed = 0;
 
-  if (hasYieldStrategyConfig()) {
-    try {
-      const strategy = createYieldStrategyAdapter();
-      const dueHarvest = await deriveDueHarvest(
-        {
-          walletAddress: candidate.walletAddress,
-          courseId: candidate.courseId,
-          updatedAt: candidate.updatedAt,
-          lastHarvestedAt: candidate.lastHarvestedAt,
-        },
-        snapshot,
-        now,
-        strategy,
-      );
+  if (!hasYieldStrategyConfig()) {
+    return { harvestProcessed };
+  }
 
-      if (dueHarvest) {
-        const recorded = await recordHarvestResult(
-          candidate.walletAddress,
-          candidate.courseId,
-          dueHarvest.harvestId,
-          dueHarvest.grossYieldAmount,
-          dueHarvest.harvestedAt,
-        );
-        const lockVaultResult = await publishHarvestResultReceipt(
-          candidate.walletAddress,
-          candidate.courseId,
-          dueHarvest.harvestId,
-          true,
-        );
-        const communityPotResult = await publishHarvestRedirectToCommunityPot(
-          candidate.walletAddress,
-          candidate.courseId,
-          dueHarvest.harvestId,
-          true,
-        );
+  try {
+    const strategy = createYieldStrategyAdapter();
+    const dueHarvest = await deriveDueHarvest(
+      {
+        walletAddress: candidate.walletAddress,
+        courseId: candidate.courseId,
+        updatedAt: candidate.updatedAt,
+        lastHarvestedAt: candidate.lastHarvestedAt,
+      },
+      snapshot,
+      now,
+      strategy,
+    );
 
-        app.log.info(
-          {
-            walletAddress: candidate.walletAddress,
-            courseId: candidate.courseId,
-            harvestId: dueHarvest.harvestId,
-            harvestedAt: dueHarvest.harvestedAt,
-            grossYieldAmount: dueHarvest.grossYieldAmount,
-            elapsedSeconds: dueHarvest.elapsedSeconds,
-            strategyKind: strategy.kind,
-            quotedApyBps: dueHarvest.apyBps ?? null,
-            recordStatus: recorded.yieldSplitterStatus ?? null,
-            lockVaultReason: lockVaultResult.reason,
-            communityPotReason: communityPotResult.reason,
-            lockVaultSignature: lockVaultResult.signature ?? null,
-          },
-          'runtime_scheduler.harvest_processed',
-        );
-        harvestProcessed += 1;
-      }
-    } catch (error) {
-      app.log.warn(
-        {
-          walletAddress: candidate.walletAddress,
-          courseId: candidate.courseId,
-          error: error instanceof Error ? error.message : String(error),
-        },
-        'runtime_scheduler.harvest_skipped',
-      );
+    if (!dueHarvest) {
+      return { harvestProcessed };
     }
-  }
 
-  const dueBurn = deriveDueBurn(
-    { walletAddress: candidate.walletAddress, courseId: candidate.courseId },
-    snapshot,
-    now,
-  );
+    const fireLit = isFireLitAt(runtime, now);
+    // Fire lit at harvest moment → 0 redirected (full yield to user).
+    // Fire out → full gross redirected to the community pot.
+    const redirectedAmount = fireLit ? '0' : dueHarvest.grossYieldAmount;
 
-  if (dueBurn) {
-    const burnResult = await consumeDailyFuel(
+    const recorded = await recordHarvestResult(
       candidate.walletAddress,
       candidate.courseId,
-      dueBurn.cycleId,
-      dueBurn.burnedAt,
+      dueHarvest.harvestId,
+      dueHarvest.grossYieldAmount,
+      dueHarvest.harvestedAt,
+      redirectedAmount,
     );
-    const publishResult = await publishFuelBurnReceipt(
+    const lockVaultResult = await publishHarvestResultReceipt(
       candidate.walletAddress,
       candidate.courseId,
-      dueBurn.cycleId,
+      dueHarvest.harvestId,
+      true,
+    );
+    const communityPotResult = await publishHarvestRedirectToCommunityPot(
+      candidate.walletAddress,
+      candidate.courseId,
+      dueHarvest.harvestId,
+      true,
     );
 
     app.log.info(
       {
         walletAddress: candidate.walletAddress,
         courseId: candidate.courseId,
-        cycleId: dueBurn.cycleId,
-        burnReason: burnResult.reason,
-        relayReason: publishResult.reason,
-        signature: publishResult.signature ?? null,
+        harvestId: dueHarvest.harvestId,
+        harvestedAt: dueHarvest.harvestedAt,
+        grossYieldAmount: dueHarvest.grossYieldAmount,
+        redirectedAmount,
+        fireLit,
+        elapsedSeconds: dueHarvest.elapsedSeconds,
+        strategyKind: strategy.kind,
+        quotedApyBps: dueHarvest.apyBps ?? null,
+        recordStatus: recorded.yieldSplitterStatus ?? null,
+        lockVaultReason: lockVaultResult.reason,
+        communityPotReason: communityPotResult.reason,
+        lockVaultSignature: lockVaultResult.signature ?? null,
       },
-      'runtime_scheduler.fuel_burn_processed',
+      'runtime_scheduler.harvest_processed',
     );
-    burnProcessed += 1;
-  }
-
-  const dueMiss = deriveDueMiss(
-    {
-      ...runtime,
-      walletAddress: candidate.walletAddress,
-      lastMissDay: candidate.lastMissDay,
-    },
-    snapshot,
-    now,
-  );
-
-  if (dueMiss) {
-    const missResult = await consumeSaverOrApplyFullConsequence(
-      candidate.walletAddress,
-      candidate.courseId,
-      dueMiss.missEventId,
-      dueMiss.missDay,
-    );
-    const publishResult = await publishMissConsequenceReceipt(
-      candidate.walletAddress,
-      candidate.courseId,
-      dueMiss.missEventId,
-    );
-
-    app.log.info(
+    harvestProcessed += 1;
+  } catch (error) {
+    app.log.warn(
       {
         walletAddress: candidate.walletAddress,
         courseId: candidate.courseId,
-        missEventId: dueMiss.missEventId,
-        missDay: dueMiss.missDay,
-        missReason: missResult.reason,
-        relayReason: publishResult.reason,
-        signature: publishResult.signature ?? null,
+        error: error instanceof Error ? error.message : String(error),
       },
-      'runtime_scheduler.miss_processed',
+      'runtime_scheduler.harvest_skipped',
     );
-    missProcessed += 1;
   }
 
-  return {
-    harvestProcessed,
-    burnProcessed,
-    missProcessed,
-  };
+  return { harvestProcessed };
 }
 
 export function registerRuntimeSchedulerWorker(app) {
@@ -346,23 +225,17 @@ export function registerRuntimeSchedulerWorker(app) {
         appConfig.runtimeSchedulerBatchSize,
       );
       let harvestProcessed = 0;
-      let burnProcessed = 0;
-      let missProcessed = 0;
 
       for (const candidate of candidates) {
         const result = await processRuntimeCandidate(app, candidate, new Date());
         harvestProcessed += result.harvestProcessed;
-        burnProcessed += result.burnProcessed;
-        missProcessed += result.missProcessed;
       }
 
-      if (harvestProcessed > 0 || burnProcessed > 0 || missProcessed > 0) {
+      if (harvestProcessed > 0) {
         app.log.info(
           {
             candidates: candidates.length,
             harvestProcessed,
-            burnProcessed,
-            missProcessed,
           },
           'runtime_scheduler.cycle_complete',
         );
