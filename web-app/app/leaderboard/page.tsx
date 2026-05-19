@@ -28,7 +28,7 @@ export default function LeaderboardPage() {
     setLoading(true);
     try {
       const resp = await fetchWithAuth((token) =>
-        getLeaderboard(token, { page: 1, pageSize: 10 }),
+        getLeaderboard(token, { page: 1, pageSize: 200 }),
       );
       if (signal?.aborted) return;
       setEntries(resp.entries);
@@ -58,8 +58,11 @@ export default function LeaderboardPage() {
   }, [fetchBoard]);
 
   const top3 = entries.slice(0, 3);
-  const rest = entries.slice(3, 10);
+  const rest = entries.slice(3);
   const [first, second, third] = top3;
+  // Hide the sticky "Your Standing" card when the user is already visible
+  // in the Pursuers list — no point showing them twice.
+  const userInVisibleList = entries.some((entry) => entry.isCurrentUser);
 
   return (
     <div className="min-h-screen relative" style={{ backgroundColor: T.bg }}>
@@ -168,8 +171,9 @@ export default function LeaderboardPage() {
           </>
         )}
 
-        {/* Your Standing — only show when current user is on the board */}
-        {currentUser && (
+        {/* Your Standing — only show when current user is NOT already in the
+            visible Pursuers list above (avoid duplicating their row). */}
+        {currentUser && !userInVisibleList && (
           <>
             <SectionHeader muted>Your Standing</SectionHeader>
             <CozyCard
