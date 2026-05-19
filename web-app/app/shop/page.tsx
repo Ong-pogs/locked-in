@@ -1,14 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useCourseStore } from '@/stores';
-import { getYieldHistory } from '@/services/api/progress/progressApi';
+import { useCourseStore, useUserStore } from '@/stores';
+import { buyStreakSaver, getYieldHistory } from '@/services/api/progress/progressApi';
 import { fetchWithAuth } from '@/services/api/httpClient';
 import type { YieldHistoryResponse } from '@/services/api/types';
 import { T } from '@/components/theme';
 import { CozyCard } from '@/components/cozy';
 import { HubButton } from '@/components/HubButton';
-import { Coins, Wallet, Package, Crown } from 'lucide-react';
+import { Coins, Wallet, Package, Crown, Shield } from 'lucide-react';
 
 /* ── Helpers ────────────────────────────────────────────────────────── */
 
@@ -120,19 +120,53 @@ const RARITY_LABEL: Record<NonNullable<ShopItem['rarity']>, string> = {
 
 /* ── Page ───────────────────────────────────────────────────────────── */
 
+const STREAK_SAVER_COST = 500;
+
 export default function ShopPage() {
   const activeCourseId = useCourseStore((s) => s.activeCourseId);
   const courseStates = useCourseStore((s) => s.courseStates);
+  const refreshCourseRuntime = useCourseStore((s) => s.refreshCourseRuntime);
+  const authToken = useUserStore((s) => s.authToken);
   const activeState = activeCourseId ? courseStates[activeCourseId] ?? null : null;
   const ichorBalance = activeState?.ichorBalance ?? 0;
   const lifetimeIchor = activeState?.totalIchorProduced ?? 0;
+  const saversUsed = activeState?.saverCount ?? 0;
+  const saversBanked = Math.max(0, 3 - saversUsed);
 
   const [yieldHistory, setYieldHistory] = useState<YieldHistoryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [buyingSaver, setBuyingSaver] = useState(false);
+  const [saverMessage, setSaverMessage] = useState<string | null>(null);
 
   const rate = getConversionRate(lifetimeIchor);
   const tierLabel = getTierLabel(lifetimeIchor);
+
+  const handleBuySaver = useCallback(async () => {
+    if (!activeCourseId || buyingSaver) return;
+    setBuyingSaver(true);
+    setSaverMessage(null);
+    try {
+      const result = await fetchWithAuth((token) => buyStreakSaver(activeCourseId, token));
+      if (!result) return;
+      if (result.applied) {
+        setSaverMessage('Saver acquired.');
+      } else if (result.reason === 'SAVERS_FULL') {
+        setSaverMessage('Saver inventory already full (3/3).');
+      } else if (result.reason === 'INSUFFICIENT_ICHOR') {
+        setSaverMessage(`Need ${result.required} ichor (you have ${result.have}).`);
+      } else {
+        setSaverMessage('Could not buy saver.');
+      }
+      if (authToken) {
+        await refreshCourseRuntime(activeCourseId, authToken).catch(() => {});
+      }
+    } catch (err) {
+      setSaverMessage(err instanceof Error ? err.message : 'Buy failed.');
+    } finally {
+      setBuyingSaver(false);
+    }
+  }, [activeCourseId, authToken, buyingSaver, refreshCourseRuntime]);
 
   const fetchShopData = useCallback(async (courseId: string | null, signal?: AbortSignal) => {
     if (!courseId) {
@@ -202,7 +236,18 @@ export default function ShopPage() {
         {/* Ichor balance hero — your purse */}
         <PurseHero balance={ichorBalance} tierLabel={tierLabel} rate={rate} />
 
-        {/* On Offer — USDC bundles as TCG cards */}
+        {/* Streak Saver — the one real, buyable item right now */}
+        <SectionHeader>Streak Savers</SectionHeader>
+        <StreakSaverCard
+          ichorBalance={ichorBalance}
+          saversUsed={saversUsed}
+          saversBanked={saversBanked}
+          busy={buyingSaver}
+          onBuy={handleBuySaver}
+          message={saverMessage}
+        />
+
+        {/* On Offer — USDC bundles as TCG cards (display-only placeholders) */}
         <SectionHeader>On Offer</SectionHeader>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-6">
           {USDC_ITEMS.map((item) => (
@@ -483,5 +528,115 @@ function LedgerRow({
         {value}
       </span>
     </div>
+  );
+}
+
+/* ── Streak Saver card ─────────────────────────────────────────────── */
+
+function StreakSaverCard({
+  ichorBalance,
+  saversUsed,
+  saversBanked,
+  busy,
+  onBuy,
+  message,
+}: {
+  ichorBalance: number;
+  saversUsed: number;
+  saversBanked: number;
+  busy: boolean;
+  onBuy: () => void;
+  message: string | null;
+}) {
+  const inventoryFull = saversUsed <= 0;
+  const canAfford = ichorBalance >= STREAK_SAVER_COST;
+  const disabled = busy || inventoryFull || !canAfford;
+  const buttonLabel = busy
+    ? 'Buying...'
+    : inventoryFull
+      ? 'Inventory full (3/3)'
+      : !canAfford
+        ? `Need ${STREAK_SAVER_COST - ichorBalance} more ichor`
+        : `◆ Buy 1 Saver (500 ichor) ◆`;
+
+  return (
+    <CozyCard
+      className="mb-6"
+      style={{
+        padding: 18,
+        border: `2px solid ${T.green}55`,
+        boxShadow: `0 0 24px rgba(62,230,138,0.10)`,
+      }}
+    >
+      <div className="flex items-start gap-4">
+        <div
+          className="flex items-center justify-center rounded-xl shrink-0"
+          style={{
+            width: 64,
+            height: 64,
+            backgroundColor: 'rgba(62,230,138,0.10)',
+            border: `1px solid ${T.green}55`,
+          }}
+        >
+          <Shield size={32} color={T.green} strokeWidth={2.2} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p
+            className="text-[15px] font-bold font-pixel mb-1"
+            style={{ color: T.green, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
+          >
+            Streak Saver
+          </p>
+          <p className="text-[11px] font-pixel mb-2" style={{ color: T.textSecondary }}>
+            Auto-consumes on a missed day. Protects your streak and lowers yield redirect.
+          </p>
+          <div className="flex items-center gap-3 mb-3 flex-wrap">
+            {[0, 1, 2].map((i) => {
+              const owned = i < saversBanked;
+              return (
+                <div
+                  key={i}
+                  className="flex items-center justify-center rounded-md"
+                  style={{
+                    width: 30,
+                    height: 30,
+                    backgroundColor: owned ? 'rgba(62,230,138,0.12)' : 'rgba(255,255,255,0.04)',
+                    border: `1px solid ${owned ? 'rgba(62,230,138,0.50)' : 'rgba(255,255,255,0.10)'}`,
+                    opacity: owned ? 1 : 0.45,
+                  }}
+                >
+                  <Shield size={16} color={owned ? T.green : T.textMuted} strokeWidth={2.4} />
+                </div>
+              );
+            })}
+            <span className="font-pixel-mono text-[10px]" style={{ color: T.textMuted }}>
+              {saversBanked}/3 banked
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onBuy}
+            disabled={disabled}
+            className="w-full sm:w-auto px-5 py-2.5 rounded-lg font-bold text-xs uppercase tracking-[1.5px] font-pixel cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 hover:brightness-110 transition-all"
+            style={{
+              border: `1px solid ${T.green}`,
+              background: 'linear-gradient(180deg, rgba(62,230,138,0.18) 0%, rgba(62,230,138,0.08) 100%)',
+              color: T.green,
+              textShadow: '0 1px 2px rgba(0,0,0,0.85)',
+            }}
+          >
+            {buttonLabel}
+          </button>
+          {message && (
+            <p
+              className="text-[11px] mt-2 font-pixel-mono"
+              style={{ color: message.startsWith('Saver acquired') ? T.green : AMBER }}
+            >
+              {message}
+            </p>
+          )}
+        </div>
+      </div>
+    </CozyCard>
   );
 }

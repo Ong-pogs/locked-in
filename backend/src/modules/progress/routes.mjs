@@ -34,6 +34,7 @@ import {
   feedFireForCourse,
   claimUnclaimedYield,
   getBreweryState,
+  buyStreakSaver,
 } from './repository.mjs';
 
 function assertPathParam(value, fieldName) {
@@ -144,6 +145,16 @@ export async function progressRoutes(app) {
     async (request) => {
       const courseId = assertBodyField(request.body?.courseId, 'courseId');
       return claimUnclaimedYield(request.auth.walletAddress, courseId);
+    },
+  );
+
+  // Shop: spend 500 ichor for one streak saver.
+  app.post(
+    '/v1/progress/shop/buy-saver',
+    { preHandler: requireAccessAuth },
+    async (request) => {
+      const courseId = assertBodyField(request.body?.courseId, 'courseId');
+      return buyStreakSaver(request.auth.walletAddress, courseId);
     },
   );
 

@@ -3,6 +3,7 @@ import type {
   BreweryStateResponse,
   BreweryFeedResponse,
   BreweryClaimResponse,
+  BuyStreakSaverResponse,
   CourseRuntimeSnapshot,
   FuelConversionResponse,
   XpSnapshot,
@@ -90,6 +91,17 @@ export function claimYield(
   token: string,
 ): Promise<BreweryClaimResponse> {
   return httpRequest<BreweryClaimResponse>('/v1/progress/brewery/claim', {
+    method: 'POST',
+    body: { courseId },
+    token,
+  });
+}
+
+export function buyStreakSaver(
+  courseId: string,
+  token: string,
+): Promise<BuyStreakSaverResponse> {
+  return httpRequest<BuyStreakSaverResponse>('/v1/progress/shop/buy-saver', {
     method: 'POST',
     body: { courseId },
     token,

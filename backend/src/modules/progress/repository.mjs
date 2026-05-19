@@ -56,11 +56,19 @@ function computeFuelFragment(score, totalQuestions) {
   if (percent >= 0.8) return randomInRange(0.20, 0.40);  // Quiz pass
   return 0; // Below threshold — no fragment
 }
+// Saver-based yield redirect tiers. Applied ON TOP of the binary fire
+// timer — i.e. if the fire is OUT, 100% of yield goes to the community
+// pot regardless of saver state. If the fire is LIT, savers determine
+// what fraction goes to the pot vs the user:
+//   0 savers used (3 banked):  0% to pot, 100% to user
+//   1 saver used  (2 banked): 10% to pot
+//   2 savers used (1 banked): 15% to pot
+//   3 savers used (0 banked): 20% to pot (also: next miss breaks the streak)
 const SAVER_REDIRECT_BPS_BY_COUNT = {
   0: 0,
-  1: 1000,
-  2: 2000,
-  3: 2000,
+  1: 1000, // 10%
+  2: 1500, // 15%
+  3: 2000, // 20%
 };
 const SUBJECTIVE_VALIDATOR_VERSION = 'rubric-v1';
 
@@ -517,7 +525,9 @@ async function ensureCourseRuntimeState(client, walletAddress, courseId) {
         last_brewer_burn_ts as "lastBrewerBurnTs",
         coalesce(fuel_fragments_today, 0)::float as "fuelFragmentsToday",
         fuel_fragments_day::text as "fuelFragmentsDay",
-        fire_lit_until as "fireLitUntil"
+        fire_lit_until as "fireLitUntil",
+        coalesce(ichor_counter, 0)::bigint as "ichorCounter",
+        coalesce(ichor_lifetime_total, 0)::bigint as "ichorLifetimeTotal"
       from lesson.user_course_runtime_state
       where wallet_address = $1
         and course_id = $2
@@ -601,6 +611,17 @@ async function applyVerifiedCompletionToCourseRuntime(
     }
   }
 
+  // Random 20-50 ichor per lesson completion. Slot-machine-style reward
+  // — fixed amount would feel mechanical, the random pull gives the
+  // dopamine hit. Saver in the shop costs 500, so ~10-25 lessons per
+  // saver if the player wants to protect their streak.
+  const ichorReward =
+    Math.floor(Math.random() * (50 - 20 + 1)) + 20;
+  const ichorCounterBefore = Number(state.ichorCounter ?? 0);
+  const ichorLifetimeBefore = Number(state.ichorLifetimeTotal ?? 0);
+  const ichorCounterAfter = ichorCounterBefore + ichorReward;
+  const ichorLifetimeAfter = ichorLifetimeBefore + ichorReward;
+
   await client.query(
     `
       update lesson.user_course_runtime_state
@@ -616,6 +637,8 @@ async function applyVerifiedCompletionToCourseRuntime(
           last_fuel_credit_day = $12::date,
           fuel_fragments_today = $13,
           fuel_fragments_day = $14::date,
+          ichor_counter = $15::bigint,
+          ichor_lifetime_total = $16::bigint,
           updated_at = now()
       where wallet_address = $1
         and course_id = $2
@@ -635,6 +658,8 @@ async function applyVerifiedCompletionToCourseRuntime(
       lastFuelCreditDay,
       fuelFragmentsToday,
       completionDay,
+      ichorCounterAfter,
+      ichorLifetimeAfter,
     ],
   );
 
@@ -655,6 +680,9 @@ async function applyVerifiedCompletionToCourseRuntime(
     fuelAwarded,
     fuelFragmentAwarded,
     fuelFragmentsToday,
+    ichorCounter: ichorCounterAfter,
+    ichorLifetimeTotal: ichorLifetimeAfter,
+    ichorReward,
     fuelEarnStatus: deriveFuelEarnStatus(
       {
         ...state,
@@ -1397,6 +1425,8 @@ export async function readCourseRuntimeState(client, walletAddress, courseId) {
     fuelFragmentsToday: state.fuelFragmentsDay === referenceDay ? state.fuelFragmentsToday : 0,
     fuelEarnStatus: deriveFuelEarnStatus(state, referenceDay),
     fireLitUntil: state.fireLitUntil ? new Date(state.fireLitUntil).toISOString() : null,
+    ichorCounter: Number(state.ichorCounter ?? 0),
+    ichorLifetimeTotal: Number(state.ichorLifetimeTotal ?? 0),
   };
 }
 
@@ -2752,6 +2782,63 @@ export async function claimUnclaimedYield(walletAddress, courseId) {
  * Brewery dashboard: fuel state, fire timer, claimable yield, and a 7-day
  * strip showing per-day user vs pot yield split.
  */
+
+const STREAK_SAVER_ICHOR_COST = 500;
+
+/**
+ * Spend 500 ichor to restore one streak saver (i.e. decrement
+ * saver_count). Refuses if the user has fewer than 500 ichor or if all
+ * 3 savers are already banked (saver_count = 0).
+ */
+export async function buyStreakSaver(walletAddress, courseId) {
+  if (!hasDatabase()) {
+    return { applied: false, reason: 'NO_DATABASE' };
+  }
+
+  return withTransactionAsWallet(walletAddress, async (client) => {
+    const state = await ensureCourseRuntimeState(client, walletAddress, courseId);
+    const ichorBalance = Number(state.ichorCounter ?? 0);
+    const saversUsed = Number(state.saverCount ?? 0);
+
+    if (saversUsed <= 0) {
+      const courseRuntime = await readCourseRuntimeState(client, walletAddress, courseId);
+      return { applied: false, reason: 'SAVERS_FULL', courseRuntime };
+    }
+    if (ichorBalance < STREAK_SAVER_ICHOR_COST) {
+      const courseRuntime = await readCourseRuntimeState(client, walletAddress, courseId);
+      return {
+        applied: false,
+        reason: 'INSUFFICIENT_ICHOR',
+        required: STREAK_SAVER_ICHOR_COST,
+        have: ichorBalance,
+        courseRuntime,
+      };
+    }
+
+    const nextSaversUsed = saversUsed - 1;
+    const nextRedirectBps = getSaverRedirectBps(nextSaversUsed);
+    const nextIchor = ichorBalance - STREAK_SAVER_ICHOR_COST;
+
+    await client.query(
+      `update lesson.user_course_runtime_state
+       set saver_count = $3,
+           current_yield_redirect_bps = $4,
+           ichor_counter = $5::bigint,
+           updated_at = now()
+       where wallet_address = $1 and course_id = $2`,
+      [walletAddress, courseId, nextSaversUsed, nextRedirectBps, nextIchor],
+    );
+
+    const courseRuntime = await readCourseRuntimeState(client, walletAddress, courseId);
+    return {
+      applied: true,
+      reason: 'SAVER_BOUGHT',
+      ichorSpent: STREAK_SAVER_ICHOR_COST,
+      courseRuntime,
+    };
+  });
+}
+
 export async function getBreweryState(walletAddress, courseId) {
   if (!hasDatabase()) {
     return {
@@ -2759,6 +2846,10 @@ export async function getBreweryState(walletAddress, courseId) {
       fuelCap: 7,
       fireLitUntil: null,
       isLit: false,
+      saverCount: 0,
+      saversBanked: 3,
+      currentYieldRedirectBps: 0,
+      ichorCounter: 0,
       unclaimedYieldAmount: '0',
       claimedYieldAmount: '0',
       last7Days: [],
@@ -2795,11 +2886,17 @@ export async function getBreweryState(walletAddress, courseId) {
       [walletAddress, courseId],
     );
 
+    const saverCount = runtime.saverCount ?? 0;
+    const redirectBps = runtime.currentYieldRedirectBps ?? 0;
     return {
       fuelCounter: runtime.fuelCounter ?? 0,
       fuelCap: runtime.fuelCap ?? 7,
       fireLitUntil: runtime.fireLitUntil,
       isLit,
+      saverCount, // savers USED (0=full inventory, 3=all spent)
+      saversBanked: Math.max(0, 3 - saverCount),
+      currentYieldRedirectBps: redirectBps,
+      ichorCounter: Number(runtime.ichorCounter ?? 0),
       unclaimedYieldAmount: totalsResult.rows[0]?.unclaimed ?? '0',
       claimedYieldAmount: totalsResult.rows[0]?.claimed ?? '0',
       last7Days: stripResult.rows,
@@ -4822,55 +4919,55 @@ export async function consumeSaverOrApplyFullConsequence(
     const redirectBpsBefore = state.currentYieldRedirectBps;
     const extensionDaysBefore = state.extensionDays;
 
-    let applied = false;
-    let reason = 'GAUNTLET_LOCKED';
+    // New saver model:
+    //   savers banked > 0 → consume one, redirect ramps a tier, streak STAYS
+    //   no savers banked → streak resets to 0, redirect caps at 20%, no
+    //                       further escalation. User can re-buy savers
+    //                       from the shop with ichor to undo the ramp.
+    let applied = true;
+    let reason = 'SAVER_CONSUMED';
     let saverCountAfter = saverCountBefore;
     let redirectBpsAfter = redirectBpsBefore;
-    let extensionDaysAfter = extensionDaysBefore;
-    let saverRecoveryMode = state.saverRecoveryMode;
+    const extensionDaysAfter = extensionDaysBefore; // no extension-day penalty
+    const saverRecoveryMode = false; // gauntlet-era flag, kept dormant
     let currentStreak = state.currentStreak;
 
-    if (!state.gauntletActive) {
-      applied = true;
+    if (state.saverCount < 3) {
+      // Has savers to consume — protect the streak, bump the redirect tier.
+      saverCountAfter = state.saverCount + 1;
+      redirectBpsAfter = getSaverRedirectBps(saverCountAfter);
+      reason = 'SAVER_CONSUMED';
+    } else {
+      // All savers exhausted — streak resets, redirect stays at 20% cap.
       currentStreak = 0;
-
-      if (state.saverCount < 3) {
-        saverCountAfter = state.saverCount + 1;
-        redirectBpsAfter = getSaverRedirectBps(saverCountAfter);
-        saverRecoveryMode = true;
-        reason = 'SAVER_CONSUMED';
-      } else {
-        redirectBpsAfter = 10000;
-        extensionDaysAfter = state.extensionDays + appConfig.missExtensionDays;
-        saverRecoveryMode = true;
-        reason = 'FULL_CONSEQUENCE';
-      }
-
-      await client.query(
-        `
-          update lesson.user_course_runtime_state
-          set current_streak = $3,
-              saver_count = $4,
-              saver_recovery_mode = $5,
-              current_yield_redirect_bps = $6,
-              extension_days = $7,
-              last_miss_day = $8::date,
-              updated_at = now()
-          where wallet_address = $1
-            and course_id = $2
-        `,
-        [
-          walletAddress,
-          courseId,
-          currentStreak,
-          saverCountAfter,
-          saverRecoveryMode,
-          redirectBpsAfter,
-          extensionDaysAfter,
-          missDayValue,
-        ],
-      );
+      redirectBpsAfter = getSaverRedirectBps(3);
+      reason = 'STREAK_BROKEN';
     }
+
+    await client.query(
+      `
+        update lesson.user_course_runtime_state
+        set current_streak = $3,
+            saver_count = $4,
+            saver_recovery_mode = $5,
+            current_yield_redirect_bps = $6,
+            extension_days = $7,
+            last_miss_day = $8::date,
+            updated_at = now()
+        where wallet_address = $1
+          and course_id = $2
+      `,
+      [
+        walletAddress,
+        courseId,
+        currentStreak,
+        saverCountAfter,
+        saverRecoveryMode,
+        redirectBpsAfter,
+        extensionDaysAfter,
+        missDayValue,
+      ],
+    );
 
     await client.query(
       `

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Flame,
+  FlaskConical,
   Droplet,
   Sparkles,
   Shield,
@@ -912,6 +913,8 @@ export default function DashboardPage() {
   const fuelToday = activeState?.fuelFragmentsToday ?? 0;
   const fuelBalance = activeState?.fuelCounter ?? 0;
   const fuelCap = activeState?.fuelCap ?? 7;
+  const ichorBalance = activeState?.ichorBalance ?? 0;
+  const SAVER_COST = 500;
 
   // ── Locked course IDs (have a lockAccountAddress) ──
   const lockedCourseIds = useMemo(
@@ -997,6 +1000,20 @@ export default function DashboardPage() {
     Icon: Droplet,
     hint: `+${fuelToday.toFixed(1)} today`,
   };
+  const saversBuyable = Math.floor(ichorBalance / SAVER_COST);
+  const ichorTile: StatTile = {
+    key: 'ichor',
+    label: 'Ichor',
+    value: ichorBalance,
+    cap: SAVER_COST,
+    display: Math.floor(ichorBalance).toLocaleString(),
+    color: '#3EE68A',
+    Icon: FlaskConical,
+    hint:
+      saversBuyable > 0
+        ? `${saversBuyable} saver${saversBuyable === 1 ? '' : 's'} buyable`
+        : `${SAVER_COST - ichorBalance} to next saver`,
+  };
   // ── Handlers ──
   const handleContinueCourse = (courseId: string) => {
     setActiveCourse(courseId);
@@ -1073,7 +1090,7 @@ export default function DashboardPage() {
         />
 
         {/* 2. Pips row (Fuel + Ichor) */}
-        <PipsRow tiles={[fuelTile]} />
+        <PipsRow tiles={[fuelTile, ichorTile]} />
 
         {/* 3. Heatmap */}
         <HeatmapSection yearActivity={yearActivity} longestStreak={longestStreak} />

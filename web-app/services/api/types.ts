@@ -219,6 +219,8 @@ export interface CourseRuntimeSnapshot {
   fuelFragmentsToday: number;
   fuelEarnStatus: ApiFuelEarnStatus;
   fireLitUntil?: string | null;
+  ichorCounter?: number;
+  ichorLifetimeTotal?: number;
 }
 
 export interface FuelConversionResponse {
@@ -249,9 +251,26 @@ export interface BreweryStateResponse {
   fuelCap: number;
   fireLitUntil: string | null;
   isLit: boolean;
+  saverCount: number; // savers used (0=full, 3=all spent)
+  saversBanked: number; // 3 - saverCount
+  currentYieldRedirectBps: number; // 0/1000/1500/2000 by saver tier
+  ichorCounter: number;
   unclaimedYieldAmount: string; // USDC base units
   claimedYieldAmount: string;
   last7Days: BreweryDayStripEntry[];
+}
+
+export interface BuyStreakSaverResponse {
+  applied: boolean;
+  reason:
+    | 'SAVER_BOUGHT'
+    | 'SAVERS_FULL'
+    | 'INSUFFICIENT_ICHOR'
+    | 'NO_DATABASE';
+  ichorSpent?: number;
+  required?: number;
+  have?: number;
+  courseRuntime?: CourseRuntimeSnapshot;
 }
 
 export interface BreweryFeedResponse {

@@ -240,8 +240,18 @@ export default function BreweryPage() {
                 className="font-pixel-mono text-[10px] mt-1"
                 style={{ color: T.textMuted }}
               >
-                {isLit ? "yield routing to your wallet" : 'yield routing to community pot'}
+                {isLit
+                  ? `${100 - Math.round((state?.currentYieldRedirectBps ?? 0) / 100)}% to your wallet · ${Math.round((state?.currentYieldRedirectBps ?? 0) / 100)}% to community pot`
+                  : 'yield routing to community pot'}
               </p>
+              {isLit && (state?.currentYieldRedirectBps ?? 0) > 0 && (
+                <p
+                  className="font-pixel-mono text-[9px] mt-1"
+                  style={{ color: RUST, opacity: 0.85 }}
+                >
+                  {state?.saversBanked ?? 0}/3 savers banked · buy savers in shop to lower redirect
+                </p>
+              )}
             </CozyCard>
 
             {/* Fuel + Feed */}
