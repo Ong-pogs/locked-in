@@ -853,6 +853,15 @@ export default function DashboardPage() {
   const lessonProgress = useCourseStore((s) => s.lessonProgress);
   const enrolledCourseIds = useCourseStore((s) => s.enrolledCourseIds);
   const setActiveCourse = useCourseStore((s) => s.setActiveCourse);
+  const refreshCourseRuntime = useCourseStore((s) => s.refreshCourseRuntime);
+
+  // Pull fresh runtime state (fuel, streak, etc.) on mount so the
+  // dashboard reflects any mutations from the brewery, lesson submit,
+  // or scheduler tick that happened while we were on another page.
+  useEffect(() => {
+    if (!authToken || !activeCourseId) return;
+    refreshCourseRuntime(activeCourseId, authToken).catch(() => {});
+  }, [authToken, activeCourseId, refreshCourseRuntime]);
 
   // ── XP from API ──
   const [xpData, setXpData] = useState<{ xpTotal: number; xpLevel: number; thresholds: number[] }>({

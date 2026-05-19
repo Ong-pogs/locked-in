@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Flame, Coins, Droplet } from 'lucide-react';
-import { useCourseStore } from '@/stores';
+import { useCourseStore, useUserStore } from '@/stores';
 import { T } from '@/components/theme';
 import { CozyCard, CozySectionLabel } from '@/components/cozy';
 import { HubButton } from '@/components/HubButton';
@@ -46,6 +46,8 @@ function formatDayLabel(iso: string): string {
 
 export default function BreweryPage() {
   const activeCourseId = useCourseStore((s) => s.activeCourseId);
+  const refreshCourseRuntime = useCourseStore((s) => s.refreshCourseRuntime);
+  const authToken = useUserStore((s) => s.authToken);
 
   const [state, setState] = useState<BreweryStateResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -95,12 +97,17 @@ export default function BreweryPage() {
         setError(result.reason === 'NO_FUEL' ? 'No fuel to feed the fire.' : 'Could not feed the fire.');
       }
       await fetchState();
+      // Sync the shared store so dashboard/inventory show the updated
+      // fuel counter without waiting for their own refresh.
+      if (authToken) {
+        refreshCourseRuntime(activeCourseId, authToken).catch(() => {});
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Feed failed.');
     } finally {
       setFeedingBusy(false);
     }
-  }, [activeCourseId, feedingBusy, fetchState]);
+  }, [activeCourseId, feedingBusy, fetchState, authToken, refreshCourseRuntime]);
 
   const handleClaim = useCallback(async () => {
     if (!activeCourseId || claimingBusy) return;
@@ -122,12 +129,15 @@ export default function BreweryPage() {
         setError('Nothing to claim yet.');
       }
       await fetchState();
+      if (authToken) {
+        refreshCourseRuntime(activeCourseId, authToken).catch(() => {});
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Claim failed.');
     } finally {
       setClaimingBusy(false);
     }
-  }, [activeCourseId, claimingBusy, fetchState]);
+  }, [activeCourseId, claimingBusy, fetchState, authToken, refreshCourseRuntime]);
 
   const fireRemainingMs = useMemo(() => {
     if (!state?.fireLitUntil) return 0;
