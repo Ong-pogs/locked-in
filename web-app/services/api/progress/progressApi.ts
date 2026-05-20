@@ -5,7 +5,6 @@ import type {
   BreweryClaimResponse,
   BuyStreakSaverResponse,
   CourseRuntimeSnapshot,
-  FuelConversionResponse,
   XpSnapshot,
   CommunityPotHistoryResponse,
   LeaderboardResponse,
@@ -48,18 +47,6 @@ export function submitLesson(
       token,
     },
   );
-}
-
-export function convertFuel(
-  courseId: string,
-  fuelAmount: number,
-  token: string,
-): Promise<FuelConversionResponse> {
-  return httpRequest<FuelConversionResponse>('/v1/progress/fuel/convert', {
-    method: 'POST',
-    body: { courseId, fuelAmount },
-    token,
-  });
 }
 
 /* ── Brewery (fire-timer model) ─────────────────────────────────────── */

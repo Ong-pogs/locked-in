@@ -4,7 +4,6 @@ import { ensureRedemptionVaultLiquidity } from '../../lib/redemptionVault.mjs';
 import { requireAccessAuth } from '../../plugins/auth.mjs';
 import {
   consumeDailyFuel,
-  convertFuelToIchor,
   getUserXp,
   closeCommunityPotWindowAndSnapshot,
   distributeCommunityPotWindowBatch,
@@ -155,20 +154,6 @@ export async function progressRoutes(app) {
     async (request) => {
       const courseId = assertBodyField(request.body?.courseId, 'courseId');
       return buyStreakSaver(request.auth.walletAddress, courseId);
-    },
-  );
-
-  // Deprecated fuel→ichor endpoint. Stays mounted for any cached clients
-  // still calling it — returns a 410 Gone with a hint to the new flow.
-  app.post(
-    '/v1/progress/fuel/convert',
-    { preHandler: requireAccessAuth },
-    async (_request, reply) => {
-      return reply.status(410).send({
-        message:
-          'Ichor conversion has been replaced. Feed the fire at /v1/progress/brewery/feed and claim USDC at /v1/progress/brewery/claim.',
-        code: 'ICHOR_CONVERSION_REMOVED',
-      });
     },
   );
 

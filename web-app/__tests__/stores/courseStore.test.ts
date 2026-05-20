@@ -309,58 +309,6 @@ describe('courseStore', () => {
     });
   });
 
-  describe('convertFuelForCourse', () => {
-    beforeEach(() => {
-      useCourseStore.setState({
-        courseStates: {
-          'course-1': {
-            ...DEFAULT_COURSE_STATE,
-            fuelCounter: 5,
-            ichorBalance: 100,
-            totalIchorProduced: 100,
-          },
-        },
-      });
-    });
-
-    it('does optimistic update - decrements fuel, increments ichor', async () => {
-      const result = await useCourseStore.getState().convertFuelForCourse('course-1', 2);
-
-      const state = useCourseStore.getState().courseStates['course-1'];
-      expect(state.fuelCounter).toBe(3);
-      expect(state.ichorBalance).toBe(300); // 100 + 2*100
-      expect(state.totalIchorProduced).toBe(300);
-      expect(result).toEqual({ applied: true, ichorGained: 200 });
-    });
-
-    it('caps conversion at available fuel', async () => {
-      await useCourseStore.getState().convertFuelForCourse('course-1', 10);
-
-      const state = useCourseStore.getState().courseStates['course-1'];
-      expect(state.fuelCounter).toBe(0);
-      expect(state.ichorBalance).toBe(600); // 100 + 5*100
-    });
-
-    it('returns null when no fuel available', async () => {
-      useCourseStore.setState({
-        courseStates: {
-          'course-1': {
-            ...DEFAULT_COURSE_STATE,
-            fuelCounter: 0,
-          },
-        },
-      });
-
-      const result = await useCourseStore.getState().convertFuelForCourse('course-1', 1);
-      expect(result).toBeNull();
-    });
-
-    it('returns null when fuelAmount is 0', async () => {
-      const result = await useCourseStore.getState().convertFuelForCourse('course-1', 0);
-      expect(result).toBeNull();
-    });
-  });
-
   describe('syncLockSnapshot', () => {
     it('merges on-chain data into course state', () => {
       useCourseStore.setState({

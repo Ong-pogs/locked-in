@@ -8,7 +8,6 @@ import { httpRequest } from '@/services/api/httpClient';
 import {
   startLesson,
   submitLesson,
-  convertFuel,
   getLeaderboard,
   getCourseRuntime,
   getUserXp,
@@ -84,28 +83,6 @@ describe('progressApi', () => {
     });
   });
 
-  describe('convertFuel', () => {
-    it('sends POST with courseId and fuelAmount', async () => {
-      const mockResponse = {
-        conversionId: 'conv-123',
-        applied: true,
-        fuelConverted: 3,
-        ichorGained: 300,
-        reason: 'success',
-      };
-      vi.mocked(httpRequest).mockResolvedValueOnce(mockResponse);
-
-      const result = await convertFuel('course-1', 3, 'auth-token');
-
-      expect(httpRequest).toHaveBeenCalledWith('/v1/progress/fuel/convert', {
-        method: 'POST',
-        body: { courseId: 'course-1', fuelAmount: 3 },
-        token: 'auth-token',
-      });
-      expect(result.applied).toBe(true);
-      expect(result.ichorGained).toBe(300);
-    });
-  });
 
   describe('getLeaderboard', () => {
     it('appends correct query params for page and pageSize', async () => {

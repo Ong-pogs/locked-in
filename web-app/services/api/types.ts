@@ -223,20 +223,6 @@ export interface CourseRuntimeSnapshot {
   ichorLifetimeTotal?: number;
 }
 
-export interface FuelConversionResponse {
-  conversionId: string;
-  applied: boolean;
-  fuelConverted: number;
-  ichorGained: number;
-  reason: string;
-  courseRuntime?: CourseRuntimeSnapshot;
-  chain?: {
-    signature?: string;
-    lockAccount?: string;
-    error?: string;
-  } | null;
-}
-
 /* ── Brewery (fire-timer model) ─────────────────────────────────────── */
 
 export interface BreweryDayStripEntry {

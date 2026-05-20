@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { webStorageAdapter } from './storage';
 import { getCourseRuntime, hasRemoteLessonApi } from '@/services/api';
-import { convertFuel } from '@/services/api/progress/progressApi';
 import type { CourseRuntimeSnapshot, UserEnrollmentsResponse } from '@/services/api/types';
 import { batchCheckLockAccounts } from '@/services/solana';
 import type { LockAccountSnapshot } from '@/services/solana';
@@ -64,7 +63,6 @@ interface CourseStore {
   completeLesson: (lessonId: string, courseId: string, score: number) => void;
   completeDayForCourse: (courseId: string) => void;
   useSaverForCourse: (courseId: string) => boolean;
-  convertFuelForCourse: (courseId: string, fuelAmount: number, authToken?: string | null) => Promise<{ applied: boolean; ichorGained: number } | null>;
 
   // Existing helpers
   setCourses: (courses: Course[]) => void;
@@ -272,68 +270,6 @@ export const useCourseStore = create<CourseStore>()(
         return true;
       },
 
-      convertFuelForCourse: async (courseId, fuelAmount, authToken) => {
-        const { courseStates } = get();
-        const state = courseStates[courseId];
-        if (!state || state.fuelCounter <= 0 || fuelAmount <= 0) return null;
-
-        const toConvert = Math.min(fuelAmount, state.fuelCounter);
-        const ICHOR_PER_FUEL = 100;
-        const ichorGained = toConvert * ICHOR_PER_FUEL;
-
-        // Snapshot for safe revert
-        const preOpState = { ...state };
-
-        // Optimistic update for instant UI feedback
-        set({
-          courseStates: {
-            ...courseStates,
-            [courseId]: {
-              ...state,
-              fuelCounter: state.fuelCounter - toConvert,
-              ichorBalance: state.ichorBalance + ichorGained,
-              totalIchorProduced: state.totalIchorProduced + ichorGained,
-            },
-          },
-        });
-
-        // Call backend API if available
-        try {
-          if (authToken && hasRemoteLessonApi()) {
-            const result = await convertFuel(courseId, toConvert, authToken);
-            // Sync with authoritative server state
-            if (result.courseRuntime) {
-              const current = get().courseStates[courseId];
-              if (current) {
-                set({
-                  courseStates: {
-                    ...get().courseStates,
-                    [courseId]: {
-                      ...current,
-                      fuelCounter: result.courseRuntime.fuelCounter,
-                      fuelCap: result.courseRuntime.fuelCap,
-                    },
-                  },
-                });
-              }
-            }
-            return { applied: result.applied, ichorGained: result.ichorGained };
-          }
-          return { applied: true, ichorGained };
-        } catch (error) {
-          // Revert to pre-operation snapshot instead of reading current state
-          const currentStates = get().courseStates;
-          set({
-            courseStates: {
-              ...currentStates,
-              [courseId]: {
-                ...preOpState,
-              },
-            },
-          });
-          throw error;
-        }
-      },
 
       // --- Existing methods ---
       setCourses: (courses) => set({ courses }),
