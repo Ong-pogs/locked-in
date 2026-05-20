@@ -910,7 +910,6 @@ export default function DashboardPage() {
   const yieldRedirectPct = Math.round((activeState?.currentYieldRedirectBps ?? 0) / 100);
   const recoveryMode = activeState?.saverRecoveryMode ?? false;
 
-  const fuelToday = activeState?.fuelFragmentsToday ?? 0;
   const fuelBalance = activeState?.fuelCounter ?? 0;
   const fuelCap = activeState?.fuelCap ?? 7;
   const ichorBalance = activeState?.ichorBalance ?? 0;
@@ -998,7 +997,10 @@ export default function DashboardPage() {
     display: `${fuelBalance}/${fuelCap}`,
     color: '#E8845A',
     Icon: Droplet,
-    hint: `+${fuelToday.toFixed(1)} today`,
+    hint:
+      fuelBalance >= fuelCap
+        ? 'fuel cap reached'
+        : '+1 per lesson · feed the fire',
   };
   const saversBuyable = Math.floor(ichorBalance / SAVER_COST);
   const ichorTile: StatTile = {

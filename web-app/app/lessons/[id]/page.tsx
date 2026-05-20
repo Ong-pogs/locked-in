@@ -411,9 +411,9 @@ export default function LessonPage(props: {
             total: String(result.totalQuestions),
             accepted: String(result.accepted),
           });
-          if (result.courseRuntime?.fuelFragmentAwarded) {
-            params.set('fuel', String(result.courseRuntime.fuelFragmentAwarded));
-            params.set('fuelTotal', String(result.courseRuntime.fuelFragmentsToday ?? 0));
+          if (result.courseRuntime?.fuelAwarded) {
+            params.set('fuel', String(result.courseRuntime.fuelAwarded));
+            params.set('fuelTotal', String(result.courseRuntime.fuelCounter ?? 0));
           }
           if (result.xp?.xpAwarded) {
             params.set('xp', String(result.xp.xpAwarded));

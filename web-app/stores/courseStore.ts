@@ -118,10 +118,9 @@ function normalizeCourseGameState(
 }
 
 function deriveFuelEarnStatus(state: CourseGameState): FuelEarnStatus {
-  const today = new Date().toISOString().slice(0, 10);
-  if (state.saverRecoveryMode) return 'PAUSED_RECOVERY';
+  // Fuel is +1 per lesson with no daily cap now — only the fuel cap
+  // gates earning.
   if (state.fuelCounter >= state.fuelCap) return 'AT_CAP';
-  if (state.lastFuelCreditDay === today) return 'EARNED_TODAY';
   return 'AVAILABLE';
 }
 
