@@ -18,6 +18,7 @@ import {
   deriveHarvestBucketTimestamp,
   hasYieldStrategyConfig,
 } from '../lib/yieldStrategy.mjs';
+import { isFireLit, computeRedirectedAmount } from '../lib/yieldRouting.mjs';
 import {
   consumeSaverOrApplyFullConsequence,
   listRuntimeSchedulerCandidates,
@@ -45,21 +46,6 @@ function maxIsoDate(...values) {
 
 function lockStartDayFromSnapshot(snapshot) {
   return new Date(snapshot.lockStartTs * 1000).toISOString().slice(0, 10);
-}
-
-function isFireLitAt(runtime, moment) {
-  if (!runtime?.fireLitUntil) return false;
-  const litUntil = new Date(runtime.fireLitUntil).getTime();
-  if (!Number.isFinite(litUntil)) return false;
-  return litUntil > moment.getTime();
-}
-
-function computeRedirectedAmount(grossYieldStr, fireLit, redirectBps) {
-  if (!fireLit) return grossYieldStr;
-  const bps = BigInt(redirectBps ?? 0);
-  if (bps <= 0n) return '0';
-  const gross = BigInt(grossYieldStr);
-  return ((gross * bps) / 10_000n).toString();
 }
 
 async function deriveDueHarvest(runtime, snapshot, now, strategy) {
@@ -174,7 +160,7 @@ async function processRuntimeCandidate(app, candidate, now) {
       );
 
       if (dueHarvest) {
-        const fireLit = isFireLitAt(runtime, now);
+        const fireLit = isFireLit(runtime?.fireLitUntil, now.getTime());
         const redirectedAmount = computeRedirectedAmount(
           dueHarvest.grossYieldAmount,
           fireLit,

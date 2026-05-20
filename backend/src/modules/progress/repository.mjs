@@ -37,25 +37,12 @@ import {
 } from '../../lib/communityPot.mjs';
 import { enhanceValidatorFeedback } from '../../lib/answerValidator.mjs';
 import { hasFaucetConfig, transferUsdcAtomic } from '../../lib/faucet.mjs';
+import { getSaverRedirectBps, computeNextFireLitUntil } from '../../lib/yieldRouting.mjs';
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DEFAULT_FUEL_CAP = 7;
 
-// Saver-based yield redirect tiers. Applied ON TOP of the binary fire
-// timer — i.e. if the fire is OUT, 100% of yield goes to the community
-// pot regardless of saver state. If the fire is LIT, savers determine
-// what fraction goes to the pot vs the user:
-//   0 savers used (3 banked):  0% to pot, 100% to user
-//   1 saver used  (2 banked): 10% to pot
-//   2 savers used (1 banked): 15% to pot
-//   3 savers used (0 banked): 20% to pot (also: next miss breaks the streak)
-const SAVER_REDIRECT_BPS_BY_COUNT = {
-  0: 0,
-  1: 1000, // 10%
-  2: 1500, // 15%
-  3: 2000, // 20%
-};
 const SUBJECTIVE_VALIDATOR_VERSION = 'rubric-v1';
 
 // XP progression — cosmetic, non-grindable milestones only
@@ -242,10 +229,6 @@ function diffDays(fromDay, toDay) {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-function getSaverRedirectBps(saverCount) {
-  return SAVER_REDIRECT_BPS_BY_COUNT[saverCount] ?? 10000;
-}
 
 function percentageOfAmount(amount, bps) {
   return Math.floor((Number(amount) * Number(bps)) / 10_000);
@@ -2592,11 +2575,7 @@ export async function feedFireForCourse(walletAddress, courseId) {
       return { applied: false, reason: 'NO_FUEL', courseRuntime };
     }
 
-    const now = new Date();
-    const currentFireLitUntil = state.fireLitUntil ? new Date(state.fireLitUntil) : null;
-    const baseTime =
-      currentFireLitUntil && currentFireLitUntil > now ? currentFireLitUntil : now;
-    const nextFireLitUntil = new Date(baseTime.getTime() + 24 * 60 * 60 * 1000);
+    const nextFireLitUntil = computeNextFireLitUntil(state.fireLitUntil, new Date());
 
     await client.query(
       `update lesson.user_course_runtime_state
