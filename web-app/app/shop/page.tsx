@@ -8,7 +8,7 @@ import type { YieldHistoryResponse } from '@/services/api/types';
 import { T } from '@/components/theme';
 import { CozyCard } from '@/components/cozy';
 import { HubButton } from '@/components/HubButton';
-import { Coins, Wallet, Package, Crown, Shield } from 'lucide-react';
+import { Coins, Shield } from 'lucide-react';
 
 /* ── Helpers ────────────────────────────────────────────────────────── */
 
@@ -22,101 +22,8 @@ function relativeTime(iso: string): string {
   return `${days}d ago`;
 }
 
-function getConversionRate(ichorLifetime: number): number {
-  if (ichorLifetime <= 9_999) return 0.9;
-  if (ichorLifetime <= 49_999) return 1.0;
-  if (ichorLifetime <= 99_999) return 1.1;
-  return 1.25;
-}
-
-function getTierLabel(ichorLifetime: number): string {
-  if (ichorLifetime <= 9_999) return 'Tier 1';
-  if (ichorLifetime <= 49_999) return 'Tier 2';
-  if (ichorLifetime <= 99_999) return 'Tier 3';
-  return 'Tier 4';
-}
-
 const COZY_BORDER = 'rgba(58, 143, 168, 0.45)';
 const AMBER = '#FFD580';
-
-/* ── Shop catalog ───────────────────────────────────────────────────── */
-
-type ShopItem = {
-  id: string;
-  name: string;
-  description: string;
-  cost: number;
-  Icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
-  iconColor: string;
-  category: 'usdc' | 'utility';
-  comingSoon?: boolean;
-  // Asset slot: when AI-gen pixel sprite is dropped, prefer it over Lucide.
-  spriteSrc?: string;
-  rarity?: 'common' | 'uncommon' | 'rare' | 'legendary';
-};
-
-const USDC_ITEMS: ShopItem[] = [
-  {
-    id: 'small-pouch',
-    name: 'Small Coin Pouch',
-    description: 'A modest handful of coin',
-    cost: 250,
-    Icon: Coins,
-    iconColor: AMBER,
-    category: 'usdc',
-    spriteSrc: '/images/shop/items/coin-pouch-small.png',
-    rarity: 'common',
-  },
-  {
-    id: 'medium-pouch',
-    name: 'Medium Coin Pouch',
-    description: 'A solid sack of coin',
-    cost: 1000,
-    Icon: Wallet,
-    iconColor: AMBER,
-    category: 'usdc',
-    spriteSrc: '/images/shop/items/coin-pouch-medium.png',
-    rarity: 'uncommon',
-  },
-  {
-    id: 'large-pouch',
-    name: 'Large Coin Pouch',
-    description: 'A heavy purse worth carrying',
-    cost: 5000,
-    Icon: Package,
-    iconColor: AMBER,
-    category: 'usdc',
-    spriteSrc: '/images/shop/items/coin-chest.png',
-    rarity: 'rare',
-  },
-  {
-    id: 'travelers-stash',
-    name: "Trader's Stash",
-    description: "A merchant's lifetime savings",
-    cost: 10000,
-    Icon: Crown,
-    iconColor: AMBER,
-    category: 'usdc',
-    spriteSrc: '/images/shop/items/coin-stash.png',
-    rarity: 'legendary',
-  },
-];
-
-/* ── Rarity look-up tables ─────────────────────────────────────────── */
-
-const RARITY_COLOR: Record<NonNullable<ShopItem['rarity']>, string> = {
-  common: 'rgba(255,255,255,0.45)',
-  uncommon: '#3EE68A',
-  rare: '#2AE8D4',
-  legendary: '#FFD580',
-};
-
-const RARITY_LABEL: Record<NonNullable<ShopItem['rarity']>, string> = {
-  common: 'Common',
-  uncommon: 'Uncommon',
-  rare: 'Rare',
-  legendary: 'Legendary',
-};
 
 /* ── Page ───────────────────────────────────────────────────────────── */
 
@@ -129,7 +36,6 @@ export default function ShopPage() {
   const authToken = useUserStore((s) => s.authToken);
   const activeState = activeCourseId ? courseStates[activeCourseId] ?? null : null;
   const ichorBalance = activeState?.ichorBalance ?? 0;
-  const lifetimeIchor = activeState?.totalIchorProduced ?? 0;
   const saversUsed = activeState?.saverCount ?? 0;
   const saversBanked = Math.max(0, 3 - saversUsed);
 
@@ -138,9 +44,6 @@ export default function ShopPage() {
   const [error, setError] = useState<string | null>(null);
   const [buyingSaver, setBuyingSaver] = useState(false);
   const [saverMessage, setSaverMessage] = useState<string | null>(null);
-
-  const rate = getConversionRate(lifetimeIchor);
-  const tierLabel = getTierLabel(lifetimeIchor);
 
   const handleBuySaver = useCallback(async () => {
     if (!activeCourseId || buyingSaver) return;
@@ -189,7 +92,6 @@ export default function ShopPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchShopData(activeCourseId, controller.signal);
     return () => { controller.abort(); };
   }, [activeCourseId, fetchShopData]);
@@ -234,7 +136,7 @@ export default function ShopPage() {
         <div className="mb-5" />
 
         {/* Ichor balance hero — your purse */}
-        <PurseHero balance={ichorBalance} tierLabel={tierLabel} rate={rate} />
+        <PurseHero balance={ichorBalance} />
 
         {/* Streak Saver — the one real, buyable item right now */}
         <SectionHeader>Streak Savers</SectionHeader>
@@ -246,14 +148,6 @@ export default function ShopPage() {
           onBuy={handleBuySaver}
           message={saverMessage}
         />
-
-        {/* On Offer — USDC bundles as TCG cards (display-only placeholders) */}
-        <SectionHeader>On Offer</SectionHeader>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-6">
-          {USDC_ITEMS.map((item) => (
-            <TradingCard key={item.id} item={item} balance={ichorBalance} rate={rate} />
-          ))}
-        </div>
 
         {/* Earnings + activity */}
         <SectionHeader>Earnings &amp; Activity</SectionHeader>
@@ -327,34 +221,21 @@ export default function ShopPage() {
 
 /* ── Purse hero ─────────────────────────────────────────────────────── */
 
-function PurseHero({ balance, tierLabel, rate }: { balance: number; tierLabel: string; rate: number }) {
+function PurseHero({ balance }: { balance: number }) {
   return (
     <CozyCard className="mb-5" style={{ padding: 18 }}>
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <Coins size={28} color={AMBER} strokeWidth={2.2} />
-          <div>
-            <p className="font-pixel-mono text-[10px] uppercase tracking-[1.5px]" style={{ color: T.textMuted }}>
-              Your Purse
-            </p>
-            <p
-              className="text-3xl font-bold font-pixel-mono leading-tight"
-              style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
-            >
-              {balance.toLocaleString()} <span className="text-sm opacity-70">ichor</span>
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span
-            className="font-pixel-mono text-[10px] px-2.5 py-1 rounded-xl"
-            style={{ color: T.teal, background: 'rgba(42,232,212,0.10)', border: '1px solid rgba(42,232,212,0.35)' }}
+      <div className="flex items-center gap-3">
+        <Coins size={28} color={AMBER} strokeWidth={2.2} />
+        <div>
+          <p className="font-pixel-mono text-[10px] uppercase tracking-[1.5px]" style={{ color: T.textMuted }}>
+            Your Purse
+          </p>
+          <p
+            className="text-3xl font-bold font-pixel-mono leading-tight"
+            style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
           >
-            {tierLabel}
-          </span>
-          <span className="font-pixel-mono text-[10px]" style={{ color: T.textMuted }}>
-            1,000 ichor = {rate.toFixed(2)} USDC
-          </span>
+            {balance.toLocaleString()} <span className="text-sm opacity-70">ichor</span>
+          </p>
         </div>
       </div>
     </CozyCard>
@@ -375,130 +256,6 @@ function SectionHeader({ children, muted }: { children: React.ReactNode; muted?:
     >
       {children}
     </p>
-  );
-}
-
-/* ── Item icon (sprite with lucide fallback) ────────────────────────── */
-
-function ItemIcon({ item, size = 44 }: { item: ShopItem; size?: number }) {
-  const [errored, setErrored] = useState(false);
-  if (item.spriteSrc && !errored) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={item.spriteSrc}
-        alt=""
-        draggable={false}
-        width={size}
-        height={size}
-        className="select-none pointer-events-none"
-        style={{ imageRendering: 'pixelated' }}
-        onError={() => setErrored(true)}
-      />
-    );
-  }
-  const Icon = item.Icon;
-  return <Icon size={size * 0.55} color={item.iconColor} strokeWidth={2.2} />;
-}
-
-/* ── Trading card (TCG-style) ───────────────────────────────────────── */
-
-function buyState(item: ShopItem, balance: number) {
-  if (item.comingSoon) return { disabled: true, label: 'Coming Soon' };
-  if (balance >= item.cost) return { disabled: false, label: '◆ Buy ◆' };
-  return { disabled: true, label: 'Need More Ichor' };
-}
-
-function TradingCard({ item, balance, rate }: { item: ShopItem; balance: number; rate: number }) {
-  const state = buyState(item, balance);
-  const rarityColor = item.rarity ? RARITY_COLOR[item.rarity] : '#FFD580';
-  const payout = ((item.cost / 1000) * rate).toFixed(2);
-  return (
-    <button
-      type="button"
-      disabled={state.disabled}
-      title={state.disabled ? state.label : undefined}
-      className="group relative rounded-xl flex flex-col text-center transition-all hover:-translate-y-1"
-      style={{
-        backgroundColor: 'rgba(14,14,28,0.55)',
-        border: `2px solid ${rarityColor}80`,
-        opacity: state.disabled ? 0.65 : 1,
-        backdropFilter: 'blur(20px) saturate(1.4)',
-        WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
-        cursor: state.disabled ? 'not-allowed' : 'pointer',
-        boxShadow: item.rarity === 'legendary'
-          ? `0 0 24px ${RARITY_COLOR.legendary}50, 0 8px 22px rgba(0,0,0,0.50), inset 0 1px 0 rgba(255,213,128,0.20)`
-          : `0 8px 22px rgba(0,0,0,0.50), 0 0 12px ${rarityColor}25, inset 0 1px 0 rgba(255,213,128,0.10)`,
-        aspectRatio: '0.7 / 1',
-        overflow: 'hidden',
-      }}
-    >
-      {/* Card top stripe — rarity color band */}
-      <div
-        className="px-3 py-1.5 flex items-center justify-between"
-        style={{
-          backgroundColor: `${rarityColor}20`,
-          borderBottom: `1px solid ${rarityColor}50`,
-        }}
-      >
-        <span
-          className="font-pixel-mono text-[8px] uppercase tracking-[1px]"
-          style={{ color: rarityColor }}
-        >
-          {item.rarity ? RARITY_LABEL[item.rarity] : (item.comingSoon ? 'Soon' : 'Item')}
-        </span>
-        <span className="font-pixel-mono text-[10px] font-bold" style={{ color: AMBER }}>
-          ◆ {item.cost.toLocaleString()}
-        </span>
-      </div>
-      {/* Art frame */}
-      <div
-        className="flex items-center justify-center"
-        style={{
-          padding: '18px 12px',
-          background: `radial-gradient(ellipse at center, ${rarityColor}15 0%, transparent 70%)`,
-          minHeight: 100,
-        }}
-      >
-        <ItemIcon item={item} size={72} />
-      </div>
-      {/* Body */}
-      <div className="flex-1 px-3 pb-3 flex flex-col">
-        <p
-          className="text-[12px] font-bold font-pixel leading-tight mb-1"
-          style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
-        >
-          {item.name}
-        </p>
-        <p className="text-[10px] font-pixel leading-tight mb-2 flex-1" style={{ color: T.textSecondary }}>
-          {item.description}
-        </p>
-        {item.category === 'usdc' && (
-          <p
-            className="font-pixel-mono text-[11px] font-bold py-1 rounded"
-            style={{
-              color: T.green,
-              backgroundColor: 'rgba(62,230,138,0.08)',
-              border: '1px solid rgba(62,230,138,0.25)',
-              textShadow: '0 1px 2px rgba(0,0,0,0.85)',
-            }}
-          >
-            +{payout} USDC
-          </p>
-        )}
-        {item.comingSoon && (
-          <p
-            className="font-pixel-mono text-[10px] py-1 rounded"
-            style={{
-              color: T.textMuted,
-              border: `1px solid ${COZY_BORDER}`,
-            }}
-          >
-            Coming Soon
-          </p>
-        )}
-      </div>
-    </button>
   );
 }
 
