@@ -1,116 +1,75 @@
-# Timer, Brewer, and Yield Product State Machine (v3.0)
+# Timer, Fire, and Yield Product State Machine (v4.0)
 
 ## Scope
 
-This spec defines user-visible lifecycle behavior for lock timers, gauntlet progression, brewer activity, and extension outcomes.
+User-visible lifecycle for lock timers, the fire timer, saver
+consequences, and yield routing. No gauntlet (removed in v4.0).
 
-## Per-course Independence
+## Per-course independence
 
-Each active course has isolated state:
+Each active course has isolated state: lock timer, saver inventory, fuel
+counter, fire timer, ichor balance, unclaimed yield. Nothing is shared
+across simultaneous locks.
 
-- lock timer
-- gauntlet status
-- saver inventory
-- Fuel counter
-- Brewer cycle
-- Ichor accumulation
-- extension total
+## Lifecycle
 
-No state is shared across courses.
+### Lock start
 
-## Lifecycle Phases
+- lock timer starts at `lock_funds` confirmation
+- 3 savers banked, fuel 0, fire out
+- all mechanics active immediately (no gauntlet gate)
 
-### Phase 1: Lock Start
+### Day-to-day
 
-- lock timestamp starts at `lock_funds` confirmation
-- countdown timer begins immediately
-- gauntlet is active (`Day 1`)
+- complete a lesson → +1 fuel, +random 20-50 ichor, streak +1
+- feed the fire in the Brewery → −1 fuel, +24h lit
+- while lit, hourly harvests route yield to the user (minus saver
+  redirect); while out, to the community pot
+- claim unclaimed USDC yield any time from the Brewery
 
-### Phase 2: Gauntlet (Day 1-7)
+### Missed day
 
-- no Ichor production
-- no saver usage
-- high consequence framing and disclosures
+- saver available → consume one, streak preserved, redirect tier +1
+  (10% → 15% → 20%)
+- no savers → streak resets to 0, redirect stays at 20% cap, no lock
+  extension
+- buy a saver in the shop (500 ichor) to step the redirect back down
 
-Gauntlet completion condition:
-
-- seven required daily completions accepted by verification pipeline
-
-### Phase 3: Post-gauntlet Activation (Day 8+)
-
-On Day 8 unlock event:
-
-- saver inventory is set to max (3)
-- Brewer is allowed to run when Fuel is available
-- Ichor production via yield harvesting becomes eligible
-- Ichor Exchange becomes available
-
-### Phase 4: Recovery and Consequences
-
-If a day is missed:
-
-- saver is consumed when available
-- penalty tier advances (10%, then 20%, then 20%)
-- saver recovery mode can activate
-- Fuel earning pauses in recovery mode until saver inventory is full again
-
-If no savers remain and another miss occurs:
-
-- 100% yield redirection
-- lock extension applied
-
-Current implementation checkpoint:
-
-- backend runtime state now tracks saver consumption, recovery mode, redirect bps, and extension days
-- miss-day consequences are applied through an idempotent scheduler event key
-- app UI can render remaining savers, redirect percent, and extension total from synced runtime state
-- backend now includes a polling runtime scheduler worker that:
-  - syncs runtime rows from live `LockVault` state before evaluating due work
-  - can auto-create deterministic `auto-harvest:*` receipts from the current yield strategy adapter
-  - auto-generates deterministic burn cycle ids when Brewer is actually due
-  - auto-generates deterministic miss event ids when a full UTC day is missed
-  - no-ops safely while a course is still in gauntlet
-- backend now also includes an unlock indexer worker that:
-  - scans recent `LockVault` program signatures
-  - detects real `unlock_funds` instructions
-  - stores verified unlock receipts from chain when metadata is available in runtime state
-- the `Community Pot` screen now reads the live current-month redirected-yield window from chain
-- `Streak Status` now includes a backend-backed runtime audit timeline for:
-  - fuel burns
-  - miss consequences
-  - redirect changes
-  - extension deltas
-
-## Timer Rules
-
-Unlock timer is based on:
+## Timer rules
 
 `effective_unlock_ts = base_lock_end_ts + extension_seconds_total`
 
-User can resurface only when `now >= effective_unlock_ts`.
+(extension is unused in v4 — the old "no savers → +extension" penalty was
+removed. The field remains for on-chain compatibility.)
 
-## Brewer Cycle Rules
+User can resurface (withdraw principal) when `now >= effective_unlock_ts`.
 
-- burn rate: `1 Fuel / 24h`
-- Brewer active condition: `gauntlet_complete && fuel_counter > 0`
-- if Fuel reaches zero, Brewer stops until Fuel is earned again
+## Fire rules
 
-## Display Requirements
+- fuel feeds the fire: 1 fuel = 24h, additive
+- fire lit ⇔ `now < fire_lit_until`
+- no automatic burn; feeding is an explicit Brewery action
 
-Per course UI must show:
+## Runtime scheduler (backend worker)
 
-- remaining lock time
-- extension added so far
-- gauntlet day/progress or completion state
-- savers remaining (0..3)
-- Fuel balance and next burn checkpoint
-- current Ichor balance
-- current penalty redirect state
+Per tick (every `RUNTIME_SCHEDULER_INTERVAL_MS`, default 15s):
 
-## Messaging Requirements
+- syncs runtime rows from live `LockVault` state (fuel/fire/ichor stay
+  off-chain authoritative — not overwritten)
+- auto-creates `auto-harvest:*` receipts when a harvest interval is due,
+  routing by fire + saver tier
+- processes missed-day consequences (`deriveDueMiss` →
+  `consumeSaverOrApplyFullConsequence`) via deterministic event keys
 
-Penalty messaging must be explicit:
+## Display requirements (per course)
 
-- principal remains safe
-- consequence applies to yield and time, not principal seizure
-- extension reason and duration are shown in history/audit view
+- remaining lock time + resurface eligibility
+- savers banked (0..3) and current redirect %
+- fuel balance + fire countdown
+- ichor balance
+- unclaimed USDC yield + 7-day routing strip
+
+## Messaging
+
+- principal is always safe; consequence applies to yield routing only
+- no lock extension or principal seizure under the v4 model

@@ -1,98 +1,100 @@
-# Tokenomics and Economic Rules (v3.0)
+# Tokenomics and Economic Rules (v4.0)
 
-## Core Economic Model
+## Core economic model
 
 Locked In uses commitment-based yield economics.
 
-- Users lock stablecoin principal (`USDC`) for a canonical preset duration (`14`, `30`, `45`, `60`, `90`, `180`, `365` days).
-- Principal is not arbitrarily confiscated.
-- Economic consequence is applied to yield, not principal.
-- Ichor is an internal redemption counter, not a market token.
+- Users lock stablecoin principal (`USDC`) for a preset duration (`14`,
+  `30`, `45`, `60`, `90`, `180`, `365` days).
+- Principal is never confiscated. Economic consequence applies to **yield
+  routing**, not principal.
+- Yield is sourced from the live Kamino USDC supply APY (read from
+  mainnet, applied to devnet locks in the current phase — see
+  05-yield-calculator).
 
-## Asset Roles
+## What changed from v3.0
 
-### Principal stablecoin
+The v3 model (fuel → ichor → USDC redemption, SKR catalyst boost, 7-day
+gauntlet, platform fee) has been replaced:
 
-- on-chain token movement
-- locked for course duration
-- always returned at resurface (subject to lock timer/extension)
+- **Gauntlet: removed.** No 7-day onboarding lock. All mechanics fire
+  from day 1.
+- **SKR catalyst: removed.** Users only lock USDC.
+- **Ichor → USDC redemption: removed.** Ichor is now a pure in-game shop
+  currency, not a redemption counter.
+- **Platform fee: 0%** in the active path (the on-chain splitter retains
+  the capability, dormant).
+- **Fire-timer model added.** Fuel feeds a 24h fire; fire state gates
+  whether yield routes to the user or the pot.
 
-### SKR catalyst
+## Asset roles
 
-- optional locked commitment alongside principal
-- tier snapshotted at lock time
-- tier fixed for lock duration
-- always returned in full at resurface
+### Principal stablecoin (USDC)
+
+- on-chain token movement, locked for the course duration
+- always returned at resurface (subject to lock timer)
 
 ### Fuel
 
-- `u16` counter in `LockAccount`
-- powers Brewer cycles
+- internal counter; +1 per lesson, cap 7
+- feeds the fire (24h per fuel) — see 03-fuel
 
 ### Ichor
 
-- `u64` counter in `LockAccount`
-- produced from eligible yield when Brewer is active
-- redeemed for stablecoin via Ichor Exchange
+- internal counter; **random 20-50 per lesson completion**
+  (slot-machine reward)
+- spent only in the shop. The one item today: **Streak Saver, 500 ichor**
+- no conversion to USDC, no secondary market
 
-## SKR Catalyst Tiers
+## Yield routing (the core split)
 
-| Locked SKR | Ichor boost |
-| --- | --- |
-| 0-99 | +0% |
-| 100-999 | +2% |
-| 1,000-9,999 | +5% |
-| 10,000+ | +10% |
+At each hourly harvest of a locked course:
 
-Boost applies multiplicatively to base Ichor output.
+```
+fire OUT (fire_lit_until <= now):
+    100% of gross yield → community pot
 
-## Ichor Conversion Tiers
+fire LIT:
+    redirect by saver tier:
+      0 savers used (3 banked):  0% → pot, 100% → user
+      1 saver used  (2 banked): 10% → pot,  90% → user
+      2 savers used (1 banked): 15% → pot,  85% → user
+      3 savers used (0 banked): 20% → pot,  80% → user
+```
 
-| Lifetime accumulated Ichor | Conversion rate |
-| --- | --- |
-| 0-9,999 | 1,000 Ichor = 0.90 USDC |
-| 10,000-49,999 | 1,000 Ichor = 1.00 USDC |
-| 50,000-99,999 | 1,000 Ichor = 1.10 USDC |
-| 100,000+ | 1,000 Ichor = 1.25 USDC |
+User-side yield accrues to an unclaimed pool. The user claims it to their
+wallet from the Brewery (devnet: a real USDC transfer from the treasury
+wallet — see 05-yield-calculator).
 
-## Saver Penalty Curve
+## Savers
 
-| Saver event | Yield redirected to community pot |
-| --- | --- |
-| 1st saver consumed | 10% |
-| 2nd saver consumed | 20% |
-| 3rd saver consumed | 20% |
-| no savers left and missed day | 100% + lock extension |
+- 3 savers per lock, all "banked" initially (0 used)
+- a missed day consumes one saver: the streak is **preserved** and the
+  redirect tier bumps up one notch
+- once all 3 are used, a further missed day **resets the streak to 0**
+  and the redirect stays at the 20% cap (no further escalation, no lock
+  extension)
+- a saver is restored by buying one in the shop for 500 ichor, which also
+  steps the redirect tier back down
 
-## Yield Split Policy
+## Streak
 
-At harvest, gross yield is partitioned into:
+- increments on daily lesson completion
+- protected by savers; resets to 0 when savers are exhausted and a day is
+  missed
+- purely a status/leaderboard signal — no ichor multiplier, no yield
+  effect
 
-1. user-eligible yield (converted to Ichor when Brewer is active)
-2. platform fee (10-20%)
-3. community pot share (penalties/forfeitures)
+## Community pot
 
-## Community Pot Distribution
-
-- Pot accumulates redirected yield.
-- Distribution cadence: monthly.
-- Eligibility: active streakers.
-- Weighting inputs: streak length and locked deposit size.
-
-Current implementation checkpoint:
-
-- redirected yield from published harvest receipts can now be recorded into the on-chain `CommunityPot`
-- the current monthly window is keyed by UTC `YYYYMM`
-- the mobile `Community Pot` screen now reads the live on-chain window balance instead of using a local proxy
-- `close_distribution_window(window_id)` now exists as the first monthly settlement checkpoint
-- backend can now snapshot eligible recipients and deterministic payouts for a closed window
-- `distribute_window(window_id, recipient_batch)` now exists in worker-driven per-recipient form
-- funded CommunityPot vault balance can now be distributed to eligible streakers in batches
-- the mobile `Community Pot` screen now shows current window balance, closed window history, and this wallet's payout history
+- accumulates all redirected yield (unlit days + saver-redirect shares)
+- distributed monthly to active streakers, weighted by streak length and
+  deposit size
+- window keyed by UTC `YYYYMM`
 
 ## Invariants
 
-1. Fuel and Ichor remain internal counters only.
-2. No secondary market exists for Fuel/Ichor.
-3. Principal and locked SKR are not consumed by penalty flow.
-4. Per-course economics are isolated across multiple simultaneous locks.
+1. Fuel and ichor are internal counters only; no secondary market.
+2. Principal is never consumed by penalty flow.
+3. Per-course economics are isolated across simultaneous locks.
+4. Yield-routing consequences never touch principal.

@@ -1,140 +1,80 @@
-# Yield Calculation and Display Spec (v3.0)
+# Yield Calculation and Display Spec (v4.0)
 
 ## Scope
 
-This spec defines the canonical yield math shown to users and the on-chain accounting source of truth.
+Defines the yield math and how it routes to user vs community pot.
 
-Display values are projections unless backed by harvested on-chain data.
-Settlement is determined by on-chain program state.
+In the current phase, yield is a **real-rate simulation**: the live
+Kamino USDC supply APY is read from mainnet and applied to devnet
+principal. No funds are actually deposited into Kamino. "Claiming" yield
+transfers devnet USDC from the treasury wallet to the user (Option 1 /
+treasury-funded). Phase 3 will replace this with a real
+`kamino_lending` deposit/withdraw CPI.
 
-Current implementation checkpoint:
+## Strategy profiles (backend/src/config.mjs)
 
-- `LockVault` now includes a worker-only `apply_harvest_result(...)` instruction
-- backend can queue and publish manual harvest receipts into the live devnet lock
-- a first `YieldSplitter` Anchor program now exists in the workspace with:
-  - protocol config
-  - idempotent harvest split receipts
-  - canonical split math tests
-- backend harvest receipts now track a separate `yield_splitter_status`
-- backend now exposes a dedicated publish route for the split step before `LockVault`:
-  - `POST /v1/internal/yield-splitter/yield/harvest/publish`
-- backend now includes a fixed-APY strategy adapter for devnet/runtime testing
-- backend now also supports a second strategy kind, `kamino_klend_reserve_v1`, which reads a live Kamino reserve supply APY and feeds that rate into the existing harvest math
-- the Kamino adapter reads APY from a separate configured RPC path, so devnet lock/testing can still reference a mainnet Kamino rate source
-- backend config now also supports one-line strategy profiles:
-  - `fixed_apy_dev`
-  - `kamino_usdc_mainnet`
-- the Kamino profile now uses a weekly harvest cadence so tiny devnet locks still produce non-zero quoted yield
-- a live Kamino-backed harvest is now verified on devnet:
-  - quoted APY source: Kamino mainnet USDC reserve
-  - gross yield: `3` atomic units on the current `1 USDC` lock over one weekly interval
-  - result: `YieldSplitter`, `LockVault`, and `CommunityPot` all published successfully
-- when a strategy profile is set, it takes precedence over the raw `YIELD_*` strategy env fields
-- the runtime scheduler worker can now auto-create deterministic `auto-harvest:*` receipts
-- a positive devnet harvest has already credited real `ichor_counter` and `ichor_lifetime_total`
-- the mobile `Ichor Shop` now reads live on-chain Ichor state and redemption tier
-- the mobile `Ichor Shop` now also reads backend harvest history and summary totals
-- backend now also supports automatic redemption-vault top-up on devnet when liquidity drops below a configured minimum
-- the redirected-yield share from a published harvest can now be relayed into the live `CommunityPot` program
-- the mobile `Community Pot` screen now reads the live current-month pot balance on-chain
-- full-redirect harvest math now uses the canonical rule:
-  - `100% redirect` sends all gross yield to redirect
-  - no platform fee is taken in that branch
-  - user share stays `0`
+- `fixed_apy_dev` — mock 8% APY, no RPC reads
+- `kamino_surfpool` — local Surfpool mainnet fork (dev only)
+- `kamino_devnet_demo` — **active in prod**. Reads live Kamino USDC
+  mainnet APY via Helius, applies to devnet locks, hourly harvest
+- `kamino_usdc_mainnet` — real mainnet path (not yet active)
 
-## Inputs
+When a profile is set it takes precedence over raw `YIELD_*` env fields,
+except `YIELD_KAMINO_RPC_URL` (where the Helius key lives).
 
-Per course lock:
+## Harvest math
 
-- `principal_amount`
-- lock start/end timestamps
-- realized strategy yield from Kamino/Marginfi
-- `savers_remaining` and active penalty tier
-- `skr_tier`
-- Brewer active status (`gauntlet_complete && fuel_counter > 0`)
+At each harvest interval (hourly for `kamino_devnet_demo`):
 
-Protocol inputs:
+```
+gross_yield = principal × apyBps × elapsedSeconds / (10_000 × YEAR_SECONDS)
+```
 
-- platform fee percentage (10-20%)
-- conversion tier table
+Where `apyBps` is the live Kamino USDC supply APY in basis points (e.g.
+752 = 7.52%). Implementation: `computeQuotedYieldFromApy` in
+backend/src/lib/yieldStrategy.mjs.
 
-## Harvest and Split Sequence
+Important: `KaminoMarket.load()` must be passed the SDK's
+`DEFAULT_RECENT_SLOT_DURATION_MS` (≈400ms). Passing a wrong slot duration
+scales the APY by the same ratio (a past bug rendered 6.95% as 0.09%).
 
-At each yield harvest interval:
+## Routing (split)
 
-1. compute `gross_yield_harvested`
-2. apply platform fee
-3. apply saver penalty redirect share to community pot
-4. compute user share remainder
-5. if Brewer active, convert user share to Ichor counter increment
-6. if Brewer inactive, user share does not mint Ichor for that cycle
+No platform fee in the active path. Split is purely fire + saver:
 
-Current auto-harvest note:
+```
+fire OUT  → redirected = gross           (100% pot)
+fire LIT  → redirected = gross × redirect_bps / 10_000
+            user_share = gross − redirected
+            (redirect_bps = 0 / 1000 / 1500 / 2000 by saver tier)
+```
 
-- the first strategy adapter uses fixed APY math for devnet verification
-- the second adapter kind keeps the same receipt/relay pipeline but swaps the APY source to a configured Kamino reserve
-- harvest quote failures from the Kamino read path now skip only that harvest and do not stop burn/miss scheduler work
-- it collapses missed time into one deterministic catch-up harvest instead of backfilling many small periods
+Each harvest writes a `harvest_result_receipts` row with
+`gross_yield_amount` and `redirected_amount`. User-side unclaimed yield =
+`sum(gross − redirected) where claimed_at is null`.
 
-Full-redirect edge case:
+## Claim
 
-- if penalty redirect is `100%`, then:
-  - platform fee is `0`
-  - redirected share is the full gross harvest
-  - user share is `0`
+`POST /v1/progress/brewery/claim`:
 
-## Penalty Application
+1. lock the unclaimed receipts (SELECT FOR UPDATE), mark `claimed_at`
+2. transfer the summed USDC from the treasury wallet to the user
+   (`transferUsdcAtomic`)
+3. on transfer failure, roll back `claimed_at` so the user can retry
 
-Penalty is based on saver-consumption sequence.
+Returns the Solana tx signature for the explorer link.
 
-- first saver event: 10% redirect
-- second saver event: 20% redirect
-- third saver event: 20% redirect
-- no savers left miss: 100% redirect and lock extension
+## UI metrics (Brewery + dashboard)
 
-## SKR Multiplier Application
+- fire state + countdown
+- fuel balance / cap
+- unclaimed yield (USDC) + claim button
+- 7-day strip: per-day user vs pot split
+- live APY chip (dashboard, from `/v1/yield/current-apy`)
+- ichor balance + savers banked
 
-SKR boost applies to Ichor output for eligible user share:
+## Safety rules
 
-`ichor_output = base_ichor_from_user_share * skr_multiplier`
-
-Where `skr_multiplier` is one of:
-
-- `1.00`
-- `1.02`
-- `1.05`
-- `1.10`
-
-## UI Metrics
-
-Per course, UI should show:
-
-- gross yield accrued (historical)
-- redirected yield total (community penalties)
-- platform fee total
-- current Ichor balance (`ichor_counter`)
-- projected daily equivalent yield under current APY assumptions
-- active conversion tier and quote
-- recent harvest receipts with audit status
-
-## Ichor Exchange Quote Logic
-
-Given requested `ichor_amount`:
-
-1. determine conversion tier from `ichor_lifetime_total`
-2. compute `usdc_out = ichor_amount / 1000 * tier_rate`
-3. enforce max redeemable `ichor_amount <= ichor_counter`
-4. execute atomic redeem (debit Ichor, release stablecoin)
-
-Ichor Exchange is available any time after gauntlet completion.
-
-## Timing and Interpolation
-
-Real yield may harvest at discrete intervals.
-UI may interpolate between harvest checkpoints for smooth display, but must label interpolated values as estimate.
-
-## Safety Rules
-
-1. Calculator display cannot be used as settlement authority.
-2. Any discrepancy resolves in favor of on-chain account state.
-3. Exchange preview must include exact tier rate used at quote time.
+1. Display values are projections; on-chain/DB ledger is settlement.
+2. Harvest quote failures (Kamino RPC) skip only that harvest; burn/miss
+   scheduler work continues, falling back to last-cached APY.

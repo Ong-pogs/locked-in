@@ -1,72 +1,60 @@
-# Fuel Counter Spec (v3.0)
+# Fuel Spec (v4.0 — fire-timer model)
 
 ## Scope
 
-Fuel powers the Brewer.
-Fuel is an on-chain integer counter in each course `LockAccount`.
-Fuel is not an SPL token.
+Fuel powers the **fire** in the Brewery. While the fire burns, a locked
+course's Kamino yield routes to the user's wallet. While it's out, that
+yield routes to the community pot. Fuel is an internal off-chain counter
+in `lesson.user_course_runtime_state` (the on-chain `LockAccount` also
+carries a `fuel_counter` field, but the off-chain ledger is authoritative
+in the current dev phase).
 
-## Canonical Representation
+Fuel is non-transferable and non-tradeable. No SPL token, no mint, no
+token account.
 
-- Field: `fuel_counter: u16`
-- Storage location: `LockAccount`
-- Non-transferable and non-tradeable by design
-- No mint authority
-- No token account
-- No token transfer instruction
+## Earn rules
 
-Current implementation checkpoint:
+- **+1 fuel per verified lesson completion.** No daily cap.
+- Capped at `fuel_cap` (default 7).
+- Failing a lesson (reward units 0) earns no fuel.
 
-- off-chain course state now carries `fuelCounter`, `fuelCap`, `lastFuelCreditDay`, and `lastBrewerBurnTs`
-- UI now exposes Fuel balance, cap, earn status, next burn timestamp, and zero-Fuel brewer stopped state
-- backend now computes at most `1 Fuel / day / course` after verified completion and syncs that snapshot back to the app
-- Fuel can be earned during gauntlet, but Brewer remains locked until gauntlet completion
-- backend now exposes an idempotent daily burn path keyed by scheduler `cycleId`
-- each burn attempt writes a receipt row so replaying the same cycle cannot double-burn Fuel
+Because there's no daily cap, an active learner can binge several lessons
+to bank a buffer of fire-days, then coast through travel or sick days.
+Daily-habit pressure is enforced separately by the streak mechanic.
 
-## Earn Rules
+(The old fragment accumulator — 0.2-0.5 partial fuel per lesson, 1/day
+cap — was removed in v4.0.)
 
-Fuel credits are applied only after verified lesson completion.
+## Burn rules (the fire timer)
 
-Canonical earn constraints:
+- Feeding the fire consumes **1 fuel** and extends `fire_lit_until` by
+  **24 hours**.
+- Feeding while the fire is still lit **stacks** additively (6h left +
+  feed = 30h left). Caps naturally at 7 × 24h since fuel caps at 7.
+- The fire is "lit" at any moment `now < fire_lit_until`.
+- There is no automatic daily burn. Feeding is an explicit user action in
+  the Brewery.
 
-1. max 1 full Fuel per day per course lock
-2. fractional lesson rewards may accumulate toward full Fuel
-3. earning is paused when saver recovery mode is active
-4. earning resumes only when saver inventory is restored to max (3)
-5. Fuel balance cannot exceed configured cap (`7..14`)
+## Yield routing (see also 05-yield-calculator, 04-tokenomics)
 
-## Burn Rules
+At each hourly harvest:
 
-- Brewer consumes 1 Fuel every 24 hours while active.
-- If `fuel_counter` reaches 0, Brewer stops.
-- Fuel burn is deterministic and scheduler-safe (idempotent cycle key).
+- fire **out** → 100% of that harvest's gross yield → community pot
+- fire **lit** → split by saver tier (0/10/15/20% to pot, rest to user)
 
-## Interaction With Savers
+## Interaction with savers
 
 Fuel and savers are separate resources:
 
-- savers protect streak continuity when a day is missed
-- Fuel powers brew cycles
-- savers cannot be spent as Fuel
-- Fuel cannot restore savers
+- fuel powers the fire (yield routing to user)
+- savers protect the streak on a missed day and lower the yield-redirect
+  tier
+- savers cannot be spent as fuel; fuel cannot restore savers
+- savers are bought in the shop with ichor (see 04-tokenomics)
 
-During saver recovery:
+## UX requirements
 
-- Fuel earning paused
-- existing Fuel buffer can continue to burn
-- prolonged recovery can eventually stop the Brewer
-
-## Required On-chain Guards
-
-1. Credit instruction enforces per-day cap server-side/on-chain.
-2. Burn instruction enforces single-cycle execution per 24h window.
-3. Counter operations use checked arithmetic.
-4. Unauthorized signers cannot mutate Fuel.
-
-## UX Requirements
-
-- display current Fuel balance per course
-- display cap and daily earn status
-- display next burn timestamp
-- clearly show Brewer stopped state when Fuel is zero
+- show current fuel balance and cap per course
+- show fire state (burning + countdown, or out)
+- show the yield-routing consequence of the current fire/saver state
+- "Feed the Fire (−1 fuel, +24h)" action when fuel > 0
