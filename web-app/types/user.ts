@@ -8,7 +8,6 @@ export interface UserProfile {
   avatarUrl: string | null;
   onboardingPhase: OnboardingPhase;
   createdAt: string | null;
-  dungeonTourCompleted: boolean;
   tutorialCompleted: boolean;
   /** Lesson API access token (Bearer) */
   authToken: string | null;

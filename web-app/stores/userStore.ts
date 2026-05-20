@@ -16,7 +16,6 @@ interface UserStore extends UserProfile {
   disconnect: () => void;
   setOnboardingPhase: (phase: OnboardingPhase) => void;
   setDisplayName: (name: string) => void;
-  completeDungeonTour: () => void;
   completeTutorial: () => void;
 }
 
@@ -27,7 +26,6 @@ const initialState: UserProfile = {
   avatarUrl: null,
   onboardingPhase: 'auth',
   createdAt: null,
-  dungeonTourCompleted: false,
   tutorialCompleted: false,
   authToken: null,
   refreshToken: null,
@@ -46,7 +44,6 @@ export const useUserStore = create<UserStore>()(
                 displayName: null,
                 avatarUrl: null,
                 tutorialCompleted: false,
-                dungeonTourCompleted: false,
                 createdAt: new Date().toISOString(),
               }
             : {
@@ -79,14 +76,12 @@ export const useUserStore = create<UserStore>()(
           ...initialState,
           // Preserve UX flags — reset only on wallet change (setWallet)
           tutorialCompleted: state.tutorialCompleted,
-          dungeonTourCompleted: state.dungeonTourCompleted,
         })),
 
       setOnboardingPhase: (phase) => set({ onboardingPhase: phase }),
 
       setDisplayName: (name) => set({ displayName: name }),
 
-      completeDungeonTour: () => set({ dungeonTourCompleted: true }),
       completeTutorial: () => {
         set({ tutorialCompleted: true });
         // Cookie needed for server-side checks; localStorage handled by Zustand persist middleware
@@ -97,14 +92,8 @@ export const useUserStore = create<UserStore>()(
       name: 'locked-in-user',
       version: 1,
       storage: createJSONStorage(() => webStorageAdapter),
-      migrate: (persistedState, version) => {
-        const state = (persistedState ?? {}) as Partial<UserStore>;
-        if (version < 1) {
-          // Users whose state predates v1 existed before the dungeon tour UI shipped.
-          // Mark the tour complete so they don't see it on first post-upgrade visit.
-          state.dungeonTourCompleted = true;
-        }
-        return state as UserStore;
+      migrate: (persistedState) => {
+        return (persistedState ?? {}) as UserStore;
       },
       merge: (persisted, current) => {
         const merged = { ...current, ...(persisted as Partial<UserStore>) };

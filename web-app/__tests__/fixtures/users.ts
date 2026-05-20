@@ -8,7 +8,6 @@ export function buildUser(overrides?: Partial<UserProfile>): UserProfile {
     avatarUrl: null,
     onboardingPhase: 'main',
     createdAt: new Date().toISOString(),
-    dungeonTourCompleted: false,
     tutorialCompleted: false,
     authToken: null,
     refreshToken: null,

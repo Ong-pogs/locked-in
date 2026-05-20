@@ -54,9 +54,6 @@ const ONBOARDING_PAGES: Entry[] = [
 ];
 
 
-const LEGACY_PAGES: Entry[] = [
-  { route: '/dungeon', label: 'Dungeon (legacy)', blurb: '3D Babylon iframe scene — kept for fallback', Icon: Home, status: 'legacy' },
-];
 
 // Decorative-only village masks (no route, no hover-glow).
 const UNUSED_BUILDINGS = [
@@ -141,9 +138,6 @@ export default function MenuPage() {
 
         <CozySectionLabel>Onboarding</CozySectionLabel>
         <Grid entries={ONBOARDING_PAGES} />
-
-        <CozySectionLabel>Legacy</CozySectionLabel>
-        <Grid entries={LEGACY_PAGES} />
 
         <CozySectionLabel>Unmapped buildings — pick what to assign</CozySectionLabel>
         <CozyCard style={{ padding: 18 }}>

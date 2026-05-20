@@ -43,7 +43,6 @@ describe('useAuth', () => {
       avatarUrl: null,
       onboardingPhase: 'auth',
       createdAt: null,
-      dungeonTourCompleted: false,
       tutorialCompleted: false,
       authToken: null,
       refreshToken: null,

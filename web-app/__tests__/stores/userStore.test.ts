@@ -14,7 +14,6 @@ describe('userStore', () => {
       avatarUrl: null,
       onboardingPhase: 'auth',
       createdAt: null,
-      dungeonTourCompleted: false,
       tutorialCompleted: false,
       authToken: null,
       refreshToken: null,
@@ -88,12 +87,11 @@ describe('userStore', () => {
 
     it('preserves tutorial flags', () => {
       useUserStore.getState().setWallet('Wallet123');
-      useUserStore.setState({ tutorialCompleted: true, dungeonTourCompleted: true });
+      useUserStore.setState({ tutorialCompleted: true });
       useUserStore.getState().disconnect();
 
       const state = useUserStore.getState();
       expect(state.tutorialCompleted).toBe(true);
-      expect(state.dungeonTourCompleted).toBe(true);
     });
   });
 
@@ -135,13 +133,6 @@ describe('userStore', () => {
     });
   });
 
-  describe('completeDungeonTour', () => {
-    it('sets dungeonTourCompleted to true', () => {
-      useUserStore.getState().completeDungeonTour();
-      expect(useUserStore.getState().dungeonTourCompleted).toBe(true);
-    });
-  });
-
   describe('setOnboardingPhase', () => {
     it('updates onboardingPhase', () => {
       useUserStore.getState().setOnboardingPhase('main');
@@ -153,79 +144,6 @@ describe('userStore', () => {
     it('updates displayName', () => {
       useUserStore.getState().setDisplayName('TestUser');
       expect(useUserStore.getState().displayName).toBe('TestUser');
-    });
-  });
-
-  describe('persist migration (v0 → v1)', () => {
-    it('marks pre-existing users (stored version < 1) as having completed the dungeon tour', async () => {
-      localStorage.setItem(
-        'locked-in-user',
-        JSON.stringify({
-          state: {
-            walletAddress: 'PreExistingWallet',
-            walletAuthToken: null,
-            displayName: 'Existing',
-            avatarUrl: null,
-            onboardingPhase: 'main',
-            createdAt: '2025-01-01T00:00:00.000Z',
-            tutorialCompleted: true,
-            dungeonTourCompleted: false,
-            authToken: null,
-            refreshToken: null,
-          },
-          version: 0,
-        }),
-      );
-
-      await useUserStore.persist.rehydrate();
-
-      const state = useUserStore.getState();
-      expect(state.dungeonTourCompleted).toBe(true);
-      expect(state.walletAddress).toBe('PreExistingWallet');
-      expect(state.tutorialCompleted).toBe(true);
-    });
-
-    it('also backfills pre-existing users whose persisted state lacks the field entirely', async () => {
-      localStorage.setItem(
-        'locked-in-user',
-        JSON.stringify({
-          state: {
-            walletAddress: 'VeryOldWallet',
-            onboardingPhase: 'main',
-            tutorialCompleted: true,
-          },
-          version: 0,
-        }),
-      );
-
-      await useUserStore.persist.rehydrate();
-
-      expect(useUserStore.getState().dungeonTourCompleted).toBe(true);
-    });
-
-    it('leaves post-migration users (version 1) at whatever they persisted', async () => {
-      localStorage.setItem(
-        'locked-in-user',
-        JSON.stringify({
-          state: {
-            walletAddress: 'NewUserWallet',
-            walletAuthToken: null,
-            displayName: null,
-            avatarUrl: null,
-            onboardingPhase: 'onboarding',
-            createdAt: '2026-04-18T00:00:00.000Z',
-            tutorialCompleted: false,
-            dungeonTourCompleted: false,
-            authToken: null,
-            refreshToken: null,
-          },
-          version: 1,
-        }),
-      );
-
-      await useUserStore.persist.rehydrate();
-
-      expect(useUserStore.getState().dungeonTourCompleted).toBe(false);
     });
   });
 });

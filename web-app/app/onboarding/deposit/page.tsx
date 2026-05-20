@@ -339,10 +339,9 @@ function DepositContent() {
 
       setStatusMessage('Lock created successfully!');
       useUserStore.getState().setOnboardingPhase('main');
-      // Send the user to /courses so they can confirm their enrollment
-      // (now Active) and pick the next move — start the lesson, see other
-      // courses, etc. The village hub doesn't add anything actionable here.
-      router.push('/courses');
+      // Land in the village hub — the canonical post-lock home. From there
+      // the player picks their next move (Academy for lessons, brewery, etc).
+      router.push('/village');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Transaction failed';
       console.error('[deposit] Lock transaction failed:', error);
