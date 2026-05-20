@@ -160,10 +160,8 @@ function DepositContent() {
 
   const [lockDuration, setLockDuration] = useState<LockDurationDays>(30);
   const [principalAmount, setPrincipalAmount] = useState('1');
-  const [skrAmount, setSkrAmount] = useState('0');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   // Faucet state
   const [faucetClaiming, setFaucetClaiming] = useState(false);
@@ -300,7 +298,7 @@ function DepositContent() {
         ownerAddress: walletAddress,
         courseId,
         stableAmountUi: principalAmount,
-        skrAmountUi: skrAmount || '0',
+        skrAmountUi: '0',
         lockDurationDays: lockDuration as SolanaLockDuration,
       });
 
@@ -336,7 +334,7 @@ function DepositContent() {
         duration: lockDuration,
         lockAccountAddress: buildResult.lockAccountAddress,
         stableMintAddress: buildResult.stableMintAddress,
-        skrAmount: Number(skrAmount || '0'),
+        skrAmount: 0,
       });
 
       setStatusMessage('Lock created successfully!');
@@ -625,36 +623,6 @@ function DepositContent() {
             </div>
           </div>
 
-          {/* Advanced collapsible — SKR boost */}
-          <div className="mt-4">
-            <button
-              type="button"
-              onClick={() => setAdvancedOpen((v) => !v)}
-              aria-expanded={advancedOpen}
-              className="font-pixel-mono w-full flex items-center justify-between text-[11px] uppercase tracking-[1.5px] py-2 hover:opacity-80 cursor-pointer"
-              style={{ color: T.textSecondary }}
-            >
-              <span>Advanced · SKR boost</span>
-              <span style={{ color: AMBER }}>{advancedOpen ? '−' : '+'}</span>
-            </button>
-            {advancedOpen && (
-              <input
-                type="number"
-                inputMode="decimal"
-                value={skrAmount}
-                onChange={(e) => setSkrAmount(e.target.value)}
-                placeholder="0"
-                aria-label="SKR boost amount"
-                className="font-pixel-mono w-full px-3 py-2.5 rounded-lg outline-none text-[14px] mt-1"
-                style={{
-                  color: T.textPrimary,
-                  backgroundColor: 'rgba(0,0,0,0.32)',
-                  border: `1px solid ${COZY_BORDER}`,
-                }}
-              />
-            )}
-          </div>
-
           {/* Status message — inline */}
           {statusMessage && (
             <div
@@ -684,7 +652,6 @@ function DepositContent() {
             >
               {[
                 { label: 'USDC', value: balances?.stableBalanceUi ?? '...' },
-                { label: 'SKR', value: balances?.skrBalanceUi ?? '...' },
                 { label: 'SOL', value: balances?.solBalanceUi ?? '...' },
               ].map((it, i, arr) => (
                 <div key={it.label} className="flex items-center gap-1.5">
