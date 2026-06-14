@@ -11,6 +11,7 @@ import {
 } from '../../lib/yieldStrategy.mjs';
 import { appConfig } from '../../config.mjs';
 import { unauthorized } from '../../lib/errors.mjs';
+import { secureEquals } from '../../lib/secureCompare.mjs';
 import { listRecentHarvestReceipts } from '../progress/repository.mjs';
 
 function requireSchedulerAuth(request) {
@@ -18,7 +19,7 @@ function requireSchedulerAuth(request) {
   if (
     typeof schedulerKey !== 'string' ||
     schedulerKey.length === 0 ||
-    schedulerKey !== appConfig.schedulerSecret
+    !secureEquals(schedulerKey, appConfig.schedulerSecret)
   ) {
     throw unauthorized('Invalid scheduler key', 'INVALID_SCHEDULER_KEY');
   }

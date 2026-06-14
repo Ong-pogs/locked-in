@@ -21,6 +21,7 @@ const AMBER = '#FFD580';
 const RUST = '#E8845A';
 const GREEN = '#3EE68A';
 const USDC_DECIMALS = 1_000_000; // base units per USDC
+const SOLANA_CLUSTER = process.env.NEXT_PUBLIC_SOLANA_CLUSTER ?? 'devnet';
 
 function formatUsdc(baseUnits: string | number): string {
   const n = typeof baseUnits === 'string' ? Number(baseUnits) : baseUnits;
@@ -356,7 +357,7 @@ export default function BreweryPage() {
               </button>
               {claimSignature && (
                 <a
-                  href={`https://explorer.solana.com/tx/${claimSignature}?cluster=devnet`}
+                  href={`https://explorer.solana.com/tx/${claimSignature}?cluster=${SOLANA_CLUSTER}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="block mt-2 text-center font-pixel-mono text-[10px] uppercase tracking-[1.5px] underline hover:brightness-125"

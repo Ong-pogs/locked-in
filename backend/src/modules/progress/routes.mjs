@@ -1,4 +1,5 @@
 import { badRequest, unauthorized } from '../../lib/errors.mjs';
+import { secureEquals } from '../../lib/secureCompare.mjs';
 import { appConfig } from '../../config.mjs';
 import { ensureRedemptionVaultLiquidity } from '../../lib/redemptionVault.mjs';
 import { requireAccessAuth } from '../../plugins/auth.mjs';
@@ -62,7 +63,7 @@ function requireSchedulerAuth(request) {
   if (
     typeof schedulerKey !== 'string' ||
     schedulerKey.length === 0 ||
-    schedulerKey !== appConfig.schedulerSecret
+    !secureEquals(schedulerKey, appConfig.schedulerSecret)
   ) {
     throw unauthorized('Invalid scheduler key', 'INVALID_SCHEDULER_KEY');
   }

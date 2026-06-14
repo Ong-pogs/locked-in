@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { badRequest, notFound } from '../../lib/errors.mjs';
+import { badRequest, notFound, HttpError } from '../../lib/errors.mjs';
 import { appConfig } from '../../config.mjs';
 import {
   hasDatabase,
@@ -36,7 +36,7 @@ import {
   readCommunityPotWindow,
 } from '../../lib/communityPot.mjs';
 import { enhanceValidatorFeedback } from '../../lib/answerValidator.mjs';
-import { hasFaucetConfig, transferUsdcAtomic } from '../../lib/faucet.mjs';
+import { hasFaucetConfig, isDevnetOnly, transferUsdcAtomic } from '../../lib/faucet.mjs';
 import { getSaverRedirectBps, computeNextFireLitUntil } from '../../lib/yieldRouting.mjs';
 
 const UUID_RE =
@@ -2609,6 +2609,22 @@ export async function feedFireForCourse(walletAddress, courseId) {
  * CPI deposits, this gets replaced with a kamino::withdraw CPI.
  */
 export async function claimUnclaimedYield(walletAddress, courseId) {
+  // INSOLVENCY GUARD. This path pays REAL USDC from the treasury wallet,
+  // but the yield it pays out is a simulation (computeQuotedYieldFromApy)
+  // with no real Kamino deposit backing it. On devnet that's harmless test
+  // USDC. On mainnet it would drain the treasury 1:1 against zero
+  // collateral. Refuse on any non-devnet cluster. The faucet path already
+  // self-guards via isDevnetOnly(); this closes the matching hole here.
+  // Remove ONLY after a real on-chain Kamino withdraw CPI replaces the
+  // treasury transfer.
+  if (!isDevnetOnly()) {
+    throw new HttpError(
+      403,
+      'Yield claim is disabled on this cluster. Treasury-funded claim is devnet-only until on-chain Kamino redemption is wired.',
+      'CLAIM_MAINNET_BLOCKED',
+    );
+  }
+
   if (!hasDatabase()) {
     return { applied: false, reason: 'NO_DATABASE', claimedAmount: '0', receiptCount: 0 };
   }

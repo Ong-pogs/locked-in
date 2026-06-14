@@ -99,6 +99,12 @@ export function registerLockVaultRelayWorker(app) {
       return;
     }
 
+    // Treasury-signing worker. Refuse on non-devnet clusters.
+    if (!(appConfig.solanaRpcUrl ?? '').includes('devnet')) {
+      app.log.error('CRITICAL: lock vault relay worker blocked on non-devnet cluster. Refusing to start.');
+      return;
+    }
+
     if (!hasLockVaultRelayConfig()) {
       app.log.warn('LockVault relay worker disabled because relay config is incomplete');
       return;

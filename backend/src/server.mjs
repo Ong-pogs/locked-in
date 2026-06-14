@@ -63,6 +63,11 @@ export function buildServer() {
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
+  // Register the rate-limit plugin globally-off, so only routes that opt in
+  // via `config: { rateLimit: {...} }` (faucet, yield) are limited. Without
+  // this register call the per-route rateLimit config is silently ignored.
+  app.register(rateLimit, { global: false });
+
   app.decorateRequest('auth', null);
 
   app.addHook('onRequest', async (request) => {

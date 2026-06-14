@@ -267,3 +267,25 @@ export const appConfig = {
     configuredCorsOrigins.length > 0 ? configuredCorsOrigins : defaultCorsOrigins,
   ),
 };
+
+// Fail-closed secret guard. The `required()` fallbacks ('dev-only-...') only
+// trip when NODE_ENV !== 'production', but NODE_ENV is set nowhere in this
+// repo's deploy, so the production fail-fast never fires. Tie the guard to
+// the cluster instead: if we're pointed at a non-devnet RPC, refuse to boot
+// with a known dev-fallback secret. A forgeable JWT secret on mainnet =
+// account takeover for any wallet. Local/devnet keeps the convenient
+// fallback so `npm run dev` still works without a full .env.
+const __isDevnetCluster = (appConfig.solanaRpcUrl ?? '').includes('devnet');
+if (!__isDevnetCluster) {
+  for (const [name, value] of [
+    ['JWT_SECRET', appConfig.jwtSecret],
+    ['SCHEDULER_SECRET', appConfig.schedulerSecret],
+  ]) {
+    if (typeof value === 'string' && value.startsWith('dev-only-')) {
+      throw new Error(
+        `Refusing to boot on a non-devnet cluster with the dev-fallback ${name}. ` +
+          `Set a real ${name} in the environment.`,
+      );
+    }
+  }
+}

@@ -348,6 +348,13 @@ export function registerRuntimeSchedulerWorker(app) {
       return;
     }
 
+    // Treasury-signing worker (harvest receipts -> relay). Refuse on
+    // non-devnet clusters until on-chain Kamino backing exists.
+    if (!(appConfig.solanaRpcUrl ?? '').includes('devnet')) {
+      app.log.error('CRITICAL: runtime scheduler worker blocked on non-devnet cluster. Refusing to start.');
+      return;
+    }
+
     if (!hasLockVaultRelayConfig()) {
       app.log.warn('Runtime scheduler worker disabled because relay config is incomplete');
       return;

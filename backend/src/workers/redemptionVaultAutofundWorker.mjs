@@ -66,6 +66,13 @@ export function registerRedemptionVaultAutofundWorker(app) {
       return;
     }
 
+    // Treasury-signing worker. Refuse on non-devnet clusters — autofund
+    // moves real funds and there is no on-chain Kamino backing yet.
+    if (!(appConfig.solanaRpcUrl ?? '').includes('devnet')) {
+      app.log.error('CRITICAL: redemption vault autofund worker blocked on non-devnet cluster. Refusing to start.');
+      return;
+    }
+
     if (!hasRedemptionVaultAutofundConfig()) {
       app.log.warn('Redemption vault autofund worker disabled because config is incomplete');
       return;

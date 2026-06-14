@@ -150,6 +150,16 @@ export async function transferUsdc(walletAddress, amountUi) {
  * and don't want to round-trip through a UI-decimal string.
  */
 export async function transferUsdcAtomic(walletAddress, amountAtomic) {
+  // Defense-in-depth insolvency guard. Callers (brewery claim) also guard,
+  // but this is the last gate before signing a real treasury transfer.
+  // Treasury-funded payout is devnet-only until on-chain Kamino redemption
+  // replaces it.
+  if (!isDevnetOnly()) {
+    throw new Error(
+      'transferUsdcAtomic refused: treasury transfers are devnet-only on this cluster.',
+    );
+  }
+
   const { connection, signer, usdcMint } = getClient();
   const recipient = new PublicKey(walletAddress);
 
