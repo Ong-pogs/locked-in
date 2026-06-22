@@ -139,6 +139,8 @@ function decodeLockAccount(data) {
     return value;
   };
 
+  // v4 custody-only LockAccount (130 bytes / 8 fields). Game state
+  // (streak/fuel/ichor/savers) is off-chain; SKR was removed entirely.
   return {
     owner: readPubkey(),
     courseIdHash: readFixedHex(32),
@@ -146,34 +148,13 @@ function decodeLockAccount(data) {
     principalAmount: readU64(),
     lockStartTs: readI64(),
     lockEndTs: readI64(),
-    extensionSecondsTotal: readU64(),
     status: readU8(),
-    gauntletComplete: readBool(),
-    gauntletDay: readU8(),
-    currentStreak: readU16(),
-    longestStreak: readU16(),
-    saversRemaining: readU8(),
-    saverRecoveryMode: readBool(),
-    fuelCounter: readU16(),
-    fuelCap: readU16(),
-    lastFuelCreditDay: readI64(),
-    lastBrewerBurnTs: readI64(),
-    lastCompletionDay: readI64(),
-    ichorCounter: readU64(),
-    ichorLifetimeTotal: readU64(),
-    skrLockedAmount: readU64(),
-    skrTier: readU8(),
-    currentYieldRedirectBps: readU16(),
     bump: readU8(),
   };
 }
 
 async function enrichDecodedLock(connection, decoded) {
   const stableMint = await fetchMintMetadata(connection, decoded.stableMint);
-  const skrMint = await fetchMintMetadata(
-    connection,
-    process.env.EXPO_PUBLIC_LOCK_VAULT_SKR_MINT ?? decoded.stableMint,
-  );
 
   return {
     ...decoded,
@@ -181,17 +162,9 @@ async function enrichDecodedLock(connection, decoded) {
       stableMint?.decimals != null
         ? formatTokenAmount(decoded.principalAmount, stableMint.decimals)
         : decoded.principalAmount.toString(),
-    skrLockedAmountUi:
-      skrMint?.decimals != null
-        ? formatTokenAmount(decoded.skrLockedAmount, skrMint.decimals)
-        : decoded.skrLockedAmount.toString(),
     lockStartDate: timestampToIso(decoded.lockStartTs),
     lockEndDate: timestampToIso(decoded.lockEndTs),
-    lastBrewerBurnDate: timestampToIso(decoded.lastBrewerBurnTs),
-    lastFuelCreditDate: dayIndexToIsoDate(decoded.lastFuelCreditDay),
-    lastCompletionDate: dayIndexToIsoDate(decoded.lastCompletionDay),
     stableMintMetadata: stableMint,
-    skrMintMetadata: skrMint,
   };
 }
 
@@ -276,7 +249,6 @@ async function inspectAllLocks(connection, programId) {
 
 async function main() {
   const env = readEnvFile();
-  process.env.EXPO_PUBLIC_LOCK_VAULT_SKR_MINT = env.EXPO_PUBLIC_LOCK_VAULT_SKR_MINT;
 
   const args = parseArgs(process.argv.slice(2));
   const rpcUrl = env.EXPO_PUBLIC_SOLANA_RPC_URL || clusterApiUrl('devnet');

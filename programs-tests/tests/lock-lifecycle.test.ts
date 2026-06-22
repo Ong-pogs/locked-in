@@ -68,7 +68,7 @@ const LockedInIDL = JSON.parse(
 // Single program ID (sourced from Anchor.toml — duplicated here so the test
 // runs without reading workspace files at runtime).
 const LOCKED_IN_PROGRAM_ID = new PublicKey(
-  '68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3',
+  '3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav',
 );
 
 // PDA seed prefixes (mirror the program's SEED const declarations). The two
