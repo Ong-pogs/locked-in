@@ -75,25 +75,6 @@ describe('lockVault', () => {
     });
   });
 
-  describe('parseIchorAmount', () => {
-    it('parses whole number', () => {
-      const result = lockVault.parseIchorAmount('500');
-      expect(result).toBe(500n);
-    });
-
-    it('throws on non-integer', () => {
-      expect(() => lockVault.parseIchorAmount('1.5')).toThrow('Enter a whole-number Ichor amount');
-    });
-
-    it('throws on zero', () => {
-      expect(() => lockVault.parseIchorAmount('0')).toThrow('must be greater than zero');
-    });
-
-    it('throws on negative string representations', () => {
-      expect(() => lockVault.parseIchorAmount('-5')).toThrow('Enter a whole-number Ichor amount');
-    });
-  });
-
   describe('formatDepositAmountUi', () => {
     it('formats atomic amount to UI string', () => {
       const result = lockVault.formatDepositAmountUi('1500000', 6);
@@ -113,31 +94,6 @@ describe('lockVault', () => {
     it('removes trailing zeros from fractional part', () => {
       const result = lockVault.formatDepositAmountUi('1100000', 6);
       expect(result).toBe('1.1');
-    });
-  });
-
-  describe('getIchorRedemptionQuote', () => {
-    it('returns correct conversion for low lifetime ichor', () => {
-      const quote = lockVault.getIchorRedemptionQuote('100', 5000);
-      expect(quote.conversionBps).toBe(9000);
-      // 100 * 1_000_000 * 9000 / 1_000 / 10_000 = 90_000 atomic USDC
-      // formatAtomicAmount(90_000, 6) = "0.09"
-      expect(quote.usdcOutUi).toBe('0.09');
-    });
-
-    it('returns correct conversion for mid-tier lifetime ichor', () => {
-      const quote = lockVault.getIchorRedemptionQuote('100', 10000);
-      expect(quote.conversionBps).toBe(10000);
-    });
-
-    it('returns correct conversion for high-tier lifetime ichor', () => {
-      const quote = lockVault.getIchorRedemptionQuote('100', 50000);
-      expect(quote.conversionBps).toBe(11000);
-    });
-
-    it('returns correct conversion for max-tier lifetime ichor', () => {
-      const quote = lockVault.getIchorRedemptionQuote('100', 100000);
-      expect(quote.conversionBps).toBe(12500);
     });
   });
 });

@@ -310,48 +310,38 @@ describe('courseStore', () => {
   });
 
   describe('syncLockSnapshot', () => {
-    it('merges on-chain data into course state', () => {
+    it('writes custody-only fields and preserves backend-owned game state', () => {
       useCourseStore.setState({
         courseStates: {
           'course-1': {
             ...DEFAULT_COURSE_STATE,
-            currentStreak: 5, // should be preserved
+            currentStreak: 5, // backend-owned: should be preserved
+            fuelCounter: 3, // backend-owned: should be preserved
+            ichorBalance: 500, // backend-owned: should be preserved
           },
         },
       });
 
+      // Custody-only snapshot — game fields no longer exist on-chain.
       useCourseStore.getState().syncLockSnapshot('course-1', {
         lockAccountAddress: 'OnChainLock123',
         principalAmountUi: '100',
         skrLockedAmountUi: '50',
         lockStartDate: '2024-01-01T00:00:00Z',
         lockEndDate: '2024-02-01T00:00:00Z',
-        gauntletComplete: true,
-        gauntletDay: 7,
-        fuelCounter: 3,
-        fuelCap: 7,
-        saverRecoveryMode: false,
-        currentYieldRedirectBps: 1000,
-        extensionDays: 2,
-        ichorCounter: 500,
-        ichorLifetimeTotal: 1000,
-        conversionBps: 9000,
-        conversionRateLabel: '0.90 USDC',
         unlockEligible: false,
         status: 1,
       });
 
       const state = useCourseStore.getState().courseStates['course-1'];
+      // Custody fields written from the snapshot
       expect(state.lockAccountAddress).toBe('OnChainLock123');
       expect(state.lockStartDate).toBe('2024-01-01T00:00:00Z');
-      expect(state.fuelCounter).toBe(3);
-      expect(state.fuelCap).toBe(7);
-      expect(state.ichorBalance).toBe(500);
-      expect(state.totalIchorProduced).toBe(1000);
-      expect(state.extensionDays).toBe(2);
-      expect(state.currentYieldRedirectBps).toBe(1000);
-      // currentStreak preserved from existing state
+      expect(state.skrLockedAmount).toBe(50);
+      // Backend-owned game state untouched by the custody writer
       expect(state.currentStreak).toBe(5);
+      expect(state.fuelCounter).toBe(3);
+      expect(state.ichorBalance).toBe(500);
     });
   });
 

@@ -17,11 +17,9 @@ export type LockDurationDays = 14 | 30 | 45 | 60 | 90 | 180 | 365;
 
 const LOCK_FUNDS_DISCRIMINATOR = Uint8Array.from([171, 49, 9, 86, 156, 155, 2, 88]);
 const UNLOCK_FUNDS_DISCRIMINATOR = Uint8Array.from([175, 119, 16, 245, 141, 55, 255, 43]);
-const REDEEM_ICHOR_DISCRIMINATOR = Uint8Array.from([70, 55, 11, 86, 107, 196, 69, 59]);
 const LOCK_ACCOUNT_DISCRIMINATOR_HEX = 'df40477cff5676c0';
 // Merged locked_in program: vault config PDA seed renamed protocol → vault-protocol.
 const PROTOCOL_SEED = Buffer.from('vault-protocol');
-const COURSE_POLICY_SEED = Buffer.from('course-policy');
 const LOCK_SEED = Buffer.from('lock');
 
 const rawProgramId = (process.env.NEXT_PUBLIC_LOCK_VAULT_PROGRAM_ID ?? '').trim();
@@ -38,11 +36,6 @@ export interface WalletDepositBalances {
   stableBalanceUi: string;
   skrBalanceUi: string;
   solBalanceUi: string;
-}
-
-export interface RedemptionVaultBalance {
-  vaultAddress: string;
-  balanceUi: string;
 }
 
 export interface LockFundsBuildResult {
@@ -64,33 +57,17 @@ export interface UnlockFundsBuildResult {
   ownerSkrTokenAccountAddress: string;
 }
 
-export interface RedeemIchorBuildResult {
-  transaction: Transaction;
-  lockAccountAddress: string;
-  redemptionVaultAddress: string;
-  ownerStableTokenAccountAddress: string;
-  ichorAmountAtomic: string;
-}
-
+// Custody-only snapshot — mirrors the 9-field on-chain LockAccount.
+// Game state (fuel/ichor/streak/saver/gauntlet/redirect) is OFF-CHAIN now,
+// sourced from the backend progress API, not from this decoder.
 export interface LockAccountSnapshot {
   lockAccountAddress: string;
   principalAmountUi: string;
   skrLockedAmountUi: string;
-  lockStartDate: string;
-  lockEndDate: string;
-  gauntletComplete: boolean;
-  gauntletDay: number;
-  fuelCounter: number;
-  fuelCap: number;
-  saverRecoveryMode: boolean;
-  currentYieldRedirectBps: number;
-  extensionDays: number;
-  ichorCounter: number;
-  ichorLifetimeTotal: number;
-  conversionBps: number;
-  conversionRateLabel: string;
-  unlockEligible: boolean;
-  status: number;
+  lockStartDate: string; // ISO from lock_start_ts*1000
+  lockEndDate: string; // ISO from lock_end_ts*1000
+  unlockEligible: boolean; // status !== 2 && now >= lock_end_ts*1000
+  status: number; // u8
 }
 
 function parsePublicKey(value: string): PublicKey | null {
@@ -176,13 +153,6 @@ function encodeUnlockFundsInstructionData(): Buffer {
   return Buffer.from(UNLOCK_FUNDS_DISCRIMINATOR);
 }
 
-function encodeRedeemIchorInstructionData(ichorAmount: bigint): Buffer {
-  return Buffer.concat([
-    Buffer.from(REDEEM_ICHOR_DISCRIMINATOR),
-    Buffer.from(encodeU64LE(ichorAmount)),
-  ]);
-}
-
 function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
 }
@@ -200,17 +170,6 @@ function readI64LE(bytes: Uint8Array, offset: number): bigint {
   return value >= (1n << 63n) ? value - (1n << 64n) : value;
 }
 
-function getIchorConversionBps(ichorLifetimeTotal: number): number {
-  if (ichorLifetimeTotal <= 9_999) return 9_000;
-  if (ichorLifetimeTotal <= 49_999) return 10_000;
-  if (ichorLifetimeTotal <= 99_999) return 11_000;
-  return 12_500;
-}
-
-function formatIchorConversionRate(conversionBps: number): string {
-  return `${(conversionBps / 10_000).toFixed(2)} USDC`;
-}
-
 function decodeLockAccountSnapshot(
   data: Uint8Array,
   lockAccountAddress: string,
@@ -221,6 +180,10 @@ function decodeLockAccountSnapshot(
     throw new Error('Account is not a LockVault lock account.');
   }
 
+  // 9-field custody LockAccount layout (138 bytes total), IDL order:
+  // disc[8] owner[32] course_id_hash[32] stable_mint[32]
+  // principal_amount(u64) skr_locked_amount(u64) lock_start_ts(i64)
+  // lock_end_ts(i64) status(u8) bump(u8).
   let offset = 8;
   const skip = (size: number) => {
     offset += size;
@@ -240,59 +203,23 @@ function decodeLockAccountSnapshot(
     offset += 1;
     return value;
   };
-  const readBool = () => readU8() === 1;
-  const readU16 = () => {
-    const value = (data[offset] ?? 0) | ((data[offset + 1] ?? 0) << 8);
-    offset += 2;
-    return value;
-  };
 
   skip(32); // owner
-  skip(32); // course hash
-  skip(32); // stable mint
-  const principalAmount = readU64();
-  const lockStartTs = readI64();
-  const lockEndTs = readI64();
-  const extensionSecondsTotal = readU64();
-  const status = readU8();
-  const gauntletComplete = readBool();
-  const gauntletDay = readU8();
-  skip(2); // current streak
-  skip(2); // longest streak
-  skip(1); // savers remaining
-  const saverRecoveryMode = readBool();
-  const fuelCounter = readU16();
-  const fuelCap = readU16();
-  skip(8); // last fuel credit day
-  skip(8); // last brewer burn ts
-  skip(8); // last completion day
-  const ichorCounter = Number(readU64());
-  const ichorLifetimeTotal = Number(readU64());
-  const skrLockedAmount = readU64();
-  skip(1); // skr tier
-  const currentYieldRedirectBps = readU16();
-  const conversionBps = getIchorConversionBps(ichorLifetimeTotal);
-
-  const lockStartDate = new Date(Number(lockStartTs) * 1000).toISOString();
-  const lockEndDate = new Date(Number(lockEndTs) * 1000).toISOString();
+  skip(32); // course_id_hash
+  skip(32); // stable_mint
+  const principalAmount = readU64(); // principal_amount
+  const skrLockedAmount = readU64(); // skr_locked_amount (NEW position, before timestamps)
+  const lockStartTs = readI64(); // lock_start_ts
+  const lockEndTs = readI64(); // lock_end_ts
+  const status = readU8(); // status
+  // bump (u8) intentionally not read
 
   return {
     lockAccountAddress,
     principalAmountUi: formatAtomicAmount(principalAmount, stableDecimals),
     skrLockedAmountUi: formatAtomicAmount(skrLockedAmount, skrDecimals),
-    lockStartDate,
-    lockEndDate,
-    gauntletComplete,
-    gauntletDay,
-    fuelCounter,
-    fuelCap,
-    saverRecoveryMode,
-    currentYieldRedirectBps,
-    extensionDays: Math.floor(Number(extensionSecondsTotal) / (24 * 60 * 60)),
-    ichorCounter,
-    ichorLifetimeTotal,
-    conversionBps,
-    conversionRateLabel: formatIchorConversionRate(conversionBps),
+    lockStartDate: new Date(Number(lockStartTs) * 1000).toISOString(),
+    lockEndDate: new Date(Number(lockEndTs) * 1000).toISOString(),
     unlockEligible: status !== 2 && Date.now() >= Number(lockEndTs) * 1000,
     status,
   };
@@ -314,20 +241,6 @@ export function parseUiTokenAmount(value: string, decimals: number): bigint {
   const atomic = BigInt(combined || '0');
 
   return atomic;
-}
-
-export function parseIchorAmount(value: string): bigint {
-  const normalized = value.trim();
-  if (!/^\d+$/.test(normalized)) {
-    throw new Error('Enter a whole-number Ichor amount.');
-  }
-
-  const amount = BigInt(normalized);
-  if (amount <= 0n) {
-    throw new Error('Ichor amount must be greater than zero.');
-  }
-
-  return amount;
 }
 
 function formatAtomicAmount(amount: bigint, decimals: number): string {
@@ -431,17 +344,6 @@ export async function batchCheckLockAccounts(
   return result;
 }
 
-export async function deriveCoursePolicyAddress(courseId: string): Promise<string> {
-  const config = getLockVaultConfig();
-  const courseIdHash = await hashCourseId(courseId);
-  const [coursePolicy] = PublicKey.findProgramAddressSync(
-    [COURSE_POLICY_SEED, Buffer.from(courseIdHash)],
-    config.programId,
-  );
-
-  return coursePolicy.toBase58();
-}
-
 export async function fetchLockAccountSnapshot(params: {
   ownerAddress: string;
   courseId: string;
@@ -515,35 +417,6 @@ export async function fetchWalletDepositBalances(
   };
 }
 
-export async function fetchRedemptionVaultBalance(): Promise<RedemptionVaultBalance> {
-  const config = getLockVaultConfig();
-  const [protocolConfig] = PublicKey.findProgramAddressSync(
-    [PROTOCOL_SEED],
-    config.programId,
-  );
-  const redemptionVault = getAssociatedTokenAddressSync(
-    config.usdcMint,
-    protocolConfig,
-    true,
-    TOKEN_PROGRAM_ID,
-    ASSOCIATED_TOKEN_PROGRAM_ID,
-  );
-
-  const account = await connection.getAccountInfo(redemptionVault, 'confirmed');
-  if (!account) {
-    return {
-      vaultAddress: redemptionVault.toBase58(),
-      balanceUi: '0',
-    };
-  }
-
-  const balance = await connection.getTokenAccountBalance(redemptionVault, 'confirmed');
-  return {
-    vaultAddress: redemptionVault.toBase58(),
-    balanceUi: balance.value.uiAmountString ?? '0',
-  };
-}
-
 export async function buildLockFundsTransaction(params: {
   ownerAddress: string;
   courseId: string;
@@ -572,10 +445,6 @@ export async function buildLockFundsTransaction(params: {
 
   const [protocolConfig] = PublicKey.findProgramAddressSync(
     [PROTOCOL_SEED],
-    config.programId,
-  );
-  const [coursePolicy] = PublicKey.findProgramAddressSync(
-    [COURSE_POLICY_SEED, Buffer.from(courseIdHash)],
     config.programId,
   );
   const [lockAccount] = PublicKey.findProgramAddressSync(
@@ -627,9 +496,12 @@ export async function buildLockFundsTransaction(params: {
     throw new Error('No SKR token account was found for this wallet on the configured cluster.');
   }
 
+  // 12 keys in exact IDL `lock_funds` account order (no course_policy):
+  // protocol_config, lock_account, stable_mint, skr_mint, owner,
+  // owner_stable_token_account, stable_vault, skr_vault, token_program,
+  // associated_token_program, system_program, owner_skr_token_account.
   const keys = [
     { pubkey: protocolConfig, isSigner: false, isWritable: false },
-    { pubkey: coursePolicy, isSigner: false, isWritable: false },
     { pubkey: lockAccount, isSigner: false, isWritable: true },
     { pubkey: stableMint, isSigner: false, isWritable: false },
     { pubkey: config.skrMint, isSigner: false, isWritable: false },
@@ -641,7 +513,8 @@ export async function buildLockFundsTransaction(params: {
     { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     {
-      // Anchor still expects a trailing account key here even when no SKR is locked.
+      // owner_skr_token_account (optional). Anchor still expects a trailing
+      // account key here even when no SKR is locked.
       pubkey: skrAmount > 0n ? ownerSkrTokenAccount : ownerStableTokenAccount,
       isSigner: false,
       isWritable: true,
@@ -755,91 +628,6 @@ export async function buildUnlockFundsTransaction(params: {
     skrVaultAddress: skrVault.toBase58(),
     ownerStableTokenAccountAddress: ownerStableTokenAccount.toBase58(),
     ownerSkrTokenAccountAddress: ownerSkrTokenAccount.toBase58(),
-  };
-}
-
-export async function buildRedeemIchorTransaction(params: {
-  ownerAddress: string;
-  courseId: string;
-  ichorAmount: string;
-}): Promise<RedeemIchorBuildResult> {
-  const config = getLockVaultConfig();
-  const owner = new PublicKey(params.ownerAddress);
-  const ichorAmount = parseIchorAmount(params.ichorAmount);
-  const courseIdHash = await hashCourseId(params.courseId);
-  const [protocolConfig] = PublicKey.findProgramAddressSync(
-    [PROTOCOL_SEED],
-    config.programId,
-  );
-  const [lockAccount] = PublicKey.findProgramAddressSync(
-    [LOCK_SEED, owner.toBuffer(), Buffer.from(courseIdHash)],
-    config.programId,
-  );
-
-  const lockAccountInfo = await connection.getAccountInfo(lockAccount, 'confirmed');
-  if (!lockAccountInfo) {
-    throw new Error('No LockVault account was found for this wallet and course.');
-  }
-
-  const redemptionVault = getAssociatedTokenAddressSync(
-    config.usdcMint,
-    protocolConfig,
-    true,
-    TOKEN_PROGRAM_ID,
-    ASSOCIATED_TOKEN_PROGRAM_ID,
-  );
-  const ownerStableTokenAccount = getAssociatedTokenAddressSync(
-    config.usdcMint,
-    owner,
-    false,
-    TOKEN_PROGRAM_ID,
-    ASSOCIATED_TOKEN_PROGRAM_ID,
-  );
-
-  const instruction = new TransactionInstruction({
-    programId: config.programId,
-    keys: [
-      { pubkey: protocolConfig, isSigner: false, isWritable: false },
-      { pubkey: lockAccount, isSigner: false, isWritable: true },
-      { pubkey: config.usdcMint, isSigner: false, isWritable: false },
-      { pubkey: owner, isSigner: true, isWritable: true },
-      { pubkey: redemptionVault, isSigner: false, isWritable: true },
-      { pubkey: ownerStableTokenAccount, isSigner: false, isWritable: true },
-      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-    ],
-    data: encodeRedeemIchorInstructionData(ichorAmount),
-  });
-
-  const latestBlockhash = await connection.getLatestBlockhash('confirmed');
-  const transaction = new Transaction({
-    feePayer: owner,
-    blockhash: latestBlockhash.blockhash,
-    lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-  }).add(instruction);
-
-  return {
-    transaction,
-    lockAccountAddress: lockAccount.toBase58(),
-    redemptionVaultAddress: redemptionVault.toBase58(),
-    ownerStableTokenAccountAddress: ownerStableTokenAccount.toBase58(),
-    ichorAmountAtomic: ichorAmount.toString(),
-  };
-}
-
-export function getIchorRedemptionQuote(
-  ichorAmount: string,
-  ichorLifetimeTotal: number,
-): { conversionBps: number; usdcOutUi: string } {
-  const atomicIchor = parseIchorAmount(ichorAmount);
-  const conversionBps = getIchorConversionBps(ichorLifetimeTotal);
-  const usdcAtomic =
-    (atomicIchor * 1_000_000n * BigInt(conversionBps)) / 1_000n / 10_000n;
-
-  return {
-    conversionBps,
-    usdcOutUi: formatAtomicAmount(usdcAtomic, 6),
   };
 }
 

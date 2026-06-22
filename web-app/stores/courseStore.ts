@@ -5,6 +5,7 @@ import { getCourseRuntime, hasRemoteLessonApi } from '@/services/api';
 import type { CourseRuntimeSnapshot, UserEnrollmentsResponse } from '@/services/api/types';
 import { batchCheckLockAccounts } from '@/services/solana';
 import type { LockAccountSnapshot } from '@/services/solana';
+import { useUserStore } from './userStore';
 import type {
   Course,
   CourseModule,
@@ -454,6 +455,9 @@ export const useCourseStore = create<CourseStore>()(
         });
       },
 
+      // Custody-only writer. The on-chain LockAccount no longer carries game
+      // state (fuel/ichor/saver/redirect/streak/extension) — those come from
+      // the backend progress API via syncCourseRuntime/restoreFromBackend.
       syncLockSnapshot: (courseId, snapshot) => {
         const state = get();
         const existingState = normalizeCourseGameState(state.courseStates[courseId]);
@@ -466,13 +470,7 @@ export const useCourseStore = create<CourseStore>()(
               lockAccountAddress:
                 snapshot.lockAccountAddress ?? existingState.lockAccountAddress,
               lockStartDate: snapshot.lockStartDate,
-              extensionDays: snapshot.extensionDays,
-              saverRecoveryMode: snapshot.saverRecoveryMode,
-              currentYieldRedirectBps: snapshot.currentYieldRedirectBps,
-              fuelCounter: snapshot.fuelCounter,
-              fuelCap: snapshot.fuelCap,
-              ichorBalance: snapshot.ichorCounter,
-              totalIchorProduced: snapshot.ichorLifetimeTotal,
+              skrLockedAmount: Number(snapshot.skrLockedAmountUi), // custody
             },
           },
         });
@@ -541,8 +539,13 @@ export const useCourseStore = create<CourseStore>()(
           try {
             const lockMap = await batchCheckLockAccounts(walletAddress, unenrolledCourseIds);
 
+            // Game state (fuel/ichor/streak/saver/redirect) lives off-chain now,
+            // so after enrolling a discovered lock we hydrate it from the backend
+            // progress API rather than from the (custody-only) on-chain snapshot.
+            const authToken = useUserStore.getState().authToken;
+
             for (const [courseId, snapshot] of lockMap) {
-              // Enroll + activate with lock data from chain
+              // Enroll + activate with custody data from chain
               const derivedDuration = snapshot.lockEndDate && snapshot.lockStartDate
                 ? Math.round((new Date(snapshot.lockEndDate).getTime() - new Date(snapshot.lockStartDate).getTime()) / 86400000)
                 : 30;
@@ -552,6 +555,11 @@ export const useCourseStore = create<CourseStore>()(
                 lockAccountAddress: snapshot.lockAccountAddress,
               });
               get().syncLockSnapshot(courseId, snapshot);
+
+              // Refresh backend-owned game state for the newly discovered course.
+              if (authToken) {
+                void get().refreshCourseRuntime(courseId, authToken).catch(() => {});
+              }
             }
           } catch (error) {
             console.warn('[on-chain-sync] Failed to check lock accounts:', error);
