@@ -74,8 +74,8 @@ Current implementation:
 - `getLeaderboardSnapshot` serves the public leaderboard: it prefers the latest
   materialized snapshot and falls back to a live `computeLeaderboardRows` pass
   only when no snapshot exists yet.
-- the app shows whether the current view is a snapshot or live fallback
-  (response `source` field is `snapshot` or `live`).
+- the app shows snapshot freshness above the podium using response
+  `snapshotAt`; if no snapshot exists yet, it shows the live fallback state.
 
 Note (internal): the live fallback `computeLeaderboardRows` reads one lock
 account at a time (one `getAccountInfo` per lock). A `getMultipleAccountsInfo`
@@ -96,9 +96,12 @@ Current implementation checkpoint:
 
 Current operator path:
 
-- leaderboard snapshots refresh automatically through a backend worker
-  (`leaderboardSnapshotWorker`, backend/src/workers/leaderboardSnapshotWorker.mjs),
-  which calls `refreshLeaderboardSnapshot` on an interval
+- leaderboard snapshots refresh through a daily cron job that runs
+  `npm run cron:leaderboard-refresh` from `backend/`
+- the in-process backend worker
+  (`leaderboardSnapshotWorker`, backend/src/workers/leaderboardSnapshotWorker.mjs)
+  remains available for local/E2E runs but should stay disabled when cron owns
+  refreshes (`LEADERBOARD_SNAPSHOT_ENABLED=false`)
 - scheduler/admin can trigger an immediate refresh through:
   - `POST /v1/internal/leaderboard/refresh`
 

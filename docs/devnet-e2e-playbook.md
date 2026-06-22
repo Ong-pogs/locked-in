@@ -252,6 +252,11 @@ UNLOCK_INDEXER_ENABLED=true        UNLOCK_INDEXER_INTERVAL_MS=15000      UNLOCK_
 LEADERBOARD_SNAPSHOT_ENABLED=true  LEADERBOARD_SNAPSHOT_INTERVAL_MS=60000 LEADERBOARD_SNAPSHOT_PAGE_SIZE=25
 ```
 
+Production leaderboard snapshots are cron-owned. Keep
+`LEADERBOARD_SNAPSHOT_ENABLED=false` there and run
+`npm run cron:leaderboard-refresh` daily with `LEADERBOARD_REFRESH_BASE_URL`
+pointing at the backend API.
+
 **CORS + server (defaults mostly fine):**
 ```
 CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000

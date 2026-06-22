@@ -7,7 +7,7 @@ import { CozyCard } from '@/components/cozy';
 import { HubButton } from '@/components/HubButton';
 import { fetchWithAuth, AuthExpiredError } from '@/services/api/httpClient';
 import { getLeaderboard } from '@/services/api/progress/progressApi';
-import type { LeaderboardEntry } from '@/services/api/types';
+import type { LeaderboardEntry, LeaderboardSource } from '@/services/api/types';
 
 const AMBER = '#FFD580';
 
@@ -21,6 +21,8 @@ const AMBER = '#FFD580';
 export default function LeaderboardPage() {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [currentUser, setCurrentUser] = useState<LeaderboardEntry | null>(null);
+  const [snapshotAt, setSnapshotAt] = useState<string | null>(null);
+  const [source, setSource] = useState<LeaderboardSource>('materialized');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,6 +35,8 @@ export default function LeaderboardPage() {
       if (signal?.aborted) return;
       setEntries(resp.entries);
       setCurrentUser(resp.currentUser);
+      setSnapshotAt(resp.snapshotAt);
+      setSource(resp.source);
       setError(null);
       setLoading(false);
     } catch (err) {
@@ -44,6 +48,8 @@ export default function LeaderboardPage() {
       }
       setEntries([]);
       setCurrentUser(null);
+      setSnapshotAt(null);
+      setSource('materialized');
       setLoading(false);
     }
   }, []);
@@ -60,6 +66,7 @@ export default function LeaderboardPage() {
   const top3 = entries.slice(0, 3);
   const rest = entries.slice(3);
   const [first, second, third] = top3;
+  const refreshLabel = formatLeaderboardRefresh(snapshotAt, source);
   // Hide the sticky "Your Standing" card when the user is already visible
   // in the Pursuers list — no point showing them twice.
   const userInVisibleList = entries.some((entry) => entry.isCurrentUser);
@@ -93,13 +100,20 @@ export default function LeaderboardPage() {
       <div className="relative z-10 max-w-[1100px] mx-auto px-[18px] pb-10">
         <div className="pt-20" />
 
-        <h1
-          className="text-3xl font-bold tracking-wide font-pixel"
-          style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
-        >
-          Leaderboard
-        </h1>
-        <div className="mb-5" />
+        <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <h1
+            className="text-3xl font-bold tracking-wide font-pixel"
+            style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
+          >
+            Leaderboard
+          </h1>
+          <p
+            className="font-pixel-mono text-[10px] uppercase tracking-[1px] sm:text-right"
+            style={{ color: T.textMuted, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
+          >
+            {refreshLabel}
+          </p>
+        </div>
 
         {loading ? (
           <CozyCard>
@@ -246,6 +260,24 @@ function SectionHeader({ children, muted }: { children: React.ReactNode; muted?:
       {children}
     </p>
   );
+}
+
+function formatLeaderboardRefresh(snapshotAt: string | null, source: LeaderboardSource): string {
+  if (!snapshotAt) {
+    return source === 'live' ? 'Live fallback' : 'Awaiting first refresh';
+  }
+
+  const refreshedAt = new Date(snapshotAt);
+  if (Number.isNaN(refreshedAt.getTime())) {
+    return 'Last refreshed recently';
+  }
+
+  return `Last refreshed ${refreshedAt.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })}`;
 }
 
 const PLACE_THEME: Record<
