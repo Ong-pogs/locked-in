@@ -1,4 +1,4 @@
-# Subjective Answer Validation Spec (v3.0)
+# Subjective Answer Validation Spec (v5.0)
 
 ## Scope
 
@@ -8,21 +8,22 @@ It is off-chain and feeds verified completion events.
 
 ## Supported Validation Modes
 
-1. rubric scoring (deterministic)
-2. LLM-assisted scoring (structured output)
-3. hybrid mode (rubric floor + LLM feedback)
+1. MCQ exact-match scoring
+2. LLM scoring for every non-MCQ answer
+3. fail-closed handling when LLM grading is unavailable
 
 Default mode:
 
-- rubric-first acceptance check
-- LLM feedback for explanatory guidance
-- rubric-only fallback when the model call is disabled, fails, or times out
+- MCQ answers are graded with deterministic exact matching
+- `short_text` and future non-MCQ question types are graded by OpenAI Responses structured output
+- model failures, missing API keys, timeouts, malformed output, empty answers, or blocking integrity flags return a rejected validator decision
+- there is no rubric-only acceptance fallback for non-MCQ answers
 
 Current implementation checkpoint:
 
-- backend now supports deterministic rubric-first validation for `short_text` questions
+- backend now uses LLM grading for all non-MCQ lesson questions
 - rubric config is stored in `lesson.questions.metadata`
-- optional hybrid mode can call OpenAI Responses for better feedback wording
+- LLM output is constrained to strict JSON schema before it is stored
 - accepted subjective answers flow into the same verified completion pipeline
 - rejected subjective answers do not create completion events or course-runtime progression
 - validator decisions are stored in an audit table with:
@@ -30,19 +31,18 @@ Current implementation checkpoint:
   - feedback summary
   - validator version
   - decision hash
-- the mobile result screen can now show backend feedback for subjective answers
-- hybrid feedback never changes acceptance; rubric stays the source of truth
+- the result screen can show backend feedback for subjective answers
+- the server still enforces the configured acceptance threshold even if model output disagrees
 
 ## Required Request Context
 
 Validator input must include:
 
 - question id
-- lesson id and version
 - prompt text
-- rubric criteria and weights
+- expected answer and/or rubric snapshot
 - learner answer text
-- language and optional locale
+- acceptance threshold
 
 ## Required Output Shape
 
@@ -50,6 +50,7 @@ Validator input must include:
 - `score: 0..100`
 - `criteria_breakdown[]`
 - `feedback_summary`
+- `confidence: 0..1`
 - `validator_version`
 - `decision_hash` (for auditability)
 
@@ -69,11 +70,11 @@ Accepted submission then flows into the same verified completion event pipeline 
 2. bounded retry policy
 3. audit trail for prompt, rubric, decision, and version
 4. abuse heuristics (copy/paste spam, impossible speed)
-5. model timeout fallback to rubric-only evaluation
+5. model timeout returns a rejected fail-closed decision
 
 ## Cost and Performance Controls
 
-- cache deterministic rubric results
+- keep output small with strict structured JSON
 - throttle LLM calls for repeated near-identical answers
 - asynchronous grading allowed with interim `pending` status
 
@@ -89,4 +90,5 @@ At minimum, show:
 ## On-chain Coupling Rule
 
 Validator never writes on-chain directly.
-Only verified completion events from backend workers may trigger on-chain Fuel/streak updates.
+Only verified completion events from backend workers may trigger Fuel/streak updates.
+Fuel and streak are off-chain Postgres counters; the only on-chain action is custody (lock/unlock) in the `locked_in` program, which is never driven by the validator.

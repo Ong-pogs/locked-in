@@ -25,7 +25,10 @@ import {
   readCommunityPotDistributionWindow,
   readCommunityPotWindow,
 } from '../../lib/communityPot.mjs';
-import { enhanceValidatorFeedback } from '../../lib/answerValidator.mjs';
+import {
+  enhanceValidatorFeedback,
+  gradeSubjectiveAnswerWithLlm,
+} from '../../lib/answerValidator.mjs';
 import { hasFaucetConfig, isDevnetOnly, transferUsdcAtomic } from '../../lib/faucet.mjs';
 import { getSaverRedirectBps, computeNextFireLitUntil } from '../../lib/yieldRouting.mjs';
 
@@ -859,19 +862,21 @@ async function gradeAnswers(questions, submittedAnswers, startedAt = null, compl
     let validatorResult = null;
     let isCorrect = false;
 
-    if (question.questionType === 'short_text') {
-      validatorResult = await evaluateSubjectiveAnswer(
-        question,
-        answerText,
-        startedAt,
-        completedAt,
-      );
-      isCorrect = validatorResult.accepted;
-    } else {
+    if (question.questionType === 'mcq') {
       const normalizedAnswer = normalizeAnswerText(answerText);
       const normalizedCorrectAnswer = normalizeAnswerText(question.correctAnswer);
       isCorrect =
         normalizedAnswer.length > 0 && normalizedAnswer === normalizedCorrectAnswer;
+    } else {
+      // Non-MCQ answers are semantically graded by the LLM validator.
+      // If the grader is unavailable it returns an explicit fail-closed decision.
+      validatorResult = await gradeSubjectiveAnswerWithLlm({
+        question,
+        answerText,
+        startedAt,
+        completedAt,
+      });
+      isCorrect = validatorResult.accepted;
     }
 
     return {
