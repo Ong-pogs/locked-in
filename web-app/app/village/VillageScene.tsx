@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { User, Wallet } from 'lucide-react';
 import { useLogin } from '@privy-io/react-auth';
-import { T } from '@/components/theme';
 import { useAuth } from '@/hooks/useAuth';
 import boundsData from '@/public/images/village/masks/bounds.json';
 import { VillageTour } from './VillageTour';
@@ -101,7 +100,10 @@ export default function VillageScene() {
   return (
     <div
       className="village-scene-outer fixed inset-0 z-0"
-      style={{ backgroundColor: T.bg }}
+      style={{
+        // #0E1B29 sampled directly from the painting's dark blue tone.
+        backgroundColor: '#0E1B29',
+      }}
     >
       {/*
         Desktop: aspect-ratio fit (letterbox/pillarbox to 16:9 of art).
@@ -395,4 +397,3 @@ export default function VillageScene() {
     </div>
   );
 }
-
