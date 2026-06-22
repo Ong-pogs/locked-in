@@ -265,13 +265,27 @@ pub struct LockFunds<'info> {
 
 #[derive(Accounts)]
 pub struct UnlockFunds<'info> {
+    // Bound singleton config; supplies the canonical SKR mint (LockAccount
+    // does NOT store skr_mint). First field to mirror LockFunds so the client
+    // account order is predictable.
+    #[account(
+        seeds = [VaultConfig::SEED],
+        bump = protocol_config.bump
+    )]
+    pub protocol_config: Box<Account<'info, VaultConfig>>,
     #[account(
         mut,
         close = owner,
         has_one = owner @ LockVaultError::InvalidLockOwner
     )]
     pub lock_account: Box<Account<'info, LockAccount>>,
+    // Custody-hardening: bind the supplied stable mint to the lock's recorded
+    // mint, blocking a fake-mint + fake-vault unlock that would strand the
+    // real principal vault under the closed lock PDA.
+    #[account(address = lock_account.stable_mint @ LockVaultError::InvalidMint)]
     pub stable_mint: Box<InterfaceAccount<'info, Mint>>,
+    // Bind the supplied SKR mint to the canonical protocol SKR mint.
+    #[account(address = protocol_config.skr_mint @ LockVaultError::InvalidMint)]
     pub skr_mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(mut)]
     pub owner: Signer<'info>,
@@ -441,6 +455,8 @@ pub enum LockVaultError {
     UnexpectedStableVaultBalance,
     #[msg("The SKR vault balance does not match the locked snapshot amount.")]
     UnexpectedSkrVaultBalance,
+    #[msg("The supplied mint does not match the lock's recorded mint or protocol config.")]
+    InvalidMint,
 }
 
 fn validate_protocol_params(usdc_mint: Pubkey, skr_mint: Pubkey) -> Result<()> {

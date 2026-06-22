@@ -432,6 +432,7 @@ describe('Lock lifecycle (merged locked_in: vault × pot)', () => {
     await program.methods
       .unlockFunds()
       .accounts({
+        protocolConfig: vaultConfig,
         lockAccount,
         stableMint: stableMint.publicKey,
         skrMint: skrMint.publicKey,
@@ -468,5 +469,203 @@ describe('Lock lifecycle (merged locked_in: vault × pot)', () => {
     // ─────────────────────────────────────────────────────────────
     console.log(`\nTotal wall-clock: ${((Date.now() - t0) / 1000).toFixed(2)}s`);
     console.log('Step timings:', stepTimings);
+  });
+
+  // ───────────────────────────────────────────────────────────────────
+  // CUSTODY-HARDENING regression (adversarial review).
+  //
+  // The lock's recorded stable_mint MUST be bound on unlock. Without that
+  // binding, a lock owner could unlock with a FAKE stable mint + a fake
+  // stable_vault (an ATA of the fake mint owned by the lock PDA, funded to
+  // principal_amount). The balance assertion (vault.amount == principal)
+  // would pass on the fake vault, the program would drain the fake tokens
+  // and CLOSE the LockAccount — STRANDING the real USDC vault under the
+  // now-closed PDA. unlock_funds must REJECT this.
+  // ───────────────────────────────────────────────────────────────────
+  test('rejects unlock with a fake stable mint + fake vault', async () => {
+    // Fresh owner + course so this lock is independent of the happy-path one.
+    const evilOwner = Keypair.generate();
+    svm.airdrop(evilOwner.publicKey, BigInt(1000 * LAMPORTS_PER_SOL));
+
+    const evilCourseHash = createHash('sha256').update('evil-course').digest();
+    const evilLock = findPDA(
+      [LOCK_SEED, evilOwner.publicKey.toBuffer(), evilCourseHash],
+      LOCKED_IN_PROGRAM_ID,
+    );
+
+    // Owner's real USDC ATA (funded) + real SKR ATA (for the unlock path).
+    const evilOwnerStableAta = getAssociatedTokenAddressSync(
+      stableMint.publicKey,
+      evilOwner.publicKey,
+    );
+    const evilOwnerSkrAta = getAssociatedTokenAddressSync(
+      skrMint.publicKey,
+      evilOwner.publicKey,
+    );
+    const setupTx = new Transaction().add(
+      createAssociatedTokenAccountInstruction(
+        authority.publicKey,
+        evilOwnerStableAta,
+        evilOwner.publicKey,
+        stableMint.publicKey,
+      ),
+      createAssociatedTokenAccountInstruction(
+        authority.publicKey,
+        evilOwnerSkrAta,
+        evilOwner.publicKey,
+        skrMint.publicKey,
+      ),
+      createMintToInstruction(
+        stableMint.publicKey,
+        evilOwnerStableAta,
+        authority.publicKey,
+        BigInt(PRINCIPAL_AMOUNT_BASE),
+      ),
+    );
+    // authority is the fee payer + mint authority; evilOwner need not sign ATA
+    // creation (it is only the ATA owner, not a required signer).
+    await sendTx(setupTx, [authority]);
+
+    // Real vault ATAs for the lock (the program inits these in lock_funds).
+    const evilStableVault = getAssociatedTokenAddressSync(
+      stableMint.publicKey,
+      evilLock,
+      true,
+    );
+    const evilSkrVault = getAssociatedTokenAddressSync(
+      skrMint.publicKey,
+      evilLock,
+      true,
+    );
+
+    // Lock 100 REAL USDC for 30 days.
+    await program.methods
+      .lockFunds(
+        Array.from(evilCourseHash),
+        LOCK_DURATION_DAYS,
+        new BN(PRINCIPAL_AMOUNT_BASE),
+        new BN(0),
+      )
+      .accounts({
+        protocolConfig: vaultConfig,
+        lockAccount: evilLock,
+        stableMint: stableMint.publicKey,
+        skrMint: skrMint.publicKey,
+        owner: evilOwner.publicKey,
+        ownerStableTokenAccount: evilOwnerStableAta,
+        stableVault: evilStableVault,
+        skrVault: evilSkrVault,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        ownerSkrTokenAccount: null,
+      })
+      .signers([evilOwner])
+      .rpc();
+
+    // Create a FAKE stable mint (same 6 decimals as real USDC, so the
+    // vault.amount == principal_amount balance check WOULD pass) and a fake
+    // vault: an ATA of (fakeMint, evilLock) funded with exactly principal.
+    const fakeStableMint = Keypair.generate();
+    const rentMint = Number(svm.minimumBalanceForRentExemption(BigInt(MINT_SIZE)));
+    const fakeMintTx = new Transaction().add(
+      SystemProgram.createAccount({
+        fromPubkey: authority.publicKey,
+        newAccountPubkey: fakeStableMint.publicKey,
+        space: MINT_SIZE,
+        lamports: rentMint,
+        programId: TOKEN_PROGRAM_ID,
+      }),
+      createInitializeMint2Instruction(
+        fakeStableMint.publicKey,
+        STABLE_DECIMALS,
+        authority.publicKey,
+        null,
+      ),
+    );
+    await sendTx(fakeMintTx, [authority, fakeStableMint]);
+
+    const fakeStableVault = getAssociatedTokenAddressSync(
+      fakeStableMint.publicKey,
+      evilLock,
+      true,
+    );
+    // Owner's ATA for the fake mint (destination on unlock).
+    const evilOwnerFakeAta = getAssociatedTokenAddressSync(
+      fakeStableMint.publicKey,
+      evilOwner.publicKey,
+    );
+    const fakeVaultTx = new Transaction().add(
+      // Fake vault: ATA of fake mint owned by the lock PDA, funded to principal.
+      createAssociatedTokenAccountInstruction(
+        authority.publicKey,
+        fakeStableVault,
+        evilLock,
+        fakeStableMint.publicKey,
+      ),
+      createAssociatedTokenAccountInstruction(
+        authority.publicKey,
+        evilOwnerFakeAta,
+        evilOwner.publicKey,
+        fakeStableMint.publicKey,
+      ),
+      createMintToInstruction(
+        fakeStableMint.publicKey,
+        fakeStableVault,
+        authority.publicKey,
+        BigInt(PRINCIPAL_AMOUNT_BASE),
+      ),
+    );
+    await sendTx(fakeVaultTx, [authority]);
+
+    // Warp past lock_end_ts so the clock gate is satisfied.
+    const evilLockAcct: any = await program.account.lockAccount.fetch(evilLock);
+    {
+      const clk = svm.getClock();
+      clk.unixTimestamp = BigInt(Number(evilLockAcct.lockEndTs) + 60);
+      svm.setClock(clk);
+    }
+
+    // Attempt the malicious unlock: pass the FAKE stable mint + FAKE vault.
+    // This MUST be rejected. (Pre-fix: the program drains the fake tokens and
+    // closes the lock, stranding the real USDC vault — i.e. it SUCCEEDS, which
+    // is the failing-test condition we want to see before the fix.)
+    let rejected = false;
+    let rejectionMessage = '';
+    try {
+      await program.methods
+        .unlockFunds()
+        .accounts({
+          protocolConfig: vaultConfig,
+          lockAccount: evilLock,
+          stableMint: fakeStableMint.publicKey, // FAKE
+          skrMint: skrMint.publicKey,
+          owner: evilOwner.publicKey,
+          stableVault: fakeStableVault, // FAKE
+          skrVault: evilSkrVault,
+          ownerStableTokenAccount: evilOwnerFakeAta,
+          ownerSkrTokenAccount: evilOwnerSkrAta,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([evilOwner])
+        .rpc();
+    } catch (err) {
+      rejected = true;
+      rejectionMessage = String((err as Error)?.message ?? err);
+    }
+
+    // The transaction must be rejected by the mint-binding constraint.
+    expect(rejected).toBe(true);
+    // Rejected for the RIGHT reason: the stable_mint address constraint
+    // (Anchor ConstraintAddress / our InvalidMint), not an unrelated error.
+    expect(rejectionMessage).toMatch(/InvalidMint|ConstraintAddress|address constraint|2006/i);
+
+    // The real lock + real vault must remain intact (NOT stranded/closed).
+    const realLockStillThere = svm.getAccount(evilLock);
+    expect(realLockStillThere).not.toBeNull();
+    const realVaultStillThere = svm.getAccount(evilStableVault);
+    expect(realVaultStillThere).not.toBeNull();
   });
 });

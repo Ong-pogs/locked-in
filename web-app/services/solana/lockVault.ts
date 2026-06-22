@@ -567,6 +567,13 @@ export async function buildUnlockFundsTransaction(params: {
     throw new Error('No LockVault account was found for this wallet and course.');
   }
 
+  // Bound singleton vault config PDA (custody-hardening: unlock now binds
+  // stable_mint to the lock's recorded mint + skr_mint to protocol_config).
+  const [protocolConfig] = PublicKey.findProgramAddressSync(
+    [PROTOCOL_SEED],
+    config.programId,
+  );
+
   const ownerStableTokenAccount = getAssociatedTokenAddressSync(
     config.usdcMint,
     owner,
@@ -596,9 +603,16 @@ export async function buildUnlockFundsTransaction(params: {
     ASSOCIATED_TOKEN_PROGRAM_ID,
   );
 
+  // 12 keys in exact IDL `unlock_funds` account order. protocol_config is
+  // FIRST (mirrors lock_funds + the on-chain UnlockFunds struct):
+  // protocol_config, lock_account, stable_mint, skr_mint, owner,
+  // stable_vault, skr_vault, owner_stable_token_account,
+  // owner_skr_token_account, token_program, associated_token_program,
+  // system_program.
   const instruction = new TransactionInstruction({
     programId: config.programId,
     keys: [
+      { pubkey: protocolConfig, isSigner: false, isWritable: false },
       { pubkey: lockAccount, isSigner: false, isWritable: true },
       { pubkey: config.usdcMint, isSigner: false, isWritable: false },
       { pubkey: config.skrMint, isSigner: false, isWritable: false },
