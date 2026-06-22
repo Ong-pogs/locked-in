@@ -17,10 +17,9 @@ Current implementation checkpoint:
 - on-chain `lock_funds` now exists in the `locked_in` program's vault module (`programs/locked_in/src/vault.rs`)
 - the web-app now builds a real `lock_funds` transaction from `web-app/app/onboarding/deposit/page.tsx` (tx builder in `web-app/services/solana/lockVault.ts`)
 - the client derives lock/vault PDAs, fetches wallet token balances, signs through a browser wallet adapter (Privy) using `@solana/web3.js`, and submits the raw transaction from the web-app for confirmation
-- the client passes the trailing SKR source account (`owner_skr_token_account`) only as an OPTIONAL final key; the merged Anchor program declares it `Option<...>`, so it is not required for `USDC`-only locks
 - the deposit page now:
   - checks for an existing on-chain lock before attempting another deposit
-  - shows `SOL` alongside `USDC` and `SKR`
+  - shows `SOL` alongside `USDC`
   - simulates `lock_funds` before opening the wallet so program/token errors surface in-app
   - reads a per-course lock policy from the course catalog
   - enforces minimum deposit and duration bounds before building the transaction
@@ -43,11 +42,10 @@ Current implementation checkpoint:
   - maximum lock duration
 - lock duration (currently constrained by on-chain presets: `14 | 30 | 45 | 60 | 90 | 180 | 365`)
 - principal amount (USDC)
-- optional SKR amount
 
 ## Canonical Deposit Flow
 
-1. fetch wallet token balances (stablecoin and SKR)
+1. fetch wallet token balances (stablecoin)
 2. validate amount, mint support, and per-course policy bounds
 3. derive required accounts:
    - lock PDA
@@ -70,21 +68,20 @@ Current flow note:
 
 ## Single-Transaction Requirement
 
-User principal and optional SKR lock must execute atomically in one transaction path for lock creation.
+User principal lock must execute atomically in one transaction path for lock creation.
 Partial lock creation is not permitted.
 
 ## Lock State Read Model
 
-Service must expose per-course lock reads. The on-chain `LockAccount` (138
-bytes, 9 fields: `owner`, `course_id_hash`, `stable_mint`, `principal_amount`,
-`skr_locked_amount`, `lock_start_ts`, `lock_end_ts`, `status`, `bump`) is the
+Service must expose per-course lock reads. The on-chain `LockAccount` (130
+bytes, 8 fields: `owner`, `course_id_hash`, `stable_mint`, `principal_amount`,
+`lock_start_ts`, `lock_end_ts`, `status`, `bump`) is the
 source of truth for custody facts; game state lives off-chain in Postgres.
 
 On-chain (from `LockAccount`):
 
 - principal amount and mint
 - lock start/end timestamps
-- SKR locked amount
 - status and unlock eligibility (clock-gated against `lock_end_ts`)
 
 Off-chain (Postgres counters, not on-chain, not SPL tokens):
@@ -111,8 +108,7 @@ When lock is unlockable:
 
 1. build and sign `unlock_funds`
 2. confirm return of principal stablecoin
-3. confirm return of locked SKR
-4. refresh all course lock state
+3. refresh all course lock state
 
 Current implementation checkpoint:
 
@@ -145,7 +141,6 @@ Client/service config must include:
   on devnet) — the former separate `LockVault` / `YieldSplitter` / `CommunityPot`
   IDs are gone (vault + pot merged into `locked_in`; `yield_splitter` removed)
 - supported stablecoin mint addresses
-- SKR mint address
 - compute budget and priority fee policy
 
 RPC note: the backend uses a dedicated Alchemy RPC configured SERVER-SIDE ONLY

@@ -1,12 +1,13 @@
 //! Vault domain — pure custody escrow (was the `lock_vault` program).
 //!
-//! Logic copied VERBATIM from `programs/lock_vault/src/lib.rs`. The ONLY
-//! changes are the rename pins required to coexist under one program ID:
+//! Renamed to coexist under one program ID:
 //!   * `ProtocolConfig`        -> `VaultConfig`        (account discriminator)
 //!   * `ProtocolConfig::SEED`  -> `b"vault-protocol"`  (PDA seed collision)
 //!   * `InitializeProtocol`    -> `InitializeVault`
 //!   * `initialize_protocol`   -> `initialize_vault`   (ix discriminator)
-//! lock_funds / unlock_funds custody logic is byte-for-byte identical.
+//! v4: SKR escrow removed — this is now pure USDC principal custody
+//! (lock principal -> wait -> return principal). Off-chain backend owns the
+//! game layer (fuel/ichor/savers).
 
 use anchor_lang::prelude::*;
 use anchor_spl::{
@@ -15,23 +16,16 @@ use anchor_spl::{
 };
 
 // ── Custody-core constants ──────────────────────────────────────────────
-// Game/fuel/ichor/saver mechanics moved off-chain (v4: backend owns points).
-// This program is now a pure escrow: lock principal -> wait -> return principal.
 const DAY_SECONDS: i64 = 86_400;
 const ACTIVE_STATUS: u8 = 0;
 const CLOSED_STATUS: u8 = 2;
 
-pub fn initialize_vault(
-    ctx: Context<InitializeVault>,
-    usdc_mint: Pubkey,
-    skr_mint: Pubkey,
-) -> Result<()> {
-    validate_protocol_params(usdc_mint, skr_mint)?;
+pub fn initialize_vault(ctx: Context<InitializeVault>, usdc_mint: Pubkey) -> Result<()> {
+    validate_protocol_params(usdc_mint)?;
 
     let protocol = &mut ctx.accounts.protocol_config;
     protocol.authority = ctx.accounts.authority.key();
     protocol.usdc_mint = usdc_mint;
-    protocol.skr_mint = skr_mint;
     protocol.bump = ctx.bumps.protocol_config;
 
     Ok(())
@@ -42,14 +36,9 @@ pub fn lock_funds(
     course_id_hash: [u8; 32],
     lock_duration_days: u16,
     stable_amount: u64,
-    skr_amount: u64,
 ) -> Result<()> {
     require!(stable_amount > 0, LockVaultError::InvalidPrincipalAmount);
-    validate_supported_mints(
-        &ctx.accounts.protocol_config,
-        ctx.accounts.stable_mint.key(),
-        ctx.accounts.skr_mint.key(),
-    )?;
+    validate_supported_mints(&ctx.accounts.protocol_config, ctx.accounts.stable_mint.key())?;
     validate_lock_duration(lock_duration_days)?;
     validate_owner_token_account(
         &ctx.accounts.owner_stable_token_account,
@@ -67,30 +56,6 @@ pub fn lock_funds(
         stable_amount,
     )?;
 
-    // Optionally escrow SKR into the SKR vault ATA.
-    if skr_amount > 0 {
-        let owner_skr_token_account = ctx
-            .accounts
-            .owner_skr_token_account
-            .as_ref()
-            .ok_or_else(|| error!(LockVaultError::MissingSkrTokenAccount))?;
-
-        validate_owner_token_account(
-            owner_skr_token_account,
-            ctx.accounts.owner.key(),
-            ctx.accounts.skr_mint.key(),
-        )?;
-
-        transfer_checked_tokens(
-            &ctx.accounts.token_program,
-            owner_skr_token_account,
-            &ctx.accounts.skr_vault,
-            &ctx.accounts.skr_mint,
-            &ctx.accounts.owner,
-            skr_amount,
-        )?;
-    }
-
     let now = Clock::get()?.unix_timestamp;
     let lock_account = &mut ctx.accounts.lock_account;
     // lock_end_ts is written exactly ONCE here. No surviving code path mutates it.
@@ -99,7 +64,6 @@ pub fn lock_funds(
         course_id_hash,
         ctx.accounts.stable_mint.key(),
         stable_amount,
-        skr_amount,
         lock_duration_days,
         now,
         ctx.bumps.lock_account,
@@ -111,7 +75,6 @@ pub fn lock_funds(
         course_id_hash: lock_account.course_id_hash,
         stable_mint: lock_account.stable_mint,
         principal_amount: lock_account.principal_amount,
-        skr_locked_amount: lock_account.skr_locked_amount,
         lock_end_ts: lock_account.lock_end_ts,
     });
 
@@ -121,7 +84,7 @@ pub fn lock_funds(
 pub fn unlock_funds(ctx: Context<UnlockFunds>) -> Result<()> {
     let now = Clock::get()?.unix_timestamp;
     let authority_info = ctx.accounts.lock_account.to_account_info();
-    let (owner_key, course_id_hash, bump, principal_amount, skr_locked_amount) = {
+    let (owner_key, course_id_hash, bump, principal_amount) = {
         let lock_account = &ctx.accounts.lock_account;
         lock_account.assert_unlockable(now)?;
 
@@ -130,17 +93,12 @@ pub fn unlock_funds(ctx: Context<UnlockFunds>) -> Result<()> {
             ctx.accounts.stable_vault.amount == lock_account.principal_amount,
             LockVaultError::UnexpectedStableVaultBalance
         );
-        require!(
-            ctx.accounts.skr_vault.amount == lock_account.skr_locked_amount,
-            LockVaultError::UnexpectedSkrVaultBalance
-        );
 
         (
             lock_account.owner,
             lock_account.course_id_hash,
             lock_account.bump,
             lock_account.principal_amount,
-            lock_account.skr_locked_amount,
         )
     };
     let signer_seeds: &[&[&[u8]]] = &[&[
@@ -161,29 +119,10 @@ pub fn unlock_funds(ctx: Context<UnlockFunds>) -> Result<()> {
         principal_amount,
     )?;
 
-    if skr_locked_amount > 0 {
-        transfer_checked_from_lock_vault(
-            &ctx.accounts.token_program,
-            &ctx.accounts.skr_vault,
-            &ctx.accounts.owner_skr_token_account,
-            &ctx.accounts.skr_mint,
-            &authority_info,
-            signer_seeds,
-            skr_locked_amount,
-        )?;
-    }
-
-    // Close both vault ATAs, refunding rent to the owner.
+    // Close the vault ATA, refunding rent to the owner.
     close_token_account_from_lock_vault(
         &ctx.accounts.token_program,
         &ctx.accounts.stable_vault.to_account_info(),
-        &ctx.accounts.owner.to_account_info(),
-        &authority_info,
-        signer_seeds,
-    )?;
-    close_token_account_from_lock_vault(
-        &ctx.accounts.token_program,
-        &ctx.accounts.skr_vault.to_account_info(),
         &ctx.accounts.owner.to_account_info(),
         &authority_info,
         signer_seeds,
@@ -196,7 +135,6 @@ pub fn unlock_funds(ctx: Context<UnlockFunds>) -> Result<()> {
         lock_account: lock_account.key(),
         owner: lock_account.owner,
         principal_amount: lock_account.principal_amount,
-        skr_locked_amount: lock_account.skr_locked_amount,
         unlocked_at_ts: now,
     });
 
@@ -219,7 +157,7 @@ pub struct InitializeVault<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(course_id_hash: [u8; 32], lock_duration_days: u16, stable_amount: u64, skr_amount: u64)]
+#[instruction(course_id_hash: [u8; 32], lock_duration_days: u16, stable_amount: u64)]
 pub struct LockFunds<'info> {
     #[account(
         seeds = [VaultConfig::SEED],
@@ -235,7 +173,6 @@ pub struct LockFunds<'info> {
     )]
     pub lock_account: Box<Account<'info, LockAccount>>,
     pub stable_mint: Box<InterfaceAccount<'info, Mint>>,
-    pub skr_mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(mut)]
     pub owner: Signer<'info>,
     #[account(mut)]
@@ -248,31 +185,13 @@ pub struct LockFunds<'info> {
         associated_token::token_program = token_program
     )]
     pub stable_vault: Box<InterfaceAccount<'info, TokenAccount>>,
-    #[account(
-        init,
-        payer = owner,
-        associated_token::mint = skr_mint,
-        associated_token::authority = lock_account,
-        associated_token::token_program = token_program
-    )]
-    pub skr_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     pub token_program: Interface<'info, TokenInterface>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
-    #[account(mut)]
-    pub owner_skr_token_account: Option<Box<InterfaceAccount<'info, TokenAccount>>>,
 }
 
 #[derive(Accounts)]
 pub struct UnlockFunds<'info> {
-    // Bound singleton config; supplies the canonical SKR mint (LockAccount
-    // does NOT store skr_mint). First field to mirror LockFunds so the client
-    // account order is predictable.
-    #[account(
-        seeds = [VaultConfig::SEED],
-        bump = protocol_config.bump
-    )]
-    pub protocol_config: Box<Account<'info, VaultConfig>>,
     #[account(
         mut,
         close = owner,
@@ -284,9 +203,6 @@ pub struct UnlockFunds<'info> {
     // real principal vault under the closed lock PDA.
     #[account(address = lock_account.stable_mint @ LockVaultError::InvalidMint)]
     pub stable_mint: Box<InterfaceAccount<'info, Mint>>,
-    // Bind the supplied SKR mint to the canonical protocol SKR mint.
-    #[account(address = protocol_config.skr_mint @ LockVaultError::InvalidMint)]
-    pub skr_mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(mut)]
     pub owner: Signer<'info>,
     #[account(
@@ -297,13 +213,6 @@ pub struct UnlockFunds<'info> {
     )]
     pub stable_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(
-        mut,
-        token::mint = skr_mint,
-        token::authority = lock_account,
-        token::token_program = token_program
-    )]
-    pub skr_vault: Box<InterfaceAccount<'info, TokenAccount>>,
-    #[account(
         init_if_needed,
         payer = owner,
         associated_token::mint = stable_mint,
@@ -311,14 +220,6 @@ pub struct UnlockFunds<'info> {
         associated_token::token_program = token_program
     )]
     pub owner_stable_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
-    #[account(
-        init_if_needed,
-        payer = owner,
-        associated_token::mint = skr_mint,
-        associated_token::authority = owner,
-        associated_token::token_program = token_program
-    )]
-    pub owner_skr_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
     pub token_program: Interface<'info, TokenInterface>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
@@ -329,7 +230,6 @@ pub struct UnlockFunds<'info> {
 pub struct VaultConfig {
     pub authority: Pubkey,
     pub usdc_mint: Pubkey,
-    pub skr_mint: Pubkey,
     pub bump: u8,
 }
 
@@ -346,7 +246,6 @@ pub struct LockAccount {
     pub course_id_hash: [u8; 32],
     pub stable_mint: Pubkey,
     pub principal_amount: u64,
-    pub skr_locked_amount: u64,
     pub lock_start_ts: i64,
     pub lock_end_ts: i64,
     pub status: u8,
@@ -356,14 +255,12 @@ pub struct LockAccount {
 impl LockAccount {
     pub const SEED: &'static [u8] = b"lock";
 
-    #[allow(clippy::too_many_arguments)]
     fn initialize_from_funding(
         &mut self,
         owner: Pubkey,
         course_id_hash: [u8; 32],
         stable_mint: Pubkey,
         principal_amount: u64,
-        skr_locked_amount: u64,
         lock_duration_days: u16,
         now: i64,
         bump: u8,
@@ -378,7 +275,6 @@ impl LockAccount {
         self.course_id_hash = course_id_hash;
         self.stable_mint = stable_mint;
         self.principal_amount = principal_amount;
-        self.skr_locked_amount = skr_locked_amount;
         self.lock_start_ts = now;
         // lock_end_ts is set ONCE; missed learning days are yield-only and
         // never extend the principal lock (v4 fire-timer model).
@@ -412,7 +308,6 @@ pub struct LockCreated {
     pub course_id_hash: [u8; 32],
     pub stable_mint: Pubkey,
     pub principal_amount: u64,
-    pub skr_locked_amount: u64,
     pub lock_end_ts: i64,
 }
 
@@ -421,7 +316,6 @@ pub struct LockUnlocked {
     pub lock_account: Pubkey,
     pub owner: Pubkey,
     pub principal_amount: u64,
-    pub skr_locked_amount: u64,
     pub unlocked_at_ts: i64,
 }
 
@@ -437,10 +331,6 @@ pub enum LockVaultError {
     InvalidPrincipalAmount,
     #[msg("Only the configured USDC mint is supported.")]
     UnsupportedStableMint,
-    #[msg("The provided SKR mint does not match protocol config.")]
-    InvalidSkrMint,
-    #[msg("The SKR source token account is required when locking SKR.")]
-    MissingSkrTokenAccount,
     #[msg("The provided token account owner does not match the signing wallet.")]
     InvalidTokenAccountOwner,
     #[msg("The provided token account mint does not match the expected mint.")]
@@ -453,17 +343,13 @@ pub enum LockVaultError {
     LockAlreadyClosed,
     #[msg("The stable vault balance does not match the locked principal.")]
     UnexpectedStableVaultBalance,
-    #[msg("The SKR vault balance does not match the locked snapshot amount.")]
-    UnexpectedSkrVaultBalance,
-    #[msg("The supplied mint does not match the lock's recorded mint or protocol config.")]
+    #[msg("The supplied mint does not match the lock's recorded mint.")]
     InvalidMint,
 }
 
-fn validate_protocol_params(usdc_mint: Pubkey, skr_mint: Pubkey) -> Result<()> {
+fn validate_protocol_params(usdc_mint: Pubkey) -> Result<()> {
     require!(
-        usdc_mint != Pubkey::default()
-            && skr_mint != Pubkey::default()
-            && usdc_mint != skr_mint,
+        usdc_mint != Pubkey::default(),
         LockVaultError::InvalidMintConfig
     );
 
@@ -479,16 +365,11 @@ fn validate_lock_duration(lock_duration_days: u16) -> Result<()> {
     Ok(())
 }
 
-fn validate_supported_mints(
-    protocol: &VaultConfig,
-    stable_mint: Pubkey,
-    skr_mint: Pubkey,
-) -> Result<()> {
+fn validate_supported_mints(protocol: &VaultConfig, stable_mint: Pubkey) -> Result<()> {
     require!(
         stable_mint == protocol.usdc_mint,
         LockVaultError::UnsupportedStableMint
     );
-    require!(skr_mint == protocol.skr_mint, LockVaultError::InvalidSkrMint);
 
     Ok(())
 }
@@ -584,7 +465,6 @@ mod tests {
         VaultConfig {
             authority: Pubkey::new_unique(),
             usdc_mint: Pubkey::new_unique(),
-            skr_mint: Pubkey::new_unique(),
             bump: 255,
         }
     }
@@ -595,7 +475,6 @@ mod tests {
             course_id_hash: [7; 32],
             stable_mint: protocol.usdc_mint,
             principal_amount: 0,
-            skr_locked_amount: 0,
             lock_start_ts: 0,
             lock_end_ts: 30 * DAY_SECONDS,
             status: ACTIVE_STATUS,
@@ -604,20 +483,17 @@ mod tests {
     }
 
     #[test]
-    fn protocol_params_require_distinct_mints() {
-        let mint = Pubkey::new_unique();
-        assert!(validate_protocol_params(mint, mint).is_err());
+    fn protocol_params_reject_default_mint() {
+        assert!(validate_protocol_params(Pubkey::default()).is_err());
     }
 
     #[test]
-    fn protocol_params_accept_distinct_mints() {
-        let usdc = Pubkey::new_unique();
-        let skr = Pubkey::new_unique();
-        assert!(validate_protocol_params(usdc, skr).is_ok());
+    fn protocol_params_accept_valid_mint() {
+        assert!(validate_protocol_params(Pubkey::new_unique()).is_ok());
     }
 
     #[test]
-    fn lock_duration_allows_canonical_v3_values() {
+    fn lock_duration_allows_canonical_values() {
         for duration in [14u16, 30, 45, 60, 90, 180, 365] {
             assert!(
                 validate_lock_duration(duration).is_ok(),
@@ -644,7 +520,6 @@ mod tests {
             [9; 32],
             protocol.usdc_mint,
             250_000_000,
-            1_500_000_000,
             60,
             1_700_000_000,
             77,
@@ -655,7 +530,6 @@ mod tests {
         assert_eq!(lock.course_id_hash, [9; 32]);
         assert_eq!(lock.stable_mint, protocol.usdc_mint);
         assert_eq!(lock.principal_amount, 250_000_000);
-        assert_eq!(lock.skr_locked_amount, 1_500_000_000);
         assert_eq!(lock.lock_start_ts, 1_700_000_000);
         assert_eq!(lock.lock_end_ts, 1_700_000_000 + 60 * DAY_SECONDS);
         assert_eq!(lock.status, ACTIVE_STATUS);
@@ -670,7 +544,6 @@ mod tests {
             [3; 32],
             protocol.usdc_mint,
             1_000_000,
-            1_000_000_000,
             30,
             1_700_000_000,
             99,
@@ -693,7 +566,6 @@ mod tests {
             [3; 32],
             protocol.usdc_mint,
             1_000_000,
-            0,
             30,
             1_700_000_000,
             99,
@@ -712,7 +584,6 @@ mod tests {
             [3; 32],
             protocol.usdc_mint,
             1_000_000,
-            0,
             30,
             1_700_000_000,
             99,
@@ -732,7 +603,6 @@ mod tests {
             [3; 32],
             protocol.usdc_mint,
             1_000_000,
-            0,
             29,
             1_700_000_000,
             99,

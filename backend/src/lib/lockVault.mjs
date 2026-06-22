@@ -72,14 +72,14 @@ function deriveLockAccount(programId, walletAddress, courseId) {
   return lockAccount;
 }
 
-// New custody-core LockAccount: 9 fields only. Layout/order/types mirror
-// target/idl/lock_vault.json -> types.LockAccount:
+// Custody-core LockAccount: 8 fields. Layout/order/types mirror
+// target/idl/locked_in.json -> types.LockAccount:
 //   owner(pubkey) course_id_hash([u8;32]) stable_mint(pubkey)
-//   principal_amount(u64) skr_locked_amount(u64) lock_start_ts(i64)
-//   lock_end_ts(i64) status(u8) bump(u8)
-// Total = 8 disc + 32 + 32 + 32 + 8 + 8 + 8 + 8 + 1 + 1 = 138 bytes.
+//   principal_amount(u64) lock_start_ts(i64) lock_end_ts(i64)
+//   status(u8) bump(u8)
+// Total = 8 disc + 32 + 32 + 32 + 8 + 8 + 8 + 1 + 1 = 130 bytes.
 function decodeLockAccountSnapshot(data) {
-  if (data.length < 138) {
+  if (data.length < 130) {
     throw new Error('Lock account data is shorter than expected.');
   }
 
@@ -120,7 +120,6 @@ function decodeLockAccountSnapshot(data) {
     courseIdHash: Buffer.from(readBytes(32)).toString('hex'),
     stableMint: readPubkey(),
     principalAmount: readU64(),
-    skrLockedAmount: readU64(),
     lockStartTs: readI64(),
     lockEndTs: readI64(),
     status: readU8(),

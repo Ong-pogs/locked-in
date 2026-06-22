@@ -90,7 +90,7 @@ That creates a strong social and economic loop: users who stay disciplined benef
 
 ### Step 1: Lock in
 
-The user connects a Solana wallet, chooses a course, and locks USDC for the course duration. The vault can also optionally escrow SKR alongside the principal; it is returned in full at resurface.
+The user connects a Solana wallet, chooses a course, and locks USDC for the course duration. The vault is pure USDC principal custody; the full principal is returned at resurface.
 
 ### Step 2: Earn Fuel through verified learning
 
@@ -127,7 +127,6 @@ Savers are restored by buying one in the shop with Ichor, which also steps the r
 When the lock period ends, the user resurfaces.
 
 Their principal comes back.
-Any locked SKR comes back.
 What changes is how much yield they preserved, how much Ichor they accumulated to spend in the shop, and whether they finished the course with momentum or regret.
 
 ## The Dungeon Model
@@ -140,10 +139,9 @@ Locked In uses one core metaphor so the system stays intuitive.
 | Fire | The 24h-per-fuel timer that gates whether yield routes to you or the pot |
 | Brewer | The engine that keeps the fire lit and routes yield while it burns |
 | Ichor | In-game shop currency earned per lesson; spent in the shop, not redeemable for USDC |
-| SKR | Optional asset escrowed alongside principal; returned at resurface |
 | Savers | Streak protection that lowers the yield-redirect tier |
 | Community pot | Yield redirected from inconsistent users to consistent ones |
-| Resurface | End-of-lock exit where principal and any locked SKR return |
+| Resurface | End-of-lock exit where the principal returns |
 
 Important implementation note:
 
@@ -176,12 +174,12 @@ The earlier separate programs are gone: `yield_splitter` was fully removed, and 
 
 The `vault` module is custody-only:
 
-- escrows principal (USDC) and any optional SKR
+- escrows principal (USDC)
 - clock-gated unlock with a full-principal assertion
 - PDA-signed payout at resurface
-- `unlock_funds` enforces mint binding (`InvalidMint`, error `6014`)
+- `unlock_funds` enforces mint binding (`InvalidMint`)
 
-The on-chain `LockAccount` is `138` bytes with `9` fields: `owner`, `course_id_hash`, `stable_mint`, `principal_amount`, `skr_locked_amount`, `lock_start_ts`, `lock_end_ts`, `status`, `bump`.
+The on-chain `LockAccount` is `130` bytes with `8` fields: `owner`, `course_id_hash`, `stable_mint`, `principal_amount`, `lock_start_ts`, `lock_end_ts`, `status`, `bump`.
 
 The `pot` module handles redirected-yield accounting:
 

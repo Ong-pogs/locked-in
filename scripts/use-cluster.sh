@@ -10,9 +10,9 @@
 #
 # All .env / .env.* files are gitignored (they hold the Alchemy RPC key +
 # secrets). The Alchemy key lives ONLY in backend files — never in web-app
-# (NEXT_PUBLIC_* ships to the browser). The mainnet profile carries
-# <FILL_AT_MAINNET_DEPLOY> placeholders for the program ID + SKR mint that
-# must be filled once the program is deployed to mainnet.
+# (NEXT_PUBLIC_* ships to the browser). The mainnet profile carries a
+# <FILL_AT_MAINNET_DEPLOY> placeholder for the program ID that must be
+# filled once the program is deployed to mainnet.
 set -euo pipefail
 
 CLUSTER="${1:-}"
@@ -36,5 +36,5 @@ done
 
 echo "✅ Switched to $CLUSTER. Restart backend (node --watch src/server.mjs) and web-app (next dev) to apply."
 if [[ "$CLUSTER" == "mainnet" ]]; then
-  echo "⚠️  mainnet profile has <FILL_AT_MAINNET_DEPLOY> placeholders — fill the program ID + SKR mint before running."
+  echo "⚠️  mainnet profile has a <FILL_AT_MAINNET_DEPLOY> placeholder — fill the program ID before running."
 fi

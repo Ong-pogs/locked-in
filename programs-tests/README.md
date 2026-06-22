@@ -31,8 +31,8 @@ All other seeds (`b"lock"`, `b"window"`, `b"distribution"`, `b"redirect"`,
 
 The happy-path test chains real transactions through the full lifecycle:
 
-1. Create stable + SKR mints, fund test owner, pre-fund the community pot vault
-2. `initialize_vault` (usdc + skr mints) — vault config PDA `b"vault-protocol"`
+1. Create the stable mint, fund test owner, pre-fund the community pot vault
+2. `initialize_vault` (usdc mint) — vault config PDA `b"vault-protocol"`
 3. `initialize_pot` (stable mint) — pot config PDA `b"pot-protocol"`
 4. `lock_funds(100 USDC, 30 days)` + asserts stable_vault balance, lock_account.principal_amount, owner USDC delta
 5. `record_redirect` + asserts PotWindow total_redirected_amount, redirect_count

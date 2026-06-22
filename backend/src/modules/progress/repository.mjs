@@ -1206,21 +1206,20 @@ export async function syncCourseRuntimeStateWithLockSnapshot(
 
   return withTransactionAsWallet(walletAddress, async (client) => {
     await ensureCourseRuntimeState(client, walletAddress, courseId);
-    // The custody-core lock_vault LockAccount only carries custody fields now
-    // (owner, mint, principal, skr, timestamps, status). The game layer —
-    // streak, gauntlet, savers, redirect_bps, extension, fuel, ichor,
-    // last_completed_day — is OWNED BY THE DB and must NOT be overwritten from
-    // the chain snapshot. We sync only the custody columns so the on-chain
-    // principal/SKR/lock window stay reflected in the runtime row.
+    // The custody-core LockAccount only carries custody fields now
+    // (owner, mint, principal, timestamps, status). The game layer — streak,
+    // savers, redirect_bps, fuel, ichor, last_completed_day — is OWNED BY THE
+    // DB and must NOT be overwritten from the chain snapshot. We sync only the
+    // custody columns so the on-chain principal/lock window stay reflected in
+    // the runtime row.
     await client.query(
       `
         update lesson.user_course_runtime_state
         set lock_account_address = $3,
             stable_mint = $4,
             principal_amount = $5::bigint,
-            skr_locked_amount = $6::bigint,
-            lock_start_at = $7::timestamptz,
-            lock_end_at = $8::timestamptz,
+            lock_start_at = $6::timestamptz,
+            lock_end_at = $7::timestamptz,
             updated_at = now()
         where wallet_address = $1
           and course_id = $2
@@ -1231,7 +1230,6 @@ export async function syncCourseRuntimeStateWithLockSnapshot(
         snapshot.lockAccount,
         snapshot.stableMint,
         snapshot.principalAmount,
-        snapshot.skrLockedAmount,
         unixTimestampSecondsToIso(snapshot.lockStartTs),
         unixTimestampSecondsToIso(snapshot.lockEndTs),
       ],
@@ -1571,7 +1569,6 @@ async function readUnlockReceipt(client, walletAddress, unlockTxSignature) {
         course_id as "courseId",
         lock_account_address as "lockAccountAddress",
         principal_amount_ui as "principalAmountUi",
-        skr_locked_amount_ui as "skrLockedAmountUi",
         lock_end_at as "lockEndAt",
         unlocked_at as "unlockedAt",
         verified_slot as "verifiedSlot",
@@ -1597,7 +1594,6 @@ async function readRuntimeLockMetadata(client, walletAddress, courseId) {
         lock_account_address as "lockAccountAddress",
         stable_mint as "stableMint",
         principal_amount as "principalAmount",
-        skr_locked_amount as "skrLockedAmount",
         lock_start_at as "lockStartAt",
         lock_end_at as "lockEndAt"
       from lesson.user_course_runtime_state
@@ -1620,7 +1616,6 @@ async function readRuntimeLockMetadataByLockAccount(client, lockAccountAddress) 
         lock_account_address as "lockAccountAddress",
         stable_mint as "stableMint",
         principal_amount as "principalAmount",
-        skr_locked_amount as "skrLockedAmount",
         lock_start_at as "lockStartAt",
         lock_end_at as "lockEndAt"
       from lesson.user_course_runtime_state
@@ -1684,9 +1679,6 @@ export async function recordUnlockReceipt(walletAddress, payload) {
   if (!payload?.principalAmountUi || typeof payload.principalAmountUi !== 'string') {
     throw badRequest('principalAmountUi is required', 'MISSING_PRINCIPAL_AMOUNT_UI');
   }
-  if (typeof payload?.skrLockedAmountUi !== 'string') {
-    throw badRequest('skrLockedAmountUi is required', 'MISSING_SKR_LOCKED_AMOUNT_UI');
-  }
   if (!payload?.lockEndDate || typeof payload.lockEndDate !== 'string') {
     throw badRequest('lockEndDate is required', 'MISSING_LOCK_END_DATE');
   }
@@ -1703,7 +1695,6 @@ export async function recordUnlockReceipt(walletAddress, payload) {
       courseId: payload.courseId,
       lockAccountAddress: payload.lockAccountAddress,
       principalAmountUi: payload.principalAmountUi,
-      skrLockedAmountUi: payload.skrLockedAmountUi,
       lockEndAt: payload.lockEndDate,
       unlockedAt,
       verifiedSlot: null,
@@ -1738,13 +1729,12 @@ export async function recordUnlockReceipt(walletAddress, payload) {
           course_id,
           lock_account_address,
           principal_amount_ui,
-          skr_locked_amount_ui,
           lock_end_at,
           unlocked_at,
           verified_slot,
           verified_block_time
         )
-        values ($1, $2, $3, $4, $5, $6, $7::timestamptz, $8::timestamptz, $9::bigint, $10::timestamptz)
+        values ($1, $2, $3, $4, $5, $6::timestamptz, $7::timestamptz, $8::bigint, $9::timestamptz)
         on conflict (unlock_tx_signature) do nothing
       `,
       [
@@ -1753,7 +1743,6 @@ export async function recordUnlockReceipt(walletAddress, payload) {
         payload.courseId,
         verification.lockAccountAddress ?? payload.lockAccountAddress,
         payload.principalAmountUi,
-        payload.skrLockedAmountUi,
         payload.lockEndDate,
         unlockedAt,
         verification.slot,
@@ -1822,7 +1811,6 @@ export async function recordUnlockReceiptFromChain(unlockTxSignature) {
     courseId: metadata.courseId,
     lockAccountAddress: metadata.lockAccountAddress,
     principalAmountUi: formatAtomicUsdcUi(metadata.principalAmount ?? 0),
-    skrLockedAmountUi: formatAtomicUsdcUi(metadata.skrLockedAmount ?? 0),
     lockEndDate:
       metadata.lockEndAt instanceof Date
         ? metadata.lockEndAt.toISOString()
@@ -1943,7 +1931,6 @@ export async function getUnlockReceipts(walletAddress, limit = 20) {
         course_id as "courseId",
         lock_account_address as "lockAccountAddress",
         principal_amount_ui as "principalAmountUi",
-        skr_locked_amount_ui as "skrLockedAmountUi",
         lock_end_at as "lockEndAt",
         unlocked_at as "unlockedAt",
         verified_slot as "verifiedSlot",

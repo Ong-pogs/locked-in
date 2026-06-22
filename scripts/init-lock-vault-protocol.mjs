@@ -4,7 +4,7 @@
 // `initialize_vault` instruction:
 //   * config PDA seed  = b"vault-protocol" (re-seeded to avoid colliding with
 //                        the pot config PDA which uses b"pot-protocol")
-//   * args             = usdc_mint (pubkey) + skr_mint (pubkey)
+//   * args             = usdc_mint (pubkey)
 //   * accounts         = [protocol_config (writable PDA), authority (signer,
 //                        writable, pays rent + becomes config.authority),
 //                        system_program]
@@ -72,7 +72,6 @@ async function main() {
     env.EXPO_PUBLIC_LOCKED_IN_PROGRAM_ID || requireEnv(env, 'EXPO_PUBLIC_LOCK_VAULT_PROGRAM_ID'),
   );
   const usdcMint = new PublicKey(requireEnv(env, 'EXPO_PUBLIC_LOCK_VAULT_USDC_MINT'));
-  const skrMint = new PublicKey(requireEnv(env, 'EXPO_PUBLIC_LOCK_VAULT_SKR_MINT'));
 
   const [protocolConfig] = PublicKey.findProgramAddressSync([VAULT_CONFIG_SEED], programId);
 
@@ -84,7 +83,6 @@ async function main() {
           programId: programId.toBase58(),
           protocolConfig: protocolConfig.toBase58(),
           usdcMint: usdcMint.toBase58(),
-          skrMint: skrMint.toBase58(),
           status: 'already_initialized',
         },
         null,
@@ -94,7 +92,7 @@ async function main() {
     return;
   }
 
-  // args layout: usdc_mint (32) + skr_mint (32), both Anchor `pubkey`.
+  // args layout: usdc_mint (32), Anchor `pubkey`.
   const instruction = new TransactionInstruction({
     programId,
     keys: [
@@ -105,7 +103,6 @@ async function main() {
     data: Buffer.concat([
       anchorDiscriminator('initialize_vault'),
       usdcMint.toBuffer(),
-      skrMint.toBuffer(),
     ]),
   });
 
@@ -128,7 +125,6 @@ async function main() {
         protocolConfig: protocolConfig.toBase58(),
         authority: authority.publicKey.toBase58(),
         usdcMint: usdcMint.toBase58(),
-        skrMint: skrMint.toBase58(),
       },
       null,
       2,

@@ -91,7 +91,7 @@ function DepositContent() {
     : (solanaWallets.find((w) => !isEmbedded(w)) ?? null);
 
   // Wallet balances
-  const [balances, setBalances] = useState<{ stableBalanceUi: string; skrBalanceUi: string; solBalanceUi: string } | null>(null);
+  const [balances, setBalances] = useState<{ stableBalanceUi: string; solBalanceUi: string } | null>(null);
 
   // Fetch wallet balances on mount
   useEffect(() => {
@@ -298,7 +298,6 @@ function DepositContent() {
         ownerAddress: walletAddress,
         courseId,
         stableAmountUi: principalAmount,
-        skrAmountUi: '0',
         lockDurationDays: lockDuration as SolanaLockDuration,
       });
 
@@ -334,7 +333,6 @@ function DepositContent() {
         duration: lockDuration,
         lockAccountAddress: buildResult.lockAccountAddress,
         stableMintAddress: buildResult.stableMintAddress,
-        skrAmount: 0,
       });
 
       setStatusMessage('Lock created successfully!');

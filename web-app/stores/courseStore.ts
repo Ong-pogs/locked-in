@@ -55,7 +55,6 @@ interface CourseStore {
       duration: 14 | 30 | 45 | 60 | 90 | 180 | 365;
       lockAccountAddress?: string | null;
       stableMintAddress?: string | null;
-      skrAmount?: number;
     },
   ) => void;
   deactivateCourse: (courseId: string) => void;
@@ -195,7 +194,6 @@ export const useCourseStore = create<CourseStore>()(
           lockStartDate: new Date().toISOString(),
           lockAccountAddress: lock.lockAccountAddress ?? null,
           stableMintAddress: lock.stableMintAddress ?? null,
-          skrLockedAmount: lock.skrAmount ?? 0,
         });
         set({
           courseStates: { ...courseStates, [courseId]: newState },
@@ -475,7 +473,6 @@ export const useCourseStore = create<CourseStore>()(
               lockAccountAddress:
                 snapshot.lockAccountAddress ?? existingState.lockAccountAddress,
               lockStartDate: snapshot.lockStartDate,
-              skrLockedAmount: Number(snapshot.skrLockedAmountUi), // custody
             },
           },
         });

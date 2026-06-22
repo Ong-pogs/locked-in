@@ -10,7 +10,6 @@ function buildReceipt(overrides?: Partial<ResurfaceReceipt>): ResurfaceReceipt {
     courseTitle: 'Solana 101',
     lockAccountAddress: 'Lock123',
     principalAmountUi: '100',
-    skrLockedAmountUi: '50',
     unlockedAt: '2024-06-01T00:00:00Z',
     unlockTxSignature: 'TxSig123',
     lockEndDate: '2024-06-01T00:00:00Z',

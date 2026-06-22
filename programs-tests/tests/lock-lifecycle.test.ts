@@ -23,12 +23,14 @@
  * Test flow:
  *   1.  Bootstrap LiteSVM, load the merged program
  *   2.  Create authority + owner keypairs, airdrop SOL
- *   3.  Create stable (USDC-like) + SKR mints, fund owner, pre-fund the pot
+ *   3.  Create stable (USDC-like) mint, fund owner, pre-fund the pot
  *   4.  initialize_vault + initialize_pot (two domain configs, one program)
  *   5.  lock_funds(100 USDC, 30 days) → principal escrowed into vault ATA
  *   6.  record_redirect → window accumulates
  *   7.  Warp LiteSVM clock past lock_end_ts
  *   8.  unlock_funds → owner receives full principal, vault + lock closed
+ *
+ * v4: SKR fully removed — pure USDC principal custody (no SKR mint/vault/ATA).
  *
  * Run: cd programs-tests && npm test
  */
@@ -78,7 +80,6 @@ const POT_WINDOW_SEED = Buffer.from('window');
 const REDIRECT_RECEIPT_SEED = Buffer.from('redirect');
 
 const STABLE_DECIMALS = 6; // USDC-like
-const SKR_DECIMALS = 9;
 
 const PRINCIPAL_AMOUNT_UI = 100; // 100 USDC
 const PRINCIPAL_AMOUNT_BASE = PRINCIPAL_AMOUNT_UI * 10 ** STABLE_DECIMALS;
@@ -108,19 +109,16 @@ describe('Lock lifecycle (merged locked_in: vault × pot)', () => {
   let owner: Keypair;
   let recipient: Keypair; // for pot distribution (not exercised here but kept)
   let stableMint: Keypair;
-  let skrMint: Keypair;
 
   // PDAs
   let vaultConfig: PublicKey;
   let potConfig: PublicKey;
   let lockAccount: PublicKey;
   let stableVault: PublicKey;
-  let skrVault: PublicKey;
   let potVault: PublicKey;
   let courseIdHash: Buffer;
 
   let ownerStableAta: PublicKey;
-  let ownerSkrAta: PublicKey;
 
   const t0 = Date.now();
   const stepTimings: { name: string; ms: number }[] = [];
@@ -152,7 +150,6 @@ describe('Lock lifecycle (merged locked_in: vault × pot)', () => {
     owner = Keypair.generate();
     recipient = Keypair.generate();
     stableMint = Keypair.generate();
-    skrMint = Keypair.generate();
 
     svm.airdrop(authority.publicKey, BigInt(1000 * LAMPORTS_PER_SOL));
     svm.airdrop(owner.publicKey, BigInt(1000 * LAMPORTS_PER_SOL));
@@ -181,11 +178,6 @@ describe('Lock lifecycle (merged locked_in: vault × pot)', () => {
       lockAccount,
       true,
     );
-    skrVault = getAssociatedTokenAddressSync(
-      skrMint.publicKey,
-      lockAccount,
-      true,
-    );
     potVault = getAssociatedTokenAddressSync(
       stableMint.publicKey,
       potConfig,
@@ -193,10 +185,6 @@ describe('Lock lifecycle (merged locked_in: vault × pot)', () => {
     );
     ownerStableAta = getAssociatedTokenAddressSync(
       stableMint.publicKey,
-      owner.publicKey,
-    );
-    ownerSkrAta = getAssociatedTokenAddressSync(
-      skrMint.publicKey,
       owner.publicKey,
     );
   });
@@ -226,38 +214,13 @@ describe('Lock lifecycle (merged locked_in: vault × pot)', () => {
       );
       sendTx(stableMintTx, [authority, stableMint]);
 
-      // Create SKR mint.
-      const skrMintTx = new Transaction().add(
-        SystemProgram.createAccount({
-          fromPubkey: authority.publicKey,
-          newAccountPubkey: skrMint.publicKey,
-          space: MINT_SIZE,
-          lamports: rentMint,
-          programId: TOKEN_PROGRAM_ID,
-        }),
-        createInitializeMint2Instruction(
-          skrMint.publicKey,
-          SKR_DECIMALS,
-          authority.publicKey,
-          null,
-        ),
-      );
-      sendTx(skrMintTx, [authority, skrMint]);
-
-      // Owner's USDC ATA + mint 500 USDC. Owner also gets an SKR ATA so the
-      // unlock path's init_if_needed owner SKR account already exists.
+      // Owner's USDC ATA + mint 500 USDC.
       const ataTx = new Transaction().add(
         createAssociatedTokenAccountInstruction(
           authority.publicKey,
           ownerStableAta,
           owner.publicKey,
           stableMint.publicKey,
-        ),
-        createAssociatedTokenAccountInstruction(
-          authority.publicKey,
-          ownerSkrAta,
-          owner.publicKey,
-          skrMint.publicKey,
         ),
         createMintToInstruction(
           stableMint.publicKey,
@@ -290,7 +253,7 @@ describe('Lock lifecycle (merged locked_in: vault × pot)', () => {
     // STEP B. initialize_vault + initialize_pot (both domains, one program)
     // ─────────────────────────────────────────────────────────────
     await program.methods
-      .initializeVault(stableMint.publicKey, skrMint.publicKey)
+      .initializeVault(stableMint.publicKey)
       .accounts({
         protocolConfig: vaultConfig,
         authority: authority.publicKey,
@@ -331,21 +294,17 @@ describe('Lock lifecycle (merged locked_in: vault × pot)', () => {
         Array.from(courseIdHash),
         LOCK_DURATION_DAYS,
         new BN(PRINCIPAL_AMOUNT_BASE),
-        new BN(0), // skr_amount = 0
       )
       .accounts({
         protocolConfig: vaultConfig,
         lockAccount,
         stableMint: stableMint.publicKey,
-        skrMint: skrMint.publicKey,
         owner: owner.publicKey,
         ownerStableTokenAccount: ownerStableAta,
         stableVault,
-        skrVault,
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
-        ownerSkrTokenAccount: null,
       })
       .signers([owner])
       .rpc();
@@ -432,15 +391,11 @@ describe('Lock lifecycle (merged locked_in: vault × pot)', () => {
     await program.methods
       .unlockFunds()
       .accounts({
-        protocolConfig: vaultConfig,
         lockAccount,
         stableMint: stableMint.publicKey,
-        skrMint: skrMint.publicKey,
         owner: owner.publicKey,
         stableVault,
-        skrVault,
         ownerStableTokenAccount: ownerStableAta,
-        ownerSkrTokenAccount: ownerSkrAta,
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
@@ -493,13 +448,9 @@ describe('Lock lifecycle (merged locked_in: vault × pot)', () => {
       LOCKED_IN_PROGRAM_ID,
     );
 
-    // Owner's real USDC ATA (funded) + real SKR ATA (for the unlock path).
+    // Owner's real USDC ATA (funded).
     const evilOwnerStableAta = getAssociatedTokenAddressSync(
       stableMint.publicKey,
-      evilOwner.publicKey,
-    );
-    const evilOwnerSkrAta = getAssociatedTokenAddressSync(
-      skrMint.publicKey,
       evilOwner.publicKey,
     );
     const setupTx = new Transaction().add(
@@ -508,12 +459,6 @@ describe('Lock lifecycle (merged locked_in: vault × pot)', () => {
         evilOwnerStableAta,
         evilOwner.publicKey,
         stableMint.publicKey,
-      ),
-      createAssociatedTokenAccountInstruction(
-        authority.publicKey,
-        evilOwnerSkrAta,
-        evilOwner.publicKey,
-        skrMint.publicKey,
       ),
       createMintToInstruction(
         stableMint.publicKey,
@@ -526,14 +471,9 @@ describe('Lock lifecycle (merged locked_in: vault × pot)', () => {
     // creation (it is only the ATA owner, not a required signer).
     await sendTx(setupTx, [authority]);
 
-    // Real vault ATAs for the lock (the program inits these in lock_funds).
+    // Real vault ATA for the lock (the program inits this in lock_funds).
     const evilStableVault = getAssociatedTokenAddressSync(
       stableMint.publicKey,
-      evilLock,
-      true,
-    );
-    const evilSkrVault = getAssociatedTokenAddressSync(
-      skrMint.publicKey,
       evilLock,
       true,
     );
@@ -544,21 +484,17 @@ describe('Lock lifecycle (merged locked_in: vault × pot)', () => {
         Array.from(evilCourseHash),
         LOCK_DURATION_DAYS,
         new BN(PRINCIPAL_AMOUNT_BASE),
-        new BN(0),
       )
       .accounts({
         protocolConfig: vaultConfig,
         lockAccount: evilLock,
         stableMint: stableMint.publicKey,
-        skrMint: skrMint.publicKey,
         owner: evilOwner.publicKey,
         ownerStableTokenAccount: evilOwnerStableAta,
         stableVault: evilStableVault,
-        skrVault: evilSkrVault,
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
-        ownerSkrTokenAccount: null,
       })
       .signers([evilOwner])
       .rpc();
@@ -636,15 +572,11 @@ describe('Lock lifecycle (merged locked_in: vault × pot)', () => {
       await program.methods
         .unlockFunds()
         .accounts({
-          protocolConfig: vaultConfig,
           lockAccount: evilLock,
           stableMint: fakeStableMint.publicKey, // FAKE
-          skrMint: skrMint.publicKey,
           owner: evilOwner.publicKey,
           stableVault: fakeStableVault, // FAKE
-          skrVault: evilSkrVault,
           ownerStableTokenAccount: evilOwnerFakeAta,
-          ownerSkrTokenAccount: evilOwnerSkrAta,
           tokenProgram: TOKEN_PROGRAM_ID,
           associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
           systemProgram: SystemProgram.programId,

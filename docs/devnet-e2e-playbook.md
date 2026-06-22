@@ -138,17 +138,17 @@ Both init instructions live in the one merged program. They coexist via distinct
 
 | Instruction | Discriminator (verified vs IDL) | Seed (bytes) | Args |
 |---|---|---|---|
-| `initialize_vault` | `[48,191,163,44,71,129,63,164]` | `b"vault-protocol"` `[118,97,117,108,116,45,112,114,111,116,111,99,111,108]` | `usdc_mint: pubkey`, `skr_mint: pubkey` |
+| `initialize_vault` | `[48,191,163,44,71,129,63,164]` | `b"vault-protocol"` `[118,97,117,108,116,45,112,114,111,116,111,99,111,108]` | `usdc_mint: pubkey` |
 | `initialize_pot` | `[142,71,252,186,244,59,203,118]` | `b"pot-protocol"` `[112,111,116,45,112,114,111,116,111,99,111,108]` | `stable_mint: pubkey` |
 
-**Authority is load-bearing.** The `authority` signer on each init becomes the stored config authority. For the pot, `record_redirect`, `close_distribution_window`, and `distribute_window` all enforce `has_one = authority` (error `UnauthorizedWorker`). So **the keypair that signs `initialize_pot` MUST be the same key the backend later uses as the pot worker** (`LOCK_VAULT_WORKER_PRIVATE_KEY`, or `COMMUNITY_POT_WORKER_PRIVATE_KEY` if you set it). On-chain validation also requires (vault only) `usdc_mint` and `skr_mint` to be non-default and distinct, else `InvalidMintConfig` (6002).
+**Authority is load-bearing.** The `authority` signer on each init becomes the stored config authority. For the pot, `record_redirect`, `close_distribution_window`, and `distribute_window` all enforce `has_one = authority` (error `UnauthorizedWorker`). So **the keypair that signs `initialize_pot` MUST be the same key the backend later uses as the pot worker** (`LOCK_VAULT_WORKER_PRIVATE_KEY`, or `COMMUNITY_POT_WORKER_PRIVATE_KEY` if you set it). On-chain validation also requires (vault only) `usdc_mint` to be non-default, else `InvalidMintConfig` (6002).
 
 **Run the (fixed) init scripts.** They are env-driven and idempotent (short-circuit `already_initialized` if the PDA exists). They read `.env` from the **current working directory** and need `@solana/web3.js` + `bs58`, which are installed under `backend/`. So run from `backend/`:
 
 ```bash
 # 1) Make sure backend/.env has the required keys (see Phase B for the full list).
 #    Minimum for init: EXPO_PUBLIC_LOCKED_IN_PROGRAM_ID (or EXPO_PUBLIC_LOCK_VAULT_PROGRAM_ID),
-#    EXPO_PUBLIC_LOCK_VAULT_USDC_MINT, EXPO_PUBLIC_LOCK_VAULT_SKR_MINT,
+#    EXPO_PUBLIC_LOCK_VAULT_USDC_MINT,
 #    DEPLOYER_PRIVATE_KEY (base58 secret of the protocol authority — must sign),
 #    EXPO_PUBLIC_SOLANA_RPC_URL (defaults to devnet if omitted).
 
@@ -218,10 +218,9 @@ COMMUNITY_POT_PROGRAM_ID=68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3
 ```
 (`YIELD_SPLITTER_PROGRAM_ID` is dead — must NOT be present.)
 
-**Mints (devnet test mints — must match web-app exactly):**
+**Mint (devnet test mint — must match web-app exactly):**
 ```
 LOCK_VAULT_USDC_MINT=4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU
-LOCK_VAULT_SKR_MINT=CQAiXocPkmrr6MTDigHn1yDJ66v5nbPyxwMoUxb4PgST
 ```
 
 **Authority / worker keys (THIS key must equal the `initialize_vault`/`initialize_pot` authority):**
@@ -269,7 +268,7 @@ Yield strategy / OpenAI validator are optional for E2E (leave disabled).
 ```bash
 cp /Users/marcus/Projects/locked-in/web-app/.env.example /Users/marcus/Projects/locked-in/web-app/.env
 ```
-Exactly 8 `NEXT_PUBLIC_*` vars are read by source:
+Exactly 7 `NEXT_PUBLIC_*` vars are read by source:
 ```
 NEXT_PUBLIC_API_URL=http://localhost:3001
 NEXT_PUBLIC_PRIVY_APP_ID=cmncshird026v0cl5n6yqq8z0          # == backend PRIVY_APP_ID
@@ -278,18 +277,16 @@ NEXT_PUBLIC_SOLANA_RPC_URL=https://api.devnet.solana.com
 NEXT_PUBLIC_SOLANA_WS_URL=wss://api.devnet.solana.com
 NEXT_PUBLIC_LOCK_VAULT_PROGRAM_ID=68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3   # merged; pot PDA derived from this
 NEXT_PUBLIC_LOCK_VAULT_USDC_MINT=4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU    # == backend
-NEXT_PUBLIC_LOCK_VAULT_SKR_MINT=CQAiXocPkmrr6MTDigHn1yDJ66v5nbPyxwMoUxb4PgST     # == backend
 ```
 `NEXT_PUBLIC_YIELD_SPLITTER_PROGRAM_ID` and `NEXT_PUBLIC_COMMUNITY_POT_PROGRAM_ID` are **not** read — `lockVault.ts` derives both the vault PDA (`vault-protocol`) and pot PDA (`pot-protocol`) from the single `NEXT_PUBLIC_LOCK_VAULT_PROGRAM_ID`. Don't set them.
 
 ### B4. Consistency invariants (must all hold or E2E breaks)
 
 - `LOCK_VAULT_USDC_MINT` (backend) == `NEXT_PUBLIC_LOCK_VAULT_USDC_MINT` (web-app)
-- `LOCK_VAULT_SKR_MINT` (backend) == `NEXT_PUBLIC_LOCK_VAULT_SKR_MINT` (web-app)
 - `PRIVY_APP_ID` (backend) == `NEXT_PUBLIC_PRIVY_APP_ID` (web-app)
 - backend `CORS_ALLOWED_ORIGINS` includes `http://localhost:3000`
 - on-chain authority used in A4 == `LOCK_VAULT_WORKER_PRIVATE_KEY`
-- both env mints == the mints passed to `initialize_vault` in A4
+- both env USDC mints == the mint passed to `initialize_vault` in A4
 
 ### B5. Start the test DB
 
@@ -327,7 +324,7 @@ Open `http://localhost:3000/courses`. Confirm the catalog loads and the browser 
 
 ## 4. Phase C — End-to-end test matrix
 
-Run **top to bottom**. The on-chain custody path (lock → redirect → close → distribute → unlock) is sequenced **first** because it's the highest-risk part of the restructuring (12-account ordering, `protocol_config` resolution on a live cluster, the new unlock account layout). Auth/Faucet are prerequisites for it, so they lead. Tick the checkbox as each passes.
+Run **top to bottom**. The on-chain custody path (lock → redirect → close → distribute → unlock) is sequenced **first** because it's the highest-risk part of the restructuring (account ordering, `protocol_config` resolution on a live cluster, the new unlock account layout). Auth/Faucet are prerequisites for it, so they lead. Tick the checkbox as each passes.
 
 ### Setup prerequisite (already done in Phase A — re-verify if unsure)
 
@@ -363,10 +360,9 @@ Run **top to bottom**. The on-chain custody path (lock → redirect → close �
 
 | ✅ | Area | Flow | Steps | Expected | Priority |
 |---|---|---|---|---|---|
-| ☐ | Lock | `lock_funds` deposit — user-signed custody on live devnet | `/onboarding/deposit?courseId=…`: ensure USDC (claim first), pick 1 USDC + a whitelisted duration (e.g. 30d), DEPOSIT & START → approve | Tx confirms; `LockCreated` emitted; `LockAccount` PDA: owner=wallet, principal=1e6, lock_end=now+30d, status=active; `stable_vault` ATA (owner=lockAccount) holds principal; **12 accounts resolve in exact IDL order** (see Phase D); `protocol_config` (vault-protocol) matches configured USDC mint; `activateCourse` writes `lockAccountAddress`; routes to `/village` | critical |
+| ☐ | Lock | `lock_funds` deposit — user-signed custody on live devnet | `/onboarding/deposit?courseId=…`: ensure USDC (claim first), pick 1 USDC + a whitelisted duration (e.g. 30d), DEPOSIT & START → approve | Tx confirms; `LockCreated` emitted; `LockAccount` PDA: owner=wallet, principal=1e6, lock_end=now+30d, status=active; `stable_vault` ATA (owner=lockAccount) holds principal; **9 accounts resolve in exact IDL order** (see Phase D); `protocol_config` (vault-protocol) matches configured USDC mint; `activateCourse` writes `lockAccountAddress`; routes to `/village` | critical |
 | ☐ | Lock | `protocol_config` resolution + `UnsupportedStableMint` guard | Confirm `initialize_vault` used the same `usdc_mint` as `NEXT_PUBLIC_LOCK_VAULT_USDC_MINT`; lock once; (neg) point env at a mint not in VaultConfig | Match → lock succeeds; mismatch → tx fails **`UnsupportedStableMint` (6004)** — proves merged VaultConfig at vault-protocol is live + authoritative | critical |
 | ☐ | Lock | Client min/max + duration whitelist | Try below course min (not demo), above max, bad decimals `1.2345678`, amount > balance | Below-min "requires at least N USDC"; above-max "allows at most N"; bad decimals → validation msg; duration pills only show whitelisted `[14,30,45,60,90,180,365]` clamped to policy; insufficient → "Insufficient USDC. You have X"; **no tx built when client validation fails** | high |
-| ☐ | Lock | SKR lock path (optional trailing ATA) | Build lock with `skr_amount>0` via `lockVault.ts`; with SKR ATA present, then absent | With ATA + skr>0: trailing acct = `owner_skr_token_account`, `skr_vault` funded, `skr_locked_amount` recorded; without ATA → **`MissingSkrTokenAccount` (6006)**; with skr=0 trailing slot harmlessly = stable ATA | medium |
 
 ### Lessons (drive game state in the DB)
 
@@ -401,12 +397,12 @@ Run **top to bottom**. The on-chain custody path (lock → redirect → close �
 | ☐ | CommunityPot | Distribute payout (`distribute_window`) — real USDC | After close, `POST /v1/internal/community-pot/windows/distribute` with `x-scheduler-key` | Per-recipient `distribute_window` succeeds: USDC moves `pot_vault`→recipient ATA; `DistributionReceipt` PDA (seed `distribution-receipt`+window+recipient_key) prevents double-pay; `distributed_amount`+`distribution_count` rise; **capped by remaining**; `DistributionPaid` emitted; DB → DISTRIBUTED with sig+amount | critical |
 | ☐ | CommunityPot | Pot history UI | `/community-pot` for a previously-paid user with an open window | Current pot shows `totalRedirectedAmountUi`; per-course chips show redirect % + savers/recovery; timeline newest-first (Open/Closed/Distributed) with totals + eligible/paid/redirected; "You were paid" card with +amount + tx link when DISTRIBUTED; FAILED/PENDING/PUBLISHING badges; error → Retry | high |
 
-### Unlock (the new `protocol_config`-first account layout)
+### Unlock (the lock-first account layout)
 
 | ✅ | Area | Flow | Steps | Expected | Priority |
 |---|---|---|---|---|---|
-| ☐ | Unlock | `unlock_funds` after lock_end — user-signed, principal returned | Matured lock (`lock_end_ts ≤ now`): build+sign+send `unlock_funds` from owner | Tx confirms; **`protocol_config` (vault-protocol) accepted as FIRST account** in new 12-key order (see Phase D); principal (+ any SKR) returns to owner ATA; `LockAccount` status → closed; `LockUnlocked` emitted with `unlocked_at_ts` | critical |
-| ☐ | Unlock | Unlock guards | Unlock before maturity; double-unlock a closed lock; unlock signed by non-owner | Pre-maturity → **`LockStillActive` (6010)**; double → **`LockAlreadyClosed` (6011)**; non-owner → **`InvalidLockOwner` (6009)**; vault balance mismatch → **`UnexpectedStableVaultBalance` (6012)** / SKR **(6013)** | high |
+| ☐ | Unlock | `unlock_funds` after lock_end — user-signed, principal returned | Matured lock (`lock_end_ts ≤ now`): build+sign+send `unlock_funds` from owner | Tx confirms; **`lock_account` accepted as FIRST account** in the 8-key order (see Phase D); principal returns to owner ATA; `LockAccount` status → closed; `LockUnlocked` emitted with `unlocked_at_ts` | critical |
+| ☐ | Unlock | Unlock guards | Unlock before maturity; double-unlock a closed lock; unlock signed by non-owner | Pre-maturity → **`LockStillActive`**; double → **`LockAlreadyClosed`**; non-owner → **`InvalidLockOwner`**; vault balance mismatch → **`UnexpectedStableVaultBalance`** | high |
 
 ### Workers
 
@@ -431,39 +427,32 @@ Run **top to bottom**. The on-chain custody path (lock → redirect → close �
 
 The merge from three programs to one is where bugs hide. Specifically check:
 
-**D1. `lock_funds` — exact 12-account order on a LIVE cluster.** LiteSVM/localnet can mask account-ordering bugs; devnet won't. The order must be exactly:
+**D1. `lock_funds` — exact 9-account order on a LIVE cluster.** LiteSVM/localnet can mask account-ordering bugs; devnet won't. The order must be exactly:
 ```
 1 protocol_config            (vault-protocol PDA — must resolve & match configured USDC mint)
 2 lock_account
 3 stable_mint
-4 skr_mint
-5 owner                      (signer)
-6 owner_stable_token_account
-7 stable_vault
-8 skr_vault
-9 token_program
-10 associated_token_program
-11 system_program
-12 owner_skr_token_account   (TRAILING; harmlessly the stable ATA when skr_amount=0)
+4 owner                      (signer)
+5 owner_stable_token_account
+6 stable_vault
+7 token_program
+8 associated_token_program
+9 system_program
 ```
 If `protocol_config` doesn't resolve or its mint doesn't match, you'll see `UnsupportedStableMint` (6004) or `InvalidMintConfig` (6002) — that's the merged VaultConfig doing its job, not a client bug.
 
-**D2. `unlock_funds` — NEW layout that accepts `protocol_config` as the FIRST key.** This is a structural change from the old standalone lock_vault. Order:
+**D2. `unlock_funds` — lock-first layout (no `protocol_config` account).** `unlock_funds` reads the bound mint directly from `lock_account.stable_mint`, so it takes no `protocol_config` account. Order:
 ```
-1 protocol_config            (vault-protocol — first key in the new layout)
-2 lock_account
-3 stable_mint
-4 skr_mint
-5 owner                      (signer)
-6 stable_vault
-7 skr_vault
-8 owner_stable_token_account
-9 owner_skr_token_account
-10 token_program
-11 associated_token_program
-12 system_program
+1 lock_account
+2 stable_mint
+3 owner                      (signer)
+4 stable_vault
+5 owner_stable_token_account
+6 token_program
+7 associated_token_program
+8 system_program
 ```
-Watch that the client builds this *new* order, not the old one. A stale builder shows up as a "missing account" / wrong-account error, not a clean program error.
+Watch that the client builds this order. A stale builder shows up as a "missing account" / wrong-account error, not a clean program error.
 
 **D3. Game state comes from the BACKEND, not the chain.** Fuel, ichor, streak, savers, redirect bps live in Postgres. The dashboard/inventory/community-pot pages must read `GET /v1/progress/...` — none of these values are decoded from on-chain accounts. If a tile is stale or garbled, suspect the DB/decoder path, not the program.
 
@@ -485,7 +474,7 @@ Watch that the client builds this *new* order, not the old one. A stale builder 
 - Symptom: `lock_funds`/`record_redirect`/etc. fail referencing `protocol_config`.
 - Diagnose: re-run the A5 PDA check. If `MISSING`, re-run the matching init script (A4). Confirm the script's `EXPO_PUBLIC_LOCK_VAULT_PROGRAM_ID` and RPC point at devnet + `68im45…`.
 
-**Mint mismatch → `UnsupportedStableMint` (6004) / `InvalidMintConfig` (6002) / `InvalidSkrMint` (6005)**
+**Mint mismatch → `UnsupportedStableMint` (6004) / `InvalidMintConfig` (6002)**
 - Cause: the mint the client uses ≠ the mint stored in VaultConfig.
 - Diagnose: the mint passed to `initialize_vault` (A4) MUST equal both env `*_USDC_MINT` values. If you changed the env mint after init, you must re-init with a fresh authority/PDA (the existing PDA is sticky) or set env back to the initialized mint. Check the B4 invariants.
 
@@ -512,7 +501,7 @@ Watch that the client builds this *new* order, not the old one. A stale builder 
 - Diagnose: send `x-scheduler-key: <SCHEDULER_SECRET>` on `/v1/internal/...` and `/v1/yield/recent-harvests`.
 
 **Lock/unlock "missing account" or wrong-account error (not a clean 60xx)**
-- Cause: client built the OLD account order. See Phase D1/D2 for the exact 12-key orders. A clean program error (60xx) means the program ran; a generic "missing account" means the instruction was malformed before it reached the program.
+- Cause: client built the OLD account order. See Phase D1/D2 for the exact account orders (`lock_funds` = 9 keys, `unlock_funds` = 8 keys). A clean program error (60xx) means the program ran; a generic "missing account" means the instruction was malformed before it reached the program.
 
 **Faucet doesn't fund / partial**
 - Diagnose: `FAUCET_ENABLED=true`, cluster is devnet (mainnet → 403 `FAUCET_MAINNET_BLOCKED`), and the worker key (faucet source) has SOL + USDC. A partial result (USDC lands, SOL fails) is expected behavior, not an error.
@@ -529,5 +518,5 @@ Watch that the client builds this *new* order, not the old one. A stale builder 
 - Backend: `/Users/marcus/Projects/locked-in/backend` (`npm run dev`, `npm run test:db:up`)
 - Web-app: `/Users/marcus/Projects/locked-in/web-app` (`npm run dev`)
 
-### Verified error-code reference (from the IDL — 15 codes)
-`6000 InvalidLockDuration` · `6001 NumericalOverflow` · `6002 InvalidMintConfig` · `6003 InvalidPrincipalAmount` · `6004 UnsupportedStableMint` · `6005 InvalidSkrMint` · `6006 MissingSkrTokenAccount` · `6007 InvalidTokenAccountOwner` · `6008 InvalidTokenAccountMint` · `6009 InvalidLockOwner` · `6010 LockStillActive` · `6011 LockAlreadyClosed` · `6012 UnexpectedStableVaultBalance` · `6013 UnexpectedSkrVaultBalance` · `6014 InvalidMint`
+### Vault error-code reference (from the IDL)
+`InvalidLockDuration` · `NumericalOverflow` · `InvalidMintConfig` · `InvalidPrincipalAmount` · `UnsupportedStableMint` · `InvalidTokenAccountOwner` · `InvalidTokenAccountMint` · `InvalidLockOwner` · `LockStillActive` · `LockAlreadyClosed` · `UnexpectedStableVaultBalance` · `InvalidMint`. Numbers are intentionally omitted — Anchor error codes shift when variants are added/removed, so check the current IDL for exact values.

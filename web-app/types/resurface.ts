@@ -5,7 +5,6 @@ export interface ResurfaceReceipt {
   courseTitle: string;
   lockAccountAddress: string;
   principalAmountUi: string;
-  skrLockedAmountUi: string;
   unlockedAt: string;
   unlockTxSignature: string;
   lockEndDate: string;

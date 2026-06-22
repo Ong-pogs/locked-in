@@ -45,12 +45,8 @@ pub mod locked_in {
     // ── Vault domain (custody escrow) ────────────────────────────────────
 
     /// Initialize the vault custody config (was `lock_vault::initialize_protocol`).
-    pub fn initialize_vault(
-        ctx: Context<InitializeVault>,
-        usdc_mint: Pubkey,
-        skr_mint: Pubkey,
-    ) -> Result<()> {
-        vault::initialize_vault(ctx, usdc_mint, skr_mint)
+    pub fn initialize_vault(ctx: Context<InitializeVault>, usdc_mint: Pubkey) -> Result<()> {
+        vault::initialize_vault(ctx, usdc_mint)
     }
 
     pub fn lock_funds(
@@ -58,9 +54,8 @@ pub mod locked_in {
         course_id_hash: [u8; 32],
         lock_duration_days: u16,
         stable_amount: u64,
-        skr_amount: u64,
     ) -> Result<()> {
-        vault::lock_funds(ctx, course_id_hash, lock_duration_days, stable_amount, skr_amount)
+        vault::lock_funds(ctx, course_id_hash, lock_duration_days, stable_amount)
     }
 
     pub fn unlock_funds(ctx: Context<UnlockFunds>) -> Result<()> {

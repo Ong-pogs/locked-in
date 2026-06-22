@@ -18,7 +18,7 @@ Design goals:
 | --- | --- | --- |
 | Web app | Next.js, Privy auth, wallet integration, brewery/pot UI | User onboarding, lesson UX, fire-timer/brewer/pot views, transaction signing |
 | Backend | Fastify (`.mjs`), lesson API, progress verification, scheduler workers, Postgres, Alchemy RPC reads | Course content, lesson verification, off-chain Fuel/Ichor counters, yield harvest/routing, job orchestration |
-| On-chain (Solana) | One `locked_in` Anchor program (`vault` + `pot` modules) | Custody escrow of principal/SKR, clock-gated unlock, community pot accumulation/distribution |
+| On-chain (Solana) | One `locked_in` Anchor program (`vault` + `pot` modules) | Custody escrow of USDC principal, clock-gated unlock, community pot accumulation/distribution |
 | DeFi yield substrate | Kamino USDC supply rate (read live from mainnet) | Real-rate yield simulation on locked stablecoin capital |
 
 ## Canonical Program Topology
@@ -48,14 +48,13 @@ Game State below).
 Each active course lock is represented by one `LockAccount` (vault domain).
 A user with multiple active courses has multiple independent `LockAccount`s.
 
-`LockAccount` is a lean custody record — **9 fields, 138 bytes** (see
+`LockAccount` is a lean custody record — **8 fields, 130 bytes** (see
 `programs/locked_in/src/vault.rs`):
 
 - `owner: Pubkey`
 - `course_id_hash: [u8; 32]`
 - `stable_mint: Pubkey` (`USDC`)
 - `principal_amount: u64`
-- `skr_locked_amount: u64`
 - `lock_start_ts: i64`
 - `lock_end_ts: i64` (written exactly once at funding; never mutated —
   missed days are yield-only and never extend the lock)
@@ -70,7 +69,7 @@ All v3 game fields (`extension_seconds_total`, `gauntlet_complete`,
 
 Global/config accounts (program-level):
 
-- `VaultConfig` (seed `b"vault-protocol"`): authority, USDC mint, SKR mint.
+- `VaultConfig` (seed `b"vault-protocol"`): authority, USDC mint.
 - `PotConfig` (seed `b"pot-protocol"`): authority, stable mint.
 - `PotWindow` / `DistributionWindow` / `RedirectReceipt` /
   `DistributionReceipt`: per-window pot accounting + idempotency receipts.
@@ -81,7 +80,6 @@ tier table, or extension policy exists anymore — those were v3 concepts.
 Token vault accounts:
 
 - stablecoin vault ATA per lock (authority = the `LockAccount` PDA)
-- SKR vault ATA per lock (created per lock; SKR amount may be 0)
 - community pot vault ATA (authority = the `PotConfig` PDA)
 
 ## Off-chain Game State
@@ -133,7 +131,7 @@ banked.
 No gauntlet in v4 — all mechanics fire from day 1.
 
 1. **Onboarding lock**
-   - User locks stablecoin principal (USDC), optional SKR.
+   - User locks stablecoin principal (USDC).
    - `lock_end_ts` is fixed at funding and never moves.
    - 3 savers are banked off-chain; fire starts out.
 2. **Active course (from day 1)**
@@ -148,20 +146,19 @@ No gauntlet in v4 — all mechanics fire from day 1.
      Brewery (devnet: a real USDC transfer from the treasury wallet).
 4. **Resurface (unlock)**
    - Triggered when `lock_end_ts` is reached (`now >= lock_end_ts`).
-   - `unlock_funds` asserts the vault still holds the full principal/SKR,
-     returns both in full via PDA-signed transfer, and closes the lock.
+   - `unlock_funds` asserts the vault still holds the full principal,
+     returns it in full via PDA-signed transfer, and closes the lock.
    - User may continue with a new lock cycle.
 
 ## On-chain Invariants
 
 1. Principal is never slashed by streak logic.
-2. SKR is never spent, burned, or partially confiscated.
-3. `unlock_funds` only succeeds at/after `lock_end_ts` and asserts the
-   vault holds the full escrowed principal/SKR before payout.
-4. Mint binding: `unlock_funds` rejects a substituted stable/SKR mint
-   (`InvalidMint`, error 6014), blocking a fake-mint unlock.
-5. Each course lock is isolated; no shared state across courses.
-6. The pot's `record_redirect` / `distribute_window` are idempotent via
+2. `unlock_funds` only succeeds at/after `lock_end_ts` and asserts the
+   vault holds the full escrowed principal before payout.
+3. Mint binding: `unlock_funds` rejects a substituted stable mint
+   (`InvalidMint`), blocking a fake-mint unlock.
+4. Each course lock is isolated; no shared state across courses.
+5. The pot's `record_redirect` / `distribute_window` are idempotent via
    per-key receipt PDAs; a payout is bounded by the window's remaining
    amount.
 

@@ -96,7 +96,6 @@ describe('courseStore', () => {
         duration: 30,
         lockAccountAddress: 'LockABC123',
         stableMintAddress: 'USDCMint123',
-        skrAmount: 10,
       });
 
       const state = useCourseStore.getState();
@@ -105,7 +104,6 @@ describe('courseStore', () => {
       expect(state.courseStates['course-1'].lockDuration).toBe(30);
       expect(state.courseStates['course-1'].lockAccountAddress).toBe('LockABC123');
       expect(state.courseStates['course-1'].stableMintAddress).toBe('USDCMint123');
-      expect(state.courseStates['course-1'].skrLockedAmount).toBe(10);
     });
 
     it('adds to enrolledCourseIds if not already enrolled', () => {
@@ -326,7 +324,6 @@ describe('courseStore', () => {
       useCourseStore.getState().syncLockSnapshot('course-1', {
         lockAccountAddress: 'OnChainLock123',
         principalAmountUi: '100',
-        skrLockedAmountUi: '50',
         lockStartDate: '2024-01-01T00:00:00Z',
         lockEndDate: '2024-02-01T00:00:00Z',
         unlockEligible: false,
@@ -337,7 +334,6 @@ describe('courseStore', () => {
       // Custody fields written from the snapshot
       expect(state.lockAccountAddress).toBe('OnChainLock123');
       expect(state.lockStartDate).toBe('2024-01-01T00:00:00Z');
-      expect(state.skrLockedAmount).toBe(50);
       // Backend-owned game state untouched by the custody writer
       expect(state.currentStreak).toBe(5);
       expect(state.fuelCounter).toBe(3);

@@ -13,7 +13,6 @@ export interface CourseGameState {
   lockStartDate: string | null;
   lockAccountAddress: string | null;
   stableMintAddress: string | null;
-  skrLockedAmount: number;
   extensionDays: number;
 
   // Streak
@@ -51,7 +50,6 @@ export const DEFAULT_COURSE_STATE: CourseGameState = {
   lockStartDate: null,
   lockAccountAddress: null,
   stableMintAddress: null,
-  skrLockedAmount: 0,
   extensionDays: 0,
   currentStreak: 0,
   longestStreak: 0,

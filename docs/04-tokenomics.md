@@ -14,12 +14,12 @@ Locked In uses commitment-based yield economics.
 
 ## What changed from v3.0
 
-The v3 model (fuel → ichor → USDC redemption, SKR catalyst boost, 7-day
-gauntlet, platform fee) has been replaced:
+The v3 model (fuel → ichor → USDC redemption, 7-day gauntlet, platform
+fee) has been replaced:
 
 - **Gauntlet: removed.** No 7-day onboarding lock. All mechanics fire
   from day 1.
-- **SKR catalyst: removed.** Users only lock USDC.
+- **Pure USDC principal custody.** Users only lock USDC.
 - **Ichor → USDC redemption: removed.** Ichor is now a pure in-game shop
   currency, not a redemption counter.
 - **Platform fee: 0%** in the active path (the on-chain splitter retains

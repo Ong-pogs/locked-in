@@ -56,8 +56,8 @@ src/server.mjs`) and web-app (`next dev`).
 ## Mainnet profile — fill at deploy
 
 `backend/.env.mainnet` and `web-app/.env.mainnet` carry `<FILL_AT_MAINNET_DEPLOY>`
-placeholders for `LOCK_VAULT_PROGRAM_ID` / `COMMUNITY_POT_PROGRAM_ID` and the SKR
-mint (none exist on mainnet until the program is deployed). `LOCK_VAULT_USDC_MINT`
+placeholders for `LOCK_VAULT_PROGRAM_ID` / `COMMUNITY_POT_PROGRAM_ID` (the program
+does not exist on mainnet until it is deployed). `LOCK_VAULT_USDC_MINT`
 is preset to the canonical mainnet USDC mint
 (`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`) — **verify before launch**.
 

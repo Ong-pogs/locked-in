@@ -496,7 +496,6 @@ export interface UnlockReceiptPayload {
   courseId: string;
   lockAccountAddress: string;
   principalAmountUi: string;
-  skrLockedAmountUi: string;
   lockEndDate: string;
   unlockedAt?: string;
   unlockTxSignature: string;
@@ -508,7 +507,6 @@ export interface UnlockReceiptRecord {
   courseId: string;
   lockAccountAddress: string;
   principalAmountUi: string;
-  skrLockedAmountUi: string;
   lockEndAt: string;
   unlockedAt: string;
   verifiedSlot: number | null;
