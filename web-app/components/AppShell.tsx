@@ -4,6 +4,7 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { BottomNav } from './BottomNav';
+import { AppBgm } from './AppBgm';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserStore } from '@/stores/userStore';
 import { useCourseStore } from '@/stores/courseStore';
@@ -212,6 +213,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <>
+      <AppBgm />
       {showChrome && <Sidebar />}
       {showChrome && <BottomNav />}
       <main className={`flex-1 ${showChrome ? 'md:ml-[240px] pb-[calc(72px_+_env(safe-area-inset-bottom,0px))] md:pb-0' : ''}`}>

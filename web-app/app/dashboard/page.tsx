@@ -14,6 +14,7 @@ import { useRouter } from 'next/navigation';
 import { T } from '@/components/theme';
 import { CozyCard, CozySectionLabel } from '@/components/cozy';
 import { HubButton } from '@/components/HubButton';
+import { MusicVolumeControl } from '@/components/MusicVolumeControl';
 import { useCourseStore, useUserStore } from '@/stores';
 import { getUserXp } from '@/services/api/progress/progressApi';
 import { LiveApyChip } from '@/components/LiveApyChip';
@@ -1128,7 +1129,10 @@ export default function DashboardPage() {
         {/* 7. Recent activity */}
         <ActivityLog rows={recentActivity} />
 
-        {/* 8. Footer disconnect */}
+        {/* 8. Music settings */}
+        <MusicVolumeControl />
+
+        {/* 9. Footer disconnect */}
         <DisconnectFooter onDisconnect={handleDisconnect} />
       </div>
     </div>
