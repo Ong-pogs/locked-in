@@ -16,11 +16,11 @@ treasury-funded). Phase 3 will replace this with a real
 - `fixed_apy_dev` — mock 8% APY, no RPC reads
 - `kamino_surfpool` — local Surfpool mainnet fork (dev only)
 - `kamino_devnet_demo` — **active in prod**. Reads live Kamino USDC
-  mainnet APY via Helius, applies to devnet locks, hourly harvest
+  mainnet APY via Alchemy, applies to devnet locks, hourly harvest
 - `kamino_usdc_mainnet` — real mainnet path (not yet active)
 
 When a profile is set it takes precedence over raw `YIELD_*` env fields,
-except `YIELD_KAMINO_RPC_URL` (where the Helius key lives).
+except `YIELD_KAMINO_RPC_URL` (where the Alchemy key lives).
 
 ## Harvest math
 

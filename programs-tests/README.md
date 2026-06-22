@@ -27,8 +27,9 @@ avoid discriminator / PDA collisions under one program ID:
 All other seeds (`b"lock"`, `b"window"`, `b"distribution"`, `b"redirect"`,
 `b"distribution-receipt"`) were already unique and are unchanged.
 
-A single test in `tests/lock-lifecycle.test.ts` chains real transactions
-through the merged program:
+`tests/lock-lifecycle.test.ts` holds two tests against the merged program.
+
+The happy-path test chains real transactions through the full lifecycle:
 
 1. Create stable + SKR mints, fund test owner, pre-fund the community pot vault
 2. `initialize_vault` (usdc + skr mints) — vault config PDA `b"vault-protocol"`
@@ -37,6 +38,12 @@ through the merged program:
 5. `record_redirect` + asserts PotWindow total_redirected_amount, redirect_count
 6. Clock warp past `lock_end_ts`
 7. `unlock_funds()` + asserts owner USDC += full principal, stable_vault closed, lock_account closed
+
+The second test is a custody security regression: it locks 100 real USDC, then
+attempts `unlock_funds()` with a FAKE stable mint + fake vault (funded to
+principal so the balance check alone would pass). `unlock_funds` MUST reject it
+on the stable-mint address constraint (`InvalidMint`), leaving the real lock +
+real USDC vault intact and un-stranded.
 
 Every `→ assert` is on **real on-chain state** produced by **real
 transactions** sent to an in-process LiteSVM (mainnet-equivalent BPF
@@ -53,7 +60,7 @@ npm install                # first time only
 npm test
 ```
 
-Expected: `Tests  1 passed (1)` in ~500ms.
+Expected: `Tests  2 passed (2)` in ~500ms.
 
 ## Hermetic
 

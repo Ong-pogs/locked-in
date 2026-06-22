@@ -1,9 +1,9 @@
-# Lesson API and Verification Pipeline (v3.0)
+# Lesson API and Verification Pipeline (v4.0)
 
 ## Scope
 
 Lesson content and grading are off-chain.
-Fuel and on-chain consequences are triggered only after verified completion events.
+Fuel and ichor rewards are credited only after verified completion events.
 
 ## Canonical API Responsibilities
 
@@ -61,24 +61,28 @@ Canonical attempt flow:
 3. client calls `POST /v1/progress/lessons/:lessonId/submit` with the same attempt id plus raw answers
 4. backend grades answers server-side and records a single immutable attempt row
 
-## Verification to On-chain Bridge
+## Verification to Reward Bridge
 
 After lesson submission is accepted:
 
-1. Backend computes reward eligibility (daily cap, gauntlet status, saver recovery state).
-2. Backend emits a signed, idempotent completion event.
-3. Authorized worker submits the corresponding on-chain instruction to update course lock state.
+1. Backend records one idempotent verified completion event keyed by attempt id.
+2. Backend applies the off-chain reward to course runtime state: **+1 fuel**
+   (capped at `fuel_cap`, default 7) and a **random 20-50 ichor** per accepted
+   lesson completion.
+3. Fuel feeds the fire/Brewer (see `03-fuel.md`); ichor is a pure in-game shop
+   currency (see `04-tokenomics.md`). Neither is on-chain — both are Postgres
+   counters on `lesson.user_course_runtime_state`.
 
-Current implementation checkpoint:
-
-- accepted lesson submit now writes one verified completion event record keyed by attempt id
-- downstream worker consumption remains the next step
+Lesson completion never pushes an on-chain instruction. The only on-chain
+program is `locked_in` custody (escrow + clock-gated unlock); it carries no
+course policy, fuel, or ichor. Missed days penalize yield routing only, never
+the lock window.
 
 Canonical rule coupling:
 
-- Fuel credit is never client-trusted.
-- Fuel credit is never granted without a verified completion event.
-- Duplicate submits cannot double-credit Fuel.
+- Fuel and ichor credit is never client-trusted.
+- Fuel and ichor credit is never granted without a verified completion event.
+- Duplicate submits cannot double-credit Fuel or ichor.
 
 ## Anti-abuse and Integrity
 
@@ -99,7 +103,7 @@ Editorial flow:
 2. normalize into internal lesson schema
 3. review and approval
 4. publish release snapshot
-5. serve immutable snapshot to mobile clients
+5. serve immutable snapshot to clients
 
 Every release must be traceable by `releaseId` and publish timestamp.
 

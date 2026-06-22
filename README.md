@@ -1,7 +1,7 @@
 # Locked In
 
 > [!IMPORTANT]
-> The current public test APK connects to a backend hosted on Render and uses Solana devnet program/mint configuration.
+> The current public test build is a PWA web app that connects to a backend hosted on Render and uses Solana devnet program/mint configuration.
 > This is a QA/testing setup, not a production release.
 > Because the current Render deployment may cold-start after inactivity, the first backend-auth or content request can occasionally be slow or need a retry.
 > Deposit, unlock, and reward flows in this build should be treated as devnet test flows.
@@ -40,11 +40,11 @@ That principal is not meant to be arbitrarily taken away. The pressure comes fro
 
 - stay consistent and keep the system alive
 - earn Fuel
-- power the Brewer
-- accumulate Ichor
+- feed the fire to power the Brewer
+- earn Ichor to spend in the in-game shop
 - keep more of the yield you generated
 
-If you lapse, the product does not slash your principal. Instead, it progressively redirects your yield to a community pot that rewards users who stayed consistent.
+If you lapse, the product does not slash your principal. Instead, it redirects your yield to a community pot that rewards users who stayed consistent.
 
 That makes the system high-pressure without being recklessly punitive.
 
@@ -72,15 +72,13 @@ Fuel, the Brewer, Ichor, and the dungeon layer make the system legible and satis
 
 Locked In does not jump straight from "missed one day" to "everything is gone."
 
-It uses a stepped consequence model:
+It uses a stepped consequence model that touches yield routing only — never your principal and never your lock duration:
 
-- saver consumed
-- recovery mode
-- Brewer pressure
-- full yield redirection
-- lock extension
+- a missed day consumes one streak saver and bumps the yield-redirect tier up a notch
+- once all savers are used, a further missed day resets the streak and the redirect stays at its cap
+- if the fire goes out, that period's yield routes fully to the community pot until you feed it again
 
-That gives users chances to recover while still preserving stakes.
+That gives users chances to recover while still preserving stakes. Missed days penalize yield only — they never extend the lock.
 
 ### 5. Social reinforcement matters
 
@@ -92,49 +90,45 @@ That creates a strong social and economic loop: users who stay disciplined benef
 
 ### Step 1: Lock in
 
-The user connects a Solana wallet, chooses a course, and locks USDC for the course duration. They can also optionally lock SKR as a catalyst.
+The user connects a Solana wallet, chooses a course, and locks USDC for the course duration. The vault can also optionally escrow SKR alongside the principal; it is returned in full at resurface.
 
-### Step 2: Survive the gauntlet
+### Step 2: Earn Fuel through verified learning
 
-The first week is the highest-pressure phase.
+All mechanics fire from day 1. Lessons are verified, and verified completion credits Fuel.
 
-- no savers
-- no Ichor output
-- Brewer stays cold
-- breaking the streak here triggers the harshest allowed consequence
+Fuel is not a token in a wallet. It is an internal off-chain counter tied to the user's course lock, earned `+1` per lesson up to a cap.
 
-The point of the gauntlet is to force genuine habit formation up front.
+### Step 3: Feed the fire and power the Brewer
 
-### Step 3: Earn Fuel through verified learning
+Fuel feeds "the fire" in the Brewer. Feeding consumes `1` fuel and extends the fire timer by `+24h`.
 
-Lessons are verified. Verified completion credits Fuel.
+While the fire is lit, the yield you generate routes to your wallet. While it is out, that yield routes to the community pot. The fire is the consequence layer made visible — more satisfying than watching tiny stablecoin decimals slowly move.
 
-Fuel is not a token in a wallet. It is an internal counter tied to the user's course lock.
+### Step 4: Earn and spend Ichor
 
-### Step 4: Power the Brewer
+Each lesson completion also awards a random `20-50` Ichor.
 
-Fuel keeps the Brewer alive. When the Brewer is active, eligible yield can be converted into Ichor.
-
-Ichor is the platform's internal redemption currency. It is intentionally more satisfying than watching tiny stablecoin decimals slowly move.
+Ichor is a pure in-game shop currency — an off-chain counter, not a token and not redeemable for USDC. You spend it in the shop, for example to buy a Streak Saver.
 
 ### Step 5: Protect your streak
 
-After the gauntlet, the user gets streak savers.
+The user has streak savers. Missing a day does not immediately destroy everything, but it does hurt: a missed day consumes one saver and bumps the yield-redirect tier up.
 
-Missing a day does not immediately destroy everything, but it does hurt:
+- 0 savers used: `0%` yield redirected (all to your wallet)
+- 1 saver used: `10%` yield redirected
+- 2 savers used: `15%` yield redirected
+- 3 savers used: `20%` yield redirected
+- no savers left and a day missed: streak resets, redirect stays at the `20%` cap
 
-- 1st saver used: `10%` yield redirected
-- 2nd saver used: `20%` yield redirected
-- 3rd saver used: `20%` yield redirected
-- no savers left: `100%` redirect plus lock extension
+Savers are restored by buying one in the shop with Ichor, which also steps the redirect tier back down. Consequences touch yield routing only — never the principal, never the lock duration.
 
 ### Step 6: Resurface
 
 When the lock period ends, the user resurfaces.
 
 Their principal comes back.
-Their locked SKR comes back.
-What changes is how much yield they preserved, how much Ichor they accumulated, and whether they finished the course with momentum or regret.
+Any locked SKR comes back.
+What changes is how much yield they preserved, how much Ichor they accumulated to spend in the shop, and whether they finished the course with momentum or regret.
 
 ## The Dungeon Model
 
@@ -142,17 +136,18 @@ Locked In uses one core metaphor so the system stays intuitive.
 
 | Concept | Meaning |
 | --- | --- |
-| Fuel | Daily energy earned from verified learning |
-| Brewer | The engine that turns consistency into output |
-| Ichor | Internal redemption balance produced while brewing |
-| SKR catalyst | Optional locked boost that increases Ichor output |
-| Savers | First-layer protection against a missed day |
+| Fuel | Energy earned from verified learning, `+1` per lesson |
+| Fire | The 24h-per-fuel timer that gates whether yield routes to you or the pot |
+| Brewer | The engine that keeps the fire lit and routes yield while it burns |
+| Ichor | In-game shop currency earned per lesson; spent in the shop, not redeemable for USDC |
+| SKR | Optional asset escrowed alongside principal; returned at resurface |
+| Savers | Streak protection that lowers the yield-redirect tier |
 | Community pot | Yield redirected from inconsistent users to consistent ones |
-| Resurface | End-of-lock exit where principal and locked SKR return |
+| Resurface | End-of-lock exit where principal and any locked SKR return |
 
 Important implementation note:
 
-In the current repo, `Fuel` and `Ichor` are counters, not SPL tokens.
+In the current repo, `Fuel` and `Ichor` are off-chain counters, not SPL tokens. There is no on-chain Ichor and no Ichor-to-USDC redemption.
 
 ## Why Solana
 
@@ -170,38 +165,31 @@ Solana gives the project:
 
 This repo is not just a concept write-up. The core structure already exists.
 
-### 1. On-chain programs
+### 1. On-chain program
 
-There are currently three Anchor programs in the repo:
+There is a single Anchor program in the repo, `locked_in` (program ID `68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3`, deployed on devnet). It contains two modules separated only by PDA seeds:
 
-1. `LockVault`
-2. `YieldSplitter`
-3. `CommunityPot`
+- `vault` (seed `vault-protocol`)
+- `pot` (seed `pot-protocol`)
 
-`LockVault` handles the core course lock lifecycle:
+The earlier separate programs are gone: `yield_splitter` was fully removed, and `lock_vault` and `community_pot` were merged into this one program. Folding everything into one program plus a release build cut the default deploy cost from roughly `15.27` SOL to about `2.51` SOL.
 
-- protocol setup
-- course policy configuration
-- user lock creation
-- verified completion application
-- daily Fuel burn
-- saver consequence logic
-- Ichor redemption
-- unlock / resurface
+The `vault` module is custody-only:
 
-`YieldSplitter` handles harvest accounting:
+- escrows principal (USDC) and any optional SKR
+- clock-gated unlock with a full-principal assertion
+- PDA-signed payout at resurface
+- `unlock_funds` enforces mint binding (`InvalidMint`, error `6014`)
 
-- idempotent split receipts
-- platform fee math
-- yield redirect math
-- user share calculation
-- brewer-active and full-redirect handling
+The on-chain `LockAccount` is `138` bytes with `9` fields: `owner`, `course_id_hash`, `stable_mint`, `principal_amount`, `skr_locked_amount`, `lock_start_ts`, `lock_end_ts`, `status`, `bump`.
 
-`CommunityPot` handles redirected-yield accounting:
+The `pot` module handles redirected-yield accounting:
 
 - redirect recording
 - distribution window creation and closing
 - recipient settlement
+
+Removed from chain in v4: Ichor counters, `redeem_ichor` / `IchorRedeemed`, the fuel-to-Ichor conversion, and the on-chain course policy. None of these are on-chain anymore — Fuel, Ichor, savers, and yield routing all live off-chain in the backend.
 
 ### 2. Backend logic
 
@@ -212,13 +200,13 @@ The backend already contains the core runtime layer for the product:
 - lesson start and submit flows
 - answer validation
 - verified completion events
-- gauntlet, Fuel, saver, redirect, and extension state
-- relay workers that publish to the on-chain programs
-- community pot and leaderboard snapshot support
+- Fuel, fire-timer, saver, Ichor, and yield-redirect state
+- relay and harvest workers that publish to the on-chain program
+- community pot accounting and a materialized leaderboard snapshot worker
 
-### 3. Mobile app structure
+### 3. App structure
 
-The React Native app already includes the main user-facing surfaces:
+The Next.js app (`web-app/`) already includes the main user-facing surfaces:
 
 - wallet connection
 - onboarding
@@ -235,28 +223,29 @@ The React Native app already includes the main user-facing surfaces:
 
 ## Repo Structure
 
-- `src/` - React Native app
+- `web-app/` - Next.js app
 - `backend/` - API, workers, SQL migrations, runtime logic
-- `programs/` - Anchor programs
+- `programs/` - the `locked_in` Anchor program
+- `programs-tests/` - program test suites
 - `docs/` - technical architecture and detailed specs
-- `scripts/` - local utilities and inspection scripts
-- `web/dungeon/` - dungeon scene assets
+- `scripts/` - local utilities, cluster profiles, and inspection scripts
 
 ## Technical Docs
 
 This README is meant to explain the concept, the product logic, and what exists so far.
 
-For the engineering source of truth, start with [`docs/00-technical-architecture-v3.md`](/Users/marcus/Projects/locked-in/docs/00-technical-architecture-v3.md).
+For the engineering source of truth, start with the architecture overview at [`docs/00-technical-architecture.md`](/Users/marcus/Projects/locked-in/docs/00-technical-architecture.md), then the current v4 specs: [`docs/03-fuel.md`](/Users/marcus/Projects/locked-in/docs/03-fuel.md), [`docs/04-tokenomics.md`](/Users/marcus/Projects/locked-in/docs/04-tokenomics.md), and [`docs/05-yield-calculator.md`](/Users/marcus/Projects/locked-in/docs/05-yield-calculator.md). Where the architecture overview and the v4 specs differ, the v4 specs describe the current state.
 
 If the README and technical docs ever differ, the technical docs should win.
 
 ## Local Dev
 
-Mobile app:
+Web app:
 
 ```bash
+cd web-app
 npm install
-npm run start
+npm run dev
 ```
 
 Backend:

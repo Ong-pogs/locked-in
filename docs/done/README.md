@@ -4,7 +4,7 @@ This folder is retained only for archival reference.
 It is not a source of truth for v3.0.
 
 Canonical technical specs now live in the top-level `docs/*.md` files,
-starting with `docs/00-technical-architecture-v3.md`.
+starting with `docs/00-technical-architecture.md`.
 
 Current implementation summaries:
 

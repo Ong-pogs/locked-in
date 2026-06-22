@@ -42,6 +42,9 @@ cp .env.example .env
 - `DATABASE_URL` (optional for first boot; required for real data)
 - `CORS_ALLOWED_ORIGINS` (comma-separated browser origins, optional but recommended)
 - `LOG_PRETTY=true` (recommended in local dev for readable logs)
+- `SOLANA_RPC_URL` (server-side RPC for the on-chain custody/relay; the dedicated Alchemy key lives here, never in a `NEXT_PUBLIC_`/`EXPO_PUBLIC_` var)
+
+> Cluster profiles: switch the active devnet/mainnet env with `scripts/use-cluster.sh <devnet|mainnet>` (copies `backend/.env.<cluster>` -> `backend/.env`). All `.env`/`.env.*` files are gitignored. See `docs/superpowers/specs/2026-06-22-rpc-env-profiles-design.md`.
 
 4. Run API:
 
@@ -81,10 +84,10 @@ Server default: `http://localhost:3001`
 - `POST /v1/auth/verify` now verifies Ed25519 signatures for the issued challenge message.
   Accepts detached signatures (64-byte base58/base64/base64url/hex) and MWA signed-payload format (`message || signature`).
 - Progress endpoints now use client-generated attempt UUIDs and grade submitted answers on the server.
-- Public lesson payloads expose `contentHash` and omit `correctAnswer` so clients cannot self-grade.
+- Public lesson payloads expose `contentHash` and now include `correctAnswer` (routes are auth-protected and answers are revealed after submission anyway); grading stays authoritative server-side via the answer validator.
 - Refresh sessions rotate one-time tokens and use Postgres persistence when `DATABASE_URL` is configured.
 - Accepted lesson submits now enqueue a `lesson.verified_completion_events` record for downstream workers.
-- Accepted lesson submits also update `lesson.user_course_runtime_state` so Fuel/gauntlet state is computed server-side.
+- Accepted lesson submits also update `lesson.user_course_runtime_state` so Fuel state is computed server-side.
 - Internal scheduler requests can now apply an idempotent daily Fuel burn cycle via `POST /v1/internal/fuel/burn`.
 - Internal scheduler requests can now apply miss-day saver/full-consequence logic via `POST /v1/internal/consequences/miss`.
 

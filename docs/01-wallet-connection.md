@@ -1,4 +1,4 @@
-# Wallet Connection and Identity (v3.0)
+# Wallet Connection and Identity (v4.0)
 
 ## Scope
 
@@ -14,8 +14,8 @@ This module must support:
 
 ## Supported Wallet Paths
 
-1. Mobile native: Solana Mobile Wallet Adapter (MWA).
-2. Web runtime: wallet-standard compatible injected providers.
+1. Privy-managed wallet: embedded wallet or a connected external wallet.
+2. Web runtime: wallet-standard compatible injected providers (browser extensions).
 
 Primary user wallets:
 
@@ -56,12 +56,16 @@ Required behavior:
 
 ## Transaction Signing Responsibilities
 
-The same connected wallet must sign:
+The same connected wallet must sign the custody actions on the single
+`locked_in` program:
 
-- `lock_funds` (stablecoin + optional SKR lock)
-- voluntary lock extension instructions
-- Ichor redemption instructions
-- resurface/unlock transaction
+- `lock_funds` (escrows USDC principal for the course duration)
+- `unlock_funds` (resurface/unlock once the lock timer elapses)
+
+These are the only on-chain actions the user signs. Fuel, ichor, savers,
+streak, and yield routing are off-chain DB mechanics (Postgres) — they
+require no wallet signature. Ichor is a pure in-game shop currency with no
+on-chain redemption.
 
 ## Integration Boundary With On-chain Programs
 
@@ -74,8 +78,12 @@ It only provides:
 
 Business rules remain in:
 
-- on-chain programs (`LockVault`, `YieldSplitter`, `CommunityPot`)
-- backend lesson verification and scheduling workers
+- the single on-chain `locked_in` program (program ID
+  `68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3`), which contains the
+  `vault` custody module (seed `vault-protocol`) and the `pot` module
+  (seed `pot-protocol`)
+- backend lesson verification, fuel/ichor/streak counters, and scheduling
+  workers
 
 ## Environment and Network
 

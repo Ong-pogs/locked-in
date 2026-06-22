@@ -1,9 +1,12 @@
-# Leaderboard and Community Pot View Spec (v3.0)
+# Leaderboard and Community Pot View Spec (v4.0)
 
 ## Scope
 
-Leaderboard is an off-chain ranking and analytics view backed by verified activity and on-chain financial data.
+Leaderboard is an off-chain ranking and analytics view backed by verified activity and on-chain custody data.
 It does not settle funds.
+
+It is served from a periodically refreshed materialized snapshot, with a live
+computation as fallback when no snapshot exists yet.
 
 ## Core Ranking Dimensions
 
@@ -44,20 +47,40 @@ Distribution policy basis:
 
 ## Data Sources
 
-- on-chain: pot balances, lock balances, yield redirects
-- backend: streak snapshots, lesson verification history, ranking materialization
+Ranking rows are assembled from three sources, merged per wallet:
 
-Backend should maintain precomputed ranking snapshots for responsive mobile queries.
+- DB runtime state (`lesson.user_course_runtime_state`): streak length and last
+  completed day (recent activity). The custody-only vault no longer carries
+  streak or activity, so these are DB-owned.
+- on-chain custody snapshot (per-lock `LockAccount`): lock status and locked
+  principal. Only `active` (status `0`) locks contribute.
+- closed distribution windows (`lesson.community_pot_distribution_snapshots`):
+  current pot amount, next distribution window label, and the projected pot
+  share per wallet.
 
-Current implementation checkpoint:
+Backend maintains precomputed ranking snapshots for responsive mobile queries.
 
-- backend can now materialize ranking snapshots into Postgres
-- snapshots store:
+Current implementation:
+
+- `computeLeaderboardRows` (backend/src/modules/progress/repository.mjs) builds
+  the live ranked rows from the three sources above.
+- `refreshLeaderboardSnapshot` materializes those rows into Postgres tables
+  `lesson.leaderboard_snapshots` (one row per refresh) and
+  `lesson.leaderboard_snapshot_rows` (the ranked wallet rows for that refresh).
+- each snapshot row stores:
   - current pot amount
   - next distribution window label
   - all ranked wallet rows for that refresh
-- the public leaderboard route now prefers the latest materialized snapshot and falls back to a live computation only when no snapshot exists yet
-- the app now shows whether the current view is a snapshot or live fallback
+- `getLeaderboardSnapshot` serves the public leaderboard: it prefers the latest
+  materialized snapshot and falls back to a live `computeLeaderboardRows` pass
+  only when no snapshot exists yet.
+- the app shows whether the current view is a snapshot or live fallback
+  (response `source` field is `snapshot` or `live`).
+
+Note (internal): the live fallback `computeLeaderboardRows` reads one lock
+account at a time (one `getAccountInfo` per lock). A `getMultipleAccountsInfo`
+batch fix is a pending follow-up for mainnet scale; the materialized snapshot
+path is the normal serving path and is unaffected.
 
 ## Refresh and Latency Targets
 
@@ -73,8 +96,10 @@ Current implementation checkpoint:
 
 Current operator path:
 
-- leaderboard snapshots can now refresh automatically through a backend worker
-- scheduler/admin can trigger a refresh through:
+- leaderboard snapshots refresh automatically through a backend worker
+  (`leaderboardSnapshotWorker`, backend/src/workers/leaderboardSnapshotWorker.mjs),
+  which calls `refreshLeaderboardSnapshot` on an interval
+- scheduler/admin can trigger an immediate refresh through:
   - `POST /v1/internal/leaderboard/refresh`
 
 ## Privacy and Fairness
@@ -83,7 +108,7 @@ Current operator path:
 2. support hiding exact deposit amount in favor of ranges if required
 3. provide transparent ranking formula documentation in app help
 
-## Explicit Out of Scope (v3.0)
+## Explicit Out of Scope (v4.0)
 
 - peer betting on user streak outcomes
 - prediction-market style side pools

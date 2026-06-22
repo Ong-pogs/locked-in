@@ -8,7 +8,7 @@ would defeat its purpose.
 ## Why
 
 - Real Kamino program (mainnet KLend at `KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD`)
-- Real USDC reserve (main market `7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF`)
+- Real Kamino main market (`7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF`); the USDC reserve is selected within it by symbol
 - Real Pyth/Scope oracles posting fresh prices
 - Real borrowers paying interest → APY > 0
 - Zero real-money risk; runs locally
@@ -69,11 +69,12 @@ Available profiles:
 
 - `fixed_apy_dev` — devnet default, mock 8% APY
 - `kamino_surfpool` — local Surfpool fork, real Kamino mainnet state
+- `kamino_devnet_demo` — production-safe: reads live mainnet Kamino USDC APY and applies it to devnet locks
 - `kamino_usdc_mainnet` — real mainnet, real funds
 
 Restart the backend. The dashboard's APY display now reads from real
-Kamino state via Surfpool. The lock-vault relay and faucet still run
-against devnet — only the yield reads use Surfpool.
+Kamino state via Surfpool. The `locked_in` vault relay and faucet still
+run against devnet — only the yield reads use Surfpool.
 
 ## After the demo
 

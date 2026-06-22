@@ -37,10 +37,13 @@ across simultaneous locks.
 
 ## Timer rules
 
-`effective_unlock_ts = base_lock_end_ts + extension_seconds_total`
+`effective_unlock_ts = lock_end_ts`
 
-(extension is unused in v4 — the old "no savers → +extension" penalty was
-removed. The field remains for on-chain compatibility.)
+(The on-chain `LockAccount` stores `lock_end_ts` once and never mutates it —
+unlock is gated purely on it, and there is no on-chain extension field. The old
+"no savers → +extension" penalty was removed in v4; a dormant `extension_days`
+column survives in the off-chain DB but is never applied. Missed days penalize
+yield only, never the lock.)
 
 User can resurface (withdraw principal) when `now >= effective_unlock_ts`.
 
@@ -54,8 +57,8 @@ User can resurface (withdraw principal) when `now >= effective_unlock_ts`.
 
 Per tick (every `RUNTIME_SCHEDULER_INTERVAL_MS`, default 15s):
 
-- syncs runtime rows from live `LockVault` state (fuel/fire/ichor stay
-  off-chain authoritative — not overwritten)
+- syncs runtime rows from live `LockAccount` custody state (fuel/fire/ichor
+  stay off-chain authoritative — not overwritten)
 - auto-creates `auto-harvest:*` receipts when a harvest interval is due,
   routing by fire + saver tier
 - processes missed-day consequences (`deriveDueMiss` →

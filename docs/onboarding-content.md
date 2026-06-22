@@ -45,7 +45,7 @@ You lock money to lock in your commitment.
 4. If you stay consistent -> you get your money back + rewards
 5. If you slack off -> your earned rewards start shrinking
 
-Stay consistent and your money is safe. Show up, do your lessons, and you get everything back plus rewards. But if you start slacking -- you'll lose the yield (interest) your money has been earning. Slack for too long, and it gets worse: your lock period gets extended, meaning your funds stay locked for longer than you originally planned. The more you slack, the steeper the penalty.
+Stay consistent and your money is safe. Show up, do your lessons, and you get everything back plus rewards. But if you start slacking -- you'll lose the yield (interest) your money has been earning, because it gets redirected to the community pot instead of coming to you. The good news: your principal is never touched and your lock period never gets extended. The only thing on the line is the interest you could have earned.
 
 Think of it as a promise to yourself -- LockedIn just makes sure you keep it.
 
@@ -109,14 +109,14 @@ Here's your commitment summary:
 
 **What happens now:**
 - Complete your daily lesson to keep your streak alive
-- Your locked USDC earns yield in the background a week after you start a new lesson
-- On Day 8, you'll start earning Ichor (your reward token which can be redeemed for rewards)
+- Your locked USDC earns yield in the background from day one
+- Every lesson you finish earns you Ichor -- an in-game currency you spend in the shop (like buying Streak Savers)
 - Stay consistent and you'll get your money back PLUS rewards
 
 **What to remember:**
-- Miss a day? You have streak savers (you earn those too)
+- Miss a day? Streak savers keep your streak alive (buy more in the shop with your Ichor)
 - Stay on track and your money comes back in full -- plus rewards
-- Slack off and you start losing yield. Slack too long and your lock period gets extended as a penalty
+- Slack off and you start losing yield -- your interest gets redirected to the community pot. Your principal is always safe and your lock period never gets extended
 
 [Start First Lesson]
 
