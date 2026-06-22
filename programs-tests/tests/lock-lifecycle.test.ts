@@ -28,7 +28,7 @@
  */
 
 import { describe, test, expect, beforeAll } from 'vitest';
-import { LiteSVM, Clock } from 'litesvm';
+import { LiteSVM } from 'litesvm';
 import { LiteSVMProvider } from 'anchor-litesvm';
 import {
   Keypair,
