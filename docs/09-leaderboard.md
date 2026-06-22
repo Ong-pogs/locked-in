@@ -98,6 +98,8 @@ Current operator path:
 
 - leaderboard snapshots refresh through a daily cron job that runs
   `npm run cron:leaderboard-refresh` from `backend/`
+- `render.yaml` defines the Render cron service:
+  `locked-in-leaderboard-snapshot-refresh`
 - the in-process backend worker
   (`leaderboardSnapshotWorker`, backend/src/workers/leaderboardSnapshotWorker.mjs)
   remains available for local/E2E runs but should stay disabled when cron owns

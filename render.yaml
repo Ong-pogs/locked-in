@@ -1,0 +1,18 @@
+# Render Blueprint for scheduled infrastructure.
+# Apply this in Render as a Blueprint to create the daily leaderboard refresh
+# cron job. Existing dashboard-managed web services are not defined here.
+services:
+  - type: cron
+    name: locked-in-leaderboard-snapshot-refresh
+    runtime: node
+    rootDir: backend
+    schedule: "0 0 * * *"
+    buildCommand: npm ci
+    startCommand: npm run cron:leaderboard-refresh
+    envVars:
+      - key: SCHEDULER_SECRET
+        sync: false
+      - key: LEADERBOARD_REFRESH_BASE_URL
+        sync: false
+      - key: LEADERBOARD_SNAPSHOT_PAGE_SIZE
+        value: "25"
