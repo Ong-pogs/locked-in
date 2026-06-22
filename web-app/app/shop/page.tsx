@@ -36,6 +36,10 @@ export default function ShopPage() {
   const authToken = useUserStore((s) => s.authToken);
   const activeState = activeCourseId ? courseStates[activeCourseId] ?? null : null;
   const ichorBalance = activeState?.ichorBalance ?? 0;
+  // v4: ichor is earned per-lesson (off-chain), not from harvests. Read the
+  // lifetime total from the store so "Ichor Earned" matches the purse —
+  // the old yieldHistory.totalIchorAwarded column is never written in v4.
+  const ichorEarnedLifetime = activeState?.totalIchorProduced ?? 0;
   const saversUsed = activeState?.saverCount ?? 0;
   const saversBanked = Math.max(0, 3 - saversUsed);
 
@@ -177,7 +181,7 @@ export default function ShopPage() {
               <LedgerRow label="Total Yield" value={`${yieldHistory?.totalGrossYieldUi ?? '0'} USDC`} valueColor={T.green} />
               <LedgerRow label="Fees" value={`${yieldHistory?.totalPlatformFeeUi ?? '0'} USDC`} valueColor={T.textSecondary} />
               <LedgerRow label="Redirected" value={`${yieldHistory?.totalRedirectedUi ?? '0'} USDC`} valueColor={T.rust} />
-              <LedgerRow label="Ichor Earned" value={Number(yieldHistory?.totalIchorAwarded ?? '0').toLocaleString()} valueColor={AMBER} />
+              <LedgerRow label="Ichor Earned" value={ichorEarnedLifetime.toLocaleString()} valueColor={AMBER} />
               <LedgerRow label="Harvests" value={`${yieldHistory?.totalHarvests ?? 0} total`} valueColor={T.textPrimary} last />
             </CozyCard>
 
