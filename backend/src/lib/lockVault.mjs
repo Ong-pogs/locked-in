@@ -3,92 +3,29 @@ import bs58Module from 'bs58';
 import {
   clusterApiUrl,
   Connection,
-  Keypair,
   PublicKey,
-  sendAndConfirmTransaction,
-  SystemProgram,
-  Transaction,
-  TransactionInstruction,
 } from '@solana/web3.js';
 import { appConfig } from '../config.mjs';
 
 const bs58 = bs58Module.decode ? bs58Module : bs58Module.default;
 
-const PROTOCOL_SEED = Buffer.from('protocol');
 const LOCK_SEED = Buffer.from('lock');
-const COMPLETION_SEED = Buffer.from('completion');
-const FUEL_BURN_SEED = Buffer.from('fuel-burn');
-const MISS_SEED = Buffer.from('miss');
-const HARVEST_SEED = Buffer.from('harvest');
-const CONVERSION_SEED = Buffer.from('conversion');
 const LOCK_ACCOUNT_DISCRIMINATOR = 'df40477cff5676c0';
 
-const APPLY_VERIFIED_COMPLETION_DISCRIMINATOR = anchorDiscriminator(
-  'apply_verified_completion',
-);
-const CONSUME_DAILY_FUEL_DISCRIMINATOR = anchorDiscriminator('consume_daily_fuel');
-const CONSUME_SAVER_OR_FULL_CONSEQUENCE_DISCRIMINATOR = anchorDiscriminator(
-  'consume_saver_or_apply_full_consequence',
-);
-const APPLY_HARVEST_RESULT_DISCRIMINATOR = anchorDiscriminator('apply_harvest_result');
+// Custody-core program exposes only initialize_protocol / lock_funds /
+// unlock_funds. The backend never signs lock_vault game-layer txs anymore —
+// the game layer is fully off-chain (DB is source of truth). We only READ the
+// LockAccount + inspect unlock transactions here.
 const UNLOCK_FUNDS_DISCRIMINATOR = anchorDiscriminator('unlock_funds');
-const CONVERT_FUEL_TO_ICHOR_DISCRIMINATOR = anchorDiscriminator('convert_fuel_to_ichor');
 
-let relay = null;
 let readConnection = null;
 
 function anchorDiscriminator(name) {
   return crypto.createHash('sha256').update(`global:${name}`).digest().subarray(0, 8);
 }
 
-function encodeU16LE(value) {
-  const buffer = Buffer.alloc(2);
-  buffer.writeUInt16LE(value, 0);
-  return buffer;
-}
-
-function encodeI64LE(value) {
-  const buffer = Buffer.alloc(8);
-  buffer.writeBigInt64LE(BigInt(value), 0);
-  return buffer;
-}
-
-function encodeU64LE(value) {
-  const buffer = Buffer.alloc(8);
-  buffer.writeBigUInt64LE(BigInt(value), 0);
-  return buffer;
-}
-
 function hashString(value) {
   return crypto.createHash('sha256').update(value).digest();
-}
-
-function toEpochDay(value) {
-  const milliseconds = new Date(`${value}T00:00:00.000Z`).getTime();
-  if (!Number.isFinite(milliseconds)) {
-    throw new Error(`Invalid date value: ${value}`);
-  }
-
-  return Math.floor(milliseconds / 86_400_000);
-}
-
-function toUnixTimestampSeconds(value) {
-  const milliseconds = new Date(value).getTime();
-  if (!Number.isFinite(milliseconds)) {
-    throw new Error(`Invalid timestamp value: ${value}`);
-  }
-
-  return Math.floor(milliseconds / 1000);
-}
-
-export function hasLockVaultRelayConfig() {
-  return Boolean(
-    appConfig.solanaRpcUrl &&
-      appConfig.lockVaultProgramId &&
-      appConfig.lockVaultUsdcMint &&
-      appConfig.lockVaultSkrMint &&
-      appConfig.lockVaultWorkerPrivateKey,
-  );
 }
 
 export function hasLockVaultReadConfig() {
@@ -110,25 +47,15 @@ function getReadConnection() {
   return readConnection;
 }
 
-function getRelay() {
-  if (!hasLockVaultRelayConfig()) {
-    throw new Error('LockVault relay config is incomplete.');
+function getReadContext() {
+  if (!hasLockVaultReadConfig()) {
+    throw new Error('LockVault read config is incomplete.');
   }
 
-  if (!relay) {
-    relay = {
-      connection: new Connection(
-        appConfig.solanaRpcUrl || clusterApiUrl('devnet'),
-        'confirmed',
-      ),
-      signer: Keypair.fromSecretKey(
-        bs58.decode(appConfig.lockVaultWorkerPrivateKey),
-      ),
-      programId: new PublicKey(appConfig.lockVaultProgramId),
-    };
-  }
-
-  return relay;
+  return {
+    connection: getReadConnection(),
+    programId: new PublicKey(appConfig.lockVaultProgramId),
+  };
 }
 
 function deriveCourseIdHash(courseId) {
@@ -144,19 +71,14 @@ function deriveLockAccount(programId, walletAddress, courseId) {
   return lockAccount;
 }
 
-function deriveProtocolConfig(programId) {
-  return PublicKey.findProgramAddressSync([PROTOCOL_SEED], programId)[0];
-}
-
-function deriveReceiptAccount(programId, seed, lockAccount, receiptKey) {
-  return PublicKey.findProgramAddressSync(
-    [seed, lockAccount.toBuffer(), receiptKey],
-    programId,
-  )[0];
-}
-
+// New custody-core LockAccount: 9 fields only. Layout/order/types mirror
+// target/idl/lock_vault.json -> types.LockAccount:
+//   owner(pubkey) course_id_hash([u8;32]) stable_mint(pubkey)
+//   principal_amount(u64) skr_locked_amount(u64) lock_start_ts(i64)
+//   lock_end_ts(i64) status(u8) bump(u8)
+// Total = 8 disc + 32 + 32 + 32 + 8 + 8 + 8 + 8 + 1 + 1 = 138 bytes.
 function decodeLockAccountSnapshot(data) {
-  if (data.length < 201) {
+  if (data.length < 138) {
     throw new Error('Lock account data is shorter than expected.');
   }
 
@@ -191,38 +113,16 @@ function decodeLockAccountSnapshot(data) {
     offset += 1;
     return value;
   };
-  const readBool = () => readU8() === 1;
-  const readU16 = () => {
-    const value = data.readUInt16LE(offset);
-    offset += 2;
-    return value;
-  };
 
   return {
     owner: readPubkey(),
     courseIdHash: Buffer.from(readBytes(32)).toString('hex'),
     stableMint: readPubkey(),
     principalAmount: readU64(),
+    skrLockedAmount: readU64(),
     lockStartTs: readI64(),
     lockEndTs: readI64(),
-    extensionSecondsTotal: readU64(),
     status: readU8(),
-    gauntletComplete: readBool(),
-    gauntletDay: readU8(),
-    currentStreak: readU16(),
-    longestStreak: readU16(),
-    saversRemaining: readU8(),
-    saverRecoveryMode: readBool(),
-    fuelCounter: readU16(),
-    fuelCap: readU16(),
-    lastFuelCreditDay: readI64(),
-    lastBrewerBurnTs: readI64(),
-    lastCompletionDay: readI64(),
-    ichorCounter: readU64(),
-    ichorLifetimeTotal: readU64(),
-    skrLockedAmount: readU64(),
-    skrTier: readU8(),
-    currentYieldRedirectBps: readU16(),
     bump: readU8(),
   };
 }
@@ -236,93 +136,8 @@ async function assertLockAccountExists(connection, lockAccount) {
   return account;
 }
 
-async function sendWorkerInstruction(keys, data) {
-  const { connection, signer, programId } = getRelay();
-  const latestBlockhash = await connection.getLatestBlockhash('confirmed');
-
-  const transaction = new Transaction({
-    feePayer: signer.publicKey,
-    blockhash: latestBlockhash.blockhash,
-    lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-  }).add(
-    new TransactionInstruction({
-      programId,
-      keys,
-      data,
-    }),
-  );
-
-  const signature = await sendAndConfirmTransaction(connection, transaction, [signer], {
-    commitment: 'confirmed',
-  });
-
-  return {
-    signature,
-    authority: signer.publicKey.toBase58(),
-  };
-}
-
-export async function publishVerifiedCompletionToLockVault({
-  eventId,
-  walletAddress,
-  courseId,
-  completionDay,
-  rewardUnits,
-}) {
-  const { connection, signer, programId } = getRelay();
-  const protocolConfig = deriveProtocolConfig(programId);
-  const lockAccount = deriveLockAccount(programId, walletAddress, courseId);
-  const receiptKey = hashString(eventId);
-  const receiptAccount = deriveReceiptAccount(
-    programId,
-    COMPLETION_SEED,
-    lockAccount,
-    receiptKey,
-  );
-
-  await assertLockAccountExists(connection, lockAccount);
-
-  const data = Buffer.concat([
-    APPLY_VERIFIED_COMPLETION_DISCRIMINATOR,
-    receiptKey,
-    encodeI64LE(toEpochDay(completionDay)),
-    encodeU16LE(rewardUnits),
-  ]);
-
-  const result = await sendWorkerInstruction(
-    [
-      { pubkey: protocolConfig, isSigner: false, isWritable: false },
-      { pubkey: lockAccount, isSigner: false, isWritable: true },
-      { pubkey: signer.publicKey, isSigner: true, isWritable: true },
-      { pubkey: receiptAccount, isSigner: false, isWritable: true },
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-    ],
-    data,
-  );
-
-  return {
-    ...result,
-    lockAccount: lockAccount.toBase58(),
-    receiptAccount: receiptAccount.toBase58(),
-    completionDay,
-    rewardUnits,
-  };
-}
-
-export async function readLockAccountTiming(walletAddress, courseId) {
-  const { connection, programId } = getRelay();
-  const lockAccount = deriveLockAccount(programId, walletAddress, courseId);
-  const account = await assertLockAccountExists(connection, lockAccount);
-  const snapshot = decodeLockAccountSnapshot(account.data);
-
-  return {
-    lockAccount: lockAccount.toBase58(),
-    lockStartTs: snapshot.lockStartTs,
-  };
-}
-
 export async function readLockAccountSnapshot(walletAddress, courseId) {
-  const { connection, programId } = getRelay();
+  const { connection, programId } = getReadContext();
   const lockAccount = deriveLockAccount(programId, walletAddress, courseId);
   const account = await assertLockAccountExists(connection, lockAccount);
 
@@ -457,126 +272,4 @@ export async function listRecentLockVaultProgramSignatures(limit = 25) {
   return connection.getSignaturesForAddress(programId, {
     limit: Math.max(1, Number(limit) || 25),
   });
-}
-
-export async function publishFuelBurnToLockVault({
-  walletAddress,
-  courseId,
-  cycleId,
-  burnedAt,
-}) {
-  const { connection, signer, programId } = getRelay();
-  const protocolConfig = deriveProtocolConfig(programId);
-  const lockAccount = deriveLockAccount(programId, walletAddress, courseId);
-  const receiptKey = hashString(cycleId);
-  const receiptAccount = deriveReceiptAccount(
-    programId,
-    FUEL_BURN_SEED,
-    lockAccount,
-    receiptKey,
-  );
-
-  await assertLockAccountExists(connection, lockAccount);
-
-  const data = Buffer.concat([
-    CONSUME_DAILY_FUEL_DISCRIMINATOR,
-    receiptKey,
-    encodeI64LE(toUnixTimestampSeconds(burnedAt)),
-  ]);
-
-  const result = await sendWorkerInstruction(
-    [
-      { pubkey: protocolConfig, isSigner: false, isWritable: false },
-      { pubkey: lockAccount, isSigner: false, isWritable: true },
-      { pubkey: signer.publicKey, isSigner: true, isWritable: true },
-      { pubkey: receiptAccount, isSigner: false, isWritable: true },
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-    ],
-    data,
-  );
-
-  return {
-    ...result,
-    lockAccount: lockAccount.toBase58(),
-    receiptAccount: receiptAccount.toBase58(),
-    burnedAt,
-  };
-}
-
-export async function publishMissConsequenceToLockVault({
-  walletAddress,
-  courseId,
-  missEventId,
-  missDay,
-}) {
-  const { connection, signer, programId } = getRelay();
-  const protocolConfig = deriveProtocolConfig(programId);
-  const lockAccount = deriveLockAccount(programId, walletAddress, courseId);
-  const receiptKey = hashString(missEventId);
-  const receiptAccount = deriveReceiptAccount(programId, MISS_SEED, lockAccount, receiptKey);
-
-  await assertLockAccountExists(connection, lockAccount);
-
-  const data = Buffer.concat([
-    CONSUME_SAVER_OR_FULL_CONSEQUENCE_DISCRIMINATOR,
-    receiptKey,
-    encodeI64LE(toEpochDay(missDay)),
-  ]);
-
-  const result = await sendWorkerInstruction(
-    [
-      { pubkey: protocolConfig, isSigner: false, isWritable: false },
-      { pubkey: lockAccount, isSigner: false, isWritable: true },
-      { pubkey: signer.publicKey, isSigner: true, isWritable: true },
-      { pubkey: receiptAccount, isSigner: false, isWritable: true },
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-    ],
-    data,
-  );
-
-  return {
-    ...result,
-    lockAccount: lockAccount.toBase58(),
-    receiptAccount: receiptAccount.toBase58(),
-    missDay,
-  };
-}
-
-export async function publishHarvestToLockVault({
-  walletAddress,
-  courseId,
-  harvestId,
-  grossYieldAmount,
-}) {
-  const { connection, signer, programId } = getRelay();
-  const protocolConfig = deriveProtocolConfig(programId);
-  const lockAccount = deriveLockAccount(programId, walletAddress, courseId);
-  const receiptKey = hashString(harvestId);
-  const receiptAccount = deriveReceiptAccount(programId, HARVEST_SEED, lockAccount, receiptKey);
-
-  await assertLockAccountExists(connection, lockAccount);
-
-  const data = Buffer.concat([
-    APPLY_HARVEST_RESULT_DISCRIMINATOR,
-    receiptKey,
-    encodeU64LE(BigInt(grossYieldAmount)),
-  ]);
-
-  const result = await sendWorkerInstruction(
-    [
-      { pubkey: protocolConfig, isSigner: false, isWritable: false },
-      { pubkey: lockAccount, isSigner: false, isWritable: true },
-      { pubkey: signer.publicKey, isSigner: true, isWritable: true },
-      { pubkey: receiptAccount, isSigner: false, isWritable: true },
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-    ],
-    data,
-  );
-
-  return {
-    ...result,
-    lockAccount: lockAccount.toBase58(),
-    receiptAccount: receiptAccount.toBase58(),
-    grossYieldAmount,
-  };
 }

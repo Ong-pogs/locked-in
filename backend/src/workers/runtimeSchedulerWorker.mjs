@@ -12,7 +12,7 @@
 //     (bumps redirect_bps). If all 3 savers are already used → streak
 //     resets to 0, redirect stays at 20% cap.
 import { appConfig } from '../config.mjs';
-import { hasLockVaultRelayConfig, readLockAccountSnapshot } from '../lib/lockVault.mjs';
+import { hasLockVaultReadConfig, readLockAccountSnapshot } from '../lib/lockVault.mjs';
 import {
   createYieldStrategyAdapter,
   deriveHarvestBucketTimestamp,
@@ -23,8 +23,6 @@ import {
   consumeSaverOrApplyFullConsequence,
   listRuntimeSchedulerCandidates,
   publishHarvestRedirectToCommunityPot,
-  publishHarvestResultReceipt,
-  publishMissConsequenceReceipt,
   recordHarvestResult,
   syncCourseRuntimeStateWithLockSnapshot,
 } from '../modules/progress/repository.mjs';
@@ -168,8 +166,8 @@ async function processRuntimeCandidate(app, candidate, now) {
         );
 
         // Record the harvest into the DB (idempotent insert keyed on
-        // wallet+course+harvest). Return value is unused now that the
-        // yield_splitter on-chain publish status is gone.
+        // wallet+course+harvest). The DB is the source of truth for the game
+        // layer — there is no lock_vault on-chain harvest publish anymore.
         await recordHarvestResult(
           candidate.walletAddress,
           candidate.courseId,
@@ -178,12 +176,7 @@ async function processRuntimeCandidate(app, candidate, now) {
           dueHarvest.harvestedAt,
           redirectedAmount,
         );
-        const lockVaultResult = await publishHarvestResultReceipt(
-          candidate.walletAddress,
-          candidate.courseId,
-          dueHarvest.harvestId,
-          true,
-        );
+        // Community pot is STILL on-chain: publish the redirected slice.
         const communityPotResult = await publishHarvestRedirectToCommunityPot(
           candidate.walletAddress,
           candidate.courseId,
@@ -204,9 +197,7 @@ async function processRuntimeCandidate(app, candidate, now) {
             elapsedSeconds: dueHarvest.elapsedSeconds,
             strategyKind: strategy.kind,
             quotedApyBps: dueHarvest.apyBps ?? null,
-            lockVaultReason: lockVaultResult.reason,
             communityPotReason: communityPotResult.reason,
-            lockVaultSignature: lockVaultResult.signature ?? null,
           },
           'runtime_scheduler.harvest_processed',
         );
@@ -237,16 +228,13 @@ async function processRuntimeCandidate(app, candidate, now) {
 
   if (dueMiss) {
     try {
+      // Misses are yield-only now (no lock extension) and fully off-chain.
+      // Record the consequence in the DB; there is no lock_vault publish.
       const missResult = await consumeSaverOrApplyFullConsequence(
         candidate.walletAddress,
         candidate.courseId,
         dueMiss.missEventId,
         dueMiss.missDay,
-      );
-      const publishResult = await publishMissConsequenceReceipt(
-        candidate.walletAddress,
-        candidate.courseId,
-        dueMiss.missEventId,
       );
 
       app.log.info(
@@ -256,7 +244,6 @@ async function processRuntimeCandidate(app, candidate, now) {
           missEventId: dueMiss.missEventId,
           missDay: dueMiss.missDay,
           missReason: missResult.reason,
-          relayReason: publishResult.reason,
         },
         'runtime_scheduler.miss_processed',
       );
@@ -350,15 +337,15 @@ export function registerRuntimeSchedulerWorker(app) {
       return;
     }
 
-    // Treasury-signing worker (harvest receipts -> relay). Refuse on
-    // non-devnet clusters until on-chain Kamino backing exists.
+    // Reads LockAccount custody state + signs community_pot redirects. Refuse
+    // on non-devnet clusters until on-chain Kamino backing exists.
     if (!(appConfig.solanaRpcUrl ?? '').includes('devnet')) {
       app.log.error('CRITICAL: runtime scheduler worker blocked on non-devnet cluster. Refusing to start.');
       return;
     }
 
-    if (!hasLockVaultRelayConfig()) {
-      app.log.warn('Runtime scheduler worker disabled because relay config is incomplete');
+    if (!hasLockVaultReadConfig()) {
+      app.log.warn('Runtime scheduler worker disabled because lock vault read config is incomplete');
       return;
     }
 

@@ -10,8 +10,6 @@ import { progressRoutes } from './modules/progress/routes.mjs';
 import { faucetRoutes } from './modules/faucet/routes.mjs';
 import { yieldRoutes } from './modules/yield/routes.mjs';
 import { registerLeaderboardSnapshotWorker } from './workers/leaderboardSnapshotWorker.mjs';
-import { registerLockVaultRelayWorker } from './workers/lockVaultRelayWorker.mjs';
-import { registerRedemptionVaultAutofundWorker } from './workers/redemptionVaultAutofundWorker.mjs';
 import { registerRuntimeSchedulerWorker } from './workers/runtimeSchedulerWorker.mjs';
 import { registerUnlockIndexerWorker } from './workers/unlockIndexerWorker.mjs';
 
@@ -122,8 +120,6 @@ export function buildServer() {
   app.register(faucetRoutes);
   app.register(yieldRoutes);
   registerLeaderboardSnapshotWorker(app);
-  registerLockVaultRelayWorker(app);
-  registerRedemptionVaultAutofundWorker(app);
   registerRuntimeSchedulerWorker(app);
   registerUnlockIndexerWorker(app);
 

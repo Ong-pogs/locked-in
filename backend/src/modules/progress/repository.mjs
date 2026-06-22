@@ -10,15 +10,9 @@ import {
 } from '../../lib/db.mjs';
 import {
   hasLockVaultReadConfig,
-  hasLockVaultRelayConfig,
   inspectUnlockTransaction,
   listRecentLockVaultProgramSignatures,
-  publishFuelBurnToLockVault,
-  publishHarvestToLockVault,
-  publishMissConsequenceToLockVault,
-  publishVerifiedCompletionToLockVault,
   readLockAccountSnapshot,
-  readLockAccountTiming,
   verifyUnlockTransaction,
 } from '../../lib/lockVault.mjs';
 import {
@@ -224,18 +218,8 @@ function diffDays(fromDay, toDay) {
   return Math.round((to - from) / (24 * 60 * 60 * 1000));
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 function percentageOfAmount(amount, bps) {
   return Math.floor((Number(amount) * Number(bps)) / 10_000);
-}
-
-function epochDayToIsoDate(epochDay) {
-  if (epochDay == null || Number(epochDay) < 0) {
-    return null;
-  }
-
-  return new Date(Number(epochDay) * DAY_MS).toISOString().slice(0, 10);
 }
 
 function unixTimestampSecondsToIso(value) {
@@ -1179,153 +1163,6 @@ async function readVerifiedCompletionEvent(client, lessonAttemptId) {
   return result.rows[0] ?? null;
 }
 
-async function claimVerifiedCompletionEvent(eventId = null, retryFailed = false) {
-  const claimableStatuses = retryFailed ? ['pending', 'failed'] : ['pending'];
-  const selectionArgs = [claimableStatuses];
-  let result;
-
-  if (eventId) {
-    selectionArgs.push(eventId);
-    result = await query(
-      `
-        update lesson.verified_completion_events
-        set status = 'publishing',
-            last_error = null
-        where event_id = $2::uuid
-          and status = any($1::text[])
-        returning
-          event_id::text as "eventId",
-          wallet_address as "walletAddress",
-          course_id as "courseId",
-          completion_day::text as "completionDay",
-          reward_units as "rewardUnits",
-          payload->>'completedAt' as "completedAt",
-          status
-      `,
-      selectionArgs,
-    );
-  } else {
-    result = await query(
-      `
-        with next_event as (
-          select event_id
-          from lesson.verified_completion_events
-          where status = any($1::text[])
-          order by created_at asc
-          for update skip locked
-          limit 1
-        )
-        update lesson.verified_completion_events events
-        set status = 'publishing',
-            last_error = null
-        from next_event
-        where events.event_id = next_event.event_id
-        returning
-          events.event_id::text as "eventId",
-          events.wallet_address as "walletAddress",
-          events.course_id as "courseId",
-          events.completion_day::text as "completionDay",
-          events.reward_units as "rewardUnits",
-          events.payload->>'completedAt' as "completedAt",
-          events.status
-      `,
-      selectionArgs,
-    );
-  }
-
-  if (result.rowCount > 0) {
-    return {
-      event: result.rows[0],
-      reason: 'CLAIMED',
-    };
-  }
-
-  if (!eventId) {
-    return {
-      event: null,
-      reason: 'NO_PENDING_EVENT',
-    };
-  }
-
-  const current = await query(
-    `
-      select
-        event_id::text as "eventId",
-        status,
-        payload->>'completedAt' as "completedAt",
-        last_error as "lastError",
-        published_at as "publishedAt",
-        transaction_signature as "transactionSignature"
-      from lesson.verified_completion_events
-      where event_id = $1::uuid
-      limit 1
-    `,
-    [eventId],
-  );
-
-  if (current.rowCount === 0) {
-    return {
-      event: null,
-      reason: 'EVENT_NOT_FOUND',
-    };
-  }
-
-  const existing = current.rows[0];
-  if (existing.status === 'published') {
-    return {
-      event: existing,
-      reason: 'ALREADY_PUBLISHED',
-    };
-  }
-
-  if (existing.status === 'publishing') {
-    return {
-      event: existing,
-      reason: 'ALREADY_PUBLISHING',
-    };
-  }
-
-  return {
-    event: existing,
-    reason: 'RETRY_REQUIRED',
-  };
-}
-
-async function markVerifiedCompletionEventPublished(eventId, signature) {
-  await query(
-    `
-      update lesson.verified_completion_events
-      set status = 'published',
-          published_at = now(),
-          last_error = null,
-          transaction_signature = $2
-      where event_id = $1::uuid
-    `,
-    [eventId, signature],
-  );
-}
-
-async function markVerifiedCompletionEventFailed(eventId, error) {
-  await query(
-    `
-      update lesson.verified_completion_events
-      set status = 'failed',
-          last_error = $2
-      where event_id = $1::uuid
-    `,
-    [eventId, error],
-  );
-}
-
-function toUnixTimestampSeconds(value) {
-  const milliseconds = new Date(value).getTime();
-  if (!Number.isFinite(milliseconds)) {
-    throw badRequest('completedAt is invalid', 'INVALID_COMPLETED_AT');
-  }
-
-  return Math.floor(milliseconds / 1000);
-}
-
 export async function readCourseRuntimeState(client, walletAddress, courseId) {
   const state = await ensureCourseRuntimeState(client, walletAddress, courseId);
 
@@ -1361,37 +1198,24 @@ export async function syncCourseRuntimeStateWithLockSnapshot(
   }
 
   const snapshot = lockSnapshot ?? (await readLockAccountSnapshot(walletAddress, courseId));
-  const extensionDays = Math.floor(snapshot.extensionSecondsTotal / 86_400);
-  const saverCount = snapshot.gauntletComplete ? Math.max(0, 3 - snapshot.saversRemaining) : 0;
 
   return withTransactionAsWallet(walletAddress, async (client) => {
     await ensureCourseRuntimeState(client, walletAddress, courseId);
-    // Fuel-related fields (fuel_counter, last_fuel_credit_day,
-    // last_brewer_burn_ts) are NOT synced from the on-chain snapshot in
-    // this dev phase — the off-chain code owns the fuel ledger and the
-    // lock-vault relay for fuel mutations isn't wired up yet. Without
-    // this carve-out, every 15s scheduler tick would overwrite a fresh
-    // brew (DB fuel = 0) with the stale on-chain value (fuel = 1),
-    // letting users mint infinite ichor.
+    // The custody-core lock_vault LockAccount only carries custody fields now
+    // (owner, mint, principal, skr, timestamps, status). The game layer —
+    // streak, gauntlet, savers, redirect_bps, extension, fuel, ichor,
+    // last_completed_day — is OWNED BY THE DB and must NOT be overwritten from
+    // the chain snapshot. We sync only the custody columns so the on-chain
+    // principal/SKR/lock window stay reflected in the runtime row.
     await client.query(
       `
         update lesson.user_course_runtime_state
-        set current_streak = $3,
-            longest_streak = $4,
-            gauntlet_active = $5,
-            gauntlet_day = $6,
-            saver_count = $7,
-            saver_recovery_mode = $8,
-            current_yield_redirect_bps = $9,
-            extension_days = $10,
-            fuel_cap = $11,
-            last_completed_day = $12::date,
-            lock_account_address = $13,
-            stable_mint = $14,
-            principal_amount = $15::bigint,
-            skr_locked_amount = $16::bigint,
-            lock_start_at = $17::timestamptz,
-            lock_end_at = $18::timestamptz,
+        set lock_account_address = $3,
+            stable_mint = $4,
+            principal_amount = $5::bigint,
+            skr_locked_amount = $6::bigint,
+            lock_start_at = $7::timestamptz,
+            lock_end_at = $8::timestamptz,
             updated_at = now()
         where wallet_address = $1
           and course_id = $2
@@ -1399,20 +1223,6 @@ export async function syncCourseRuntimeStateWithLockSnapshot(
       [
         walletAddress,
         courseId,
-        snapshot.currentStreak,
-        snapshot.longestStreak,
-        // Gauntlet dropped — force gauntlet_active=false in the DB so every
-        // downstream behavioural gate (miss consequence, fuel burn, fuel→ichor)
-        // sees a post-gauntlet world. The on-chain program still tracks
-        // gauntletComplete/gauntletDay; we just stop honouring them off-chain.
-        false,
-        snapshot.gauntletDay,
-        saverCount,
-        snapshot.saverRecoveryMode,
-        snapshot.currentYieldRedirectBps,
-        extensionDays,
-        snapshot.fuelCap,
-        epochDayToIsoDate(snapshot.lastCompletionDay),
         snapshot.lockAccount,
         snapshot.stableMint,
         snapshot.principalAmount,
@@ -2147,280 +1957,24 @@ export async function getUnlockReceipts(walletAddress, limit = 20) {
   };
 }
 
-export async function publishVerifiedCompletionEvent(
-  eventId = null,
-  retryFailed = false,
-) {
-  if (!hasDatabase()) {
-    return {
-      processed: false,
-      reason: 'NO_DATABASE',
-    };
-  }
-
-  if (!hasLockVaultRelayConfig()) {
-    return {
-      processed: false,
-      reason: 'LOCK_VAULT_RELAY_DISABLED',
-    };
-  }
-
-  const claim = await claimVerifiedCompletionEvent(eventId, retryFailed);
-  if (!claim.event) {
-    return {
-      processed: false,
-      reason: claim.reason,
-    };
-  }
-
-  if (claim.reason !== 'CLAIMED') {
-    return {
-      processed: false,
-      reason: claim.reason,
-      event: claim.event,
-    };
-  }
-
-  try {
-    const lockTiming = await readLockAccountTiming(
-      claim.event.walletAddress,
-      claim.event.courseId,
-    );
-    const completedAtTs = toUnixTimestampSeconds(claim.event.completedAt);
-
-    if (completedAtTs < lockTiming.lockStartTs) {
-      const error =
-        'Completion predates the on-chain lock start and cannot be published.';
-      await markVerifiedCompletionEventFailed(claim.event.eventId, error);
-      return {
-        processed: false,
-        reason: 'PREDATES_LOCK',
-        eventId: claim.event.eventId,
-        courseId: claim.event.courseId,
-        walletAddress: claim.event.walletAddress,
-        error,
-        lockAccount: lockTiming.lockAccount,
-      };
-    }
-
-    const publishResult = await publishVerifiedCompletionToLockVault(claim.event);
-    await markVerifiedCompletionEventPublished(
-      claim.event.eventId,
-      publishResult.signature,
-    );
-
-    return {
-      processed: true,
-      reason: 'PUBLISHED',
-      eventId: claim.event.eventId,
-      courseId: claim.event.courseId,
-      walletAddress: claim.event.walletAddress,
-      completionDay: claim.event.completionDay,
-      rewardUnits: claim.event.rewardUnits,
-      signature: publishResult.signature,
-      authority: publishResult.authority,
-      lockAccount: publishResult.lockAccount,
-      receiptAccount: publishResult.receiptAccount,
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    await markVerifiedCompletionEventFailed(claim.event.eventId, message);
-
-    return {
-      processed: false,
-      reason: 'PUBLISH_FAILED',
-      eventId: claim.event.eventId,
-      courseId: claim.event.courseId,
-      walletAddress: claim.event.walletAddress,
-      error: message,
-    };
-  }
+// ── Dead on-chain lock_vault game-layer publishes (now inert) ─────────────
+// The custody-core lock_vault program no longer has apply_verified_completion,
+// consume_daily_fuel, or consume_saver_or_apply_full_consequence. The game
+// layer is fully off-chain — these DB rows are the source of truth and are
+// already written by the recording paths (persistVerifiedCompletionEvent,
+// consumeDailyFuel, consumeSaverOrApplyFullConsequence). These exported stubs
+// remain only so the legacy /v1/internal/.../publish routes return cleanly.
+// The *_publish_status columns are left inert (deferred destructive cleanup).
+export async function publishVerifiedCompletionEvent() {
+  return { processed: false, reason: 'ONCHAIN_PUBLISH_REMOVED' };
 }
 
-export async function publishFuelBurnReceipt(
-  walletAddress,
-  courseId,
-  cycleId,
-  retryFailed = false,
-) {
-  if (!hasDatabase()) {
-    return {
-      processed: false,
-      reason: 'NO_DATABASE',
-    };
-  }
-
-  if (!hasLockVaultRelayConfig()) {
-    return {
-      processed: false,
-      reason: 'LOCK_VAULT_RELAY_DISABLED',
-    };
-  }
-
-  const claim = await claimFuelBurnReceipt(
-    walletAddress,
-    courseId,
-    cycleId,
-    retryFailed,
-  );
-  if (!claim.receipt) {
-    return {
-      processed: false,
-      reason: claim.reason,
-    };
-  }
-
-  if (claim.reason !== 'CLAIMED') {
-    return {
-      processed: false,
-      reason: claim.reason,
-      receipt: claim.receipt,
-    };
-  }
-
-  if (!['BURNED', 'GAUNTLET_LOCKED', 'NO_FUEL'].includes(claim.receipt.reason ?? '')) {
-    const error = `Fuel burn receipt reason is not publishable: ${claim.receipt.reason ?? 'UNKNOWN'}`;
-    await markFuelBurnReceiptFailed(walletAddress, courseId, cycleId, error);
-    return {
-      processed: false,
-      reason: 'UNPUBLISHABLE_RECEIPT',
-      walletAddress,
-      courseId,
-      cycleId,
-      error,
-    };
-  }
-
-  try {
-    const publishResult = await publishFuelBurnToLockVault(claim.receipt);
-    await markFuelBurnReceiptPublished(
-      walletAddress,
-      courseId,
-      cycleId,
-      publishResult.signature,
-    );
-
-    return {
-      processed: true,
-      reason: 'PUBLISHED',
-      walletAddress,
-      courseId,
-      cycleId,
-      burnedAt: claim.receipt.burnedAt,
-      signature: publishResult.signature,
-      authority: publishResult.authority,
-      lockAccount: publishResult.lockAccount,
-      receiptAccount: publishResult.receiptAccount,
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    await markFuelBurnReceiptFailed(walletAddress, courseId, cycleId, message);
-
-    return {
-      processed: false,
-      reason: 'PUBLISH_FAILED',
-      walletAddress,
-      courseId,
-      cycleId,
-      error: message,
-    };
-  }
+export async function publishFuelBurnReceipt() {
+  return { processed: false, reason: 'ONCHAIN_PUBLISH_REMOVED' };
 }
 
-export async function publishMissConsequenceReceipt(
-  walletAddress,
-  courseId,
-  missEventId,
-  retryFailed = false,
-) {
-  if (!hasDatabase()) {
-    return {
-      processed: false,
-      reason: 'NO_DATABASE',
-    };
-  }
-
-  if (!hasLockVaultRelayConfig()) {
-    return {
-      processed: false,
-      reason: 'LOCK_VAULT_RELAY_DISABLED',
-    };
-  }
-
-  const claim = await claimMissConsequenceReceipt(
-    walletAddress,
-    courseId,
-    missEventId,
-    retryFailed,
-  );
-  if (!claim.receipt) {
-    return {
-      processed: false,
-      reason: claim.reason,
-    };
-  }
-
-  if (claim.reason !== 'CLAIMED') {
-    return {
-      processed: false,
-      reason: claim.reason,
-      receipt: claim.receipt,
-    };
-  }
-
-  if (!['SAVER_CONSUMED', 'FULL_CONSEQUENCE', 'GAUNTLET_LOCKED'].includes(claim.receipt.reason ?? '')) {
-    const error =
-      `Miss consequence receipt reason is not publishable: ${claim.receipt.reason ?? 'UNKNOWN'}`;
-    await markMissConsequenceReceiptFailed(walletAddress, courseId, missEventId, error);
-    return {
-      processed: false,
-      reason: 'UNPUBLISHABLE_RECEIPT',
-      walletAddress,
-      courseId,
-      missEventId,
-      error,
-    };
-  }
-
-  try {
-    const publishResult = await publishMissConsequenceToLockVault(claim.receipt);
-    await markMissConsequenceReceiptPublished(
-      walletAddress,
-      courseId,
-      missEventId,
-      publishResult.signature,
-    );
-
-    return {
-      processed: true,
-      reason: 'PUBLISHED',
-      walletAddress,
-      courseId,
-      missEventId,
-      missDay: claim.receipt.missDay,
-      signature: publishResult.signature,
-      authority: publishResult.authority,
-      lockAccount: publishResult.lockAccount,
-      receiptAccount: publishResult.receiptAccount,
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    await markMissConsequenceReceiptFailed(
-      walletAddress,
-      courseId,
-      missEventId,
-      message,
-    );
-
-    return {
-      processed: false,
-      reason: 'PUBLISH_FAILED',
-      walletAddress,
-      courseId,
-      missEventId,
-      error: message,
-    };
-  }
+export async function publishMissConsequenceReceipt() {
+  return { processed: false, reason: 'ONCHAIN_PUBLISH_REMOVED' };
 }
 
 async function readHarvestResultReceipt(client, walletAddress, courseId, harvestId) {
@@ -2830,232 +2384,13 @@ export async function getBreweryState(walletAddress, courseId) {
   });
 }
 
-async function claimHarvestResultReceipt(
-  walletAddress,
-  courseId,
-  harvestId,
-  retryFailed = false,
-) {
-  const claimableStatuses = retryFailed ? ['pending', 'failed'] : ['pending'];
-  const result = await query(
-    `
-      update lesson.harvest_result_receipts
-      set lock_vault_status = 'publishing',
-          lock_vault_last_error = null
-      where wallet_address = $1
-        and course_id = $2
-        and harvest_id = $3
-        and lock_vault_status = any($4::text[])
-      returning
-        wallet_address as "walletAddress",
-        course_id as "courseId",
-        harvest_id as "harvestId",
-        harvested_at as "harvestedAt",
-        gross_yield_amount as "grossYieldAmount",
-        applied,
-        reason,
-        platform_fee_amount as "platformFeeAmount",
-        redirected_amount as "redirectedAmount",
-        ichor_awarded as "ichorAwarded"
-    `,
-    [walletAddress, courseId, harvestId, claimableStatuses],
-  );
-
-  if (result.rowCount > 0) {
-    return { receipt: result.rows[0], reason: 'CLAIMED' };
-  }
-
-  const current = await query(
-    `
-      select
-        wallet_address as "walletAddress",
-        course_id as "courseId",
-        harvest_id as "harvestId",
-        harvested_at as "harvestedAt",
-        gross_yield_amount as "grossYieldAmount",
-        applied,
-        reason,
-        platform_fee_amount as "platformFeeAmount",
-        redirected_amount as "redirectedAmount",
-        ichor_awarded as "ichorAwarded",
-        lock_vault_status as "lockVaultStatus",
-        lock_vault_published_at as "lockVaultPublishedAt",
-        lock_vault_last_error as "lockVaultLastError",
-        lock_vault_transaction_signature as "lockVaultTransactionSignature"
-      from lesson.harvest_result_receipts
-      where wallet_address = $1
-        and course_id = $2
-        and harvest_id = $3
-      limit 1
-    `,
-    [walletAddress, courseId, harvestId],
-  );
-
-  if (current.rowCount === 0) {
-    return { receipt: null, reason: 'RECEIPT_NOT_FOUND' };
-  }
-
-  const existing = current.rows[0];
-  if (existing.lockVaultStatus === 'published') {
-    return { receipt: existing, reason: 'ALREADY_PUBLISHED' };
-  }
-
-  if (existing.lockVaultStatus === 'publishing') {
-    return { receipt: existing, reason: 'ALREADY_PUBLISHING' };
-  }
-
-  return { receipt: existing, reason: 'RETRY_REQUIRED' };
-}
-
-async function markHarvestResultReceiptPublished(
-  walletAddress,
-  courseId,
-  harvestId,
-  values,
-) {
-  await query(
-    `
-      update lesson.harvest_result_receipts
-      set lock_vault_status = 'published',
-          lock_vault_published_at = now(),
-          lock_vault_last_error = null,
-          lock_vault_transaction_signature = $4,
-          applied = $5,
-          reason = $6,
-          platform_fee_amount = $7::bigint,
-          redirected_amount = $8::bigint,
-          ichor_awarded = $9::bigint
-      where wallet_address = $1
-        and course_id = $2
-        and harvest_id = $3
-    `,
-    [
-      walletAddress,
-      courseId,
-      harvestId,
-      values.signature,
-      values.applied,
-      values.reason,
-      values.platformFeeAmount,
-      values.redirectedAmount,
-      values.ichorAwarded,
-    ],
-  );
-}
-
-async function markHarvestResultReceiptFailed(walletAddress, courseId, harvestId, error) {
-  await query(
-    `
-      update lesson.harvest_result_receipts
-      set lock_vault_status = 'failed',
-          lock_vault_last_error = $4
-      where wallet_address = $1
-        and course_id = $2
-        and harvest_id = $3
-    `,
-    [walletAddress, courseId, harvestId, error],
-  );
-}
-
-export async function publishHarvestResultReceipt(
-  walletAddress,
-  courseId,
-  harvestId,
-  retryFailed = false,
-) {
-  if (!hasDatabase()) {
-    return {
-      processed: false,
-      reason: 'NO_DATABASE',
-    };
-  }
-
-  if (!hasLockVaultRelayConfig()) {
-    return {
-      processed: false,
-      reason: 'LOCK_VAULT_RELAY_DISABLED',
-    };
-  }
-
-  const claim = await claimHarvestResultReceipt(
-    walletAddress,
-    courseId,
-    harvestId,
-    retryFailed,
-  );
-  if (!claim.receipt) {
-    return {
-      processed: false,
-      reason: claim.reason,
-    };
-  }
-
-  if (claim.reason !== 'CLAIMED') {
-    return {
-      processed: false,
-      reason: claim.reason,
-      receipt: claim.receipt,
-    };
-  }
-
-  try {
-    const snapshotBefore = await readLockAccountSnapshot(walletAddress, courseId);
-    const publishResult = await publishHarvestToLockVault({
-      walletAddress,
-      courseId,
-      harvestId,
-      grossYieldAmount: claim.receipt.grossYieldAmount,
-    });
-    const snapshotAfter = await readLockAccountSnapshot(walletAddress, courseId);
-
-    const applied =
-      snapshotAfter.ichorCounter > snapshotBefore.ichorCounter ||
-      snapshotAfter.ichorLifetimeTotal > snapshotBefore.ichorLifetimeTotal;
-    const platformFeeAmount = String(claim.receipt.platformFeeAmount ?? 0);
-    const redirectedAmount = String(claim.receipt.redirectedAmount ?? 0);
-    const ichorAwarded = String(claim.receipt.ichorAwarded ?? 0);
-    const reason = claim.receipt.reason ?? (applied ? 'HARVEST_APPLIED' : 'HARVEST_SKIPPED');
-
-    await markHarvestResultReceiptPublished(walletAddress, courseId, harvestId, {
-      signature: publishResult.signature,
-      applied,
-      reason,
-      platformFeeAmount,
-      redirectedAmount,
-      ichorAwarded,
-    });
-    await syncCourseRuntimeStateWithLockSnapshot(walletAddress, courseId, snapshotAfter);
-
-    return {
-      processed: true,
-      reason: 'PUBLISHED',
-      walletAddress,
-      courseId,
-      harvestId,
-      grossYieldAmount: claim.receipt.grossYieldAmount,
-      applied,
-      harvestReason: reason,
-      platformFeeAmount,
-      redirectedAmount,
-      ichorAwarded,
-      signature: publishResult.signature,
-      authority: publishResult.authority,
-      lockAccount: publishResult.lockAccount,
-      receiptAccount: publishResult.receiptAccount,
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    await markHarvestResultReceiptFailed(walletAddress, courseId, harvestId, message);
-
-    return {
-      processed: false,
-      reason: 'PUBLISH_FAILED',
-      walletAddress,
-      courseId,
-      harvestId,
-      error: message,
-    };
-  }
+// Inert: the custody-core lock_vault has no apply_harvest_result instruction.
+// Harvest results live in lesson.harvest_result_receipts (written by
+// recordHarvestResult) and drive ichor off-chain. Only the community_pot
+// redirect (below) is still published on-chain. The lock_vault_* publish
+// columns are left inert (deferred destructive cleanup).
+export async function publishHarvestResultReceipt() {
+  return { processed: false, reason: 'ONCHAIN_PUBLISH_REMOVED' };
 }
 
 async function claimHarvestRedirectReceipt(
@@ -3064,6 +2399,10 @@ async function claimHarvestRedirectReceipt(
   harvestId,
   retryFailed = false,
 ) {
+  // The lock_vault harvest publish is gone (custody-core program), so the
+  // community_pot redirect no longer waits on lock_vault_status. It claims
+  // purely on its own community_pot_status — the harvest receipt row (written
+  // by recordHarvestResult) is the only precondition.
   const claimableStatuses = retryFailed ? ['pending', 'failed'] : ['pending'];
   const result = await query(
     `
@@ -3073,7 +2412,6 @@ async function claimHarvestRedirectReceipt(
       where wallet_address = $1
         and course_id = $2
         and harvest_id = $3
-        and lock_vault_status = 'published'
         and community_pot_status = any($4::text[])
       returning
         wallet_address as "walletAddress",
@@ -3121,10 +2459,6 @@ async function claimHarvestRedirectReceipt(
   }
 
   const existing = current.rows[0];
-  if (existing.lockVaultStatus !== 'published') {
-    return { receipt: existing, reason: 'LOCK_VAULT_NOT_PUBLISHED' };
-  }
-
   if (existing.communityPotStatus === 'published') {
     return { receipt: existing, reason: 'ALREADY_PUBLISHED' };
   }
@@ -3512,11 +2846,15 @@ export async function closeCommunityPotWindowAndSnapshot(windowId, closedAt = nu
     };
   }
 
+  // Streak is DB-owned now (the custody-core lock_vault no longer tracks it),
+  // so read current_streak from runtime state and only use the on-chain
+  // snapshot for custody facts (lock status + principal).
   const runtimeResult = await query(
     `
       select
         wallet_address as "walletAddress",
-        course_id as "courseId"
+        course_id as "courseId",
+        current_streak as "currentStreak"
       from lesson.user_course_runtime_state
       order by wallet_address asc, course_id asc
     `,
@@ -3530,7 +2868,7 @@ export async function closeCommunityPotWindowAndSnapshot(windowId, closedAt = nu
         continue;
       }
 
-      const currentStreak = Number(snapshot.currentStreak ?? 0);
+      const currentStreak = Number(row.currentStreak ?? 0);
       if (currentStreak <= 0) {
         continue;
       }
@@ -3972,9 +3310,15 @@ async function computeLeaderboardRows() {
   const entries = [];
   for (const row of runtimeWallets.rows) {
     const wallet = row.wallet_address;
+    // Streak + last activity are DB-owned (the custody-core lock_vault no
+    // longer carries them). Pull them from runtime state; use the on-chain
+    // snapshot only for custody facts (lock status + principal).
     const courseIdsResult = await query(
       `
-        select course_id as "courseId"
+        select
+          course_id as "courseId",
+          current_streak as "currentStreak",
+          last_completed_day::text as "lastCompletedDay"
         from lesson.user_course_runtime_state
         where wallet_address = $1
         order by course_id asc
@@ -3994,14 +3338,14 @@ async function computeLeaderboardRows() {
           continue;
         }
 
-        const currentStreak = Number(snapshot.currentStreak ?? 0);
+        const currentStreak = Number(course.currentStreak ?? 0);
         streakLength = Math.max(streakLength, currentStreak);
         if (currentStreak > 0) {
           activeCourseCount += 1;
         }
 
         lockedPrincipal += BigInt(snapshot.principalAmount ?? 0);
-        const completionDate = epochDayToIsoDate(snapshot.lastCompletionDay);
+        const completionDate = course.lastCompletedDay ?? null;
         if (completionDate && (!recentActivityDate || completionDate > recentActivityDate)) {
           recentActivityDate = completionDate;
         }
@@ -4337,100 +3681,6 @@ async function readFuelBurnReceipt(client, walletAddress, courseId, cycleId) {
   return result.rows[0] ?? null;
 }
 
-async function claimFuelBurnReceipt(walletAddress, courseId, cycleId, retryFailed = false) {
-  const claimableStatuses = retryFailed ? ['pending', 'failed'] : ['pending'];
-  const result = await query(
-    `
-      update lesson.fuel_burn_cycle_receipts
-      set lock_vault_status = 'publishing',
-          lock_vault_last_error = null
-      where wallet_address = $1
-        and course_id = $2
-        and cycle_id = $3
-        and lock_vault_status = any($4::text[])
-      returning
-        wallet_address as "walletAddress",
-        course_id as "courseId",
-        cycle_id as "cycleId",
-        burned_at as "burnedAt",
-        applied,
-        reason
-    `,
-    [walletAddress, courseId, cycleId, claimableStatuses],
-  );
-
-  if (result.rowCount > 0) {
-    return { receipt: result.rows[0], reason: 'CLAIMED' };
-  }
-
-  const current = await query(
-    `
-      select
-        wallet_address as "walletAddress",
-        course_id as "courseId",
-        cycle_id as "cycleId",
-        burned_at as "burnedAt",
-        applied,
-        reason,
-        lock_vault_status as "lockVaultStatus",
-        lock_vault_published_at as "lockVaultPublishedAt",
-        lock_vault_last_error as "lockVaultLastError",
-        lock_vault_transaction_signature as "lockVaultTransactionSignature"
-      from lesson.fuel_burn_cycle_receipts
-      where wallet_address = $1
-        and course_id = $2
-        and cycle_id = $3
-      limit 1
-    `,
-    [walletAddress, courseId, cycleId],
-  );
-
-  if (current.rowCount === 0) {
-    return { receipt: null, reason: 'RECEIPT_NOT_FOUND' };
-  }
-
-  const existing = current.rows[0];
-  if (existing.lockVaultStatus === 'published') {
-    return { receipt: existing, reason: 'ALREADY_PUBLISHED' };
-  }
-
-  if (existing.lockVaultStatus === 'publishing') {
-    return { receipt: existing, reason: 'ALREADY_PUBLISHING' };
-  }
-
-  return { receipt: existing, reason: 'RETRY_REQUIRED' };
-}
-
-async function markFuelBurnReceiptPublished(walletAddress, courseId, cycleId, signature) {
-  await query(
-    `
-      update lesson.fuel_burn_cycle_receipts
-      set lock_vault_status = 'published',
-          lock_vault_published_at = now(),
-          lock_vault_last_error = null,
-          lock_vault_transaction_signature = $4
-      where wallet_address = $1
-        and course_id = $2
-        and cycle_id = $3
-    `,
-    [walletAddress, courseId, cycleId, signature],
-  );
-}
-
-async function markFuelBurnReceiptFailed(walletAddress, courseId, cycleId, error) {
-  await query(
-    `
-      update lesson.fuel_burn_cycle_receipts
-      set lock_vault_status = 'failed',
-          lock_vault_last_error = $4
-      where wallet_address = $1
-        and course_id = $2
-        and cycle_id = $3
-    `,
-    [walletAddress, courseId, cycleId, error],
-  );
-}
-
 async function readMissConsequenceReceipt(client, walletAddress, courseId, missEventId) {
   const result = await client.query(
     `
@@ -4461,110 +3711,6 @@ async function readMissConsequenceReceipt(client, walletAddress, courseId, missE
   );
 
   return result.rows[0] ?? null;
-}
-
-async function claimMissConsequenceReceipt(
-  walletAddress,
-  courseId,
-  missEventId,
-  retryFailed = false,
-) {
-  const claimableStatuses = retryFailed ? ['pending', 'failed'] : ['pending'];
-  const result = await query(
-    `
-      update lesson.miss_consequence_receipts
-      set lock_vault_status = 'publishing',
-          lock_vault_last_error = null
-      where wallet_address = $1
-        and course_id = $2
-        and miss_event_id = $3
-        and lock_vault_status = any($4::text[])
-      returning
-        wallet_address as "walletAddress",
-        course_id as "courseId",
-        miss_event_id as "missEventId",
-        miss_day::text as "missDay",
-        applied,
-        reason
-    `,
-    [walletAddress, courseId, missEventId, claimableStatuses],
-  );
-
-  if (result.rowCount > 0) {
-    return { receipt: result.rows[0], reason: 'CLAIMED' };
-  }
-
-  const current = await query(
-    `
-      select
-        wallet_address as "walletAddress",
-        course_id as "courseId",
-        miss_event_id as "missEventId",
-        miss_day::text as "missDay",
-        applied,
-        reason,
-        lock_vault_status as "lockVaultStatus",
-        lock_vault_published_at as "lockVaultPublishedAt",
-        lock_vault_last_error as "lockVaultLastError",
-        lock_vault_transaction_signature as "lockVaultTransactionSignature"
-      from lesson.miss_consequence_receipts
-      where wallet_address = $1
-        and course_id = $2
-        and miss_event_id = $3
-      limit 1
-    `,
-    [walletAddress, courseId, missEventId],
-  );
-
-  if (current.rowCount === 0) {
-    return { receipt: null, reason: 'RECEIPT_NOT_FOUND' };
-  }
-
-  const existing = current.rows[0];
-  if (existing.lockVaultStatus === 'published') {
-    return { receipt: existing, reason: 'ALREADY_PUBLISHED' };
-  }
-
-  if (existing.lockVaultStatus === 'publishing') {
-    return { receipt: existing, reason: 'ALREADY_PUBLISHING' };
-  }
-
-  return { receipt: existing, reason: 'RETRY_REQUIRED' };
-}
-
-async function markMissConsequenceReceiptPublished(
-  walletAddress,
-  courseId,
-  missEventId,
-  signature,
-) {
-  await query(
-    `
-      update lesson.miss_consequence_receipts
-      set lock_vault_status = 'published',
-          lock_vault_published_at = now(),
-          lock_vault_last_error = null,
-          lock_vault_transaction_signature = $4
-      where wallet_address = $1
-        and course_id = $2
-        and miss_event_id = $3
-    `,
-    [walletAddress, courseId, missEventId, signature],
-  );
-}
-
-async function markMissConsequenceReceiptFailed(walletAddress, courseId, missEventId, error) {
-  await query(
-    `
-      update lesson.miss_consequence_receipts
-      set lock_vault_status = 'failed',
-          lock_vault_last_error = $4
-      where wallet_address = $1
-        and course_id = $2
-        and miss_event_id = $3
-    `,
-    [walletAddress, courseId, missEventId, error],
-  );
 }
 
 export async function consumeSaverOrApplyFullConsequence(
