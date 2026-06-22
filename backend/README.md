@@ -54,7 +54,10 @@ npm run dev
 
 Server default: `http://localhost:3001`
 
-## Implemented Endpoints (Step 1 Starter)
+## Implemented Endpoints
+
+The full request/response contract is authoritative in `openapi/lesson-api-v1.yaml`.
+Quick reference:
 
 ### Public content
 
@@ -96,4 +99,3 @@ Server default: `http://localhost:3001`
 1. Add SIWS-style challenge constraints (domain, URI, chain, nonce replay window).
 2. Add schema validation (Zod) and structured response typing from OpenAPI.
 3. Add tests for each route module.
-4. Emit signed completion events for the on-chain reward/consequence worker.

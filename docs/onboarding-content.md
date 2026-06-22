@@ -79,8 +79,8 @@ Already have USDC on Solana? Tap "Receive" to see your deposit address and send 
 Choose your course. Set your stakes.
 
 1. Pick a course -- what do you want to learn?
-2. Set your amount -- how much USDC do you want to lock? (minimum: $X)
-3. Set your duration -- 30, 60, or 90 days
+2. Set your amount -- how much USDC do you want to lock? (each course sets its own minimum)
+3. Set your duration -- 14, 30, 45, 60, 90, 180, or 365 days
 
 **What happens when you tap "Lock":**
 - Your USDC moves from your account into a smart contract (automatic code on the blockchain)
@@ -102,8 +102,8 @@ Here's your commitment summary:
 | | |
 |---|---|
 | **Course** | [Course Name] |
-| **Locked** | [X] USDC |
-| **Duration** | [30/60/90] days |
+| **Locked** | [Amount] USDC |
+| **Duration** | [Duration] days |
 | **Unlock date** | [Date] |
 | **Daily goal** | Complete 1 lesson per day |
 
@@ -123,4 +123,5 @@ Here's your commitment summary:
 ---
 
 ## Home Base Tour
-(TBD)
+
+_Planned — copy not yet written._
