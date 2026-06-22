@@ -89,7 +89,7 @@ On-chain (from `LockAccount`):
 
 Off-chain (Postgres counters, not on-chain, not SPL tokens):
 
-- Fuel counter (drives the fire timer; see `docs/03-fuel.md`)
+- Fuel counter (drives the fire timer; see `docs/08-timer-yield-product.md`)
 - Ichor counter (in-game shop currency; see `docs/04-tokenomics.md`)
 
 There is NO extension total and NO saver state stored on-chain. `lock_end_ts`
@@ -103,7 +103,7 @@ There is NO lock extension in v4. `lock_end_ts` is set exactly once at
 `lock_funds` and no surviving on-chain code path mutates it. The old automatic
 "penalty extension" is gone: missed learning days penalize YIELD ONLY (via the
 off-chain fire timer / yield routing) and never extend the principal lock.
-See `docs/04-tokenomics.md` (authoritative) and `docs/03-fuel.md`.
+See `docs/04-tokenomics.md` (authoritative) and `docs/08-timer-yield-product.md`.
 
 ## Resurface Flow
 

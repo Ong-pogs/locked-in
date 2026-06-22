@@ -8,7 +8,7 @@ plus optional `SKR`, clock-gates the unlock against an immutable
 `lock_end_ts`, and returns the full principal to the owner via a
 PDA-signed payout. It holds **no game/economy state** — Fuel, Ichor,
 savers, streaks, and yield routing are all off-chain backend counters
-(see 03-fuel, 04-tokenomics, 05-yield-calculator).
+(see 08-timer-yield-product, 04-tokenomics, 05-yield-calculator).
 
 Source of truth: `programs/locked_in/src/vault.rs` (custody logic),
 `programs/locked_in/src/lib.rs` (program entrypoints + program ID).

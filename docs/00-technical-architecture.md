@@ -91,10 +91,10 @@ counters (e.g. `lesson.user_course_runtime_state`; Ichor in migration
 `0037`). They are authoritative in the current dev phase. None of them
 are SPL tokens; there is no mint, no token account, no secondary market.
 The authoritative economic specs are `docs/04-tokenomics.md`,
-`docs/03-fuel.md`, and `docs/05-yield-calculator.md` — this section only
+`docs/08-timer-yield-product.md`, and `docs/05-yield-calculator.md` — this section only
 summarizes; do not contradict them.
 
-### Fuel + the fire (see 03-fuel)
+### Fuel + the fire (see 08-timer-yield-product)
 
 - `+1` fuel per verified lesson completion, capped at `fuel_cap`
   (default 7). No daily cap.

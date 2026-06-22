@@ -69,7 +69,7 @@ After lesson submission is accepted:
 2. Backend applies the off-chain reward to course runtime state: **+1 fuel**
    (capped at `fuel_cap`, default 7) and a **random 20-50 ichor** per accepted
    lesson completion.
-3. Fuel feeds the fire/Brewer (see `03-fuel.md`); ichor is a pure in-game shop
+3. Fuel feeds the fire/Brewer (see `08-timer-yield-product.md`); ichor is a pure in-game shop
    currency (see `04-tokenomics.md`). Neither is on-chain — both are Postgres
    counters on `lesson.user_course_runtime_state`.
 

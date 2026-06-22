@@ -37,7 +37,7 @@ gauntlet, platform fee) has been replaced:
 ### Fuel
 
 - internal counter; +1 per lesson, cap 7
-- feeds the fire (24h per fuel) — see 03-fuel
+- feeds the fire (24h per fuel) — see 08-timer-yield-product
 
 ### Ichor
 

@@ -234,7 +234,7 @@ The Next.js app (`web-app/`) already includes the main user-facing surfaces:
 
 This README is meant to explain the concept, the product logic, and what exists so far.
 
-For the engineering source of truth, start with the architecture overview at [`docs/00-technical-architecture.md`](/Users/marcus/Projects/locked-in/docs/00-technical-architecture.md), then the current v4 specs: [`docs/03-fuel.md`](/Users/marcus/Projects/locked-in/docs/03-fuel.md), [`docs/04-tokenomics.md`](/Users/marcus/Projects/locked-in/docs/04-tokenomics.md), and [`docs/05-yield-calculator.md`](/Users/marcus/Projects/locked-in/docs/05-yield-calculator.md). Where the architecture overview and the v4 specs differ, the v4 specs describe the current state.
+For the engineering source of truth, start with the architecture overview at [`docs/00-technical-architecture.md`](/Users/marcus/Projects/locked-in/docs/00-technical-architecture.md), then the current v4 specs: [`docs/08-timer-yield-product.md`](/Users/marcus/Projects/locked-in/docs/08-timer-yield-product.md), [`docs/04-tokenomics.md`](/Users/marcus/Projects/locked-in/docs/04-tokenomics.md), and [`docs/05-yield-calculator.md`](/Users/marcus/Projects/locked-in/docs/05-yield-calculator.md). Where the architecture overview and the v4 specs differ, the v4 specs describe the current state.
 
 If the README and technical docs ever differ, the technical docs should win.
 

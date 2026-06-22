@@ -2,7 +2,7 @@
 
 ## Scope
 
-User-visible lifecycle for lock timers, the fire timer, saver
+User-visible lifecycle for lock timers, fuel, the fire timer, saver
 consequences, and yield routing. No gauntlet (removed in v4.0).
 
 ## Per-course independence
@@ -47,9 +47,29 @@ yield only, never the lock.)
 
 User can resurface (withdraw principal) when `now >= effective_unlock_ts`.
 
+## Fuel earn rules
+
+Fuel is an off-chain counter in `lesson.user_course_runtime_state` (the on-chain
+`LockAccount` also carries a `fuel_counter` field, but the off-chain ledger is
+authoritative in the current dev phase). It is non-transferable — no SPL token,
+no mint, no token account.
+
+- **+1 fuel per verified lesson completion, no daily cap.** Capped at `fuel_cap`
+  (default 7). A failed lesson (reward units 0) earns no fuel.
+- No daily cap lets an active learner binge lessons to bank fire-days, then
+  coast through travel/sick days; daily-habit pressure comes from the streak
+  mechanic instead.
+- Fuel and savers are separate resources: fuel powers the fire (yield routing to
+  the user), while savers protect the streak and lower the redirect tier.
+  Neither converts into the other.
+- (The old v3 fragment accumulator — 0.2-0.5 partial fuel/lesson, 1/day cap —
+  was removed in v4.0.)
+
 ## Fire rules
 
-- fuel feeds the fire: 1 fuel = 24h, additive
+- fuel feeds the fire: feeding consumes 1 fuel and extends `fire_lit_until` by
+  24h, additive (6h left + feed = 30h); caps naturally at 7 × 24h since fuel
+  caps at 7
 - fire lit ⇔ `now < fire_lit_until`
 - no automatic burn; feeding is an explicit Brewery action
 
