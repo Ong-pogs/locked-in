@@ -450,6 +450,11 @@ export const useCourseStore = create<CourseStore>()(
               lastFuelCreditDay: snapshot.lastFuelCreditDay,
               lastBrewerBurnTs: snapshot.lastBrewerBurnTs,
               fuelFragmentsToday: snapshot.fuelFragmentsToday ?? 0,
+              // Ichor is off-chain now (v4) — hydrate it from the backend
+              // runtime snapshot (was previously read from the on-chain decoder).
+              ichorBalance: snapshot.ichorCounter ?? existingState.ichorBalance,
+              totalIchorProduced:
+                snapshot.ichorLifetimeTotal ?? existingState.totalIchorProduced,
             },
           },
         });
@@ -681,6 +686,12 @@ export const useCourseStore = create<CourseStore>()(
               extensionDays: enrollment.runtime.extensionDays,
               fuelCounter: enrollment.runtime.fuelCounter,
               fuelCap: enrollment.runtime.fuelCap,
+              // Ichor is off-chain now (v4) — hydrate from the backend runtime.
+              ichorBalance:
+                enrollment.runtime.ichorCounter ?? existing.ichorBalance,
+              totalIchorProduced:
+                enrollment.runtime.ichorLifetimeTotal ??
+                existing.totalIchorProduced,
             };
           }
         }
