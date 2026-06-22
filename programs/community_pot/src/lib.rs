@@ -294,6 +294,11 @@ pub struct DistributeWindow<'info> {
         associated_token::token_program = token_program,
     )]
     pub pot_vault: InterfaceAccount<'info, TokenAccount>,
+    /// CHECK: payout destination wallet; used only as the authority/owner of
+    /// `recipient_stable_token_account` (its ATA). No data is read from this
+    /// account. The payout amount is bounded on-chain by the distribution_window
+    /// remaining-amount cap and the distribution_receipt double-pay guard, so an
+    /// arbitrary pubkey is safe here.
     #[account(mut)]
     pub recipient: UncheckedAccount<'info>,
     #[account(
