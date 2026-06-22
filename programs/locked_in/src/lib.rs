@@ -36,7 +36,7 @@ pub use pot::*;
 #[allow(ambiguous_glob_reexports)]
 pub use vault::*;
 
-declare_id!("68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3");
+declare_id!("3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav");
 
 #[program]
 pub mod locked_in {
