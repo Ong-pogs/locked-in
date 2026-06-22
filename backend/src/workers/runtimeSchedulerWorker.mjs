@@ -167,7 +167,10 @@ async function processRuntimeCandidate(app, candidate, now) {
           runtime?.currentYieldRedirectBps,
         );
 
-        const recorded = await recordHarvestResult(
+        // Record the harvest into the DB (idempotent insert keyed on
+        // wallet+course+harvest). Return value is unused now that the
+        // yield_splitter on-chain publish status is gone.
+        await recordHarvestResult(
           candidate.walletAddress,
           candidate.courseId,
           dueHarvest.harvestId,
@@ -201,7 +204,6 @@ async function processRuntimeCandidate(app, candidate, now) {
             elapsedSeconds: dueHarvest.elapsedSeconds,
             strategyKind: strategy.kind,
             quotedApyBps: dueHarvest.apyBps ?? null,
-            recordStatus: recorded.yieldSplitterStatus ?? null,
             lockVaultReason: lockVaultResult.reason,
             communityPotReason: communityPotResult.reason,
             lockVaultSignature: lockVaultResult.signature ?? null,

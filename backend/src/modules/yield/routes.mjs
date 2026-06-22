@@ -94,7 +94,6 @@ export async function yieldRoutes(app) {
         grossYieldAmount: row.grossYieldAmount,
         grossYieldUsdcUi: toUsdcUi(row.grossYieldAmount),
         applied: row.applied,
-        yieldSplitterStatus: row.yieldSplitterStatus,
       }));
 
       const totalBaseUnits = rows.reduce((acc, row) => {

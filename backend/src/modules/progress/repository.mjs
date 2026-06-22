@@ -22,10 +22,6 @@ import {
   verifyUnlockTransaction,
 } from '../../lib/lockVault.mjs';
 import {
-  hasYieldSplitterRelayConfig,
-  publishHarvestSplitToYieldSplitter,
-} from '../../lib/yieldSplitter.mjs';
-import {
   closeCommunityPotDistributionWindow,
   deriveCommunityPotWindowId,
   distributeCommunityPotWindow,
@@ -1449,8 +1445,7 @@ export async function listRecentHarvestReceipts(limit = 20) {
         harvest_id as "harvestId",
         harvested_at as "harvestedAt",
         gross_yield_amount::text as "grossYieldAmount",
-        applied,
-        yield_splitter_status as "yieldSplitterStatus"
+        applied
       from lesson.harvest_result_receipts
       order by harvested_at desc
       limit $1
@@ -2442,11 +2437,6 @@ async function readHarvestResultReceipt(client, walletAddress, courseId, harvest
         platform_fee_amount as "platformFeeAmount",
         redirected_amount as "redirectedAmount",
         ichor_awarded as "ichorAwarded",
-        yield_splitter_status as "yieldSplitterStatus",
-        yield_splitter_published_at as "yieldSplitterPublishedAt",
-        yield_splitter_last_error as "yieldSplitterLastError",
-        yield_splitter_transaction_signature as "yieldSplitterTransactionSignature",
-        yield_splitter_receipt_account as "yieldSplitterReceiptAccount",
         lock_vault_status as "lockVaultStatus",
         lock_vault_published_at as "lockVaultPublishedAt",
         lock_vault_last_error as "lockVaultLastError",
@@ -2513,7 +2503,6 @@ export async function recordHarvestResult(
       harvestedAt: harvestedAtValue,
       grossYieldAmount: amount.toString(),
       redirectedAmount: redirected != null ? redirected.toString() : null,
-      yieldSplitterStatus: 'pending',
       lockVaultStatus: 'pending',
       communityPotStatus: 'pending',
     };
@@ -2841,214 +2830,6 @@ export async function getBreweryState(walletAddress, courseId) {
   });
 }
 
-async function claimHarvestSplitReceipt(
-  walletAddress,
-  courseId,
-  harvestId,
-  retryFailed = false,
-) {
-  const claimableStatuses = retryFailed ? ['pending', 'failed'] : ['pending'];
-  const result = await query(
-    `
-      update lesson.harvest_result_receipts
-      set yield_splitter_status = 'publishing',
-          yield_splitter_last_error = null
-      where wallet_address = $1
-        and course_id = $2
-        and harvest_id = $3
-        and yield_splitter_status = any($4::text[])
-      returning
-        wallet_address as "walletAddress",
-        course_id as "courseId",
-        harvest_id as "harvestId",
-        harvested_at as "harvestedAt",
-        gross_yield_amount as "grossYieldAmount",
-        applied,
-        reason,
-        platform_fee_amount as "platformFeeAmount",
-        redirected_amount as "redirectedAmount",
-        ichor_awarded as "ichorAwarded",
-        yield_splitter_status as "yieldSplitterStatus",
-        yield_splitter_transaction_signature as "yieldSplitterTransactionSignature",
-        yield_splitter_receipt_account as "yieldSplitterReceiptAccount"
-    `,
-    [walletAddress, courseId, harvestId, claimableStatuses],
-  );
-
-  if (result.rowCount > 0) {
-    return { receipt: result.rows[0], reason: 'CLAIMED' };
-  }
-
-  const current = await readHarvestResultReceipt(
-    { query: (...args) => query(...args) },
-    walletAddress,
-    courseId,
-    harvestId,
-  );
-
-  if (!current) {
-    return { receipt: null, reason: 'RECEIPT_NOT_FOUND' };
-  }
-
-  if (current.yieldSplitterStatus === 'published') {
-    return { receipt: current, reason: 'ALREADY_PUBLISHED' };
-  }
-
-  if (current.yieldSplitterStatus === 'publishing') {
-    return { receipt: current, reason: 'ALREADY_PUBLISHING' };
-  }
-
-  return { receipt: current, reason: 'RETRY_REQUIRED' };
-}
-
-async function markHarvestSplitReceiptPublished(
-  walletAddress,
-  courseId,
-  harvestId,
-  values,
-) {
-  await query(
-    `
-      update lesson.harvest_result_receipts
-      set yield_splitter_status = 'published',
-          yield_splitter_published_at = now(),
-          yield_splitter_last_error = null,
-          yield_splitter_transaction_signature = $4,
-          yield_splitter_receipt_account = $5,
-          applied = $6,
-          reason = $7,
-          platform_fee_amount = $8::bigint,
-          redirected_amount = $9::bigint,
-          ichor_awarded = $10::bigint
-      where wallet_address = $1
-        and course_id = $2
-        and harvest_id = $3
-    `,
-    [
-      walletAddress,
-      courseId,
-      harvestId,
-      values.signature,
-      values.receiptAccount,
-      values.applied,
-      values.reason,
-      values.platformFeeAmount,
-      values.redirectedAmount,
-      values.ichorAwarded,
-    ],
-  );
-}
-
-async function markHarvestSplitReceiptFailed(walletAddress, courseId, harvestId, error) {
-  await query(
-    `
-      update lesson.harvest_result_receipts
-      set yield_splitter_status = 'failed',
-          yield_splitter_last_error = $4
-      where wallet_address = $1
-        and course_id = $2
-        and harvest_id = $3
-    `,
-    [walletAddress, courseId, harvestId, error],
-  );
-}
-
-export async function publishHarvestSplitReceipt(
-  walletAddress,
-  courseId,
-  harvestId,
-  retryFailed = false,
-) {
-  if (!hasDatabase()) {
-    return {
-      processed: false,
-      reason: 'NO_DATABASE',
-    };
-  }
-
-  if (!hasYieldSplitterRelayConfig()) {
-    return {
-      processed: false,
-      reason: 'YIELD_SPLITTER_RELAY_DISABLED',
-    };
-  }
-
-  const claim = await claimHarvestSplitReceipt(walletAddress, courseId, harvestId, retryFailed);
-  if (!claim.receipt) {
-    return {
-      processed: false,
-      reason: claim.reason,
-    };
-  }
-
-  if (claim.reason !== 'CLAIMED') {
-    return {
-      processed: false,
-      reason: claim.reason,
-      receipt: claim.receipt,
-    };
-  }
-
-  try {
-    const snapshotBefore = await readLockAccountSnapshot(walletAddress, courseId);
-    const publishResult = await publishHarvestSplitToYieldSplitter({
-      walletAddress,
-      courseId,
-      harvestId,
-      grossYieldAmount: claim.receipt.grossYieldAmount,
-      redirectBps: snapshotBefore.currentYieldRedirectBps,
-      // Gauntlet dropped — brewer is active whenever fuel exists.
-      brewerActive: snapshotBefore.fuelCounter > 0,
-      skrTier: snapshotBefore.skrTier,
-      processedAt: claim.receipt.harvestedAt,
-    });
-
-    const applied = BigInt(publishResult.receipt.ichorAwarded) > 0n;
-    const reason = applied ? 'HARVEST_APPLIED' : 'HARVEST_SKIPPED';
-
-    await markHarvestSplitReceiptPublished(walletAddress, courseId, harvestId, {
-      signature: publishResult.signature,
-      receiptAccount: publishResult.receiptAccount,
-      applied,
-      reason,
-      platformFeeAmount: publishResult.receipt.platformFeeAmount,
-      redirectedAmount: publishResult.receipt.redirectedAmount,
-      ichorAwarded: publishResult.receipt.ichorAwarded,
-    });
-
-    return {
-      processed: true,
-      reason: 'PUBLISHED',
-      walletAddress,
-      courseId,
-      harvestId,
-      grossYieldAmount: claim.receipt.grossYieldAmount,
-      applied,
-      harvestReason: reason,
-      platformFeeAmount: publishResult.receipt.platformFeeAmount,
-      redirectedAmount: publishResult.receipt.redirectedAmount,
-      ichorAwarded: publishResult.receipt.ichorAwarded,
-      signature: publishResult.signature,
-      authority: publishResult.authority,
-      lockAccount: publishResult.lockAccount,
-      receiptAccount: publishResult.receiptAccount,
-      yieldSplitterReceipt: publishResult.receipt,
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    await markHarvestSplitReceiptFailed(walletAddress, courseId, harvestId, message);
-
-    return {
-      processed: false,
-      reason: 'PUBLISH_FAILED',
-      walletAddress,
-      courseId,
-      harvestId,
-      error: message,
-    };
-  }
-}
-
 async function claimHarvestResultReceipt(
   walletAddress,
   courseId,
@@ -3064,7 +2845,6 @@ async function claimHarvestResultReceipt(
       where wallet_address = $1
         and course_id = $2
         and harvest_id = $3
-        and yield_splitter_status = 'published'
         and lock_vault_status = any($4::text[])
       returning
         wallet_address as "walletAddress",
@@ -3095,7 +2875,6 @@ async function claimHarvestResultReceipt(
         gross_yield_amount as "grossYieldAmount",
         applied,
         reason,
-        yield_splitter_status as "yieldSplitterStatus",
         platform_fee_amount as "platformFeeAmount",
         redirected_amount as "redirectedAmount",
         ichor_awarded as "ichorAwarded",
@@ -3117,10 +2896,6 @@ async function claimHarvestResultReceipt(
   }
 
   const existing = current.rows[0];
-  if (existing.yieldSplitterStatus !== 'published') {
-    return { receipt: existing, reason: 'YIELD_SPLITTER_NOT_PUBLISHED' };
-  }
-
   if (existing.lockVaultStatus === 'published') {
     return { receipt: existing, reason: 'ALREADY_PUBLISHED' };
   }
@@ -3199,23 +2974,6 @@ export async function publishHarvestResultReceipt(
     return {
       processed: false,
       reason: 'LOCK_VAULT_RELAY_DISABLED',
-    };
-  }
-
-  const yieldSplit = await publishHarvestSplitReceipt(
-    walletAddress,
-    courseId,
-    harvestId,
-    retryFailed,
-  );
-  if (!yieldSplit.processed && yieldSplit.reason !== 'ALREADY_PUBLISHED') {
-    return {
-      processed: false,
-      reason: 'YIELD_SPLITTER_NOT_READY',
-      walletAddress,
-      courseId,
-      harvestId,
-      yieldSplitter: yieldSplit,
     };
   }
 
@@ -4060,8 +3818,6 @@ export async function getYieldHistory(walletAddress, courseId, limit = 10) {
           coalesce(platform_fee_amount, 0)::text as "platformFeeAmount",
           coalesce(redirected_amount, 0)::text as "redirectedAmount",
           coalesce(ichor_awarded, 0)::text as "ichorAwarded",
-          yield_splitter_status as "yieldSplitterStatus",
-          yield_splitter_transaction_signature as "yieldSplitterTransactionSignature",
           lock_vault_status as "lockVaultStatus",
           lock_vault_transaction_signature as "lockVaultTransactionSignature",
           community_pot_status as "communityPotStatus",
@@ -4107,8 +3863,6 @@ export async function getYieldHistory(walletAddress, courseId, limit = 10) {
       redirectedAmount: row.redirectedAmount,
       redirectedAmountUi: formatAtomicUsdcUi(row.redirectedAmount),
       ichorAwarded: row.ichorAwarded,
-      yieldSplitterStatus: mapHarvestRelayStatus(row.yieldSplitterStatus),
-      yieldSplitterTransactionSignature: row.yieldSplitterTransactionSignature ?? null,
       lockVaultStatus: mapHarvestRelayStatus(row.lockVaultStatus),
       lockVaultTransactionSignature: row.lockVaultTransactionSignature ?? null,
       communityPotStatus: mapHarvestRelayStatus(row.communityPotStatus),

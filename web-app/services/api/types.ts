@@ -442,8 +442,6 @@ export interface YieldHistoryEntry {
   redirectedAmount: string;
   redirectedAmountUi: string;
   ichorAwarded: string;
-  yieldSplitterStatus: HarvestRelayStatus;
-  yieldSplitterTransactionSignature: string | null;
   lockVaultStatus: HarvestRelayStatus;
   lockVaultTransactionSignature: string | null;
   communityPotStatus: HarvestRelayStatus;

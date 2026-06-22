@@ -23,7 +23,6 @@ import {
   recordUnlockReceipt,
   syncUnlockReceiptsFromChain,
   publishFuelBurnReceipt,
-  publishHarvestSplitReceipt,
   publishHarvestRedirectToCommunityPot,
   publishHarvestResultReceipt,
   publishMissConsequenceReceipt,
@@ -213,17 +212,6 @@ export async function progressRoutes(app) {
       grossYieldAmount,
       harvestedAt,
     );
-  });
-
-  app.post('/v1/internal/yield-splitter/yield/harvest/publish', async (request) => {
-    requireSchedulerAuth(request);
-
-    const walletAddress = assertBodyField(request.body?.walletAddress, 'walletAddress');
-    const courseId = assertBodyField(request.body?.courseId, 'courseId');
-    const harvestId = assertBodyField(request.body?.harvestId, 'harvestId');
-    const retryFailed = request.body?.retryFailed === true;
-
-    return publishHarvestSplitReceipt(walletAddress, courseId, harvestId, retryFailed);
   });
 
   app.post('/v1/internal/lock-vault/yield/harvest/publish', async (request) => {

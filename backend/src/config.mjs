@@ -229,10 +229,6 @@ export const appConfig = {
     process.env.LOCK_VAULT_PROGRAM_ID ??
     process.env.EXPO_PUBLIC_LOCK_VAULT_PROGRAM_ID ??
     '',
-  yieldSplitterProgramId:
-    process.env.YIELD_SPLITTER_PROGRAM_ID ??
-    process.env.EXPO_PUBLIC_YIELD_SPLITTER_PROGRAM_ID ??
-    '',
   communityPotProgramId:
     process.env.COMMUNITY_POT_PROGRAM_ID ??
     process.env.EXPO_PUBLIC_COMMUNITY_POT_PROGRAM_ID ??
@@ -246,11 +242,6 @@ export const appConfig = {
     process.env.EXPO_PUBLIC_LOCK_VAULT_SKR_MINT ??
     '',
   lockVaultWorkerPrivateKey:
-    process.env.LOCK_VAULT_WORKER_PRIVATE_KEY ??
-    process.env.DEPLOYER_PRIVATE_KEY ??
-    '',
-  yieldSplitterWorkerPrivateKey:
-    process.env.YIELD_SPLITTER_WORKER_PRIVATE_KEY ??
     process.env.LOCK_VAULT_WORKER_PRIVATE_KEY ??
     process.env.DEPLOYER_PRIVATE_KEY ??
     '',
