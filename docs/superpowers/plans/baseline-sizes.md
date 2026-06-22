@@ -57,3 +57,44 @@ Use the byte sizes / SOL costs above as the comparison point for all
 cost-reduction deltas. Re-run full `anchor build` + `cargo test --workspace`
 + the integration suite after each change to confirm the build stays green and
 to re-measure binary size.
+
+---
+
+# Phase 1 result (Task 1.1) — size build flags
+
+Added to `[profile.release]` in the workspace Cargo.toml:
+`opt-level = "z"`, `panic = "abort"`, `strip = true`. Kept `overflow-checks = true`
+(money math — never trade size for silent wraparound), `lto = "fat"`,
+`codegen-units = 1`.
+
+## opt-level benchmark: "z" vs "s" (clean rebuild each)
+
+| opt-level | total bytes |
+|-----------|-------------|
+| "z"       | 894296      |
+| "s"       | 934416      |
+
+WINNER: "z" (40120 bytes smaller than "s"). Kept `opt-level = "z"`.
+
+## New sizes vs TRUE baseline (opt-level "z")
+
+| Program           | Baseline (B) | New (B) | Reduction (B) | Reduction % | New cost (SOL) |
+|-------------------|--------------|---------|---------------|-------------|----------------|
+| lock_vault.so     | 511512       | 399480  | 112032        | 21.90%      | 5.560762       |
+| community_pot.so  | 343960       | 287136  | 56824         | 16.52%      | 3.996933       |
+| yield_splitter.so | 241192       | 207680  | 33512         | 13.89%      | 2.890906       |
+| **TOTAL**         | **1096664**  | **894296** | **202368** | **18.45%**  | **12.448600**  |
+
+Deploy cost @ 0.00001392 SOL/byte: 15.265563 SOL -> 12.448600 SOL
+(saved ~2.82 SOL, -18.45%).
+
+NOTE: the new "z" sizes (399480 / 287136 / 207680) land almost exactly on the
+plan's original "expected" baselines, confirming those expected figures were
+measured with these size flags already applied at some earlier point.
+
+## Verification (flags did not change behavior or ABI)
+
+- `cargo test --workspace`: 69 passed, 0 failed.
+- `programs-tests` (LiteSVM, exercises on-chain ABI via regenerated IDL +
+  the size-optimized .so): 1 test file, 1 test passed. Passing confirms the
+  instruction interface is unchanged.

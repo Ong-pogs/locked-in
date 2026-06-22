@@ -3,6 +3,9 @@ members = ["programs/*"]
 resolver = "2"
 
 [profile.release]
-overflow-checks = true
+overflow-checks = true   # KEEP: money math; do NOT trade size for silent wraparound
 lto = "fat"
 codegen-units = 1
+opt-level = "z"          # optimize for size
+panic = "abort"          # SBF aborts on panic anyway; drops unwind tables/format strings
+strip = true             # remove symbol/debug metadata
