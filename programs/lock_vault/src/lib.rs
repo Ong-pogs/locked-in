@@ -9,36 +9,12 @@ use anchor_spl::{
 
 declare_id!("41TexnrHDMV4ASJmqNNFcgQ7RBk6N193yvukfiCzKQmD");
 
+// ── Custody-core constants ──────────────────────────────────────────────
+// Game/fuel/ichor/saver mechanics moved off-chain (v4: backend owns points).
+// This program is now a pure escrow: lock principal -> wait -> return principal.
 const DAY_SECONDS: i64 = 86_400;
-const MIN_FUEL_CAP: u16 = 7;
-const MAX_FUEL_CAP: u16 = 14;
-const DEFAULT_MAX_SAVERS: u8 = 3;
-const GAUNTLET_DAYS: u8 = 7;
-const MAX_LOCK_DURATION_DAYS: u16 = 365;
 const ACTIVE_STATUS: u8 = 0;
 const CLOSED_STATUS: u8 = 2;
-const FULL_REDIRECT_BPS: u16 = 10_000;
-const RECEIPT_KIND_COMPLETION: u8 = 1;
-const RECEIPT_KIND_FUEL_BURN: u8 = 2;
-const RECEIPT_KIND_MISS: u8 = 3;
-const RECEIPT_KIND_HARVEST: u8 = 4;
-const OUTCOME_NO_REWARD_UNITS: u8 = 1;
-const OUTCOME_SAVER_RECOVERED: u8 = 2;
-const OUTCOME_ALREADY_EARNED_TODAY: u8 = 3;
-const OUTCOME_AT_FUEL_CAP: u8 = 4;
-const OUTCOME_FUEL_CREDITED: u8 = 5;
-const OUTCOME_GAUNTLET_LOCKED: u8 = 20;
-const OUTCOME_NO_FUEL_AVAILABLE: u8 = 21;
-const OUTCOME_FUEL_BURNED: u8 = 22;
-const OUTCOME_SAVER_CONSUMED: u8 = 30;
-const OUTCOME_FULL_CONSEQUENCE: u8 = 31;
-const OUTCOME_HARVEST_SKIPPED: u8 = 40;
-const OUTCOME_HARVEST_APPLIED: u8 = 41;
-const ICHOR_PER_FUEL: u64 = 100;
-const RECEIPT_KIND_CONVERSION: u8 = 5;
-const OUTCOME_CONVERSION_APPLIED: u8 = 50;
-const OUTCOME_CONVERSION_NO_FUEL: u8 = 51;
-const OUTCOME_CONVERSION_GAUNTLET_LOCKED: u8 = 52;
 
 #[program]
 pub mod lock_vault {
@@ -46,25 +22,13 @@ pub mod lock_vault {
 
     pub fn initialize_protocol(
         ctx: Context<InitializeProtocol>,
-        fuel_cap: u16,
-        max_savers: u8,
-        miss_extension_days: u16,
         usdc_mint: Pubkey,
         skr_mint: Pubkey,
     ) -> Result<()> {
-        validate_protocol_params(
-            fuel_cap,
-            max_savers,
-            miss_extension_days,
-            usdc_mint,
-            skr_mint,
-        )?;
+        validate_protocol_params(usdc_mint, skr_mint)?;
 
         let protocol = &mut ctx.accounts.protocol_config;
         protocol.authority = ctx.accounts.authority.key();
-        protocol.fuel_cap = fuel_cap;
-        protocol.max_savers = max_savers;
-        protocol.miss_extension_days = miss_extension_days;
         protocol.usdc_mint = usdc_mint;
         protocol.skr_mint = skr_mint;
         protocol.bump = ctx.bumps.protocol_config;
@@ -80,24 +44,19 @@ pub mod lock_vault {
         skr_amount: u64,
     ) -> Result<()> {
         require!(stable_amount > 0, LockVaultError::InvalidPrincipalAmount);
-        require!(
-            ctx.accounts.course_policy.course_id_hash == course_id_hash,
-            LockVaultError::InvalidCoursePolicy
-        );
         validate_supported_mints(
             &ctx.accounts.protocol_config,
             ctx.accounts.stable_mint.key(),
             ctx.accounts.skr_mint.key(),
         )?;
-        ctx.accounts
-            .course_policy
-            .validate_lock_request(stable_amount, lock_duration_days)?;
+        validate_lock_duration(lock_duration_days)?;
         validate_owner_token_account(
             &ctx.accounts.owner_stable_token_account,
             ctx.accounts.owner.key(),
             ctx.accounts.stable_mint.key(),
         )?;
 
+        // Escrow the principal (USDC) into the lock_account-owned vault ATA.
         transfer_checked_tokens(
             &ctx.accounts.token_program,
             &ctx.accounts.owner_stable_token_account,
@@ -107,7 +66,8 @@ pub mod lock_vault {
             stable_amount,
         )?;
 
-        let skr_tier = if skr_amount > 0 {
+        // Optionally escrow SKR into the SKR vault ATA.
+        if skr_amount > 0 {
             let owner_skr_token_account = ctx
                 .accounts
                 .owner_skr_token_account
@@ -128,22 +88,17 @@ pub mod lock_vault {
                 &ctx.accounts.owner,
                 skr_amount,
             )?;
-
-            derive_skr_tier(skr_amount, ctx.accounts.skr_mint.decimals)?
-        } else {
-            0
-        };
+        }
 
         let now = Clock::get()?.unix_timestamp;
         let lock_account = &mut ctx.accounts.lock_account;
+        // lock_end_ts is written exactly ONCE here. No surviving code path mutates it.
         lock_account.initialize_from_funding(
-            &ctx.accounts.protocol_config,
             ctx.accounts.owner.key(),
             course_id_hash,
             ctx.accounts.stable_mint.key(),
             stable_amount,
             skr_amount,
-            skr_tier,
             lock_duration_days,
             now,
             ctx.bumps.lock_account,
@@ -156,173 +111,8 @@ pub mod lock_vault {
             stable_mint: lock_account.stable_mint,
             principal_amount: lock_account.principal_amount,
             skr_locked_amount: lock_account.skr_locked_amount,
-            skr_tier: lock_account.skr_tier,
             lock_end_ts: lock_account.lock_end_ts,
         });
-
-        Ok(())
-    }
-
-    pub fn upsert_course_policy(
-        ctx: Context<UpsertCoursePolicy>,
-        course_id_hash: [u8; 32],
-        min_principal_amount: u64,
-        max_principal_amount: u64,
-        demo_principal_amount: u64,
-        min_lock_duration_days: u16,
-        max_lock_duration_days: u16,
-    ) -> Result<()> {
-        validate_course_policy_params(
-            min_principal_amount,
-            max_principal_amount,
-            demo_principal_amount,
-            min_lock_duration_days,
-            max_lock_duration_days,
-        )?;
-
-        let course_policy = &mut ctx.accounts.course_policy;
-        course_policy.course_id_hash = course_id_hash;
-        course_policy.min_principal_amount = min_principal_amount;
-        course_policy.max_principal_amount = max_principal_amount;
-        course_policy.demo_principal_amount = demo_principal_amount;
-        course_policy.min_lock_duration_days = min_lock_duration_days;
-        course_policy.max_lock_duration_days = max_lock_duration_days;
-        course_policy.bump = ctx.bumps.course_policy;
-
-        emit!(CoursePolicyUpserted {
-            course_policy: course_policy.key(),
-            course_id_hash,
-            min_principal_amount,
-            max_principal_amount,
-            demo_principal_amount,
-            min_lock_duration_days,
-            max_lock_duration_days,
-        });
-
-        Ok(())
-    }
-
-    pub fn apply_verified_completion(
-        ctx: Context<ApplyVerifiedCompletion>,
-        receipt_key: [u8; 32],
-        completion_day: i64,
-        reward_units: u16,
-    ) -> Result<()> {
-        let now = Clock::get()?.unix_timestamp;
-        let receipt = &mut ctx.accounts.receipt;
-        if receipt.is_initialized() {
-            return Ok(());
-        }
-
-        let effect = ctx.accounts.lock_account.apply_verified_completion(
-            &ctx.accounts.protocol_config,
-            completion_day,
-            reward_units,
-        )?;
-
-        receipt.record(
-            ctx.accounts.lock_account.key(),
-            receipt_key,
-            RECEIPT_KIND_COMPLETION,
-            effect.applied,
-            effect.outcome,
-            completion_day,
-            i64::from(effect.fuel_awarded),
-            ctx.bumps.receipt,
-            now,
-        );
-
-        if effect.fuel_awarded > 0 {
-            emit!(FuelCredited {
-                lock_account: ctx.accounts.lock_account.key(),
-                completion_day,
-                fuel_awarded: effect.fuel_awarded,
-                fuel_counter: ctx.accounts.lock_account.fuel_counter,
-            });
-        }
-
-        Ok(())
-    }
-
-    pub fn consume_daily_fuel(
-        ctx: Context<ConsumeDailyFuel>,
-        receipt_key: [u8; 32],
-        burned_at_ts: i64,
-    ) -> Result<()> {
-        let now = Clock::get()?.unix_timestamp;
-        let receipt = &mut ctx.accounts.receipt;
-        if receipt.is_initialized() {
-            return Ok(());
-        }
-
-        let effect = ctx.accounts.lock_account.consume_daily_fuel(burned_at_ts)?;
-
-        receipt.record(
-            ctx.accounts.lock_account.key(),
-            receipt_key,
-            RECEIPT_KIND_FUEL_BURN,
-            effect.applied,
-            effect.outcome,
-            burned_at_ts,
-            i64::from(effect.fuel_burned),
-            ctx.bumps.receipt,
-            now,
-        );
-
-        if effect.fuel_burned > 0 {
-            emit!(FuelBurned {
-                lock_account: ctx.accounts.lock_account.key(),
-                burned_at_ts,
-                fuel_counter: ctx.accounts.lock_account.fuel_counter,
-            });
-        }
-
-        Ok(())
-    }
-
-    pub fn consume_saver_or_apply_full_consequence(
-        ctx: Context<ConsumeSaverOrApplyFullConsequence>,
-        receipt_key: [u8; 32],
-        miss_day: i64,
-    ) -> Result<()> {
-        let now = Clock::get()?.unix_timestamp;
-        let receipt = &mut ctx.accounts.receipt;
-        if receipt.is_initialized() {
-            return Ok(());
-        }
-
-        let effect = ctx
-            .accounts
-            .lock_account
-            .consume_saver_or_apply_full_consequence(&ctx.accounts.protocol_config, miss_day)?;
-
-        receipt.record(
-            ctx.accounts.lock_account.key(),
-            receipt_key,
-            RECEIPT_KIND_MISS,
-            effect.applied,
-            effect.outcome,
-            miss_day,
-            effect.extension_seconds_added,
-            ctx.bumps.receipt,
-            now,
-        );
-
-        match effect.outcome {
-            OUTCOME_SAVER_CONSUMED => emit!(SaverConsumed {
-                lock_account: ctx.accounts.lock_account.key(),
-                miss_day,
-                savers_remaining: ctx.accounts.lock_account.savers_remaining,
-                current_yield_redirect_bps: ctx.accounts.lock_account.current_yield_redirect_bps,
-            }),
-            OUTCOME_FULL_CONSEQUENCE => emit!(FullConsequenceApplied {
-                lock_account: ctx.accounts.lock_account.key(),
-                miss_day,
-                extension_seconds_total: ctx.accounts.lock_account.extension_seconds_total,
-                current_yield_redirect_bps: ctx.accounts.lock_account.current_yield_redirect_bps,
-            }),
-            _ => {}
-        }
 
         Ok(())
     }
@@ -334,6 +124,7 @@ pub mod lock_vault {
             let lock_account = &ctx.accounts.lock_account;
             lock_account.assert_unlockable(now)?;
 
+            // Assert the vault still holds the full escrowed principal.
             require!(
                 ctx.accounts.stable_vault.amount == lock_account.principal_amount,
                 LockVaultError::UnexpectedStableVaultBalance
@@ -358,6 +149,7 @@ pub mod lock_vault {
             &[bump],
         ]];
 
+        // Return the principal to the owner.
         transfer_checked_from_lock_vault(
             &ctx.accounts.token_program,
             &ctx.accounts.stable_vault,
@@ -380,6 +172,7 @@ pub mod lock_vault {
             )?;
         }
 
+        // Close both vault ATAs, refunding rent to the owner.
         close_token_account_from_lock_vault(
             &ctx.accounts.token_program,
             &ctx.accounts.stable_vault.to_account_info(),
@@ -408,129 +201,6 @@ pub mod lock_vault {
 
         Ok(())
     }
-
-    pub fn redeem_ichor(ctx: Context<RedeemIchor>, ichor_amount: u64) -> Result<()> {
-        validate_supported_mints(
-            &ctx.accounts.protocol_config,
-            ctx.accounts.stable_mint.key(),
-            ctx.accounts.protocol_config.skr_mint,
-        )?;
-        require!(
-            ctx.accounts.lock_account.stable_mint == ctx.accounts.stable_mint.key(),
-            LockVaultError::InvalidTokenAccountMint
-        );
-
-        let lock_account = &mut ctx.accounts.lock_account;
-        let effect = lock_account.redeem_ichor(ichor_amount, ctx.accounts.stable_mint.decimals)?;
-
-        require!(
-            ctx.accounts.redemption_vault.amount >= effect.usdc_out,
-            LockVaultError::InsufficientRedemptionLiquidity
-        );
-
-        let signer_seeds: &[&[&[u8]]] =
-            &[&[ProtocolConfig::SEED, &[ctx.accounts.protocol_config.bump]]];
-
-        transfer_checked_from_lock_vault(
-            &ctx.accounts.token_program,
-            &ctx.accounts.redemption_vault,
-            &ctx.accounts.owner_stable_token_account,
-            &ctx.accounts.stable_mint,
-            &ctx.accounts.protocol_config.to_account_info(),
-            signer_seeds,
-            effect.usdc_out,
-        )?;
-
-        emit!(IchorRedeemed {
-            lock_account: lock_account.key(),
-            owner: lock_account.owner,
-            ichor_amount,
-            usdc_out: effect.usdc_out,
-            conversion_bps: effect.conversion_bps,
-        });
-
-        Ok(())
-    }
-
-    pub fn apply_harvest_result(
-        ctx: Context<ApplyHarvestResult>,
-        receipt_key: [u8; 32],
-        gross_yield_amount: u64,
-    ) -> Result<()> {
-        let now = Clock::get()?.unix_timestamp;
-        let receipt = &mut ctx.accounts.receipt;
-        if receipt.is_initialized() {
-            return Ok(());
-        }
-
-        let effect = ctx
-            .accounts
-            .lock_account
-            .apply_harvest_result(gross_yield_amount)?;
-
-        receipt.record(
-            ctx.accounts.lock_account.key(),
-            receipt_key,
-            RECEIPT_KIND_HARVEST,
-            effect.applied,
-            effect.outcome,
-            now,
-            i64::try_from(effect.ichor_awarded).map_err(|_| LockVaultError::NumericalOverflow)?,
-            ctx.bumps.receipt,
-            now,
-        );
-
-        if effect.applied {
-            emit!(HarvestApplied {
-                lock_account: ctx.accounts.lock_account.key(),
-                gross_yield_amount,
-                platform_fee_amount: effect.platform_fee_amount,
-                redirected_amount: effect.redirected_amount,
-                ichor_awarded: effect.ichor_awarded,
-                ichor_counter: ctx.accounts.lock_account.ichor_counter,
-            });
-        }
-
-        Ok(())
-    }
-
-    pub fn convert_fuel_to_ichor(
-        ctx: Context<ConvertFuelToIchor>,
-        receipt_key: [u8; 32],
-        fuel_amount: u16,
-    ) -> Result<()> {
-        let now = Clock::get()?.unix_timestamp;
-        let receipt = &mut ctx.accounts.receipt;
-        if receipt.is_initialized() {
-            return Ok(());
-        }
-
-        let effect = ctx.accounts.lock_account.convert_fuel_to_ichor(fuel_amount)?;
-
-        receipt.record(
-            ctx.accounts.lock_account.key(),
-            receipt_key,
-            RECEIPT_KIND_CONVERSION,
-            effect.applied,
-            effect.outcome,
-            now,
-            i64::try_from(effect.ichor_gained).map_err(|_| LockVaultError::NumericalOverflow)?,
-            ctx.bumps.receipt,
-            now,
-        );
-
-        if effect.applied {
-            emit!(FuelConverted {
-                lock_account: ctx.accounts.lock_account.key(),
-                fuel_amount: effect.fuel_consumed,
-                ichor_gained: effect.ichor_gained,
-                fuel_counter: ctx.accounts.lock_account.fuel_counter,
-                ichor_counter: ctx.accounts.lock_account.ichor_counter,
-            });
-        }
-
-        Ok(())
-    }
 }
 
 #[derive(Accounts)]
@@ -549,28 +219,6 @@ pub struct InitializeProtocol<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(course_id_hash: [u8; 32])]
-pub struct UpsertCoursePolicy<'info> {
-    #[account(
-        seeds = [ProtocolConfig::SEED],
-        bump = protocol_config.bump,
-        has_one = authority @ LockVaultError::UnauthorizedWorker
-    )]
-    pub protocol_config: Account<'info, ProtocolConfig>,
-    #[account(
-        init_if_needed,
-        payer = authority,
-        space = 8 + CoursePolicy::INIT_SPACE,
-        seeds = [CoursePolicy::SEED, course_id_hash.as_ref()],
-        bump
-    )]
-    pub course_policy: Account<'info, CoursePolicy>,
-    #[account(mut)]
-    pub authority: Signer<'info>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
 #[instruction(course_id_hash: [u8; 32], lock_duration_days: u16, stable_amount: u64, skr_amount: u64)]
 pub struct LockFunds<'info> {
     #[account(
@@ -578,11 +226,6 @@ pub struct LockFunds<'info> {
         bump = protocol_config.bump
     )]
     pub protocol_config: Box<Account<'info, ProtocolConfig>>,
-    #[account(
-        seeds = [CoursePolicy::SEED, course_id_hash.as_ref()],
-        bump = course_policy.bump
-    )]
-    pub course_policy: Box<Account<'info, CoursePolicy>>,
     #[account(
         init,
         payer = owner,
@@ -618,126 +261,6 @@ pub struct LockFunds<'info> {
     pub system_program: Program<'info, System>,
     #[account(mut)]
     pub owner_skr_token_account: Option<Box<InterfaceAccount<'info, TokenAccount>>>,
-}
-
-#[derive(Accounts)]
-#[instruction(receipt_key: [u8; 32], completion_day: i64, reward_units: u16)]
-pub struct ApplyVerifiedCompletion<'info> {
-    #[account(
-        seeds = [ProtocolConfig::SEED],
-        bump = protocol_config.bump,
-        has_one = authority @ LockVaultError::UnauthorizedWorker
-    )]
-    pub protocol_config: Account<'info, ProtocolConfig>,
-    #[account(mut)]
-    pub lock_account: Account<'info, LockAccount>,
-    #[account(mut)]
-    pub authority: Signer<'info>,
-    #[account(
-        init_if_needed,
-        payer = authority,
-        space = 8 + WorkerReceipt::INIT_SPACE,
-        seeds = [WorkerReceipt::COMPLETION_SEED, lock_account.key().as_ref(), receipt_key.as_ref()],
-        bump
-    )]
-    pub receipt: Account<'info, WorkerReceipt>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-#[instruction(receipt_key: [u8; 32], burned_at_ts: i64)]
-pub struct ConsumeDailyFuel<'info> {
-    #[account(
-        seeds = [ProtocolConfig::SEED],
-        bump = protocol_config.bump,
-        has_one = authority @ LockVaultError::UnauthorizedWorker
-    )]
-    pub protocol_config: Account<'info, ProtocolConfig>,
-    #[account(mut)]
-    pub lock_account: Account<'info, LockAccount>,
-    #[account(mut)]
-    pub authority: Signer<'info>,
-    #[account(
-        init_if_needed,
-        payer = authority,
-        space = 8 + WorkerReceipt::INIT_SPACE,
-        seeds = [WorkerReceipt::FUEL_BURN_SEED, lock_account.key().as_ref(), receipt_key.as_ref()],
-        bump
-    )]
-    pub receipt: Account<'info, WorkerReceipt>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-#[instruction(receipt_key: [u8; 32], miss_day: i64)]
-pub struct ConsumeSaverOrApplyFullConsequence<'info> {
-    #[account(
-        seeds = [ProtocolConfig::SEED],
-        bump = protocol_config.bump,
-        has_one = authority @ LockVaultError::UnauthorizedWorker
-    )]
-    pub protocol_config: Account<'info, ProtocolConfig>,
-    #[account(mut)]
-    pub lock_account: Account<'info, LockAccount>,
-    #[account(mut)]
-    pub authority: Signer<'info>,
-    #[account(
-        init_if_needed,
-        payer = authority,
-        space = 8 + WorkerReceipt::INIT_SPACE,
-        seeds = [WorkerReceipt::MISS_SEED, lock_account.key().as_ref(), receipt_key.as_ref()],
-        bump
-    )]
-    pub receipt: Account<'info, WorkerReceipt>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-#[instruction(receipt_key: [u8; 32], gross_yield_amount: u64)]
-pub struct ApplyHarvestResult<'info> {
-    #[account(
-        seeds = [ProtocolConfig::SEED],
-        bump = protocol_config.bump,
-        has_one = authority @ LockVaultError::UnauthorizedWorker
-    )]
-    pub protocol_config: Account<'info, ProtocolConfig>,
-    #[account(mut)]
-    pub lock_account: Account<'info, LockAccount>,
-    #[account(mut)]
-    pub authority: Signer<'info>,
-    #[account(
-        init_if_needed,
-        payer = authority,
-        space = 8 + WorkerReceipt::INIT_SPACE,
-        seeds = [WorkerReceipt::HARVEST_SEED, lock_account.key().as_ref(), receipt_key.as_ref()],
-        bump
-    )]
-    pub receipt: Account<'info, WorkerReceipt>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-#[instruction(receipt_key: [u8; 32], fuel_amount: u16)]
-pub struct ConvertFuelToIchor<'info> {
-    #[account(
-        seeds = [ProtocolConfig::SEED],
-        bump = protocol_config.bump,
-        has_one = authority @ LockVaultError::UnauthorizedWorker
-    )]
-    pub protocol_config: Account<'info, ProtocolConfig>,
-    #[account(mut)]
-    pub lock_account: Account<'info, LockAccount>,
-    #[account(mut)]
-    pub authority: Signer<'info>,
-    #[account(
-        init_if_needed,
-        payer = authority,
-        space = 8 + WorkerReceipt::INIT_SPACE,
-        seeds = [WorkerReceipt::CONVERSION_SEED, lock_account.key().as_ref(), receipt_key.as_ref()],
-        bump
-    )]
-    pub receipt: Account<'info, WorkerReceipt>,
-    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
@@ -787,48 +310,10 @@ pub struct UnlockFunds<'info> {
     pub system_program: Program<'info, System>,
 }
 
-#[derive(Accounts)]
-pub struct RedeemIchor<'info> {
-    #[account(
-        seeds = [ProtocolConfig::SEED],
-        bump = protocol_config.bump
-    )]
-    pub protocol_config: Account<'info, ProtocolConfig>,
-    #[account(
-        mut,
-        has_one = owner @ LockVaultError::InvalidLockOwner
-    )]
-    pub lock_account: Account<'info, LockAccount>,
-    pub stable_mint: InterfaceAccount<'info, Mint>,
-    #[account(mut)]
-    pub owner: Signer<'info>,
-    #[account(
-        mut,
-        token::mint = stable_mint,
-        token::authority = protocol_config,
-        token::token_program = token_program
-    )]
-    pub redemption_vault: InterfaceAccount<'info, TokenAccount>,
-    #[account(
-        init_if_needed,
-        payer = owner,
-        associated_token::mint = stable_mint,
-        associated_token::authority = owner,
-        associated_token::token_program = token_program
-    )]
-    pub owner_stable_token_account: InterfaceAccount<'info, TokenAccount>,
-    pub token_program: Interface<'info, TokenInterface>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
-    pub system_program: Program<'info, System>,
-}
-
 #[account]
 #[derive(InitSpace)]
 pub struct ProtocolConfig {
     pub authority: Pubkey,
-    pub fuel_cap: u16,
-    pub max_savers: u8,
-    pub miss_extension_days: u16,
     pub usdc_mint: Pubkey,
     pub skr_mint: Pubkey,
     pub bump: u8,
@@ -840,75 +325,15 @@ impl ProtocolConfig {
 
 #[account]
 #[derive(InitSpace)]
-pub struct CoursePolicy {
-    pub course_id_hash: [u8; 32],
-    pub min_principal_amount: u64,
-    pub max_principal_amount: u64,
-    pub demo_principal_amount: u64,
-    pub min_lock_duration_days: u16,
-    pub max_lock_duration_days: u16,
-    pub bump: u8,
-}
-
-impl CoursePolicy {
-    pub const SEED: &'static [u8] = b"course-policy";
-
-    fn validate_lock_request(&self, stable_amount: u64, lock_duration_days: u16) -> Result<()> {
-        validate_lock_duration(lock_duration_days)?;
-
-        require!(
-            lock_duration_days >= self.min_lock_duration_days
-                && lock_duration_days <= self.max_lock_duration_days,
-            LockVaultError::DurationOutsideCoursePolicy
-        );
-
-        let is_demo_override =
-            self.demo_principal_amount > 0 && stable_amount == self.demo_principal_amount;
-        if !is_demo_override {
-            require!(
-                stable_amount >= self.min_principal_amount,
-                LockVaultError::PrincipalBelowCourseMinimum
-            );
-        }
-
-        if self.max_principal_amount > 0 {
-            require!(
-                stable_amount <= self.max_principal_amount,
-                LockVaultError::PrincipalAboveCourseMaximum
-            );
-        }
-
-        Ok(())
-    }
-}
-
-#[account]
-#[derive(InitSpace)]
 pub struct LockAccount {
     pub owner: Pubkey,
     pub course_id_hash: [u8; 32],
     pub stable_mint: Pubkey,
     pub principal_amount: u64,
+    pub skr_locked_amount: u64,
     pub lock_start_ts: i64,
     pub lock_end_ts: i64,
-    pub extension_seconds_total: u64,
     pub status: u8,
-    pub gauntlet_complete: bool,
-    pub gauntlet_day: u8,
-    pub current_streak: u16,
-    pub longest_streak: u16,
-    pub savers_remaining: u8,
-    pub saver_recovery_mode: bool,
-    pub fuel_counter: u16,
-    pub fuel_cap: u16,
-    pub last_fuel_credit_day: i64,
-    pub last_brewer_burn_ts: i64,
-    pub last_completion_day: i64,
-    pub ichor_counter: u64,
-    pub ichor_lifetime_total: u64,
-    pub skr_locked_amount: u64,
-    pub skr_tier: u8,
-    pub current_yield_redirect_bps: u16,
     pub bump: u8,
 }
 
@@ -918,13 +343,11 @@ impl LockAccount {
     #[allow(clippy::too_many_arguments)]
     fn initialize_from_funding(
         &mut self,
-        protocol: &ProtocolConfig,
         owner: Pubkey,
         course_id_hash: [u8; 32],
         stable_mint: Pubkey,
         principal_amount: u64,
         skr_locked_amount: u64,
-        skr_tier: u8,
         lock_duration_days: u16,
         now: i64,
         bump: u8,
@@ -939,244 +362,17 @@ impl LockAccount {
         self.course_id_hash = course_id_hash;
         self.stable_mint = stable_mint;
         self.principal_amount = principal_amount;
+        self.skr_locked_amount = skr_locked_amount;
         self.lock_start_ts = now;
+        // lock_end_ts is set ONCE; missed learning days are yield-only and
+        // never extend the principal lock (v4 fire-timer model).
         self.lock_end_ts = now
             .checked_add(duration_seconds)
             .ok_or(LockVaultError::NumericalOverflow)?;
-        self.extension_seconds_total = 0;
         self.status = ACTIVE_STATUS;
-        self.gauntlet_complete = false;
-        self.gauntlet_day = 1;
-        self.current_streak = 0;
-        self.longest_streak = 0;
-        self.savers_remaining = 0;
-        self.saver_recovery_mode = false;
-        self.fuel_counter = 0;
-        self.fuel_cap = protocol.fuel_cap;
-        self.last_fuel_credit_day = -1;
-        self.last_brewer_burn_ts = 0;
-        self.last_completion_day = -1;
-        self.ichor_counter = 0;
-        self.ichor_lifetime_total = 0;
-        self.skr_locked_amount = skr_locked_amount;
-        self.skr_tier = skr_tier;
-        self.current_yield_redirect_bps = 0;
         self.bump = bump;
 
         Ok(())
-    }
-
-    fn apply_verified_completion(
-        &mut self,
-        protocol: &ProtocolConfig,
-        completion_day: i64,
-        reward_units: u16,
-    ) -> Result<CompletionEffect> {
-        require!(completion_day >= 0, LockVaultError::InvalidDay);
-
-        let same_day = self.last_completion_day == completion_day;
-
-        if !same_day {
-            let consecutive =
-                self.last_completion_day >= 0 && completion_day - self.last_completion_day == 1;
-            self.current_streak = if self.last_completion_day < 0 {
-                1
-            } else if consecutive {
-                self.current_streak
-                    .checked_add(1)
-                    .ok_or(LockVaultError::NumericalOverflow)?
-            } else {
-                1
-            };
-            self.longest_streak = self.longest_streak.max(self.current_streak);
-            self.last_completion_day = completion_day;
-
-            if !self.gauntlet_complete {
-                self.gauntlet_day = self.gauntlet_day.saturating_add(1).min(GAUNTLET_DAYS + 1);
-                if self.gauntlet_day > GAUNTLET_DAYS {
-                    self.gauntlet_complete = true;
-                    self.savers_remaining = protocol.max_savers;
-                    self.saver_recovery_mode = false;
-                    self.current_yield_redirect_bps = 0;
-                }
-            }
-        }
-
-        let mut outcome = if reward_units == 0 {
-            OUTCOME_NO_REWARD_UNITS
-        } else {
-            OUTCOME_ALREADY_EARNED_TODAY
-        };
-
-        if self.saver_recovery_mode && self.savers_remaining < protocol.max_savers {
-            self.savers_remaining = self
-                .savers_remaining
-                .checked_add(1)
-                .ok_or(LockVaultError::NumericalOverflow)?;
-            self.saver_recovery_mode = self.savers_remaining < protocol.max_savers;
-            self.current_yield_redirect_bps =
-                saver_redirect_bps(protocol.max_savers, self.savers_remaining);
-            outcome = OUTCOME_SAVER_RECOVERED;
-        }
-
-        let mut fuel_awarded = 0;
-        if reward_units > 0 && !self.saver_recovery_mode {
-            if self.fuel_counter >= self.fuel_cap {
-                outcome = OUTCOME_AT_FUEL_CAP;
-            } else if self.last_fuel_credit_day == completion_day {
-                outcome = OUTCOME_ALREADY_EARNED_TODAY;
-            } else {
-                let next_fuel = self
-                    .fuel_counter
-                    .checked_add(1)
-                    .ok_or(LockVaultError::NumericalOverflow)?
-                    .min(self.fuel_cap);
-                fuel_awarded = next_fuel.saturating_sub(self.fuel_counter);
-                self.fuel_counter = next_fuel;
-                self.last_fuel_credit_day = completion_day;
-                outcome = OUTCOME_FUEL_CREDITED;
-            }
-        }
-
-        Ok(CompletionEffect {
-            applied: true,
-            outcome,
-            fuel_awarded,
-        })
-    }
-
-    fn consume_daily_fuel(&mut self, burned_at_ts: i64) -> Result<FuelBurnEffect> {
-        require!(burned_at_ts >= 0, LockVaultError::InvalidTimestamp);
-
-        if !self.gauntlet_complete {
-            return Ok(FuelBurnEffect {
-                applied: false,
-                outcome: OUTCOME_GAUNTLET_LOCKED,
-                fuel_burned: 0,
-            });
-        }
-
-        if self.fuel_counter == 0 {
-            return Ok(FuelBurnEffect {
-                applied: false,
-                outcome: OUTCOME_NO_FUEL_AVAILABLE,
-                fuel_burned: 0,
-            });
-        }
-
-        self.fuel_counter = self
-            .fuel_counter
-            .checked_sub(1)
-            .ok_or(LockVaultError::NumericalOverflow)?;
-        self.last_brewer_burn_ts = burned_at_ts;
-
-        Ok(FuelBurnEffect {
-            applied: true,
-            outcome: OUTCOME_FUEL_BURNED,
-            fuel_burned: 1,
-        })
-    }
-
-    fn convert_fuel_to_ichor(&mut self, fuel_amount: u16) -> Result<FuelConversionEffect> {
-        if !self.gauntlet_complete {
-            return Ok(FuelConversionEffect {
-                applied: false,
-                outcome: OUTCOME_CONVERSION_GAUNTLET_LOCKED,
-                fuel_consumed: 0,
-                ichor_gained: 0,
-            });
-        }
-
-        if self.fuel_counter == 0 || fuel_amount == 0 {
-            return Ok(FuelConversionEffect {
-                applied: false,
-                outcome: OUTCOME_CONVERSION_NO_FUEL,
-                fuel_consumed: 0,
-                ichor_gained: 0,
-            });
-        }
-
-        let to_convert = fuel_amount.min(self.fuel_counter);
-        let ichor_gained = u64::from(to_convert)
-            .checked_mul(ICHOR_PER_FUEL)
-            .ok_or(LockVaultError::NumericalOverflow)?;
-
-        self.fuel_counter = self
-            .fuel_counter
-            .checked_sub(to_convert)
-            .ok_or(LockVaultError::NumericalOverflow)?;
-        self.ichor_counter = self
-            .ichor_counter
-            .checked_add(ichor_gained)
-            .ok_or(LockVaultError::NumericalOverflow)?;
-        self.ichor_lifetime_total = self
-            .ichor_lifetime_total
-            .checked_add(ichor_gained)
-            .ok_or(LockVaultError::NumericalOverflow)?;
-
-        Ok(FuelConversionEffect {
-            applied: true,
-            outcome: OUTCOME_CONVERSION_APPLIED,
-            fuel_consumed: to_convert,
-            ichor_gained,
-        })
-    }
-
-    fn consume_saver_or_apply_full_consequence(
-        &mut self,
-        protocol: &ProtocolConfig,
-        miss_day: i64,
-    ) -> Result<MissEffect> {
-        require!(miss_day >= 0, LockVaultError::InvalidDay);
-
-        if !self.gauntlet_complete {
-            return Ok(MissEffect {
-                applied: false,
-                outcome: OUTCOME_GAUNTLET_LOCKED,
-                extension_seconds_added: 0,
-            });
-        }
-
-        self.current_streak = 0;
-        self.saver_recovery_mode = true;
-
-        if self.savers_remaining > 0 {
-            self.savers_remaining = self
-                .savers_remaining
-                .checked_sub(1)
-                .ok_or(LockVaultError::NumericalOverflow)?;
-            self.current_yield_redirect_bps =
-                saver_redirect_bps(protocol.max_savers, self.savers_remaining);
-
-            return Ok(MissEffect {
-                applied: true,
-                outcome: OUTCOME_SAVER_CONSUMED,
-                extension_seconds_added: 0,
-            });
-        }
-
-        self.current_yield_redirect_bps = FULL_REDIRECT_BPS;
-
-        let extension_seconds = i64::from(protocol.miss_extension_days)
-            .checked_mul(DAY_SECONDS)
-            .ok_or(LockVaultError::NumericalOverflow)?;
-        let extension_u64 =
-            u64::try_from(extension_seconds).map_err(|_| LockVaultError::NumericalOverflow)?;
-
-        self.extension_seconds_total = self
-            .extension_seconds_total
-            .checked_add(extension_u64)
-            .ok_or(LockVaultError::NumericalOverflow)?;
-        self.lock_end_ts = self
-            .lock_end_ts
-            .checked_add(extension_seconds)
-            .ok_or(LockVaultError::NumericalOverflow)?;
-
-        Ok(MissEffect {
-            applied: true,
-            outcome: OUTCOME_FULL_CONSEQUENCE,
-            extension_seconds_added: extension_seconds,
-        })
     }
 
     fn assert_unlockable(&self, now: i64) -> Result<()> {
@@ -1191,133 +387,6 @@ impl LockAccount {
     fn mark_closed(&mut self) {
         self.status = CLOSED_STATUS;
     }
-
-    fn redeem_ichor(&mut self, ichor_amount: u64, stable_decimals: u8) -> Result<RedeemEffect> {
-        require!(
-            self.status != CLOSED_STATUS,
-            LockVaultError::LockAlreadyClosed
-        );
-        require!(self.gauntlet_complete, LockVaultError::IchorExchangeLocked);
-        require!(ichor_amount > 0, LockVaultError::InvalidIchorAmount);
-        require!(
-            ichor_amount <= self.ichor_counter,
-            LockVaultError::InsufficientIchorBalance
-        );
-
-        let conversion_bps = ichor_conversion_bps(self.ichor_lifetime_total);
-        let base_units = 10u128
-            .checked_pow(u32::from(stable_decimals))
-            .ok_or(LockVaultError::UnsupportedMintDecimals)?;
-        let usdc_out = u128::from(ichor_amount)
-            .checked_mul(base_units)
-            .and_then(|value| value.checked_mul(u128::from(conversion_bps)))
-            .ok_or(LockVaultError::NumericalOverflow)?
-            / 1_000u128
-            / 10_000u128;
-        let usdc_out = u64::try_from(usdc_out).map_err(|_| LockVaultError::NumericalOverflow)?;
-
-        self.ichor_counter = self
-            .ichor_counter
-            .checked_sub(ichor_amount)
-            .ok_or(LockVaultError::NumericalOverflow)?;
-
-        Ok(RedeemEffect {
-            usdc_out,
-            conversion_bps,
-        })
-    }
-
-    fn apply_harvest_result(&mut self, gross_yield_amount: u64) -> Result<HarvestEffect> {
-        require!(
-            self.status != CLOSED_STATUS,
-            LockVaultError::LockAlreadyClosed
-        );
-
-        let brewer_active = self.gauntlet_complete && self.fuel_counter > 0;
-        let split = calculate_harvest_split(
-            gross_yield_amount,
-            self.current_yield_redirect_bps,
-            brewer_active,
-            self.skr_tier,
-        )?;
-
-        if split.ichor_awarded == 0 {
-            return Ok(HarvestEffect {
-                applied: false,
-                outcome: OUTCOME_HARVEST_SKIPPED,
-                platform_fee_amount: split.platform_fee_amount,
-                redirected_amount: split.redirected_amount,
-                ichor_awarded: 0,
-            });
-        }
-
-        self.ichor_counter = self
-            .ichor_counter
-            .checked_add(split.ichor_awarded)
-            .ok_or(LockVaultError::NumericalOverflow)?;
-        self.ichor_lifetime_total = self
-            .ichor_lifetime_total
-            .checked_add(split.ichor_awarded)
-            .ok_or(LockVaultError::NumericalOverflow)?;
-
-        Ok(HarvestEffect {
-            applied: true,
-            outcome: OUTCOME_HARVEST_APPLIED,
-            platform_fee_amount: split.platform_fee_amount,
-            redirected_amount: split.redirected_amount,
-            ichor_awarded: split.ichor_awarded,
-        })
-    }
-}
-
-#[account]
-#[derive(InitSpace)]
-pub struct WorkerReceipt {
-    pub lock_account: Pubkey,
-    pub receipt_key: [u8; 32],
-    pub kind: u8,
-    pub applied: bool,
-    pub outcome: u8,
-    pub reference_value: i64,
-    pub numeric_delta: i64,
-    pub processed_at: i64,
-    pub bump: u8,
-}
-
-impl WorkerReceipt {
-    pub const COMPLETION_SEED: &'static [u8] = b"completion";
-    pub const FUEL_BURN_SEED: &'static [u8] = b"fuel-burn";
-    pub const MISS_SEED: &'static [u8] = b"miss";
-    pub const HARVEST_SEED: &'static [u8] = b"harvest";
-    pub const CONVERSION_SEED: &'static [u8] = b"conversion";
-
-    fn is_initialized(&self) -> bool {
-        self.lock_account != Pubkey::default()
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn record(
-        &mut self,
-        lock_account: Pubkey,
-        receipt_key: [u8; 32],
-        kind: u8,
-        applied: bool,
-        outcome: u8,
-        reference_value: i64,
-        numeric_delta: i64,
-        bump: u8,
-        processed_at: i64,
-    ) {
-        self.lock_account = lock_account;
-        self.receipt_key = receipt_key;
-        self.kind = kind;
-        self.applied = applied;
-        self.outcome = outcome;
-        self.reference_value = reference_value;
-        self.numeric_delta = numeric_delta;
-        self.processed_at = processed_at;
-        self.bump = bump;
-    }
 }
 
 #[event]
@@ -1328,59 +397,7 @@ pub struct LockCreated {
     pub stable_mint: Pubkey,
     pub principal_amount: u64,
     pub skr_locked_amount: u64,
-    pub skr_tier: u8,
     pub lock_end_ts: i64,
-}
-
-#[event]
-pub struct CoursePolicyUpserted {
-    pub course_policy: Pubkey,
-    pub course_id_hash: [u8; 32],
-    pub min_principal_amount: u64,
-    pub max_principal_amount: u64,
-    pub demo_principal_amount: u64,
-    pub min_lock_duration_days: u16,
-    pub max_lock_duration_days: u16,
-}
-
-#[event]
-pub struct FuelCredited {
-    pub lock_account: Pubkey,
-    pub completion_day: i64,
-    pub fuel_awarded: u16,
-    pub fuel_counter: u16,
-}
-
-#[event]
-pub struct FuelBurned {
-    pub lock_account: Pubkey,
-    pub burned_at_ts: i64,
-    pub fuel_counter: u16,
-}
-
-#[event]
-pub struct FuelConverted {
-    pub lock_account: Pubkey,
-    pub fuel_amount: u16,
-    pub ichor_gained: u64,
-    pub fuel_counter: u16,
-    pub ichor_counter: u64,
-}
-
-#[event]
-pub struct SaverConsumed {
-    pub lock_account: Pubkey,
-    pub miss_day: i64,
-    pub savers_remaining: u8,
-    pub current_yield_redirect_bps: u16,
-}
-
-#[event]
-pub struct FullConsequenceApplied {
-    pub lock_account: Pubkey,
-    pub miss_day: i64,
-    pub extension_seconds_total: u64,
-    pub current_yield_redirect_bps: u16,
 }
 
 #[event]
@@ -1392,63 +409,16 @@ pub struct LockUnlocked {
     pub unlocked_at_ts: i64,
 }
 
-#[event]
-pub struct IchorRedeemed {
-    pub lock_account: Pubkey,
-    pub owner: Pubkey,
-    pub ichor_amount: u64,
-    pub usdc_out: u64,
-    pub conversion_bps: u16,
-}
-
-#[event]
-pub struct HarvestApplied {
-    pub lock_account: Pubkey,
-    pub gross_yield_amount: u64,
-    pub platform_fee_amount: u64,
-    pub redirected_amount: u64,
-    pub ichor_awarded: u64,
-    pub ichor_counter: u64,
-}
-
 #[error_code]
 pub enum LockVaultError {
-    #[msg("Fuel cap must stay within the v3 protocol range.")]
-    InvalidFuelCap,
-    #[msg("The saver inventory must match the canonical v3 max of 3.")]
-    InvalidMaxSavers,
-    #[msg("Miss extension days must be greater than zero.")]
-    InvalidMissExtensionDays,
-    #[msg("Only the configured worker authority can call this instruction.")]
-    UnauthorizedWorker,
     #[msg("Lock duration must be one of the allowed canonical values.")]
     InvalidLockDuration,
-    #[msg("Day values must be non-negative epoch days.")]
-    InvalidDay,
-    #[msg("Timestamp values must be non-negative unix timestamps.")]
-    InvalidTimestamp,
     #[msg("A checked arithmetic operation overflowed.")]
     NumericalOverflow,
     #[msg("The protocol mint configuration is invalid.")]
     InvalidMintConfig,
     #[msg("The stable deposit amount must be greater than zero.")]
     InvalidPrincipalAmount,
-    #[msg("The supplied course policy PDA does not match the requested course.")]
-    InvalidCoursePolicy,
-    #[msg("Course policy minimum principal must be greater than zero.")]
-    InvalidCoursePolicyMinimumPrincipal,
-    #[msg("Course policy maximum principal must be zero or at least the minimum principal.")]
-    InvalidCoursePolicyMaximumPrincipal,
-    #[msg("Course policy demo principal must be zero or a valid positive override.")]
-    InvalidCoursePolicyDemoPrincipal,
-    #[msg("Course policy duration bounds are invalid.")]
-    InvalidCoursePolicyDurationRange,
-    #[msg("The deposit amount is below the course minimum.")]
-    PrincipalBelowCourseMinimum,
-    #[msg("The deposit amount is above the course maximum.")]
-    PrincipalAboveCourseMaximum,
-    #[msg("The selected duration is outside the course policy range.")]
-    DurationOutsideCoursePolicy,
     #[msg("Only the configured USDC mint is supported.")]
     UnsupportedStableMint,
     #[msg("The provided SKR mint does not match protocol config.")]
@@ -1459,8 +429,6 @@ pub enum LockVaultError {
     InvalidTokenAccountOwner,
     #[msg("The provided token account mint does not match the expected mint.")]
     InvalidTokenAccountMint,
-    #[msg("Mint decimals exceeded the supported range for tier snapshotting.")]
-    UnsupportedMintDecimals,
     #[msg("The provided lock owner does not match the signing wallet.")]
     InvalidLockOwner,
     #[msg("The lock is still active and cannot be unlocked yet.")]
@@ -1471,70 +439,14 @@ pub enum LockVaultError {
     UnexpectedStableVaultBalance,
     #[msg("The SKR vault balance does not match the locked snapshot amount.")]
     UnexpectedSkrVaultBalance,
-    #[msg("Ichor exchange is still locked until gauntlet completion.")]
-    IchorExchangeLocked,
-    #[msg("Ichor amount must be greater than zero.")]
-    InvalidIchorAmount,
-    #[msg("Ichor balance is insufficient for this redemption.")]
-    InsufficientIchorBalance,
-    #[msg("Redemption vault liquidity is insufficient.")]
-    InsufficientRedemptionLiquidity,
 }
 
-fn validate_protocol_params(
-    fuel_cap: u16,
-    max_savers: u8,
-    miss_extension_days: u16,
-    usdc_mint: Pubkey,
-    skr_mint: Pubkey,
-) -> Result<()> {
-    require!(
-        (MIN_FUEL_CAP..=MAX_FUEL_CAP).contains(&fuel_cap),
-        LockVaultError::InvalidFuelCap
-    );
-    require!(
-        max_savers == DEFAULT_MAX_SAVERS,
-        LockVaultError::InvalidMaxSavers
-    );
-    require!(
-        miss_extension_days > 0 && miss_extension_days <= MAX_LOCK_DURATION_DAYS,
-        LockVaultError::InvalidMissExtensionDays
-    );
+fn validate_protocol_params(usdc_mint: Pubkey, skr_mint: Pubkey) -> Result<()> {
     require!(
         usdc_mint != Pubkey::default()
             && skr_mint != Pubkey::default()
             && usdc_mint != skr_mint,
         LockVaultError::InvalidMintConfig
-    );
-
-    Ok(())
-}
-
-fn validate_course_policy_params(
-    min_principal_amount: u64,
-    max_principal_amount: u64,
-    demo_principal_amount: u64,
-    min_lock_duration_days: u16,
-    max_lock_duration_days: u16,
-) -> Result<()> {
-    require!(
-        min_principal_amount > 0,
-        LockVaultError::InvalidCoursePolicyMinimumPrincipal
-    );
-    require!(
-        max_principal_amount == 0 || max_principal_amount >= min_principal_amount,
-        LockVaultError::InvalidCoursePolicyMaximumPrincipal
-    );
-    require!(
-        min_lock_duration_days > 0
-            && max_lock_duration_days >= min_lock_duration_days
-            && max_lock_duration_days <= MAX_LOCK_DURATION_DAYS,
-        LockVaultError::InvalidCoursePolicyDurationRange
-    );
-    require!(
-        demo_principal_amount == 0
-            || (max_principal_amount == 0 || demo_principal_amount <= max_principal_amount),
-        LockVaultError::InvalidCoursePolicyDemoPrincipal
     );
 
     Ok(())
@@ -1554,11 +466,11 @@ fn validate_supported_mints(
     stable_mint: Pubkey,
     skr_mint: Pubkey,
 ) -> Result<()> {
-    require!(stable_mint == protocol.usdc_mint, LockVaultError::UnsupportedStableMint);
     require!(
-        skr_mint == protocol.skr_mint,
-        LockVaultError::InvalidSkrMint
+        stable_mint == protocol.usdc_mint,
+        LockVaultError::UnsupportedStableMint
     );
+    require!(skr_mint == protocol.skr_mint, LockVaultError::InvalidSkrMint);
 
     Ok(())
 }
@@ -1646,155 +558,6 @@ fn close_token_account_from_lock_vault<'info>(
     token_interface::close_account(cpi_context)
 }
 
-fn derive_skr_tier(amount: u64, decimals: u8) -> Result<u8> {
-    let base_units = 10u128
-        .checked_pow(u32::from(decimals))
-        .ok_or(LockVaultError::UnsupportedMintDecimals)?;
-    let amount = u128::from(amount);
-
-    let tier_three = 10_000u128
-        .checked_mul(base_units)
-        .ok_or(LockVaultError::NumericalOverflow)?;
-    let tier_two = 1_000u128
-        .checked_mul(base_units)
-        .ok_or(LockVaultError::NumericalOverflow)?;
-    let tier_one = 100u128
-        .checked_mul(base_units)
-        .ok_or(LockVaultError::NumericalOverflow)?;
-
-    Ok(if amount >= tier_three {
-        3
-    } else if amount >= tier_two {
-        2
-    } else if amount >= tier_one {
-        1
-    } else {
-        0
-    })
-}
-
-fn saver_redirect_bps(max_savers: u8, savers_remaining: u8) -> u16 {
-    let savers_consumed = max_savers.saturating_sub(savers_remaining);
-    match savers_consumed {
-        0 => 0,
-        1 => 1_000,
-        2 | 3 => 2_000,
-        _ => FULL_REDIRECT_BPS,
-    }
-}
-
-fn ichor_conversion_bps(ichor_lifetime_total: u64) -> u16 {
-    match ichor_lifetime_total {
-        0..=9_999 => 9_000,
-        10_000..=49_999 => 10_000,
-        50_000..=99_999 => 11_000,
-        _ => 12_500,
-    }
-}
-
-fn percentage_of_amount(amount: u64, bps: u16) -> Result<u64> {
-    let value = u128::from(amount)
-        .checked_mul(u128::from(bps))
-        .ok_or(LockVaultError::NumericalOverflow)?
-        / 10_000u128;
-    u64::try_from(value).map_err(|_| error!(LockVaultError::NumericalOverflow))
-}
-
-fn apply_skr_multiplier(base_amount: u64, skr_tier: u8) -> Result<u64> {
-    let multiplier_bps = match skr_tier {
-        0 => 10_000u16,
-        1 => 10_200u16,
-        2 => 10_500u16,
-        _ => 11_000u16,
-    };
-    percentage_of_amount(base_amount, multiplier_bps)
-}
-
-fn calculate_harvest_split(
-    gross_yield_amount: u64,
-    redirect_bps: u16,
-    brewer_active: bool,
-    skr_tier: u8,
-) -> Result<HarvestSplit> {
-    if gross_yield_amount == 0 {
-        return Ok(HarvestSplit {
-            platform_fee_amount: 0,
-            redirected_amount: 0,
-            ichor_awarded: 0,
-        });
-    }
-
-    if redirect_bps >= FULL_REDIRECT_BPS {
-        return Ok(HarvestSplit {
-            platform_fee_amount: 0,
-            redirected_amount: gross_yield_amount,
-            ichor_awarded: 0,
-        });
-    }
-
-    let platform_fee_amount = percentage_of_amount(gross_yield_amount, 1_000)?;
-    let redirected_amount = percentage_of_amount(gross_yield_amount, redirect_bps)?;
-    let user_share_amount = gross_yield_amount
-        .checked_sub(platform_fee_amount)
-        .and_then(|value| value.checked_sub(redirected_amount))
-        .ok_or(LockVaultError::NumericalOverflow)?;
-    let ichor_awarded = if brewer_active && user_share_amount > 0 {
-        apply_skr_multiplier(user_share_amount, skr_tier)?
-    } else {
-        0
-    };
-
-    Ok(HarvestSplit {
-        platform_fee_amount,
-        redirected_amount,
-        ichor_awarded,
-    })
-}
-
-struct CompletionEffect {
-    applied: bool,
-    outcome: u8,
-    fuel_awarded: u16,
-}
-
-struct FuelBurnEffect {
-    applied: bool,
-    outcome: u8,
-    fuel_burned: u16,
-}
-
-struct FuelConversionEffect {
-    applied: bool,
-    outcome: u8,
-    fuel_consumed: u16,
-    ichor_gained: u64,
-}
-
-struct MissEffect {
-    applied: bool,
-    outcome: u8,
-    extension_seconds_added: i64,
-}
-
-struct RedeemEffect {
-    usdc_out: u64,
-    conversion_bps: u16,
-}
-
-struct HarvestEffect {
-    applied: bool,
-    outcome: u8,
-    platform_fee_amount: u64,
-    redirected_amount: u64,
-    ichor_awarded: u64,
-}
-
-struct HarvestSplit {
-    platform_fee_amount: u64,
-    redirected_amount: u64,
-    ichor_awarded: u64,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1802,9 +565,6 @@ mod tests {
     fn protocol() -> ProtocolConfig {
         ProtocolConfig {
             authority: Pubkey::new_unique(),
-            fuel_cap: 7,
-            max_savers: DEFAULT_MAX_SAVERS,
-            miss_extension_days: 7,
             usdc_mint: Pubkey::new_unique(),
             skr_mint: Pubkey::new_unique(),
             bump: 255,
@@ -1817,26 +577,10 @@ mod tests {
             course_id_hash: [7; 32],
             stable_mint: protocol.usdc_mint,
             principal_amount: 0,
+            skr_locked_amount: 0,
             lock_start_ts: 0,
             lock_end_ts: 30 * DAY_SECONDS,
-            extension_seconds_total: 0,
             status: ACTIVE_STATUS,
-            gauntlet_complete: false,
-            gauntlet_day: 1,
-            current_streak: 0,
-            longest_streak: 0,
-            savers_remaining: 0,
-            saver_recovery_mode: false,
-            fuel_counter: 0,
-            fuel_cap: protocol.fuel_cap,
-            last_fuel_credit_day: -1,
-            last_brewer_burn_ts: 0,
-            last_completion_day: -1,
-            ichor_counter: 0,
-            ichor_lifetime_total: 0,
-            skr_locked_amount: 0,
-            skr_tier: 0,
-            current_yield_redirect_bps: 0,
             bump: 254,
         }
     }
@@ -1844,41 +588,23 @@ mod tests {
     #[test]
     fn protocol_params_require_distinct_mints() {
         let mint = Pubkey::new_unique();
-        assert!(validate_protocol_params(7, 3, 7, mint, mint).is_err());
+        assert!(validate_protocol_params(mint, mint).is_err());
     }
 
     #[test]
-    fn course_policy_validates_demo_override_and_duration_range() {
-        assert!(validate_course_policy_params(10_000_000, 100_000_000, 1_000_000, 10, 30).is_ok());
-        assert!(validate_course_policy_params(10_000_000, 0, 1_000_000, 10, 365).is_ok());
-        assert!(validate_course_policy_params(0, 100_000_000, 0, 10, 30).is_err());
-        assert!(validate_course_policy_params(10_000_000, 5_000_000, 0, 10, 30).is_err());
-        assert!(validate_course_policy_params(10_000_000, 100_000_000, 200_000_000, 10, 30).is_err());
-        assert!(validate_course_policy_params(10_000_000, 100_000_000, 0, 30, 10).is_err());
-    }
-
-    #[test]
-    fn course_policy_enforces_demo_override_and_range() {
-        let policy = CoursePolicy {
-            course_id_hash: [1; 32],
-            min_principal_amount: 10_000_000,
-            max_principal_amount: 100_000_000,
-            demo_principal_amount: 1_000_000,
-            min_lock_duration_days: 10,
-            max_lock_duration_days: 30,
-            bump: 255,
-        };
-
-        assert!(policy.validate_lock_request(1_000_000, 14).is_ok());
-        assert!(policy.validate_lock_request(10_000_000, 14).is_ok());
-        assert!(policy.validate_lock_request(5_000_000, 14).is_err());
-        assert!(policy.validate_lock_request(10_000_000, 45).is_err());
+    fn protocol_params_accept_distinct_mints() {
+        let usdc = Pubkey::new_unique();
+        let skr = Pubkey::new_unique();
+        assert!(validate_protocol_params(usdc, skr).is_ok());
     }
 
     #[test]
     fn lock_duration_allows_canonical_v3_values() {
         for duration in [14u16, 30, 45, 60, 90, 180, 365] {
-            assert!(validate_lock_duration(duration).is_ok(), "duration {duration} should pass");
+            assert!(
+                validate_lock_duration(duration).is_ok(),
+                "duration {duration} should pass"
+            );
         }
 
         for duration in [1u16, 10, 15, 29, 120, 366] {
@@ -1890,32 +616,17 @@ mod tests {
     }
 
     #[test]
-    fn skr_tier_matches_canonical_thresholds() {
-        assert_eq!(derive_skr_tier(99, 0).unwrap(), 0);
-        assert_eq!(derive_skr_tier(100, 0).unwrap(), 1);
-        assert_eq!(derive_skr_tier(999, 0).unwrap(), 1);
-        assert_eq!(derive_skr_tier(1_000, 0).unwrap(), 2);
-        assert_eq!(derive_skr_tier(9_999, 0).unwrap(), 2);
-        assert_eq!(derive_skr_tier(10_000, 0).unwrap(), 3);
-        assert_eq!(derive_skr_tier(100_000_000, 6).unwrap(), 1);
-        assert_eq!(derive_skr_tier(1_000_000_000, 6).unwrap(), 2);
-        assert_eq!(derive_skr_tier(10_000_000_000, 6).unwrap(), 3);
-    }
-
-    #[test]
-    fn funded_lock_snapshots_principal_and_skr_tier() {
+    fn funded_lock_snapshots_principal_and_sets_immutable_end() {
         let protocol = protocol();
         let owner = Pubkey::new_unique();
         let mut lock = lock(&protocol);
 
         lock.initialize_from_funding(
-            &protocol,
             owner,
             [9; 32],
             protocol.usdc_mint,
             250_000_000,
             1_500_000_000,
-            2,
             60,
             1_700_000_000,
             77,
@@ -1927,104 +638,9 @@ mod tests {
         assert_eq!(lock.stable_mint, protocol.usdc_mint);
         assert_eq!(lock.principal_amount, 250_000_000);
         assert_eq!(lock.skr_locked_amount, 1_500_000_000);
-        assert_eq!(lock.skr_tier, 2);
         assert_eq!(lock.lock_start_ts, 1_700_000_000);
         assert_eq!(lock.lock_end_ts, 1_700_000_000 + 60 * DAY_SECONDS);
-        assert_eq!(lock.fuel_cap, protocol.fuel_cap);
-    }
-
-    #[test]
-    fn verified_completion_credits_fuel_once_per_day() {
-        let protocol = protocol();
-        let mut lock = lock(&protocol);
-
-        let first = lock
-            .apply_verified_completion(&protocol, 20000, 100)
-            .unwrap();
-        assert!(first.applied);
-        assert_eq!(first.fuel_awarded, 1);
-        assert_eq!(lock.current_streak, 1);
-        assert_eq!(lock.longest_streak, 1);
-        assert_eq!(lock.gauntlet_day, 2);
-        assert_eq!(lock.fuel_counter, 1);
-        assert_eq!(lock.last_fuel_credit_day, 20000);
-
-        let second = lock
-            .apply_verified_completion(&protocol, 20000, 100)
-            .unwrap();
-        assert!(second.applied);
-        assert_eq!(second.fuel_awarded, 0);
-        assert_eq!(lock.current_streak, 1);
-        assert_eq!(lock.fuel_counter, 1);
-        assert_eq!(lock.last_fuel_credit_day, 20000);
-    }
-
-    #[test]
-    fn gauntlet_unlocks_savers_after_seventh_unique_day() {
-        let protocol = protocol();
-        let mut lock = lock(&protocol);
-
-        for day in 20000..=20006 {
-            lock.apply_verified_completion(&protocol, day, 100).unwrap();
-        }
-
-        assert!(lock.gauntlet_complete);
-        assert_eq!(lock.gauntlet_day, 8);
-        assert_eq!(lock.savers_remaining, protocol.max_savers);
-        assert_eq!(lock.current_streak, 7);
-    }
-
-    #[test]
-    fn saver_recovery_restores_inventory_before_fuel_earning_resumes() {
-        let protocol = protocol();
-        let mut lock = lock(&protocol);
-        lock.gauntlet_complete = true;
-        lock.gauntlet_day = 8;
-        lock.savers_remaining = 1;
-        lock.saver_recovery_mode = true;
-        lock.current_yield_redirect_bps = 2_000;
-
-        let first = lock
-            .apply_verified_completion(&protocol, 20010, 100)
-            .unwrap();
-        assert_eq!(first.outcome, OUTCOME_SAVER_RECOVERED);
-        assert_eq!(first.fuel_awarded, 0);
-        assert_eq!(lock.savers_remaining, 2);
-        assert!(lock.saver_recovery_mode);
-        assert_eq!(lock.current_yield_redirect_bps, 1_000);
-        assert_eq!(lock.fuel_counter, 0);
-
-        let second = lock
-            .apply_verified_completion(&protocol, 20010, 100)
-            .unwrap();
-        assert_eq!(second.outcome, OUTCOME_FUEL_CREDITED);
-        assert_eq!(second.fuel_awarded, 1);
-        assert_eq!(lock.savers_remaining, 3);
-        assert!(!lock.saver_recovery_mode);
-        assert_eq!(lock.current_yield_redirect_bps, 0);
-        assert_eq!(lock.fuel_counter, 1);
-    }
-
-    #[test]
-    fn fuel_burn_is_blocked_during_gauntlet_and_then_consumes_fuel() {
-        let protocol = protocol();
-        let mut lock = lock(&protocol);
-        lock.fuel_counter = 1;
-
-        let blocked = lock.consume_daily_fuel(1_700_000_000).unwrap();
-        assert!(!blocked.applied);
-        assert_eq!(blocked.outcome, OUTCOME_GAUNTLET_LOCKED);
-        assert_eq!(lock.fuel_counter, 1);
-
-        lock.gauntlet_complete = true;
-        lock.gauntlet_day = 8;
-
-        let burned = lock.consume_daily_fuel(1_700_000_000).unwrap();
-        assert!(burned.applied);
-        assert_eq!(burned.outcome, OUTCOME_FUEL_BURNED);
-        assert_eq!(burned.fuel_burned, 1);
-        assert_eq!(lock.fuel_counter, 0);
-        assert_eq!(lock.last_brewer_burn_ts, 1_700_000_000);
+        assert_eq!(lock.status, ACTIVE_STATUS);
     }
 
     #[test]
@@ -2032,13 +648,11 @@ mod tests {
         let protocol = protocol();
         let mut lock = lock(&protocol);
         lock.initialize_from_funding(
-            &protocol,
             Pubkey::new_unique(),
             [3; 32],
             protocol.usdc_mint,
             1_000_000,
             1_000_000_000,
-            2,
             30,
             1_700_000_000,
             99,
@@ -2053,356 +667,14 @@ mod tests {
     }
 
     #[test]
-    fn ichor_conversion_bps_matches_canonical_thresholds() {
-        assert_eq!(ichor_conversion_bps(0), 9_000);
-        assert_eq!(ichor_conversion_bps(9_999), 9_000);
-        assert_eq!(ichor_conversion_bps(10_000), 10_000);
-        assert_eq!(ichor_conversion_bps(49_999), 10_000);
-        assert_eq!(ichor_conversion_bps(50_000), 11_000);
-        assert_eq!(ichor_conversion_bps(99_999), 11_000);
-        assert_eq!(ichor_conversion_bps(100_000), 12_500);
-    }
-
-    #[test]
-    fn redeem_ichor_requires_gauntlet_and_debits_balance() {
-        let protocol = protocol();
-        let mut lock = lock(&protocol);
-        lock.ichor_counter = 12_000;
-        lock.ichor_lifetime_total = 50_000;
-
-        assert!(lock.redeem_ichor(1_000, 6).is_err());
-
-        lock.gauntlet_complete = true;
-        let effect = lock.redeem_ichor(1_000, 6).unwrap();
-        assert_eq!(effect.conversion_bps, 11_000);
-        assert_eq!(effect.usdc_out, 1_100_000);
-        assert_eq!(lock.ichor_counter, 11_000);
-        assert_eq!(lock.ichor_lifetime_total, 50_000);
-    }
-
-    #[test]
-    fn harvest_applies_fee_redirect_and_skr_boost_only_when_brewer_active() {
-        let protocol = protocol();
-        let mut lock = lock(&protocol);
-        lock.gauntlet_complete = true;
-        lock.gauntlet_day = 8;
-        lock.fuel_counter = 1;
-        lock.skr_tier = 2;
-        lock.current_yield_redirect_bps = 1_000;
-
-        let effect = lock.apply_harvest_result(100_000_000).unwrap();
-        assert!(effect.applied);
-        assert_eq!(effect.platform_fee_amount, 10_000_000);
-        assert_eq!(effect.redirected_amount, 10_000_000);
-        assert_eq!(effect.ichor_awarded, 84_000_000);
-        assert_eq!(lock.ichor_counter, 84_000_000);
-        assert_eq!(lock.ichor_lifetime_total, 84_000_000);
-
-        lock.fuel_counter = 0;
-        let skipped = lock.apply_harvest_result(100_000_000).unwrap();
-        assert!(!skipped.applied);
-        assert_eq!(skipped.outcome, OUTCOME_HARVEST_SKIPPED);
-        assert_eq!(skipped.platform_fee_amount, 10_000_000);
-        assert_eq!(skipped.redirected_amount, 10_000_000);
-    }
-
-    #[test]
-    fn harvest_full_redirect_sends_all_yield_to_redirect_without_overflow() {
-        let protocol = protocol();
-        let mut lock = lock(&protocol);
-        lock.gauntlet_complete = true;
-        lock.gauntlet_day = 8;
-        lock.fuel_counter = 1;
-        lock.current_yield_redirect_bps = FULL_REDIRECT_BPS;
-
-        let effect = lock.apply_harvest_result(100_000_000).unwrap();
-        assert!(!effect.applied);
-        assert_eq!(effect.outcome, OUTCOME_HARVEST_SKIPPED);
-        assert_eq!(effect.platform_fee_amount, 0);
-        assert_eq!(effect.redirected_amount, 100_000_000);
-        assert_eq!(effect.ichor_awarded, 0);
-        assert_eq!(lock.ichor_counter, 0);
-        assert_eq!(lock.ichor_lifetime_total, 0);
-    }
-
-    #[test]
-    fn miss_path_consumes_savers_then_applies_full_consequence() {
-        let protocol = protocol();
-        let mut lock = lock(&protocol);
-        lock.gauntlet_complete = true;
-        lock.gauntlet_day = 8;
-        lock.savers_remaining = 3;
-        lock.current_streak = 5;
-
-        let first = lock
-            .consume_saver_or_apply_full_consequence(&protocol, 20020)
-            .unwrap();
-        assert!(first.applied);
-        assert_eq!(first.outcome, OUTCOME_SAVER_CONSUMED);
-        assert_eq!(lock.savers_remaining, 2);
-        assert_eq!(lock.current_yield_redirect_bps, 1_000);
-        assert_eq!(lock.current_streak, 0);
-
-        lock.consume_saver_or_apply_full_consequence(&protocol, 20021)
-            .unwrap();
-        assert_eq!(lock.savers_remaining, 1);
-        assert_eq!(lock.current_yield_redirect_bps, 2_000);
-
-        lock.consume_saver_or_apply_full_consequence(&protocol, 20022)
-            .unwrap();
-        assert_eq!(lock.savers_remaining, 0);
-        assert_eq!(lock.current_yield_redirect_bps, 2_000);
-
-        let before_end_ts = lock.lock_end_ts;
-        let fourth = lock
-            .consume_saver_or_apply_full_consequence(&protocol, 20023)
-            .unwrap();
-        assert!(fourth.applied);
-        assert_eq!(fourth.outcome, OUTCOME_FULL_CONSEQUENCE);
-        assert_eq!(fourth.extension_seconds_added, 7 * DAY_SECONDS);
-        assert_eq!(lock.current_yield_redirect_bps, FULL_REDIRECT_BPS);
-        assert_eq!(lock.lock_end_ts, before_end_ts + 7 * DAY_SECONDS);
-        assert_eq!(lock.extension_seconds_total, 7 * DAY_SECONDS as u64);
-        assert!(lock.saver_recovery_mode);
-    }
-
-    // ── Boundary validation tests ──────────────────────────────────────
-
-    #[test]
-    fn validate_protocol_params_fuel_cap_at_min_passes() {
-        let usdc = Pubkey::new_unique();
-        let skr = Pubkey::new_unique();
-        assert!(validate_protocol_params(MIN_FUEL_CAP, DEFAULT_MAX_SAVERS, 7, usdc, skr).is_ok());
-    }
-
-    #[test]
-    fn validate_protocol_params_fuel_cap_below_min_fails() {
-        let usdc = Pubkey::new_unique();
-        let skr = Pubkey::new_unique();
-        assert!(validate_protocol_params(MIN_FUEL_CAP - 1, DEFAULT_MAX_SAVERS, 7, usdc, skr).is_err());
-    }
-
-    #[test]
-    fn validate_protocol_params_fuel_cap_at_max_passes() {
-        let usdc = Pubkey::new_unique();
-        let skr = Pubkey::new_unique();
-        assert!(validate_protocol_params(MAX_FUEL_CAP, DEFAULT_MAX_SAVERS, 7, usdc, skr).is_ok());
-    }
-
-    #[test]
-    fn validate_protocol_params_fuel_cap_above_max_fails() {
-        let usdc = Pubkey::new_unique();
-        let skr = Pubkey::new_unique();
-        assert!(validate_protocol_params(MAX_FUEL_CAP + 1, DEFAULT_MAX_SAVERS, 7, usdc, skr).is_err());
-    }
-
-    #[test]
-    fn validate_protocol_params_miss_extension_days_zero_fails() {
-        let usdc = Pubkey::new_unique();
-        let skr = Pubkey::new_unique();
-        assert!(validate_protocol_params(7, DEFAULT_MAX_SAVERS, 0, usdc, skr).is_err());
-    }
-
-    #[test]
-    fn validate_protocol_params_miss_extension_days_one_passes() {
-        let usdc = Pubkey::new_unique();
-        let skr = Pubkey::new_unique();
-        assert!(validate_protocol_params(7, DEFAULT_MAX_SAVERS, 1, usdc, skr).is_ok());
-    }
-
-    // ── Completion edge cases ──────────────────────────────────────────
-
-    #[test]
-    fn completion_with_zero_reward_units_credits_no_fuel() {
-        let protocol = protocol();
-        let mut lock = lock(&protocol);
-
-        let effect = lock
-            .apply_verified_completion(&protocol, 20000, 0)
-            .unwrap();
-        assert!(effect.applied);
-        assert_eq!(effect.outcome, OUTCOME_NO_REWARD_UNITS);
-        assert_eq!(effect.fuel_awarded, 0);
-        assert_eq!(lock.fuel_counter, 0);
-    }
-
-    #[test]
-    fn completion_twice_same_day_returns_already_earned() {
-        let protocol = protocol();
-        let mut lock = lock(&protocol);
-
-        let first = lock
-            .apply_verified_completion(&protocol, 20000, 100)
-            .unwrap();
-        assert_eq!(first.outcome, OUTCOME_FUEL_CREDITED);
-        assert_eq!(first.fuel_awarded, 1);
-
-        let second = lock
-            .apply_verified_completion(&protocol, 20000, 100)
-            .unwrap();
-        assert_eq!(second.outcome, OUTCOME_ALREADY_EARNED_TODAY);
-        assert_eq!(second.fuel_awarded, 0);
-    }
-
-    #[test]
-    fn completion_non_consecutive_days_resets_streak() {
-        let protocol = protocol();
-        let mut lock = lock(&protocol);
-
-        lock.apply_verified_completion(&protocol, 20000, 100).unwrap();
-        lock.apply_verified_completion(&protocol, 20001, 100).unwrap();
-        assert_eq!(lock.current_streak, 2);
-
-        lock.apply_verified_completion(&protocol, 20005, 100).unwrap();
-        assert_eq!(lock.current_streak, 1);
-        assert_eq!(lock.longest_streak, 2);
-    }
-
-    #[test]
-    fn completion_at_fuel_cap_returns_at_cap_outcome() {
-        let protocol = protocol();
-        let mut lock = lock(&protocol);
-        lock.fuel_counter = protocol.fuel_cap;
-        lock.last_fuel_credit_day = 19999;
-
-        let effect = lock
-            .apply_verified_completion(&protocol, 20000, 100)
-            .unwrap();
-        assert_eq!(effect.outcome, OUTCOME_AT_FUEL_CAP);
-        assert_eq!(effect.fuel_awarded, 0);
-        assert_eq!(lock.fuel_counter, protocol.fuel_cap);
-    }
-
-    // ── Fuel mechanics ─────────────────────────────────────────────────
-
-    #[test]
-    fn consume_daily_fuel_zero_counter_returns_no_fuel() {
-        let protocol = protocol();
-        let mut lock = lock(&protocol);
-        lock.gauntlet_complete = true;
-        lock.gauntlet_day = 8;
-        lock.fuel_counter = 0;
-
-        let effect = lock.consume_daily_fuel(1_700_000_000).unwrap();
-        assert!(!effect.applied);
-        assert_eq!(effect.outcome, OUTCOME_NO_FUEL_AVAILABLE);
-        assert_eq!(effect.fuel_burned, 0);
-    }
-
-    #[test]
-    fn convert_fuel_to_ichor_zero_fuel_counter_returns_no_fuel() {
-        let protocol = protocol();
-        let mut lock = lock(&protocol);
-        lock.gauntlet_complete = true;
-        lock.gauntlet_day = 8;
-        lock.fuel_counter = 0;
-
-        let effect = lock.convert_fuel_to_ichor(5).unwrap();
-        assert!(!effect.applied);
-        assert_eq!(effect.outcome, OUTCOME_CONVERSION_NO_FUEL);
-        assert_eq!(effect.fuel_consumed, 0);
-        assert_eq!(effect.ichor_gained, 0);
-    }
-
-    #[test]
-    fn convert_fuel_to_ichor_clamps_to_fuel_counter() {
-        let protocol = protocol();
-        let mut lock = lock(&protocol);
-        lock.gauntlet_complete = true;
-        lock.gauntlet_day = 8;
-        lock.fuel_counter = 3;
-
-        let effect = lock.convert_fuel_to_ichor(10).unwrap();
-        assert!(effect.applied);
-        assert_eq!(effect.outcome, OUTCOME_CONVERSION_APPLIED);
-        assert_eq!(effect.fuel_consumed, 3);
-        assert_eq!(effect.ichor_gained, 3 * ICHOR_PER_FUEL);
-        assert_eq!(lock.fuel_counter, 0);
-    }
-
-    #[test]
-    fn convert_fuel_to_ichor_during_gauntlet_returns_locked() {
-        let protocol = protocol();
-        let mut lock = lock(&protocol);
-        lock.fuel_counter = 5;
-
-        let effect = lock.convert_fuel_to_ichor(3).unwrap();
-        assert!(!effect.applied);
-        assert_eq!(effect.outcome, OUTCOME_CONVERSION_GAUNTLET_LOCKED);
-        assert_eq!(effect.fuel_consumed, 0);
-        assert_eq!(effect.ichor_gained, 0);
-        assert_eq!(lock.fuel_counter, 5);
-    }
-
-    #[test]
-    fn convert_fuel_to_ichor_verifies_ichor_equals_fuel_times_rate() {
-        let protocol = protocol();
-        let mut lock = lock(&protocol);
-        lock.gauntlet_complete = true;
-        lock.gauntlet_day = 8;
-        lock.fuel_counter = 7;
-
-        let effect = lock.convert_fuel_to_ichor(4).unwrap();
-        assert!(effect.applied);
-        assert_eq!(effect.fuel_consumed, 4);
-        assert_eq!(effect.ichor_gained, 4 * ICHOR_PER_FUEL);
-        assert_eq!(lock.fuel_counter, 3);
-        assert_eq!(lock.ichor_counter, 4 * ICHOR_PER_FUEL);
-        assert_eq!(lock.ichor_lifetime_total, 4 * ICHOR_PER_FUEL);
-    }
-
-    // ── Miss consequence edge cases ────────────────────────────────────
-
-    #[test]
-    fn miss_during_gauntlet_returns_locked_outcome() {
-        let protocol = protocol();
-        let mut lock = lock(&protocol);
-
-        let effect = lock
-            .consume_saver_or_apply_full_consequence(&protocol, 20000)
-            .unwrap();
-        assert!(!effect.applied);
-        assert_eq!(effect.outcome, OUTCOME_GAUNTLET_LOCKED);
-        assert_eq!(effect.extension_seconds_added, 0);
-    }
-
-    #[test]
-    fn multiple_full_consequences_each_extend_lock_end() {
-        let protocol = protocol();
-        let mut lock = lock(&protocol);
-        lock.gauntlet_complete = true;
-        lock.gauntlet_day = 8;
-        lock.savers_remaining = 0;
-        let original_end = lock.lock_end_ts;
-        let extension = i64::from(protocol.miss_extension_days) * DAY_SECONDS;
-
-        let first = lock
-            .consume_saver_or_apply_full_consequence(&protocol, 20000)
-            .unwrap();
-        assert_eq!(first.outcome, OUTCOME_FULL_CONSEQUENCE);
-        assert_eq!(lock.lock_end_ts, original_end + extension);
-
-        let second = lock
-            .consume_saver_or_apply_full_consequence(&protocol, 20001)
-            .unwrap();
-        assert_eq!(second.outcome, OUTCOME_FULL_CONSEQUENCE);
-        assert_eq!(lock.lock_end_ts, original_end + 2 * extension);
-        assert_eq!(lock.extension_seconds_total, 2 * extension as u64);
-    }
-
-    // ── Unlock edge cases ──────────────────────────────────────────────
-
-    #[test]
     fn assert_unlockable_exactly_at_lock_end_passes() {
         let protocol = protocol();
         let mut lock = lock(&protocol);
         lock.initialize_from_funding(
-            &protocol,
             Pubkey::new_unique(),
             [3; 32],
             protocol.usdc_mint,
             1_000_000,
-            0,
             0,
             30,
             1_700_000_000,
@@ -2418,12 +690,10 @@ mod tests {
         let protocol = protocol();
         let mut lock = lock(&protocol);
         lock.initialize_from_funding(
-            &protocol,
             Pubkey::new_unique(),
             [3; 32],
             protocol.usdc_mint,
             1_000_000,
-            0,
             0,
             30,
             1_700_000_000,
@@ -2434,97 +704,21 @@ mod tests {
         assert!(lock.assert_unlockable(lock.lock_end_ts - 1).is_err());
     }
 
-    // ── Ichor redemption edge cases ────────────────────────────────────
-
     #[test]
-    fn redeem_ichor_zero_amount_fails() {
+    fn invalid_duration_rejected_during_funding() {
         let protocol = protocol();
         let mut lock = lock(&protocol);
-        lock.gauntlet_complete = true;
-        lock.ichor_counter = 1_000;
-
-        let err = lock.redeem_ichor(0, 6);
-        assert!(err.is_err());
-    }
-
-    #[test]
-    fn redeem_ichor_exceeds_balance_fails() {
-        let protocol = protocol();
-        let mut lock = lock(&protocol);
-        lock.gauntlet_complete = true;
-        lock.ichor_counter = 500;
-
-        let err = lock.redeem_ichor(501, 6);
-        assert!(err.is_err());
-    }
-
-    #[test]
-    fn redeem_ichor_on_closed_lock_fails() {
-        let protocol = protocol();
-        let mut lock = lock(&protocol);
-        lock.gauntlet_complete = true;
-        lock.ichor_counter = 1_000;
-        lock.status = CLOSED_STATUS;
-
-        let err = lock.redeem_ichor(100, 6);
-        assert!(err.is_err());
-    }
-
-    #[test]
-    fn redeem_ichor_conversion_tiers_match_lifetime_total() {
-        let protocol = protocol();
-        let mut lock = lock(&protocol);
-        lock.gauntlet_complete = true;
-
-        // Tier 1: lifetime 0..=9_999 => 9_000 bps
-        lock.ichor_counter = 100;
-        lock.ichor_lifetime_total = 5_000;
-        let effect = lock.redeem_ichor(10, 6).unwrap();
-        assert_eq!(effect.conversion_bps, 9_000);
-
-        // Tier 2: lifetime 10_000..=49_999 => 10_000 bps
-        lock.ichor_counter = 100;
-        lock.ichor_lifetime_total = 25_000;
-        let effect = lock.redeem_ichor(10, 6).unwrap();
-        assert_eq!(effect.conversion_bps, 10_000);
-
-        // Tier 3: lifetime 50_000..=99_999 => 11_000 bps
-        lock.ichor_counter = 100;
-        lock.ichor_lifetime_total = 75_000;
-        let effect = lock.redeem_ichor(10, 6).unwrap();
-        assert_eq!(effect.conversion_bps, 11_000);
-
-        // Tier 4: lifetime >= 100_000 => 12_500 bps
-        lock.ichor_counter = 100;
-        lock.ichor_lifetime_total = 200_000;
-        let effect = lock.redeem_ichor(10, 6).unwrap();
-        assert_eq!(effect.conversion_bps, 12_500);
-    }
-
-    // ── Pure function tests ────────────────────────────────────────────
-
-    #[test]
-    fn saver_redirect_bps_for_all_consumed_counts() {
-        // consumed = 0 (max_savers=3, remaining=3) => 0
-        assert_eq!(saver_redirect_bps(DEFAULT_MAX_SAVERS, 3), 0);
-        // consumed = 1 (remaining=2) => 1_000
-        assert_eq!(saver_redirect_bps(DEFAULT_MAX_SAVERS, 2), 1_000);
-        // consumed = 2 (remaining=1) => 2_000
-        assert_eq!(saver_redirect_bps(DEFAULT_MAX_SAVERS, 1), 2_000);
-        // consumed = 3 (remaining=0) => 2_000
-        assert_eq!(saver_redirect_bps(DEFAULT_MAX_SAVERS, 0), 2_000);
-        // consumed = 4+ => FULL_REDIRECT_BPS (simulated with max_savers=5, remaining=0)
-        assert_eq!(saver_redirect_bps(5, 0), FULL_REDIRECT_BPS);
-    }
-
-    #[test]
-    fn ichor_conversion_bps_at_boundary_values() {
-        assert_eq!(ichor_conversion_bps(0), 9_000);
-        assert_eq!(ichor_conversion_bps(9_999), 9_000);
-        assert_eq!(ichor_conversion_bps(10_000), 10_000);
-        assert_eq!(ichor_conversion_bps(49_999), 10_000);
-        assert_eq!(ichor_conversion_bps(50_000), 11_000);
-        assert_eq!(ichor_conversion_bps(99_999), 11_000);
-        assert_eq!(ichor_conversion_bps(100_000), 12_500);
+        // 29 days is not a canonical duration -> funding must fail.
+        let result = lock.initialize_from_funding(
+            Pubkey::new_unique(),
+            [3; 32],
+            protocol.usdc_mint,
+            1_000_000,
+            0,
+            29,
+            1_700_000_000,
+            99,
+        );
+        assert!(result.is_err());
     }
 }

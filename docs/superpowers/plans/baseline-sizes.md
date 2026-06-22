@@ -139,3 +139,63 @@ remaining two programs are byte-for-byte unchanged (no source touched).
 - `programs-tests` (LiteSVM): 1 test file, 1 test passed. The lock_vault
   lock→gauntlet→harvest→redeem→unlock flow and the community_pot record_redirect
   flow remain intact and green.
+
+---
+
+# Phase 2BCD result — lock_vault stripped to custody core
+
+`lock_vault` was stripped from ~2530 lines down to its custody core. The
+game/fuel/ichor/saver layer moved off-chain (v4: backend owns ichor as
+points). Removed 7 instructions (`upsert_course_policy`,
+`apply_verified_completion`, `consume_daily_fuel`,
+`consume_saver_or_apply_full_consequence`, `redeem_ichor`,
+`apply_harvest_result`, `convert_fuel_to_ichor`) plus their Accounts
+structs, the `CoursePolicy` + `WorkerReceipt` account types and their seeds,
+the `redemption_vault`, and all game-only `LockAccount`/`ProtocolConfig`
+fields + helpers. Surviving instructions: `initialize_protocol`,
+`lock_funds`, `unlock_funds` (exactly 3).
+
+`lock_end_ts` now has exactly ONE writer (`lock_funds`); no surviving path
+mutates it. Missed learning days are yield-only and never extend the
+principal lock.
+
+LockAccount shrank from ~212 B to a custody-only struct:
+owner(32) + course_id_hash(32) + stable_mint(32) + principal_amount(8) +
+skr_locked_amount(8) + lock_start_ts(8) + lock_end_ts(8) + status(1) +
+bump(1) = 130 B data (+8 discriminator = 138 B on-chain).
+ProtocolConfig: kept authority/usdc_mint/skr_mint/bump; removed
+fuel_cap/max_savers/miss_extension_days.
+
+## New `.so` sizes (full `anchor build`, IDL included)
+
+| Program           | Size (bytes) | Deploy cost (SOL) |
+|-------------------|--------------|-------------------|
+| lock_vault.so     | 265168       | 3.691139          |
+| community_pot.so  | 287136       | 3.996933          |
+| **TOTAL**         | **552304**   | **7.688072**      |
+
+Deploy cost = bytes x 0.00001392 SOL/byte.
+
+## Delta vs Phase 2A-i (686616 B)
+
+| Metric        | Phase 2A-i | Phase 2BCD | Delta             |
+|---------------|------------|------------|-------------------|
+| Total bytes   | 686616     | 552304     | -134312 (-19.6%)  |
+| Deploy (SOL)  | 9.557695   | 7.688072   | -1.869623         |
+
+The entire -134312 B reduction comes from lock_vault.so (399480 -> 265168 B);
+community_pot.so is byte-for-byte unchanged (287136 B, no source touched).
+
+## Verification
+
+- `anchor build`: SUCCESS. `target/deploy/` holds only lock_vault.so +
+  community_pot.so; `target/idl/lock_vault.json` exposes exactly 3
+  instructions + 2 accounts (LockAccount, ProtocolConfig) + 2 events.
+- `cargo test --workspace`: 22 passed, 0 failed (community_pot 13 + lock_vault
+  9 = 8 custody unit tests + the auto-generated program-id `test_id`). The
+  removed completion/fuel/miss/harvest/conversion/redeem_ichor tests are gone;
+  kept the lock/unlock, immutable-end, double-close, and clock-gating tests.
+- `programs-tests` (LiteSVM): 1 test file, 1 test passed. New flow:
+  lock_funds -> warp clock past lock_end_ts -> unlock_funds (assert full
+  principal returned + vault/lock closed). The community_pot record_redirect
+  flow remains intact and green.

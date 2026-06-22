@@ -9,20 +9,18 @@
  * struct mutation in memory, no mocked CPI. Both programs run as
  * compiled .so files loaded from target/deploy/ after `anchor build`.
  *
+ * lock_vault is now a pure custody escrow (v4): the game/fuel/ichor layer
+ * moved off-chain (backend owns points). lock_end_ts is immutable.
+ *
  * Test flow:
  *   1.  Bootstrap LiteSVM, load both programs
  *   2.  Create authority + owner keypairs, airdrop SOL
- *   3.  Create stable (USDC-like) + SKR mints, fund owner
+ *   3.  Create stable (USDC-like) + SKR mints, fund owner, pre-fund the pot
  *   4.  Initialize protocol on lock_vault, community_pot
- *   5.  Upsert course policy
- *   6.  lock_funds(100 USDC, 30 days)
- *   7.  Apply 7 daily completions → gauntlet_complete flips true
- *   8.  Warp clock 1 day
- *   9.  apply_harvest_result on lock_vault → ichor_counter increases
- *   10. record_redirect on community_pot → window accumulates
- *   11. Warp clock to lock_end_ts
- *   12. redeem_ichor → owner receives USDC, ichor_counter decreases
- *   13. unlock_funds → owner receives principal, vault closed
+ *   5.  lock_funds(100 USDC, 30 days) → principal escrowed into vault ATA
+ *   6.  community_pot.record_redirect → window accumulates
+ *   7.  Warp LiteSVM clock past lock_end_ts
+ *   8.  unlock_funds → owner receives full principal, vault + lock closed
  *
  * Run: cd programs-tests && npm test
  */
@@ -67,23 +65,16 @@ const COMMUNITY_POT_PROGRAM_ID = new PublicKey('BsJDnhJGVdLQ3mxBJ7YCMkkBitKP2RT4
 
 // PDA seed prefixes (mirror programs' SEED const declarations).
 const PROTOCOL_SEED = Buffer.from('protocol');
-const COURSE_POLICY_SEED = Buffer.from('course-policy');
 const LOCK_SEED = Buffer.from('lock');
-const COMPLETION_RECEIPT_SEED = Buffer.from('completion');
-const HARVEST_RECEIPT_SEED = Buffer.from('harvest');
 const POT_WINDOW_SEED = Buffer.from('window');
 const REDIRECT_RECEIPT_SEED = Buffer.from('redirect');
 
 const STABLE_DECIMALS = 6; // USDC-like
 const SKR_DECIMALS = 9;
-const FUEL_CAP = 7; // gauntlet length + cap
-const MAX_SAVERS = 3;
-const MISS_EXTENSION_DAYS = 7;
 
 const PRINCIPAL_AMOUNT_UI = 100; // 100 USDC
 const PRINCIPAL_AMOUNT_BASE = PRINCIPAL_AMOUNT_UI * 10 ** STABLE_DECIMALS;
 const LOCK_DURATION_DAYS = 30;
-const REDEMPTION_PREFUND_BASE = 50 * 10 ** STABLE_DECIMALS; // pre-fund redemption vault
 const POT_PREFUND_BASE = 10 * 10 ** STABLE_DECIMALS; // pre-fund community pot
 
 function findPDA(seeds: (Buffer | Uint8Array)[], programId: PublicKey): PublicKey {
@@ -115,11 +106,9 @@ describe('Lock lifecycle (lock_vault × community_pot)', () => {
   // PDAs
   let lockVaultConfig: PublicKey;
   let communityPotConfig: PublicKey;
-  let coursePolicy: PublicKey;
   let lockAccount: PublicKey;
   let stableVault: PublicKey;
   let skrVault: PublicKey;
-  let redemptionVault: PublicKey;
   let potVault: PublicKey;
   let courseIdHash: Buffer;
 
@@ -171,14 +160,12 @@ describe('Lock lifecycle (lock_vault × community_pot)', () => {
     lockVault = new Program(LockVaultIDL as Idl, provider);
     communityPot = new Program(CommunityPotIDL as Idl, provider);
 
+    // course_id_hash is now just an opaque PDA seed + custody record (no
+    // on-chain CoursePolicy account anymore).
     courseIdHash = createHash('sha256').update('test-course-1').digest();
 
     lockVaultConfig = findPDA([PROTOCOL_SEED], LOCK_VAULT_PROGRAM_ID);
     communityPotConfig = findPDA([PROTOCOL_SEED], COMMUNITY_POT_PROGRAM_ID);
-    coursePolicy = findPDA(
-      [COURSE_POLICY_SEED, courseIdHash],
-      LOCK_VAULT_PROGRAM_ID,
-    );
     lockAccount = findPDA(
       [LOCK_SEED, owner.publicKey.toBuffer(), courseIdHash],
       LOCK_VAULT_PROGRAM_ID,
@@ -191,11 +178,6 @@ describe('Lock lifecycle (lock_vault × community_pot)', () => {
     skrVault = getAssociatedTokenAddressSync(
       skrMint.publicKey,
       lockAccount,
-      true,
-    );
-    redemptionVault = getAssociatedTokenAddressSync(
-      stableMint.publicKey,
-      lockVaultConfig,
       true,
     );
     potVault = getAssociatedTokenAddressSync(
@@ -215,7 +197,7 @@ describe('Lock lifecycle (lock_vault × community_pot)', () => {
 
   test('end-to-end lock lifecycle', async () => {
     // ─────────────────────────────────────────────────────────────
-    // STEP A. Create mints + fund owner + pre-fund vaults
+    // STEP A. Create mints + fund owner + pre-fund the community pot
     // ─────────────────────────────────────────────────────────────
     timeStep('mints + funding', () => {
       const rentMint = Number(svm.minimumBalanceForRentExemption(BigInt(MINT_SIZE)));
@@ -256,7 +238,8 @@ describe('Lock lifecycle (lock_vault × community_pot)', () => {
       );
       sendTx(skrMintTx, [authority, skrMint]);
 
-      // Owner's USDC ATA + mint 500 USDC.
+      // Owner's USDC ATA + mint 500 USDC. Owner also gets an SKR ATA so the
+      // unlock path's init_if_needed owner SKR account already exists.
       const ataTx = new Transaction().add(
         createAssociatedTokenAccountInstruction(
           authority.publicKey,
@@ -279,24 +262,7 @@ describe('Lock lifecycle (lock_vault × community_pot)', () => {
       );
       sendTx(ataTx, [authority]);
 
-      // Pre-fund redemption_vault (lock_vault protocol_config-owned ATA).
-      const redemptionTx = new Transaction().add(
-        createAssociatedTokenAccountInstruction(
-          authority.publicKey,
-          redemptionVault,
-          lockVaultConfig,
-          stableMint.publicKey,
-        ),
-        createMintToInstruction(
-          stableMint.publicKey,
-          redemptionVault,
-          authority.publicKey,
-          BigInt(REDEMPTION_PREFUND_BASE),
-        ),
-      );
-      sendTx(redemptionTx, [authority]);
-
-      // Pre-fund community pot vault.
+      // Pre-fund community pot vault (exercised by record_redirect flow).
       const potTx = new Transaction().add(
         createAssociatedTokenAccountInstruction(
           authority.publicKey,
@@ -318,13 +284,7 @@ describe('Lock lifecycle (lock_vault × community_pot)', () => {
     // STEP B. initialize_protocol on both programs
     // ─────────────────────────────────────────────────────────────
     await lockVault.methods
-      .initializeProtocol(
-        FUEL_CAP,
-        MAX_SAVERS,
-        MISS_EXTENSION_DAYS,
-        stableMint.publicKey,
-        skrMint.publicKey,
-      )
+      .initializeProtocol(stableMint.publicKey, skrMint.publicKey)
       .accounts({
         protocolConfig: lockVaultConfig,
         authority: authority.publicKey,
@@ -349,7 +309,7 @@ describe('Lock lifecycle (lock_vault × community_pot)', () => {
         lockVaultConfig,
       );
       expect(lvCfg.authority.toString()).toBe(authority.publicKey.toString());
-      expect(lvCfg.fuelCap).toBe(FUEL_CAP);
+      expect(lvCfg.usdcMint.toString()).toBe(stableMint.publicKey.toString());
 
       const cpCfg: any = await communityPot.account.protocolConfig.fetch(
         communityPotConfig,
@@ -358,36 +318,7 @@ describe('Lock lifecycle (lock_vault × community_pot)', () => {
     }
 
     // ─────────────────────────────────────────────────────────────
-    // STEP C. upsert_course_policy
-    // ─────────────────────────────────────────────────────────────
-    await lockVault.methods
-      .upsertCoursePolicy(
-        Array.from(courseIdHash),
-        new BN(10 * 10 ** STABLE_DECIMALS), // min principal 10 USDC
-        new BN(1000 * 10 ** STABLE_DECIMALS), // max principal 1000 USDC
-        new BN(20 * 10 ** STABLE_DECIMALS), // demo principal 20 USDC
-        14, // min lock days
-        365, // max lock days
-      )
-      .accounts({
-        protocolConfig: lockVaultConfig,
-        coursePolicy,
-        authority: authority.publicKey,
-        systemProgram: SystemProgram.programId,
-      })
-      .signers([authority])
-      .rpc();
-
-    {
-      const policy: any = await lockVault.account.coursePolicy.fetch(
-        coursePolicy,
-      );
-      expect(Buffer.from(policy.courseIdHash).equals(courseIdHash)).toBe(true);
-      expect(policy.maxLockDurationDays).toBe(365);
-    }
-
-    // ─────────────────────────────────────────────────────────────
-    // STEP D. lock_funds(100 USDC, 30 days)
+    // STEP C. lock_funds(100 USDC, 30 days)
     // ─────────────────────────────────────────────────────────────
     const beforeLockBalance = AccountLayout.decode(
       svm.getAccount(ownerStableAta)!.data,
@@ -402,7 +333,6 @@ describe('Lock lifecycle (lock_vault × community_pot)', () => {
       )
       .accounts({
         protocolConfig: lockVaultConfig,
-        coursePolicy,
         lockAccount,
         stableMint: stableMint.publicKey,
         skrMint: skrMint.publicKey,
@@ -440,100 +370,13 @@ describe('Lock lifecycle (lock_vault × community_pot)', () => {
       BigInt(PRINCIPAL_AMOUNT_BASE),
     );
 
-    // ─────────────────────────────────────────────────────────────
-    // STEP E. Apply 7 verified completions (gauntlet)
-    // ─────────────────────────────────────────────────────────────
+    // Record lock window timestamps for the clock-warp + redirect steps.
     const lockStartTs = Number(lockAfterLock.lockStartTs);
+    const lockEndTs = Number(lockAfterLock.lockEndTs);
     const secondsPerDay = 86400;
-    // completion_day is a DAY INDEX (consecutive=+1), not a unix timestamp.
-    // The program rejects gaps; passing seconds would reset streak each call.
-    for (let day = 1; day <= 7; day++) {
-      const receiptKey = makeReceiptKey(`completion-${day}`);
-      const completionReceipt = findPDA(
-        [COMPLETION_RECEIPT_SEED, lockAccount.toBuffer(), receiptKey],
-        LOCK_VAULT_PROGRAM_ID,
-      );
-
-      // Advance the wall clock so the receipt's now-timestamp is monotonic.
-      const clk = svm.getClock();
-      clk.unixTimestamp = BigInt(lockStartTs + day * secondsPerDay);
-      svm.setClock(clk);
-
-      await lockVault.methods
-        .applyVerifiedCompletion(
-          Array.from(receiptKey),
-          new BN(day), // day index, not seconds
-          1, // reward_units
-        )
-        .accounts({
-          protocolConfig: lockVaultConfig,
-          lockAccount,
-          authority: authority.publicKey,
-          receipt: completionReceipt,
-          systemProgram: SystemProgram.programId,
-        })
-        .signers([authority])
-        .rpc();
-    }
-
-    // → assert lock_account.gauntlet_complete == true
-    const lockAfterGauntlet: any = await lockVault.account.lockAccount.fetch(
-      lockAccount,
-    );
-    expect(lockAfterGauntlet.gauntletComplete).toBe(true);
-    expect(lockAfterGauntlet.saversRemaining).toBeGreaterThan(0);
-    expect(lockAfterGauntlet.fuelCounter).toBe(FUEL_CAP);
-    expect(lockAfterGauntlet.currentStreak).toBe(7);
 
     // ─────────────────────────────────────────────────────────────
-    // STEP F. Warp clock 1 day, apply_harvest_result(1 USDC)
-    // ─────────────────────────────────────────────────────────────
-    {
-      const harvestTs = lockStartTs + 8 * secondsPerDay;
-      const clk = svm.getClock();
-      clk.unixTimestamp = BigInt(harvestTs);
-      svm.setClock(clk);
-    }
-    const harvestAmount = 1_000_000; // 1 USDC
-    const harvestKey = makeReceiptKey('harvest-1');
-    const harvestReceiptLV = findPDA(
-      [HARVEST_RECEIPT_SEED, lockAccount.toBuffer(), harvestKey],
-      LOCK_VAULT_PROGRAM_ID,
-    );
-
-    const ichorBefore = (lockAfterGauntlet.ichorCounter as BN).toString();
-
-    await lockVault.methods
-      .applyHarvestResult(Array.from(harvestKey), new BN(harvestAmount))
-      .accounts({
-        protocolConfig: lockVaultConfig,
-        lockAccount,
-        authority: authority.publicKey,
-        receipt: harvestReceiptLV,
-        systemProgram: SystemProgram.programId,
-      })
-      .signers([authority])
-      .rpc();
-
-    // → assert lock_account.ichor_counter increased
-    const lockAfterHarvest: any = await lockVault.account.lockAccount.fetch(
-      lockAccount,
-    );
-    expect(BigInt(lockAfterHarvest.ichorCounter.toString())).toBeGreaterThan(
-      BigInt(ichorBefore),
-    );
-
-    // → assert lock_vault HarvestReceipt PDA created
-    const harvestReceiptAcct = svm.getAccount(
-      harvestReceiptLV,
-    );
-    expect(harvestReceiptAcct).toBeTruthy();
-    expect(harvestReceiptAcct!.owner.toString()).toBe(
-      LOCK_VAULT_PROGRAM_ID.toString(),
-    );
-
-    // ─────────────────────────────────────────────────────────────
-    // STEP G. community_pot.record_redirect
+    // STEP D. community_pot.record_redirect (yield-redirect accounting)
     // ─────────────────────────────────────────────────────────────
     const windowId = 1n; // i64
     const potWindow = findPDA(
@@ -545,8 +388,6 @@ describe('Lock lifecycle (lock_vault × community_pot)', () => {
       [REDIRECT_RECEIPT_SEED, potWindow.toBuffer(), redirectKey],
       COMMUNITY_POT_PROGRAM_ID,
     );
-    // Redirect amount the backend would record. With the gauntlet complete and
-    // no streak break, the redirected share is 0, so the recorded minimum is 1.
     const redirectAmount = 1;
 
     await communityPot.methods
@@ -554,7 +395,7 @@ describe('Lock lifecycle (lock_vault × community_pot)', () => {
         Array.from(redirectKey),
         new BN(windowId),
         new BN(redirectAmount),
-        new BN(lockStartTs + 8 * secondsPerDay),
+        new BN(lockStartTs + secondsPerDay),
       )
       .accounts({
         protocolConfig: communityPotConfig,
@@ -574,55 +415,14 @@ describe('Lock lifecycle (lock_vault × community_pot)', () => {
     expect(potWinAcct.redirectCount).toBe(1);
 
     // ─────────────────────────────────────────────────────────────
-    // STEP H. Warp clock past lock_end_ts, redeem_ichor + unlock_funds
+    // STEP E. Warp clock past lock_end_ts, unlock_funds
     // ─────────────────────────────────────────────────────────────
-    const lockEndTs = Number(lockAfterLock.lockEndTs);
     {
       const clk = svm.getClock();
       clk.unixTimestamp = BigInt(lockEndTs + 60);
       svm.setClock(clk);
     }
 
-    // Redeem 1 ichor (smallest unit the program tracks).
-    const ownerStableBeforeRedeem = AccountLayout.decode(
-      svm.getAccount(ownerStableAta)!.data,
-    ).amount;
-    const ichorCounterBefore = BigInt(
-      lockAfterHarvest.ichorCounter.toString(),
-    );
-    if (ichorCounterBefore > 0n) {
-      await lockVault.methods
-        .redeemIchor(new BN(1))
-        .accounts({
-          protocolConfig: lockVaultConfig,
-          lockAccount,
-          stableMint: stableMint.publicKey,
-          owner: owner.publicKey,
-          redemptionVault,
-          ownerStableTokenAccount: ownerStableAta,
-          tokenProgram: TOKEN_PROGRAM_ID,
-          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-          systemProgram: SystemProgram.programId,
-        })
-        .signers([owner])
-        .rpc();
-
-      const ownerStableAfterRedeem = AccountLayout.decode(
-        svm.getAccount(ownerStableAta)!.data,
-      ).amount;
-      // → assert user USDC balance increased
-      expect(ownerStableAfterRedeem).toBeGreaterThan(ownerStableBeforeRedeem);
-
-      const lockAfterRedeem: any = await lockVault.account.lockAccount.fetch(
-        lockAccount,
-      );
-      // → assert ichor_counter decreased
-      expect(
-        BigInt(lockAfterRedeem.ichorCounter.toString()),
-      ).toBeLessThan(ichorCounterBefore);
-    }
-
-    // unlock_funds
     const ownerStableBeforeUnlock = AccountLayout.decode(
       svm.getAccount(ownerStableAta)!.data,
     ).amount;
@@ -645,7 +445,7 @@ describe('Lock lifecycle (lock_vault × community_pot)', () => {
       .signers([owner])
       .rpc();
 
-    // → assert user USDC balance increased by principal
+    // → assert user USDC balance increased by the full principal
     const ownerStableAfterUnlock = AccountLayout.decode(
       svm.getAccount(ownerStableAta)!.data,
     ).amount;

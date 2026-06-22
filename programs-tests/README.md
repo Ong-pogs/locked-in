@@ -7,21 +7,20 @@ LiteSVM-driven end-to-end test of the full lock lifecycle. Satisfies
 
 ## What it covers
 
-A single test in `tests/lock-lifecycle.test.ts` chains **15 real
-transactions** through `lock_vault` and `community_pot`:
+`lock_vault` is now a pure custody escrow (v4): the game/fuel/ichor layer
+moved off-chain (the backend owns points). `lock_end_ts` is immutable —
+missed learning days are yield-only and never extend the principal lock.
 
-1. Create stable + SKR mints, fund test owner, pre-fund redemption + pot vaults
-2. `lock_vault.initialize_protocol` (fuel cap, max savers, mints)
+A single test in `tests/lock-lifecycle.test.ts` chains real transactions
+through `lock_vault` and `community_pot`:
+
+1. Create stable + SKR mints, fund test owner, pre-fund the community pot vault
+2. `lock_vault.initialize_protocol` (usdc + skr mints)
 3. `community_pot.initialize_protocol`
-4. `lock_vault.upsert_course_policy` (course-specific min/max principal + duration)
-5. `lock_vault.lock_funds(100 USDC, 30 days)` + asserts stable_vault balance, lock_account.principal_amount, owner USDC delta
-6. `apply_verified_completion × 7` (the gauntlet) + asserts gauntlet_complete, savers_remaining, fuel_counter, current_streak
-7. Clock warp to day 8
-8. `lock_vault.apply_harvest_result(1 USDC)` + asserts ichor_counter increased, lock_vault HarvestReceipt PDA written
-9. `community_pot.record_redirect` + asserts PotWindow total_redirected_amount, redirect_count
-10. Clock warp past lock_end_ts
-11. `lock_vault.redeem_ichor(1)` + asserts owner USDC increased, ichor_counter decreased
-12. `lock_vault.unlock_funds()` + asserts owner USDC += principal, stable_vault closed, lock_account closed
+4. `lock_vault.lock_funds(100 USDC, 30 days)` + asserts stable_vault balance, lock_account.principal_amount, owner USDC delta
+5. `community_pot.record_redirect` + asserts PotWindow total_redirected_amount, redirect_count
+6. Clock warp past `lock_end_ts`
+7. `lock_vault.unlock_funds()` + asserts owner USDC += full principal, stable_vault closed, lock_account closed
 
 Every `→ assert` is on **real on-chain state** produced by **real
 transactions** sent to an in-process LiteSVM (mainnet-equivalent BPF
