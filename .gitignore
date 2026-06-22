@@ -37,9 +37,12 @@ yarn-error.*
 .claude/
 .superpowers/
 
-# local env files
+# local env files — never commit (hold secrets / RPC keys).
+# Only *.example files are tracked. This covers cluster profiles
+# (.env.devnet / .env.mainnet) in the repo root AND any subdirectory.
 .env
-.env*.local
+.env.*
+!.env.example
 backend/.env
 render.env.local
 
