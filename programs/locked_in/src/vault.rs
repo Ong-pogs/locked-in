@@ -1,13 +1,18 @@
-#![allow(deprecated)]
-#![allow(unexpected_cfgs)]
+//! Vault domain — pure custody escrow (was the `lock_vault` program).
+//!
+//! Logic copied VERBATIM from `programs/lock_vault/src/lib.rs`. The ONLY
+//! changes are the rename pins required to coexist under one program ID:
+//!   * `ProtocolConfig`        -> `VaultConfig`        (account discriminator)
+//!   * `ProtocolConfig::SEED`  -> `b"vault-protocol"`  (PDA seed collision)
+//!   * `InitializeProtocol`    -> `InitializeVault`
+//!   * `initialize_protocol`   -> `initialize_vault`   (ix discriminator)
+//! lock_funds / unlock_funds custody logic is byte-for-byte identical.
 
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
     token_interface::{self, CloseAccount, Mint, TokenAccount, TokenInterface, TransferChecked},
 };
-
-declare_id!("41TexnrHDMV4ASJmqNNFcgQ7RBk6N193yvukfiCzKQmD");
 
 // ── Custody-core constants ──────────────────────────────────────────────
 // Game/fuel/ichor/saver mechanics moved off-chain (v4: backend owns points).
@@ -16,203 +21,198 @@ const DAY_SECONDS: i64 = 86_400;
 const ACTIVE_STATUS: u8 = 0;
 const CLOSED_STATUS: u8 = 2;
 
-#[program]
-pub mod lock_vault {
-    use super::*;
+pub fn initialize_vault(
+    ctx: Context<InitializeVault>,
+    usdc_mint: Pubkey,
+    skr_mint: Pubkey,
+) -> Result<()> {
+    validate_protocol_params(usdc_mint, skr_mint)?;
 
-    pub fn initialize_protocol(
-        ctx: Context<InitializeProtocol>,
-        usdc_mint: Pubkey,
-        skr_mint: Pubkey,
-    ) -> Result<()> {
-        validate_protocol_params(usdc_mint, skr_mint)?;
+    let protocol = &mut ctx.accounts.protocol_config;
+    protocol.authority = ctx.accounts.authority.key();
+    protocol.usdc_mint = usdc_mint;
+    protocol.skr_mint = skr_mint;
+    protocol.bump = ctx.bumps.protocol_config;
 
-        let protocol = &mut ctx.accounts.protocol_config;
-        protocol.authority = ctx.accounts.authority.key();
-        protocol.usdc_mint = usdc_mint;
-        protocol.skr_mint = skr_mint;
-        protocol.bump = ctx.bumps.protocol_config;
+    Ok(())
+}
 
-        Ok(())
-    }
+pub fn lock_funds(
+    ctx: Context<LockFunds>,
+    course_id_hash: [u8; 32],
+    lock_duration_days: u16,
+    stable_amount: u64,
+    skr_amount: u64,
+) -> Result<()> {
+    require!(stable_amount > 0, LockVaultError::InvalidPrincipalAmount);
+    validate_supported_mints(
+        &ctx.accounts.protocol_config,
+        ctx.accounts.stable_mint.key(),
+        ctx.accounts.skr_mint.key(),
+    )?;
+    validate_lock_duration(lock_duration_days)?;
+    validate_owner_token_account(
+        &ctx.accounts.owner_stable_token_account,
+        ctx.accounts.owner.key(),
+        ctx.accounts.stable_mint.key(),
+    )?;
 
-    pub fn lock_funds(
-        ctx: Context<LockFunds>,
-        course_id_hash: [u8; 32],
-        lock_duration_days: u16,
-        stable_amount: u64,
-        skr_amount: u64,
-    ) -> Result<()> {
-        require!(stable_amount > 0, LockVaultError::InvalidPrincipalAmount);
-        validate_supported_mints(
-            &ctx.accounts.protocol_config,
-            ctx.accounts.stable_mint.key(),
+    // Escrow the principal (USDC) into the lock_account-owned vault ATA.
+    transfer_checked_tokens(
+        &ctx.accounts.token_program,
+        &ctx.accounts.owner_stable_token_account,
+        &ctx.accounts.stable_vault,
+        &ctx.accounts.stable_mint,
+        &ctx.accounts.owner,
+        stable_amount,
+    )?;
+
+    // Optionally escrow SKR into the SKR vault ATA.
+    if skr_amount > 0 {
+        let owner_skr_token_account = ctx
+            .accounts
+            .owner_skr_token_account
+            .as_ref()
+            .ok_or_else(|| error!(LockVaultError::MissingSkrTokenAccount))?;
+
+        validate_owner_token_account(
+            owner_skr_token_account,
+            ctx.accounts.owner.key(),
             ctx.accounts.skr_mint.key(),
         )?;
-        validate_lock_duration(lock_duration_days)?;
-        validate_owner_token_account(
-            &ctx.accounts.owner_stable_token_account,
-            ctx.accounts.owner.key(),
-            ctx.accounts.stable_mint.key(),
-        )?;
 
-        // Escrow the principal (USDC) into the lock_account-owned vault ATA.
         transfer_checked_tokens(
             &ctx.accounts.token_program,
-            &ctx.accounts.owner_stable_token_account,
-            &ctx.accounts.stable_vault,
-            &ctx.accounts.stable_mint,
+            owner_skr_token_account,
+            &ctx.accounts.skr_vault,
+            &ctx.accounts.skr_mint,
             &ctx.accounts.owner,
-            stable_amount,
-        )?;
-
-        // Optionally escrow SKR into the SKR vault ATA.
-        if skr_amount > 0 {
-            let owner_skr_token_account = ctx
-                .accounts
-                .owner_skr_token_account
-                .as_ref()
-                .ok_or_else(|| error!(LockVaultError::MissingSkrTokenAccount))?;
-
-            validate_owner_token_account(
-                owner_skr_token_account,
-                ctx.accounts.owner.key(),
-                ctx.accounts.skr_mint.key(),
-            )?;
-
-            transfer_checked_tokens(
-                &ctx.accounts.token_program,
-                owner_skr_token_account,
-                &ctx.accounts.skr_vault,
-                &ctx.accounts.skr_mint,
-                &ctx.accounts.owner,
-                skr_amount,
-            )?;
-        }
-
-        let now = Clock::get()?.unix_timestamp;
-        let lock_account = &mut ctx.accounts.lock_account;
-        // lock_end_ts is written exactly ONCE here. No surviving code path mutates it.
-        lock_account.initialize_from_funding(
-            ctx.accounts.owner.key(),
-            course_id_hash,
-            ctx.accounts.stable_mint.key(),
-            stable_amount,
             skr_amount,
-            lock_duration_days,
-            now,
-            ctx.bumps.lock_account,
         )?;
-
-        emit!(LockCreated {
-            lock_account: lock_account.key(),
-            owner: lock_account.owner,
-            course_id_hash: lock_account.course_id_hash,
-            stable_mint: lock_account.stable_mint,
-            principal_amount: lock_account.principal_amount,
-            skr_locked_amount: lock_account.skr_locked_amount,
-            lock_end_ts: lock_account.lock_end_ts,
-        });
-
-        Ok(())
     }
 
-    pub fn unlock_funds(ctx: Context<UnlockFunds>) -> Result<()> {
-        let now = Clock::get()?.unix_timestamp;
-        let authority_info = ctx.accounts.lock_account.to_account_info();
-        let (owner_key, course_id_hash, bump, principal_amount, skr_locked_amount) = {
-            let lock_account = &ctx.accounts.lock_account;
-            lock_account.assert_unlockable(now)?;
+    let now = Clock::get()?.unix_timestamp;
+    let lock_account = &mut ctx.accounts.lock_account;
+    // lock_end_ts is written exactly ONCE here. No surviving code path mutates it.
+    lock_account.initialize_from_funding(
+        ctx.accounts.owner.key(),
+        course_id_hash,
+        ctx.accounts.stable_mint.key(),
+        stable_amount,
+        skr_amount,
+        lock_duration_days,
+        now,
+        ctx.bumps.lock_account,
+    )?;
 
-            // Assert the vault still holds the full escrowed principal.
-            require!(
-                ctx.accounts.stable_vault.amount == lock_account.principal_amount,
-                LockVaultError::UnexpectedStableVaultBalance
-            );
-            require!(
-                ctx.accounts.skr_vault.amount == lock_account.skr_locked_amount,
-                LockVaultError::UnexpectedSkrVaultBalance
-            );
+    emit!(LockCreated {
+        lock_account: lock_account.key(),
+        owner: lock_account.owner,
+        course_id_hash: lock_account.course_id_hash,
+        stable_mint: lock_account.stable_mint,
+        principal_amount: lock_account.principal_amount,
+        skr_locked_amount: lock_account.skr_locked_amount,
+        lock_end_ts: lock_account.lock_end_ts,
+    });
 
-            (
-                lock_account.owner,
-                lock_account.course_id_hash,
-                lock_account.bump,
-                lock_account.principal_amount,
-                lock_account.skr_locked_amount,
-            )
-        };
-        let signer_seeds: &[&[&[u8]]] = &[&[
-            LockAccount::SEED,
-            owner_key.as_ref(),
-            course_id_hash.as_ref(),
-            &[bump],
-        ]];
+    Ok(())
+}
 
-        // Return the principal to the owner.
+pub fn unlock_funds(ctx: Context<UnlockFunds>) -> Result<()> {
+    let now = Clock::get()?.unix_timestamp;
+    let authority_info = ctx.accounts.lock_account.to_account_info();
+    let (owner_key, course_id_hash, bump, principal_amount, skr_locked_amount) = {
+        let lock_account = &ctx.accounts.lock_account;
+        lock_account.assert_unlockable(now)?;
+
+        // Assert the vault still holds the full escrowed principal.
+        require!(
+            ctx.accounts.stable_vault.amount == lock_account.principal_amount,
+            LockVaultError::UnexpectedStableVaultBalance
+        );
+        require!(
+            ctx.accounts.skr_vault.amount == lock_account.skr_locked_amount,
+            LockVaultError::UnexpectedSkrVaultBalance
+        );
+
+        (
+            lock_account.owner,
+            lock_account.course_id_hash,
+            lock_account.bump,
+            lock_account.principal_amount,
+            lock_account.skr_locked_amount,
+        )
+    };
+    let signer_seeds: &[&[&[u8]]] = &[&[
+        LockAccount::SEED,
+        owner_key.as_ref(),
+        course_id_hash.as_ref(),
+        &[bump],
+    ]];
+
+    // Return the principal to the owner.
+    transfer_checked_from_lock_vault(
+        &ctx.accounts.token_program,
+        &ctx.accounts.stable_vault,
+        &ctx.accounts.owner_stable_token_account,
+        &ctx.accounts.stable_mint,
+        &authority_info,
+        signer_seeds,
+        principal_amount,
+    )?;
+
+    if skr_locked_amount > 0 {
         transfer_checked_from_lock_vault(
             &ctx.accounts.token_program,
-            &ctx.accounts.stable_vault,
-            &ctx.accounts.owner_stable_token_account,
-            &ctx.accounts.stable_mint,
+            &ctx.accounts.skr_vault,
+            &ctx.accounts.owner_skr_token_account,
+            &ctx.accounts.skr_mint,
             &authority_info,
             signer_seeds,
-            principal_amount,
+            skr_locked_amount,
         )?;
-
-        if skr_locked_amount > 0 {
-            transfer_checked_from_lock_vault(
-                &ctx.accounts.token_program,
-                &ctx.accounts.skr_vault,
-                &ctx.accounts.owner_skr_token_account,
-                &ctx.accounts.skr_mint,
-                &authority_info,
-                signer_seeds,
-                skr_locked_amount,
-            )?;
-        }
-
-        // Close both vault ATAs, refunding rent to the owner.
-        close_token_account_from_lock_vault(
-            &ctx.accounts.token_program,
-            &ctx.accounts.stable_vault.to_account_info(),
-            &ctx.accounts.owner.to_account_info(),
-            &authority_info,
-            signer_seeds,
-        )?;
-        close_token_account_from_lock_vault(
-            &ctx.accounts.token_program,
-            &ctx.accounts.skr_vault.to_account_info(),
-            &ctx.accounts.owner.to_account_info(),
-            &authority_info,
-            signer_seeds,
-        )?;
-
-        let lock_account = &mut ctx.accounts.lock_account;
-        lock_account.mark_closed();
-
-        emit!(LockUnlocked {
-            lock_account: lock_account.key(),
-            owner: lock_account.owner,
-            principal_amount: lock_account.principal_amount,
-            skr_locked_amount: lock_account.skr_locked_amount,
-            unlocked_at_ts: now,
-        });
-
-        Ok(())
     }
+
+    // Close both vault ATAs, refunding rent to the owner.
+    close_token_account_from_lock_vault(
+        &ctx.accounts.token_program,
+        &ctx.accounts.stable_vault.to_account_info(),
+        &ctx.accounts.owner.to_account_info(),
+        &authority_info,
+        signer_seeds,
+    )?;
+    close_token_account_from_lock_vault(
+        &ctx.accounts.token_program,
+        &ctx.accounts.skr_vault.to_account_info(),
+        &ctx.accounts.owner.to_account_info(),
+        &authority_info,
+        signer_seeds,
+    )?;
+
+    let lock_account = &mut ctx.accounts.lock_account;
+    lock_account.mark_closed();
+
+    emit!(LockUnlocked {
+        lock_account: lock_account.key(),
+        owner: lock_account.owner,
+        principal_amount: lock_account.principal_amount,
+        skr_locked_amount: lock_account.skr_locked_amount,
+        unlocked_at_ts: now,
+    });
+
+    Ok(())
 }
 
 #[derive(Accounts)]
-pub struct InitializeProtocol<'info> {
+pub struct InitializeVault<'info> {
     #[account(
         init,
         payer = authority,
-        space = 8 + ProtocolConfig::INIT_SPACE,
-        seeds = [ProtocolConfig::SEED],
+        space = 8 + VaultConfig::INIT_SPACE,
+        seeds = [VaultConfig::SEED],
         bump
     )]
-    pub protocol_config: Account<'info, ProtocolConfig>,
+    pub protocol_config: Account<'info, VaultConfig>,
     #[account(mut)]
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -222,10 +222,10 @@ pub struct InitializeProtocol<'info> {
 #[instruction(course_id_hash: [u8; 32], lock_duration_days: u16, stable_amount: u64, skr_amount: u64)]
 pub struct LockFunds<'info> {
     #[account(
-        seeds = [ProtocolConfig::SEED],
+        seeds = [VaultConfig::SEED],
         bump = protocol_config.bump
     )]
-    pub protocol_config: Box<Account<'info, ProtocolConfig>>,
+    pub protocol_config: Box<Account<'info, VaultConfig>>,
     #[account(
         init,
         payer = owner,
@@ -312,15 +312,17 @@ pub struct UnlockFunds<'info> {
 
 #[account]
 #[derive(InitSpace)]
-pub struct ProtocolConfig {
+pub struct VaultConfig {
     pub authority: Pubkey,
     pub usdc_mint: Pubkey,
     pub skr_mint: Pubkey,
     pub bump: u8,
 }
 
-impl ProtocolConfig {
-    pub const SEED: &'static [u8] = b"protocol";
+impl VaultConfig {
+    // Re-seeded from b"protocol" to avoid colliding with the pot config PDA
+    // under one program ID.
+    pub const SEED: &'static [u8] = b"vault-protocol";
 }
 
 #[account]
@@ -462,7 +464,7 @@ fn validate_lock_duration(lock_duration_days: u16) -> Result<()> {
 }
 
 fn validate_supported_mints(
-    protocol: &ProtocolConfig,
+    protocol: &VaultConfig,
     stable_mint: Pubkey,
     skr_mint: Pubkey,
 ) -> Result<()> {
@@ -562,8 +564,8 @@ fn close_token_account_from_lock_vault<'info>(
 mod tests {
     use super::*;
 
-    fn protocol() -> ProtocolConfig {
-        ProtocolConfig {
+    fn protocol() -> VaultConfig {
+        VaultConfig {
             authority: Pubkey::new_unique(),
             usdc_mint: Pubkey::new_unique(),
             skr_mint: Pubkey::new_unique(),
@@ -571,7 +573,7 @@ mod tests {
         }
     }
 
-    fn lock(protocol: &ProtocolConfig) -> LockAccount {
+    fn lock(protocol: &VaultConfig) -> LockAccount {
         LockAccount {
             owner: Pubkey::new_unique(),
             course_id_hash: [7; 32],

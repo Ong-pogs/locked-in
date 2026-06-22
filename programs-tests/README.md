@@ -1,4 +1,4 @@
-# Integration tests for the Locked In Anchor programs
+# Integration tests for the Locked In Anchor program
 
 LiteSVM-driven end-to-end test of the full lock lifecycle. Satisfies
 **Milestone 2 #6** of the Solana Foundation grant tranche:
@@ -7,31 +7,47 @@ LiteSVM-driven end-to-end test of the full lock lifecycle. Satisfies
 
 ## What it covers
 
-`lock_vault` is now a pure custody escrow (v4): the game/fuel/ichor layer
-moved off-chain (the backend owns points). `lock_end_ts` is immutable —
-missed learning days are yield-only and never extend the principal lock.
+`lock_vault` + `community_pot` were merged into ONE program (`locked_in`) to
+pay a single Anchor baseline instead of two. There is now ONE program ID and
+ONE `Program` instance. The custody (vault) domain is still a pure escrow (v4):
+the game/fuel/ichor layer moved off-chain (the backend owns points).
+`lock_end_ts` is immutable — missed learning days are yield-only and never
+extend the principal lock.
+
+Because both former programs defined a `ProtocolConfig` (struct + `b"protocol"`
+seed) and an `initialize_protocol` instruction, the merge re-named them to
+avoid discriminator / PDA collisions under one program ID:
+
+| Was                         | Now (vault)        | Now (pot)        |
+|-----------------------------|--------------------|------------------|
+| `ProtocolConfig` (struct)   | `VaultConfig`      | `PotConfig`      |
+| seed `b"protocol"`          | `b"vault-protocol"`| `b"pot-protocol"`|
+| `initialize_protocol` (ix)  | `initialize_vault` | `initialize_pot` |
+
+All other seeds (`b"lock"`, `b"window"`, `b"distribution"`, `b"redirect"`,
+`b"distribution-receipt"`) were already unique and are unchanged.
 
 A single test in `tests/lock-lifecycle.test.ts` chains real transactions
-through `lock_vault` and `community_pot`:
+through the merged program:
 
 1. Create stable + SKR mints, fund test owner, pre-fund the community pot vault
-2. `lock_vault.initialize_protocol` (usdc + skr mints)
-3. `community_pot.initialize_protocol`
-4. `lock_vault.lock_funds(100 USDC, 30 days)` + asserts stable_vault balance, lock_account.principal_amount, owner USDC delta
-5. `community_pot.record_redirect` + asserts PotWindow total_redirected_amount, redirect_count
+2. `initialize_vault` (usdc + skr mints) — vault config PDA `b"vault-protocol"`
+3. `initialize_pot` (stable mint) — pot config PDA `b"pot-protocol"`
+4. `lock_funds(100 USDC, 30 days)` + asserts stable_vault balance, lock_account.principal_amount, owner USDC delta
+5. `record_redirect` + asserts PotWindow total_redirected_amount, redirect_count
 6. Clock warp past `lock_end_ts`
-7. `lock_vault.unlock_funds()` + asserts owner USDC += full principal, stable_vault closed, lock_account closed
+7. `unlock_funds()` + asserts owner USDC += full principal, stable_vault closed, lock_account closed
 
 Every `→ assert` is on **real on-chain state** produced by **real
 transactions** sent to an in-process LiteSVM (mainnet-equivalent BPF
-execution). No struct mutation in memory, no mocked CPI. Both
-programs run as compiled `.so` files loaded from `target/deploy/`.
+execution). No struct mutation in memory, no mocked CPI. The program
+runs as the compiled `locked_in.so` loaded from `target/deploy/`.
 
 ## Run
 
 ```bash
 cd /                       # repo root
-anchor build --skip-lint   # produce target/deploy/*.so + target/idl/*.json
+anchor build               # produce target/deploy/locked_in.so + target/idl/locked_in.json
 cd programs-tests
 npm install                # first time only
 npm test
@@ -52,25 +68,15 @@ Expected: `Tests  1 passed (1)` in ~500ms.
 LiteSVM is an in-process BPF runtime — equivalent semantics to mainnet but
 deterministic and instant. Surfpool is the right tool for testing CPIs
 into other people's mainnet protocols (e.g. Kamino, Jupiter); irrelevant
-here because we're testing our own programs in isolation. Devnet is
+here because we're testing our own program in isolation. Devnet is
 non-deterministic and slow.
 
-## Findings during construction
+## Notes
 
-These were noted while building the harness — not fixed (per the
-"don't modify program code" instruction). Worth triaging:
-
-1. **`community_pot::DistributeWindow.recipient` lacks a `/// CHECK:` doc
-   comment.** Anchor's strict lint flags it (`anchor build --skip-lint`
-   is currently needed to generate the IDL). The safety reasoning is
-   sound — the recipient ATA's `associated_token::authority` constraint
-   enforces the recipient pubkey — but a one-line `/// CHECK:` comment
-   should be added before the next grant tranche review so the lint
-   passes cleanly.
-
-2. **Build-config gap: `programs/{lock_vault,community_pot}/Cargo.toml`
-   was missing `anchor-spl/idl-build` in the `idl-build` feature.**
-   Without it, Anchor 0.31.1's IDL generator can't resolve SPL token
-   interface types. Added in this PR.
-
-These are documentation / hygiene findings, not security bugs.
+- The `recipient` field on the pot `DistributeWindow` accounts struct carries
+  a `/// CHECK:` doc comment (it is used only as the authority/owner of its
+  ATA; the payout is bounded on-chain by the distribution-window remaining
+  cap + the distribution-receipt double-pay guard), so `anchor build` lints
+  cleanly without `--skip-lint`.
+- The merged crate's `idl-build` feature includes `anchor-spl/idl-build` so
+  Anchor 0.31.1's IDL generator resolves the SPL token-interface types.

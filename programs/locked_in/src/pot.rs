@@ -1,5 +1,16 @@
-#![allow(deprecated)]
-#![allow(unexpected_cfgs)]
+//! Pot domain — yield-redirect accumulator + payout (was the `community_pot`
+//! program).
+//!
+//! Logic copied VERBATIM from `programs/community_pot/src/lib.rs`. The ONLY
+//! changes are the rename pins required to coexist under one program ID:
+//!   * `ProtocolConfig`        -> `PotConfig`        (account discriminator)
+//!   * `ProtocolConfig::SEED`  -> `b"pot-protocol"`  (PDA seed collision)
+//!   * `InitializeProtocol`    -> `InitializePot`
+//!   * `initialize_protocol`   -> `initialize_pot`   (ix discriminator)
+//! record_redirect / close_distribution_window / distribute_window logic is
+//! byte-for-byte identical. NOTE: the distribute_window PDA-signer seeds use
+//! `PotConfig::SEED` (the re-seeded value) so the pot_vault ATA authority
+//! still resolves to the pot config PDA — the payout invariant is preserved.
 
 use anchor_lang::prelude::*;
 use anchor_spl::{
@@ -7,207 +18,197 @@ use anchor_spl::{
     token_interface::{self, Mint, TokenAccount, TokenInterface, TransferChecked},
 };
 
-declare_id!("BsJDnhJGVdLQ3mxBJ7YCMkkBitKP2RT49zFqR9XsGri1");
-
 const OPEN_STATUS: u8 = 0;
 const CLOSED_STATUS: u8 = 1;
 const DISTRIBUTED_STATUS: u8 = 2;
 
-#[program]
-pub mod community_pot {
-    use super::*;
+pub fn initialize_pot(ctx: Context<InitializePot>, stable_mint: Pubkey) -> Result<()> {
+    let protocol = &mut ctx.accounts.protocol_config;
+    protocol.authority = ctx.accounts.authority.key();
+    protocol.stable_mint = stable_mint;
+    protocol.bump = ctx.bumps.protocol_config;
+    Ok(())
+}
 
-    pub fn initialize_protocol(
-        ctx: Context<InitializeProtocol>,
-        stable_mint: Pubkey,
-    ) -> Result<()> {
-        let protocol = &mut ctx.accounts.protocol_config;
-        protocol.authority = ctx.accounts.authority.key();
-        protocol.stable_mint = stable_mint;
-        protocol.bump = ctx.bumps.protocol_config;
-        Ok(())
+pub fn record_redirect(
+    ctx: Context<RecordRedirect>,
+    receipt_key: [u8; 32],
+    window_id: i64,
+    amount: u64,
+    recorded_at_ts: i64,
+) -> Result<()> {
+    require!(amount > 0, CommunityPotError::InvalidRedirectAmount);
+
+    let receipt = &mut ctx.accounts.receipt;
+    if receipt.is_initialized() {
+        return Ok(());
     }
 
-    pub fn record_redirect(
-        ctx: Context<RecordRedirect>,
-        receipt_key: [u8; 32],
-        window_id: i64,
-        amount: u64,
-        recorded_at_ts: i64,
-    ) -> Result<()> {
-        require!(amount > 0, CommunityPotError::InvalidRedirectAmount);
-
-        let receipt = &mut ctx.accounts.receipt;
-        if receipt.is_initialized() {
-            return Ok(());
-        }
-
-        let window = &mut ctx.accounts.window;
-        if !window.is_initialized() {
-            window.initialize(
-                ctx.accounts.protocol_config.key(),
-                window_id,
-                ctx.bumps.window,
-                recorded_at_ts,
-            );
-        } else {
-            require!(
-                window.protocol_config == ctx.accounts.protocol_config.key(),
-                CommunityPotError::WindowProtocolMismatch
-            );
-            require!(
-                window.window_id == window_id,
-                CommunityPotError::WindowIdMismatch
-            );
-        }
-
-        window.record_redirect(amount, recorded_at_ts)?;
-        let window_key = window.key();
-        receipt.record(
-            window_key,
-            receipt_key,
-            amount,
-            ctx.bumps.receipt,
+    let window = &mut ctx.accounts.window;
+    if !window.is_initialized() {
+        window.initialize(
+            ctx.accounts.protocol_config.key(),
+            window_id,
+            ctx.bumps.window,
             recorded_at_ts,
         );
-
-        emit!(RedirectRecorded {
-            window: window_key,
-            window_id,
-            amount,
-            total_redirected_amount: window.total_redirected_amount,
-            redirect_count: window.redirect_count,
-        });
-
-        Ok(())
-    }
-
-    pub fn close_distribution_window(
-        ctx: Context<CloseDistributionWindow>,
-        window_id: i64,
-        total_weight: u64,
-        eligible_recipient_count: u32,
-        closed_at_ts: i64,
-    ) -> Result<()> {
-        let pot_window = &ctx.accounts.window;
+    } else {
         require!(
-            pot_window.is_initialized(),
-            CommunityPotError::PotWindowNotInitialized
+            window.protocol_config == ctx.accounts.protocol_config.key(),
+            CommunityPotError::WindowProtocolMismatch
         );
         require!(
-            pot_window.window_id == window_id,
+            window.window_id == window_id,
             CommunityPotError::WindowIdMismatch
         );
-
-        let distribution_window = &mut ctx.accounts.distribution_window;
-        if distribution_window.is_initialized()
-            && !(distribution_window.distribution_count == 0
-                && distribution_window.total_weight == 0
-                && distribution_window.eligible_recipient_count == 0)
-        {
-            return Ok(());
-        }
-
-        distribution_window.initialize(
-            ctx.accounts.protocol_config.key(),
-            pot_window.key(),
-            window_id,
-            pot_window.total_redirected_amount,
-            total_weight,
-            eligible_recipient_count,
-            closed_at_ts,
-            ctx.bumps.distribution_window,
-        );
-
-        emit!(DistributionWindowClosed {
-            distribution_window: distribution_window.key(),
-            pot_window: pot_window.key(),
-            window_id,
-            total_redirected_amount: pot_window.total_redirected_amount,
-            total_weight,
-            eligible_recipient_count,
-            closed_at_ts,
-        });
-
-        Ok(())
     }
 
-    pub fn distribute_window(
-        ctx: Context<DistributeWindow>,
-        recipient_key: [u8; 32],
-        window_id: i64,
-        amount: u64,
-        distributed_at_ts: i64,
-    ) -> Result<()> {
-        require!(amount > 0, CommunityPotError::InvalidDistributionAmount);
+    window.record_redirect(amount, recorded_at_ts)?;
+    let window_key = window.key();
+    receipt.record(
+        window_key,
+        receipt_key,
+        amount,
+        ctx.bumps.receipt,
+        recorded_at_ts,
+    );
 
-        let distribution_window = &mut ctx.accounts.distribution_window;
-        require!(
-            distribution_window.is_initialized(),
-            CommunityPotError::DistributionWindowNotInitialized
-        );
-        require!(
-            distribution_window.window_id == window_id,
-            CommunityPotError::WindowIdMismatch
-        );
+    emit!(RedirectRecorded {
+        window: window_key,
+        window_id,
+        amount,
+        total_redirected_amount: window.total_redirected_amount,
+        redirect_count: window.redirect_count,
+    });
 
-        let receipt = &mut ctx.accounts.distribution_receipt;
-        if receipt.is_initialized() {
-            return Ok(());
-        }
+    Ok(())
+}
 
-        require!(
-            distribution_window.remaining_amount() >= amount,
-            CommunityPotError::InsufficientPotBalance
-        );
+pub fn close_distribution_window(
+    ctx: Context<CloseDistributionWindow>,
+    window_id: i64,
+    total_weight: u64,
+    eligible_recipient_count: u32,
+    closed_at_ts: i64,
+) -> Result<()> {
+    let pot_window = &ctx.accounts.window;
+    require!(
+        pot_window.is_initialized(),
+        CommunityPotError::PotWindowNotInitialized
+    );
+    require!(
+        pot_window.window_id == window_id,
+        CommunityPotError::WindowIdMismatch
+    );
 
-        let protocol_seeds: &[&[&[u8]]] = &[&[
-            ProtocolConfig::SEED,
-            &[ctx.accounts.protocol_config.bump],
-        ]];
-
-        transfer_checked_from_protocol(
-            &ctx.accounts.token_program,
-            &ctx.accounts.pot_vault,
-            &ctx.accounts.recipient_stable_token_account,
-            &ctx.accounts.stable_mint,
-            &ctx.accounts.protocol_config.to_account_info(),
-            protocol_seeds,
-            amount,
-        )?;
-
-        distribution_window.record_distribution(amount)?;
-        let distribution_window_key = distribution_window.key();
-        receipt.record(
-            distribution_window_key,
-            recipient_key,
-            amount,
-            distributed_at_ts,
-            ctx.bumps.distribution_receipt,
-        );
-
-        emit!(DistributionPaid {
-            distribution_window: distribution_window_key,
-            recipient: ctx.accounts.recipient.key(),
-            amount,
-            distributed_amount: distribution_window.distributed_amount,
-            distribution_count: distribution_window.distribution_count,
-        });
-
-        Ok(())
+    let distribution_window = &mut ctx.accounts.distribution_window;
+    if distribution_window.is_initialized()
+        && !(distribution_window.distribution_count == 0
+            && distribution_window.total_weight == 0
+            && distribution_window.eligible_recipient_count == 0)
+    {
+        return Ok(());
     }
+
+    distribution_window.initialize(
+        ctx.accounts.protocol_config.key(),
+        pot_window.key(),
+        window_id,
+        pot_window.total_redirected_amount,
+        total_weight,
+        eligible_recipient_count,
+        closed_at_ts,
+        ctx.bumps.distribution_window,
+    );
+
+    emit!(DistributionWindowClosed {
+        distribution_window: distribution_window.key(),
+        pot_window: pot_window.key(),
+        window_id,
+        total_redirected_amount: pot_window.total_redirected_amount,
+        total_weight,
+        eligible_recipient_count,
+        closed_at_ts,
+    });
+
+    Ok(())
+}
+
+pub fn distribute_window(
+    ctx: Context<DistributeWindow>,
+    recipient_key: [u8; 32],
+    window_id: i64,
+    amount: u64,
+    distributed_at_ts: i64,
+) -> Result<()> {
+    require!(amount > 0, CommunityPotError::InvalidDistributionAmount);
+
+    let distribution_window = &mut ctx.accounts.distribution_window;
+    require!(
+        distribution_window.is_initialized(),
+        CommunityPotError::DistributionWindowNotInitialized
+    );
+    require!(
+        distribution_window.window_id == window_id,
+        CommunityPotError::WindowIdMismatch
+    );
+
+    let receipt = &mut ctx.accounts.distribution_receipt;
+    if receipt.is_initialized() {
+        return Ok(());
+    }
+
+    require!(
+        distribution_window.remaining_amount() >= amount,
+        CommunityPotError::InsufficientPotBalance
+    );
+
+    let protocol_seeds: &[&[&[u8]]] = &[&[
+        PotConfig::SEED,
+        &[ctx.accounts.protocol_config.bump],
+    ]];
+
+    transfer_checked_from_protocol(
+        &ctx.accounts.token_program,
+        &ctx.accounts.pot_vault,
+        &ctx.accounts.recipient_stable_token_account,
+        &ctx.accounts.stable_mint,
+        &ctx.accounts.protocol_config.to_account_info(),
+        protocol_seeds,
+        amount,
+    )?;
+
+    distribution_window.record_distribution(amount)?;
+    let distribution_window_key = distribution_window.key();
+    receipt.record(
+        distribution_window_key,
+        recipient_key,
+        amount,
+        distributed_at_ts,
+        ctx.bumps.distribution_receipt,
+    );
+
+    emit!(DistributionPaid {
+        distribution_window: distribution_window_key,
+        recipient: ctx.accounts.recipient.key(),
+        amount,
+        distributed_amount: distribution_window.distributed_amount,
+        distribution_count: distribution_window.distribution_count,
+    });
+
+    Ok(())
 }
 
 #[derive(Accounts)]
-pub struct InitializeProtocol<'info> {
+pub struct InitializePot<'info> {
     #[account(
         init,
         payer = authority,
-        space = 8 + ProtocolConfig::INIT_SPACE,
-        seeds = [ProtocolConfig::SEED],
+        space = 8 + PotConfig::INIT_SPACE,
+        seeds = [PotConfig::SEED],
         bump,
     )]
-    pub protocol_config: Account<'info, ProtocolConfig>,
+    pub protocol_config: Account<'info, PotConfig>,
     #[account(mut)]
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -218,11 +219,11 @@ pub struct InitializeProtocol<'info> {
 pub struct RecordRedirect<'info> {
     #[account(
         mut,
-        seeds = [ProtocolConfig::SEED],
+        seeds = [PotConfig::SEED],
         bump = protocol_config.bump,
         has_one = authority @ CommunityPotError::UnauthorizedWorker,
     )]
-    pub protocol_config: Account<'info, ProtocolConfig>,
+    pub protocol_config: Account<'info, PotConfig>,
     #[account(
         init_if_needed,
         payer = authority,
@@ -249,11 +250,11 @@ pub struct RecordRedirect<'info> {
 pub struct CloseDistributionWindow<'info> {
     #[account(
         mut,
-        seeds = [ProtocolConfig::SEED],
+        seeds = [PotConfig::SEED],
         bump = protocol_config.bump,
         has_one = authority @ CommunityPotError::UnauthorizedWorker,
     )]
-    pub protocol_config: Account<'info, ProtocolConfig>,
+    pub protocol_config: Account<'info, PotConfig>,
     #[account(
         seeds = [PotWindow::SEED, &window_id.to_le_bytes()],
         bump = window.bump,
@@ -276,11 +277,11 @@ pub struct CloseDistributionWindow<'info> {
 #[instruction(recipient_key: [u8; 32], window_id: i64)]
 pub struct DistributeWindow<'info> {
     #[account(
-        seeds = [ProtocolConfig::SEED],
+        seeds = [PotConfig::SEED],
         bump = protocol_config.bump,
         has_one = authority @ CommunityPotError::UnauthorizedWorker,
     )]
-    pub protocol_config: Account<'info, ProtocolConfig>,
+    pub protocol_config: Account<'info, PotConfig>,
     #[account(
         mut,
         seeds = [DistributionWindow::SEED, &window_id.to_le_bytes()],
@@ -332,14 +333,16 @@ pub struct DistributeWindow<'info> {
 
 #[account]
 #[derive(InitSpace)]
-pub struct ProtocolConfig {
+pub struct PotConfig {
     pub authority: Pubkey,
     pub stable_mint: Pubkey,
     pub bump: u8,
 }
 
-impl ProtocolConfig {
-    pub const SEED: &'static [u8] = b"protocol";
+impl PotConfig {
+    // Re-seeded from b"protocol" to avoid colliding with the vault config PDA
+    // under one program ID.
+    pub const SEED: &'static [u8] = b"pot-protocol";
 }
 
 #[account]

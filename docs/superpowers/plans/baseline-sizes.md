@@ -199,3 +199,82 @@ community_pot.so is byte-for-byte unchanged (287136 B, no source touched).
   lock_funds -> warp clock past lock_end_ts -> unlock_funds (assert full
   principal returned + vault/lock closed). The community_pot record_redirect
   flow remains intact and green.
+
+---
+
+# Phase 3 result — merged to `locked_in` (one program)
+
+`lock_vault` + `community_pot` were merged into ONE Anchor program,
+`programs/locked_in`, to pay a SINGLE Anchor runtime baseline instead of two.
+No custody logic changed; only the names that collide under one program ID:
+
+- **Seeds** (PDA collision): both configs used `b"protocol"`. Re-seeded to
+  `b"vault-protocol"` (vault config) and `b"pot-protocol"` (pot config). All
+  other seeds (`b"lock"`, `b"window"`, `b"distribution"`, `b"redirect"`,
+  `b"distribution-receipt"`) were already unique — kept.
+- **Account discriminators** (8-byte `hash("account:<StructName>")`): both
+  defined `ProtocolConfig`. Renamed to `VaultConfig` / `PotConfig`.
+- **Instruction discriminators** (`hash("global:<name>")`): both defined
+  `initialize_protocol`. Renamed to `initialize_vault` / `initialize_pot`.
+  The other 5 ix names (`lock_funds`, `unlock_funds`, `record_redirect`,
+  `close_distribution_window`, `distribute_window`) were unique — kept.
+
+Crate layout: `programs/locked_in/src/{lib.rs,vault.rs,pot.rs}`. `lib.rs` holds
+`declare_id!` + `#[program] pub mod locked_in` whose handlers delegate to
+`vault::*` / `pot::*`; each domain keeps its own `#[derive(Accounts)]` structs.
+The `distribute_window` PDA-signer seeds use `PotConfig::SEED`
+(`b"pot-protocol"`) so the pot_vault ATA authority still resolves correctly —
+the payout invariant is preserved.
+
+## New program ID
+
+`locked_in = 68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3`
+(keypair: `target/deploy/locked_in-keypair.json`; `target/` is gitignored so
+the keypair is NOT committed.)
+
+## New `.so` size (full `anchor build`, IDL included)
+
+| Program       | Size (bytes) | Deploy cost (SOL) |
+|---------------|--------------|-------------------|
+| locked_in.so  | 357640       | 4.978349          |
+
+Deploy cost = bytes x 0.00001392 SOL/byte. IDL: target/idl/locked_in.json
+(7 instructions, 7 accounts).
+
+## Delta vs Phase 2BCD two-program total (552304 B)
+
+| Metric        | Phase 2BCD (2 programs) | Phase 3 (merged) | Delta             |
+|---------------|-------------------------|------------------|-------------------|
+| Total bytes   | 552304                  | 357640           | -194664 (-35.25%) |
+| Deploy (SOL)  | 7.688072                | 4.978349         | -2.709723         |
+
+The -194664 B reduction is the single-Anchor-baseline win: one program's
+runtime/entrypoint/dispatch + one IDL stub instead of two. The custody +
+pot instruction bodies are byte-identical to their source; only the
+collision-avoiding names changed.
+
+## Verification
+
+- `anchor build`: SUCCESS (no `--skip-lint` needed). `target/deploy/` holds
+  only `locked_in.so`; `target/idl/locked_in.json` exposes all 7 instructions
+  (`initialize_vault`, `initialize_pot`, `lock_funds`, `unlock_funds`,
+  `record_redirect`, `close_distribution_window`, `distribute_window`) + 7
+  accounts (`VaultConfig`, `PotConfig`, `LockAccount`, `PotWindow`,
+  `DistributionWindow`, `RedirectReceipt`, `DistributionReceipt`).
+- `cargo test --workspace`: 22 passed, 0 failed (8 vault custody + 13 pot +
+  1 new `merge_tests::vault_and_pot_config_pdas_are_distinct` that derives both
+  config PDAs under the one program ID and asserts they are different
+  addresses — proves the seed-collision fix; plus the auto-generated
+  `test_id`).
+- `programs-tests` (LiteSVM): 1 test file, 1 test passed. ONE program loaded;
+  flow: initialize_vault + initialize_pot -> lock_funds(100 USDC, 30d) ->
+  record_redirect -> warp clock past lock_end_ts -> unlock_funds (assert full
+  principal returned + vault/lock closed).
+
+## Note for the follow-up task
+
+`backend/` and `web-app/` still reference the old two program IDs
+(`41Texnr…` lock_vault, `BsJDnhJ…` community_pot), the old `b"protocol"`
+seed, and the old `initialize_protocol` instruction name. A later task must
+repoint them to `locked_in` (`68im45BC…`), the `b"vault-protocol"` /
+`b"pot-protocol"` seeds, and `initialize_vault` / `initialize_pot`.

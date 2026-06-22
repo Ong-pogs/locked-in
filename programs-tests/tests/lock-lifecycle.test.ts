@@ -1,24 +1,32 @@
 /**
- * End-to-end integration test for lock_vault + community_pot.
+ * End-to-end integration test for the merged `locked_in` program.
  *
  * Satisfies Milestone 2 #6 of the Solana Foundation grant tranche review:
  *   "Integration tests (lock → supply → yield accrual → claim)"
  *
+ * `lock_vault` + `community_pot` were merged into ONE program (`locked_in`) to
+ * pay a single Anchor baseline. There is now ONE program ID and ONE Program
+ * instance. The two config PDAs are domain-separated to avoid the seed
+ * collision that would otherwise occur under one program ID:
+ *   vault config -> seeds = [b"vault-protocol"]
+ *   pot   config -> seeds = [b"pot-protocol"]
+ * and the two init instructions were renamed `initialize_vault` /
+ * `initialize_pot` to avoid the `global:initialize_protocol` discriminator
+ * collision. The custody logic (lock_funds / unlock_funds / record_redirect)
+ * is unchanged.
+ *
  * Every assertion is on real on-chain state produced by real transactions
  * sent to an in-process LiteSVM (mainnet-equivalent BPF execution). No
- * struct mutation in memory, no mocked CPI. Both programs run as
- * compiled .so files loaded from target/deploy/ after `anchor build`.
- *
- * lock_vault is now a pure custody escrow (v4): the game/fuel/ichor layer
- * moved off-chain (backend owns points). lock_end_ts is immutable.
+ * struct mutation in memory, no mocked CPI. The program runs as the compiled
+ * `locked_in.so` loaded from target/deploy/ after `anchor build`.
  *
  * Test flow:
- *   1.  Bootstrap LiteSVM, load both programs
+ *   1.  Bootstrap LiteSVM, load the merged program
  *   2.  Create authority + owner keypairs, airdrop SOL
  *   3.  Create stable (USDC-like) + SKR mints, fund owner, pre-fund the pot
- *   4.  Initialize protocol on lock_vault, community_pot
+ *   4.  initialize_vault + initialize_pot (two domain configs, one program)
  *   5.  lock_funds(100 USDC, 30 days) → principal escrowed into vault ATA
- *   6.  community_pot.record_redirect → window accumulates
+ *   6.  record_redirect → window accumulates
  *   7.  Warp LiteSVM clock past lock_end_ts
  *   8.  unlock_funds → owner receives full principal, vault + lock closed
  *
@@ -50,21 +58,21 @@ import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 
-// Load IDLs as plain JSON (resolveJsonModule + bundler resolution).
-const LockVaultIDL = JSON.parse(
-  readFileSync(resolve(__dirname, '../../target/idl/lock_vault.json'), 'utf8'),
-);
-const CommunityPotIDL = JSON.parse(
-  readFileSync(resolve(__dirname, '../../target/idl/community_pot.json'), 'utf8'),
+// Load the single merged IDL as plain JSON.
+const LockedInIDL = JSON.parse(
+  readFileSync(resolve(__dirname, '../../target/idl/locked_in.json'), 'utf8'),
 );
 
-// Program IDs (sourced from Anchor.toml — duplicated here so the test
+// Single program ID (sourced from Anchor.toml — duplicated here so the test
 // runs without reading workspace files at runtime).
-const LOCK_VAULT_PROGRAM_ID = new PublicKey('41TexnrHDMV4ASJmqNNFcgQ7RBk6N193yvukfiCzKQmD');
-const COMMUNITY_POT_PROGRAM_ID = new PublicKey('BsJDnhJGVdLQ3mxBJ7YCMkkBitKP2RT49zFqR9XsGri1');
+const LOCKED_IN_PROGRAM_ID = new PublicKey(
+  '68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3',
+);
 
-// PDA seed prefixes (mirror programs' SEED const declarations).
-const PROTOCOL_SEED = Buffer.from('protocol');
+// PDA seed prefixes (mirror the program's SEED const declarations). The two
+// config seeds are DOMAIN-SEPARATED so they don't collide under one program ID.
+const VAULT_CONFIG_SEED = Buffer.from('vault-protocol');
+const POT_CONFIG_SEED = Buffer.from('pot-protocol');
 const LOCK_SEED = Buffer.from('lock');
 const POT_WINDOW_SEED = Buffer.from('window');
 const REDIRECT_RECEIPT_SEED = Buffer.from('redirect');
@@ -91,21 +99,20 @@ function i64LE(value: number | bigint): Buffer {
   return buf;
 }
 
-describe('Lock lifecycle (lock_vault × community_pot)', () => {
+describe('Lock lifecycle (merged locked_in: vault × pot)', () => {
   let svm: LiteSVM;
   let provider: LiteSVMProvider;
-  let lockVault: Program;
-  let communityPot: Program;
+  let program: Program; // ONE program instance for both domains
 
   let authority: Keypair;
   let owner: Keypair;
-  let recipient: Keypair; // for community_pot distribution (not exercised here but kept)
+  let recipient: Keypair; // for pot distribution (not exercised here but kept)
   let stableMint: Keypair;
   let skrMint: Keypair;
 
   // PDAs
-  let lockVaultConfig: PublicKey;
-  let communityPotConfig: PublicKey;
+  let vaultConfig: PublicKey;
+  let potConfig: PublicKey;
   let lockAccount: PublicKey;
   let stableVault: PublicKey;
   let skrVault: PublicKey;
@@ -135,14 +142,10 @@ describe('Lock lifecycle (lock_vault × community_pot)', () => {
   beforeAll(() => {
     svm = new LiteSVM();
     // @solana/kit takes addresses as base58 strings, not byte arrays — the
-    // litesvm wrapper passes through to @solana/addresses' codec.
+    // litesvm wrapper passes through to @solana/addresses' codec. ONE program.
     svm.addProgramFromFile(
-      LOCK_VAULT_PROGRAM_ID,
-      resolve(__dirname, '../../target/deploy/lock_vault.so'),
-    );
-    svm.addProgramFromFile(
-      COMMUNITY_POT_PROGRAM_ID,
-      resolve(__dirname, '../../target/deploy/community_pot.so'),
+      LOCKED_IN_PROGRAM_ID,
+      resolve(__dirname, '../../target/deploy/locked_in.so'),
     );
 
     authority = Keypair.generate();
@@ -155,20 +158,23 @@ describe('Lock lifecycle (lock_vault × community_pot)', () => {
     svm.airdrop(owner.publicKey, BigInt(1000 * LAMPORTS_PER_SOL));
     svm.airdrop(recipient.publicKey, BigInt(10 * LAMPORTS_PER_SOL));
 
-    // Anchor provider; authority is the default fee payer.
+    // Anchor provider; authority is the default fee payer. ONE Program instance.
     provider = new LiteSVMProvider(svm, new Wallet(authority));
-    lockVault = new Program(LockVaultIDL as Idl, provider);
-    communityPot = new Program(CommunityPotIDL as Idl, provider);
+    program = new Program(LockedInIDL as Idl, provider);
 
-    // course_id_hash is now just an opaque PDA seed + custody record (no
-    // on-chain CoursePolicy account anymore).
+    // course_id_hash is just an opaque PDA seed + custody record (no on-chain
+    // CoursePolicy account anymore).
     courseIdHash = createHash('sha256').update('test-course-1').digest();
 
-    lockVaultConfig = findPDA([PROTOCOL_SEED], LOCK_VAULT_PROGRAM_ID);
-    communityPotConfig = findPDA([PROTOCOL_SEED], COMMUNITY_POT_PROGRAM_ID);
+    // Domain-separated config PDAs under the SAME program ID.
+    vaultConfig = findPDA([VAULT_CONFIG_SEED], LOCKED_IN_PROGRAM_ID);
+    potConfig = findPDA([POT_CONFIG_SEED], LOCKED_IN_PROGRAM_ID);
+    // Sanity: the seed-collision fix means these two MUST differ.
+    expect(vaultConfig.toString()).not.toBe(potConfig.toString());
+
     lockAccount = findPDA(
       [LOCK_SEED, owner.publicKey.toBuffer(), courseIdHash],
-      LOCK_VAULT_PROGRAM_ID,
+      LOCKED_IN_PROGRAM_ID,
     );
     stableVault = getAssociatedTokenAddressSync(
       stableMint.publicKey,
@@ -182,7 +188,7 @@ describe('Lock lifecycle (lock_vault × community_pot)', () => {
     );
     potVault = getAssociatedTokenAddressSync(
       stableMint.publicKey,
-      communityPotConfig,
+      potConfig,
       true,
     );
     ownerStableAta = getAssociatedTokenAddressSync(
@@ -267,7 +273,7 @@ describe('Lock lifecycle (lock_vault × community_pot)', () => {
         createAssociatedTokenAccountInstruction(
           authority.publicKey,
           potVault,
-          communityPotConfig,
+          potConfig,
           stableMint.publicKey,
         ),
         createMintToInstruction(
@@ -281,40 +287,36 @@ describe('Lock lifecycle (lock_vault × community_pot)', () => {
     });
 
     // ─────────────────────────────────────────────────────────────
-    // STEP B. initialize_protocol on both programs
+    // STEP B. initialize_vault + initialize_pot (both domains, one program)
     // ─────────────────────────────────────────────────────────────
-    await lockVault.methods
-      .initializeProtocol(stableMint.publicKey, skrMint.publicKey)
+    await program.methods
+      .initializeVault(stableMint.publicKey, skrMint.publicKey)
       .accounts({
-        protocolConfig: lockVaultConfig,
+        protocolConfig: vaultConfig,
         authority: authority.publicKey,
         systemProgram: SystemProgram.programId,
       })
       .signers([authority])
       .rpc();
 
-    await communityPot.methods
-      .initializeProtocol(stableMint.publicKey)
+    await program.methods
+      .initializePot(stableMint.publicKey)
       .accounts({
-        protocolConfig: communityPotConfig,
+        protocolConfig: potConfig,
         authority: authority.publicKey,
         systemProgram: SystemProgram.programId,
       })
       .signers([authority])
       .rpc();
 
-    // Sanity: each ProtocolConfig PDA exists and points at this authority.
+    // Sanity: each config PDA exists and points at this authority.
     {
-      const lvCfg: any = await lockVault.account.protocolConfig.fetch(
-        lockVaultConfig,
-      );
-      expect(lvCfg.authority.toString()).toBe(authority.publicKey.toString());
-      expect(lvCfg.usdcMint.toString()).toBe(stableMint.publicKey.toString());
+      const vCfg: any = await program.account.vaultConfig.fetch(vaultConfig);
+      expect(vCfg.authority.toString()).toBe(authority.publicKey.toString());
+      expect(vCfg.usdcMint.toString()).toBe(stableMint.publicKey.toString());
 
-      const cpCfg: any = await communityPot.account.protocolConfig.fetch(
-        communityPotConfig,
-      );
-      expect(cpCfg.stableMint.toString()).toBe(stableMint.publicKey.toString());
+      const pCfg: any = await program.account.potConfig.fetch(potConfig);
+      expect(pCfg.stableMint.toString()).toBe(stableMint.publicKey.toString());
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -324,7 +326,7 @@ describe('Lock lifecycle (lock_vault × community_pot)', () => {
       svm.getAccount(ownerStableAta)!.data,
     ).amount;
 
-    await lockVault.methods
+    await program.methods
       .lockFunds(
         Array.from(courseIdHash),
         LOCK_DURATION_DAYS,
@@ -332,7 +334,7 @@ describe('Lock lifecycle (lock_vault × community_pot)', () => {
         new BN(0), // skr_amount = 0
       )
       .accounts({
-        protocolConfig: lockVaultConfig,
+        protocolConfig: vaultConfig,
         lockAccount,
         stableMint: stableMint.publicKey,
         skrMint: skrMint.publicKey,
@@ -355,7 +357,7 @@ describe('Lock lifecycle (lock_vault × community_pot)', () => {
     expect(stableVaultBalance).toBe(BigInt(PRINCIPAL_AMOUNT_BASE));
 
     // → assert lock_account.principal_amount == 100_000_000
-    const lockAfterLock: any = await lockVault.account.lockAccount.fetch(
+    const lockAfterLock: any = await program.account.lockAccount.fetch(
       lockAccount,
     );
     expect(lockAfterLock.principalAmount.toString()).toBe(
@@ -376,21 +378,21 @@ describe('Lock lifecycle (lock_vault × community_pot)', () => {
     const secondsPerDay = 86400;
 
     // ─────────────────────────────────────────────────────────────
-    // STEP D. community_pot.record_redirect (yield-redirect accounting)
+    // STEP D. record_redirect (yield-redirect accounting)
     // ─────────────────────────────────────────────────────────────
     const windowId = 1n; // i64
     const potWindow = findPDA(
       [POT_WINDOW_SEED, i64LE(windowId)],
-      COMMUNITY_POT_PROGRAM_ID,
+      LOCKED_IN_PROGRAM_ID,
     );
     const redirectKey = makeReceiptKey('redirect-1');
     const redirectReceipt = findPDA(
       [REDIRECT_RECEIPT_SEED, potWindow.toBuffer(), redirectKey],
-      COMMUNITY_POT_PROGRAM_ID,
+      LOCKED_IN_PROGRAM_ID,
     );
     const redirectAmount = 1;
 
-    await communityPot.methods
+    await program.methods
       .recordRedirect(
         Array.from(redirectKey),
         new BN(windowId),
@@ -398,7 +400,7 @@ describe('Lock lifecycle (lock_vault × community_pot)', () => {
         new BN(lockStartTs + secondsPerDay),
       )
       .accounts({
-        protocolConfig: communityPotConfig,
+        protocolConfig: potConfig,
         window: potWindow,
         receipt: redirectReceipt,
         authority: authority.publicKey,
@@ -408,7 +410,7 @@ describe('Lock lifecycle (lock_vault × community_pot)', () => {
       .rpc();
 
     // → assert PotWindow + RedirectReceipt exist with the expected amount
-    const potWinAcct: any = await communityPot.account.potWindow.fetch(potWindow);
+    const potWinAcct: any = await program.account.potWindow.fetch(potWindow);
     expect(BigInt(potWinAcct.totalRedirectedAmount.toString())).toBe(
       BigInt(redirectAmount),
     );
@@ -427,7 +429,7 @@ describe('Lock lifecycle (lock_vault × community_pot)', () => {
       svm.getAccount(ownerStableAta)!.data,
     ).amount;
 
-    await lockVault.methods
+    await program.methods
       .unlockFunds()
       .accounts({
         lockAccount,

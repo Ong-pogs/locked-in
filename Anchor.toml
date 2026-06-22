@@ -6,8 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-community_pot = "BsJDnhJGVdLQ3mxBJ7YCMkkBitKP2RT49zFqR9XsGri1"
-lock_vault = "41TexnrHDMV4ASJmqNNFcgQ7RBk6N193yvukfiCzKQmD"
+locked_in = "68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3"
 
 [provider]
 cluster = "Localnet"

@@ -1,12 +1,12 @@
 [package]
-name = "lock-vault"
+name = "locked-in"
 version = "0.1.0"
-description = "LockVault program scaffold for Locked In v3"
+description = "Merged custody (vault) + community-pot program for Locked In v4"
 edition = "2021"
 
 [lib]
 crate-type = ["cdylib", "lib"]
-name = "lock_vault"
+name = "locked_in"
 
 [features]
 default = []
