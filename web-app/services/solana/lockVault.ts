@@ -19,7 +19,8 @@ const LOCK_FUNDS_DISCRIMINATOR = Uint8Array.from([171, 49, 9, 86, 156, 155, 2, 8
 const UNLOCK_FUNDS_DISCRIMINATOR = Uint8Array.from([175, 119, 16, 245, 141, 55, 255, 43]);
 const REDEEM_ICHOR_DISCRIMINATOR = Uint8Array.from([70, 55, 11, 86, 107, 196, 69, 59]);
 const LOCK_ACCOUNT_DISCRIMINATOR_HEX = 'df40477cff5676c0';
-const PROTOCOL_SEED = Buffer.from('protocol');
+// Merged locked_in program: vault config PDA seed renamed protocol → vault-protocol.
+const PROTOCOL_SEED = Buffer.from('vault-protocol');
 const COURSE_POLICY_SEED = Buffer.from('course-policy');
 const LOCK_SEED = Buffer.from('lock');
 

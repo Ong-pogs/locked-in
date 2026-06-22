@@ -12,8 +12,9 @@ const bs58 = bs58Module.decode ? bs58Module : bs58Module.default;
 const LOCK_SEED = Buffer.from('lock');
 const LOCK_ACCOUNT_DISCRIMINATOR = 'df40477cff5676c0';
 
-// Custody-core program exposes only initialize_protocol / lock_funds /
-// unlock_funds. The backend never signs lock_vault game-layer txs anymore —
+// Custody-core program exposes only initialize_vault / lock_funds /
+// unlock_funds (merged into the single locked_in program). The backend never
+// signs lock_vault game-layer txs anymore —
 // the game layer is fully off-chain (DB is source of truth). We only READ the
 // LockAccount + inspect unlock transactions here.
 const UNLOCK_FUNDS_DISCRIMINATOR = anchorDiscriminator('unlock_funds');

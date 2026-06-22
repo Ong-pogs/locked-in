@@ -19,7 +19,8 @@ import { appConfig } from '../config.mjs';
 
 const bs58 = bs58Module.decode ? bs58Module : bs58Module.default;
 
-const PROTOCOL_SEED = Buffer.from('protocol');
+// Merged locked_in program: pot config PDA seed renamed protocol → pot-protocol.
+const PROTOCOL_SEED = Buffer.from('pot-protocol');
 const WINDOW_SEED = Buffer.from('window');
 const REDIRECT_SEED = Buffer.from('redirect');
 const POT_WINDOW_DISCRIMINATOR = crypto
@@ -32,7 +33,8 @@ const DISTRIBUTION_WINDOW_DISCRIMINATOR = crypto
   .update('account:DistributionWindow')
   .digest()
   .subarray(0, 8);
-const INIT_PROTOCOL_DISCRIMINATOR = anchorDiscriminator('initialize_protocol');
+// Merged locked_in program: pot init instruction renamed initialize_protocol → initialize_pot.
+const INIT_PROTOCOL_DISCRIMINATOR = anchorDiscriminator('initialize_pot');
 const RECORD_REDIRECT_DISCRIMINATOR = anchorDiscriminator('record_redirect');
 const CLOSE_DISTRIBUTION_WINDOW_DISCRIMINATOR = anchorDiscriminator(
   'close_distribution_window',

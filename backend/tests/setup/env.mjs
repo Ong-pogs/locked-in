@@ -7,9 +7,10 @@ process.env.JWT_ACCESS_TTL = '15m';
 process.env.JWT_REFRESH_TTL = '30d';
 process.env.SCHEDULER_SECRET = 'test-scheduler-secret';
 process.env.SOLANA_RPC_URL = 'https://api.devnet.solana.com';
-process.env.LOCK_VAULT_PROGRAM_ID = '41TexnrHDMV4ASJmqNNFcgQ7RBk6N193yvukfiCzKQmD';
+// lock_vault + community_pot merged into ONE program (`locked_in`); both IDs match.
+process.env.LOCK_VAULT_PROGRAM_ID = '68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3';
 process.env.YIELD_SPLITTER_PROGRAM_ID = '8bevd3T3LWoUh2Z9348UKwFFN1p5MdbRbAe2zniCrnVv';
-process.env.COMMUNITY_POT_PROGRAM_ID = 'BsJDnhJGVdLQ3mxBJ7YCMkkBitKP2RT49zFqR9XsGri1';
+process.env.COMMUNITY_POT_PROGRAM_ID = '68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3';
 process.env.LOCK_VAULT_USDC_MINT = '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU';
 process.env.LOCK_VAULT_SKR_MINT = 'CQAiXocPkmrr6MTDigHn1yDJ66v5nbPyxwMoUxb4PgST';
 process.env.LOCK_VAULT_RELAY_ENABLED = 'false';
