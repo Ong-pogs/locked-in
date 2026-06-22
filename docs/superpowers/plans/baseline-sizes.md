@@ -98,3 +98,44 @@ measured with these size flags already applied at some earlier point.
 - `programs-tests` (LiteSVM, exercises on-chain ABI via regenerated IDL +
   the size-optimized .so): 1 test file, 1 test passed. Passing confirms the
   instruction interface is unchanged.
+
+---
+
+# Phase 2A-i result — yield_splitter program removed
+
+The `yield_splitter` program was a pure notarization step (moved zero tokens);
+the product decision was FULL removal — the DB is authoritative for harvests.
+Removed the crate (`programs/yield_splitter`), its `[programs.localnet]` entry in
+`Anchor.toml`, and all yield_splitter steps from the integration test
+(`programs-tests/tests/lock-lifecycle.test.ts`). The workspace `members =
+["programs/*"]` glob now resolves to two crates: lock_vault + community_pot.
+
+## New `.so` sizes (full `anchor build`, IDL included)
+
+| Program           | Size (bytes) | Deploy cost (SOL) |
+|-------------------|--------------|-------------------|
+| lock_vault.so     | 399480       | 5.560762          |
+| community_pot.so  | 287136       | 3.996933          |
+| **TOTAL**         | **686616**   | **9.557695**      |
+
+Deploy cost = bytes x 0.00001392 SOL/byte.
+
+## Delta vs post-Phase-1 (894296 B)
+
+| Metric        | Post-Phase-1 | Phase 2A-i | Delta            |
+|---------------|--------------|------------|------------------|
+| Total bytes   | 894296       | 686616     | -207680 (-23.2%) |
+| Deploy (SOL)  | 12.448600    | 9.557695   | -2.890906        |
+
+The -207680 B reduction equals the prior yield_splitter.so size exactly; the
+remaining two programs are byte-for-byte unchanged (no source touched).
+
+## Verification
+
+- `anchor build`: SUCCESS. `target/deploy/` now holds only lock_vault.so +
+  community_pot.so; `target/idl/` only lock_vault.json + community_pot.json.
+- `cargo test --workspace`: 55 passed, 0 failed (community_pot 13 + lock_vault
+  42; yield_splitter's 14 tests removed with the crate).
+- `programs-tests` (LiteSVM): 1 test file, 1 test passed. The lock_vault
+  lock→gauntlet→harvest→redeem→unlock flow and the community_pot record_redirect
+  flow remain intact and green.

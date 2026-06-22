@@ -7,27 +7,25 @@ LiteSVM-driven end-to-end test of the full lock lifecycle. Satisfies
 
 ## What it covers
 
-A single test in `tests/lock-lifecycle.test.ts` chains **17 real
-transactions** through `lock_vault`, `yield_splitter`, and `community_pot`:
+A single test in `tests/lock-lifecycle.test.ts` chains **15 real
+transactions** through `lock_vault` and `community_pot`:
 
 1. Create stable + SKR mints, fund test owner, pre-fund redemption + pot vaults
 2. `lock_vault.initialize_protocol` (fuel cap, max savers, mints)
-3. `yield_splitter.initialize_protocol` (platform fee 10%)
-4. `community_pot.initialize_protocol`
-5. `lock_vault.upsert_course_policy` (course-specific min/max principal + duration)
-6. `lock_vault.lock_funds(100 USDC, 30 days)` + asserts stable_vault balance, lock_account.principal_amount, owner USDC delta
-7. `apply_verified_completion × 7` (the gauntlet) + asserts gauntlet_complete, savers_remaining, fuel_counter, current_streak
-8. Clock warp to day 8
-9. `lock_vault.apply_harvest_result(1 USDC)` + asserts ichor_counter increased, lock_vault HarvestReceipt PDA written
-10. `yield_splitter.harvest_and_split` with the SAME `receipt_key` + asserts platform_fee + redirected + user_share = gross
-11. `community_pot.record_redirect` + asserts PotWindow total_redirected_amount, redirect_count
-12. Clock warp past lock_end_ts
-13. `lock_vault.redeem_ichor(1)` + asserts owner USDC increased, ichor_counter decreased
-14. `lock_vault.unlock_funds()` + asserts owner USDC += principal, stable_vault closed, lock_account closed
+3. `community_pot.initialize_protocol`
+4. `lock_vault.upsert_course_policy` (course-specific min/max principal + duration)
+5. `lock_vault.lock_funds(100 USDC, 30 days)` + asserts stable_vault balance, lock_account.principal_amount, owner USDC delta
+6. `apply_verified_completion × 7` (the gauntlet) + asserts gauntlet_complete, savers_remaining, fuel_counter, current_streak
+7. Clock warp to day 8
+8. `lock_vault.apply_harvest_result(1 USDC)` + asserts ichor_counter increased, lock_vault HarvestReceipt PDA written
+9. `community_pot.record_redirect` + asserts PotWindow total_redirected_amount, redirect_count
+10. Clock warp past lock_end_ts
+11. `lock_vault.redeem_ichor(1)` + asserts owner USDC increased, ichor_counter decreased
+12. `lock_vault.unlock_funds()` + asserts owner USDC += principal, stable_vault closed, lock_account closed
 
 Every `→ assert` is on **real on-chain state** produced by **real
 transactions** sent to an in-process LiteSVM (mainnet-equivalent BPF
-execution). No struct mutation in memory, no mocked CPI. The three
+execution). No struct mutation in memory, no mocked CPI. Both
 programs run as compiled `.so` files loaded from `target/deploy/`.
 
 ## Run
@@ -71,15 +69,7 @@ These were noted while building the harness — not fixed (per the
    should be added before the next grant tranche review so the lint
    passes cleanly.
 
-2. **`yield_splitter::HarvestAndSplit.lock_account` is `UncheckedAccount`.**
-   This is intentional per the source comment: "the first milestone only
-   binds this lock pubkey into the receipt PDA." The integration test
-   verifies that the harvest receipt PDAs in `lock_vault` (seed
-   `b"harvest"`) and `yield_splitter` (seed `b"receipt"`) coexist at
-   different addresses with matching `(lock_account, receipt_key)` —
-   coordination is by convention, not on-chain enforcement.
-
-3. **Build-config gap: `programs/{lock_vault,community_pot}/Cargo.toml`
+2. **Build-config gap: `programs/{lock_vault,community_pot}/Cargo.toml`
    was missing `anchor-spl/idl-build` in the `idl-build` feature.**
    Without it, Anchor 0.31.1's IDL generator can't resolve SPL token
    interface types. Added in this PR.

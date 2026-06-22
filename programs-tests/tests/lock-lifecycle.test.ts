@@ -1,29 +1,28 @@
 /**
- * End-to-end integration test for lock_vault + yield_splitter + community_pot.
+ * End-to-end integration test for lock_vault + community_pot.
  *
  * Satisfies Milestone 2 #6 of the Solana Foundation grant tranche review:
  *   "Integration tests (lock → supply → yield accrual → claim)"
  *
  * Every assertion is on real on-chain state produced by real transactions
  * sent to an in-process LiteSVM (mainnet-equivalent BPF execution). No
- * struct mutation in memory, no mocked CPI. The three programs run as
+ * struct mutation in memory, no mocked CPI. Both programs run as
  * compiled .so files loaded from target/deploy/ after `anchor build`.
  *
  * Test flow:
- *   1.  Bootstrap LiteSVM, load all three programs
+ *   1.  Bootstrap LiteSVM, load both programs
  *   2.  Create authority + owner keypairs, airdrop SOL
  *   3.  Create stable (USDC-like) + SKR mints, fund owner
- *   4.  Initialize protocol on lock_vault, yield_splitter, community_pot
+ *   4.  Initialize protocol on lock_vault, community_pot
  *   5.  Upsert course policy
  *   6.  lock_funds(100 USDC, 30 days)
  *   7.  Apply 7 daily completions → gauntlet_complete flips true
  *   8.  Warp clock 1 day
  *   9.  apply_harvest_result on lock_vault → ichor_counter increases
- *   10. harvest_and_split on yield_splitter → records same receipt_key
- *   11. record_redirect on community_pot → window accumulates
- *   12. Warp clock to lock_end_ts
- *   13. redeem_ichor → owner receives USDC, ichor_counter decreases
- *   14. unlock_funds → owner receives principal, vault closed
+ *   10. record_redirect on community_pot → window accumulates
+ *   11. Warp clock to lock_end_ts
+ *   12. redeem_ichor → owner receives USDC, ichor_counter decreases
+ *   13. unlock_funds → owner receives principal, vault closed
  *
  * Run: cd programs-tests && npm test
  */
@@ -57,9 +56,6 @@ import { readFileSync } from 'node:fs';
 const LockVaultIDL = JSON.parse(
   readFileSync(resolve(__dirname, '../../target/idl/lock_vault.json'), 'utf8'),
 );
-const YieldSplitterIDL = JSON.parse(
-  readFileSync(resolve(__dirname, '../../target/idl/yield_splitter.json'), 'utf8'),
-);
 const CommunityPotIDL = JSON.parse(
   readFileSync(resolve(__dirname, '../../target/idl/community_pot.json'), 'utf8'),
 );
@@ -67,7 +63,6 @@ const CommunityPotIDL = JSON.parse(
 // Program IDs (sourced from Anchor.toml — duplicated here so the test
 // runs without reading workspace files at runtime).
 const LOCK_VAULT_PROGRAM_ID = new PublicKey('41TexnrHDMV4ASJmqNNFcgQ7RBk6N193yvukfiCzKQmD');
-const YIELD_SPLITTER_PROGRAM_ID = new PublicKey('8bevd3T3LWoUh2Z9348UKwFFN1p5MdbRbAe2zniCrnVv');
 const COMMUNITY_POT_PROGRAM_ID = new PublicKey('BsJDnhJGVdLQ3mxBJ7YCMkkBitKP2RT49zFqR9XsGri1');
 
 // PDA seed prefixes (mirror programs' SEED const declarations).
@@ -76,7 +71,6 @@ const COURSE_POLICY_SEED = Buffer.from('course-policy');
 const LOCK_SEED = Buffer.from('lock');
 const COMPLETION_RECEIPT_SEED = Buffer.from('completion');
 const HARVEST_RECEIPT_SEED = Buffer.from('harvest');
-const YIELD_RECEIPT_SEED = Buffer.from('receipt');
 const POT_WINDOW_SEED = Buffer.from('window');
 const REDIRECT_RECEIPT_SEED = Buffer.from('redirect');
 
@@ -106,11 +100,10 @@ function i64LE(value: number | bigint): Buffer {
   return buf;
 }
 
-describe('Lock lifecycle (lock_vault × yield_splitter × community_pot)', () => {
+describe('Lock lifecycle (lock_vault × community_pot)', () => {
   let svm: LiteSVM;
   let provider: LiteSVMProvider;
   let lockVault: Program;
-  let yieldSplitter: Program;
   let communityPot: Program;
 
   let authority: Keypair;
@@ -121,7 +114,6 @@ describe('Lock lifecycle (lock_vault × yield_splitter × community_pot)', () =>
 
   // PDAs
   let lockVaultConfig: PublicKey;
-  let yieldSplitterConfig: PublicKey;
   let communityPotConfig: PublicKey;
   let coursePolicy: PublicKey;
   let lockAccount: PublicKey;
@@ -160,10 +152,6 @@ describe('Lock lifecycle (lock_vault × yield_splitter × community_pot)', () =>
       resolve(__dirname, '../../target/deploy/lock_vault.so'),
     );
     svm.addProgramFromFile(
-      YIELD_SPLITTER_PROGRAM_ID,
-      resolve(__dirname, '../../target/deploy/yield_splitter.so'),
-    );
-    svm.addProgramFromFile(
       COMMUNITY_POT_PROGRAM_ID,
       resolve(__dirname, '../../target/deploy/community_pot.so'),
     );
@@ -181,13 +169,11 @@ describe('Lock lifecycle (lock_vault × yield_splitter × community_pot)', () =>
     // Anchor provider; authority is the default fee payer.
     provider = new LiteSVMProvider(svm, new Wallet(authority));
     lockVault = new Program(LockVaultIDL as Idl, provider);
-    yieldSplitter = new Program(YieldSplitterIDL as Idl, provider);
     communityPot = new Program(CommunityPotIDL as Idl, provider);
 
     courseIdHash = createHash('sha256').update('test-course-1').digest();
 
     lockVaultConfig = findPDA([PROTOCOL_SEED], LOCK_VAULT_PROGRAM_ID);
-    yieldSplitterConfig = findPDA([PROTOCOL_SEED], YIELD_SPLITTER_PROGRAM_ID);
     communityPotConfig = findPDA([PROTOCOL_SEED], COMMUNITY_POT_PROGRAM_ID);
     coursePolicy = findPDA(
       [COURSE_POLICY_SEED, courseIdHash],
@@ -329,7 +315,7 @@ describe('Lock lifecycle (lock_vault × yield_splitter × community_pot)', () =>
     });
 
     // ─────────────────────────────────────────────────────────────
-    // STEP B. initialize_protocol on all three programs
+    // STEP B. initialize_protocol on both programs
     // ─────────────────────────────────────────────────────────────
     await lockVault.methods
       .initializeProtocol(
@@ -341,21 +327,6 @@ describe('Lock lifecycle (lock_vault × yield_splitter × community_pot)', () =>
       )
       .accounts({
         protocolConfig: lockVaultConfig,
-        authority: authority.publicKey,
-        systemProgram: SystemProgram.programId,
-      })
-      .signers([authority])
-      .rpc();
-
-    await yieldSplitter.methods
-      .initializeProtocol(
-        stableMint.publicKey,
-        LOCK_VAULT_PROGRAM_ID,
-        COMMUNITY_POT_PROGRAM_ID,
-        1000, // 10% platform fee
-      )
-      .accounts({
-        protocolConfig: yieldSplitterConfig,
         authority: authority.publicKey,
         systemProgram: SystemProgram.programId,
       })
@@ -379,11 +350,6 @@ describe('Lock lifecycle (lock_vault × yield_splitter × community_pot)', () =>
       );
       expect(lvCfg.authority.toString()).toBe(authority.publicKey.toString());
       expect(lvCfg.fuelCap).toBe(FUEL_CAP);
-
-      const ysCfg: any = await yieldSplitter.account.protocolConfig.fetch(
-        yieldSplitterConfig,
-      );
-      expect(ysCfg.platformFeeBps).toBe(1000);
 
       const cpCfg: any = await communityPot.account.protocolConfig.fetch(
         communityPotConfig,
@@ -567,44 +533,7 @@ describe('Lock lifecycle (lock_vault × yield_splitter × community_pot)', () =>
     );
 
     // ─────────────────────────────────────────────────────────────
-    // STEP G. yield_splitter.harvest_and_split (same receipt_key)
-    // ─────────────────────────────────────────────────────────────
-    const splitReceipt = findPDA(
-      [YIELD_RECEIPT_SEED, lockAccount.toBuffer(), harvestKey],
-      YIELD_SPLITTER_PROGRAM_ID,
-    );
-
-    await yieldSplitter.methods
-      .harvestAndSplit(
-        Array.from(harvestKey),
-        new BN(harvestAmount),
-        0, // redirect_bps = 0 (gauntlet complete, no streak break yet)
-        true, // brewer_active
-        0, // skr_tier
-        new BN(lockStartTs + 8 * secondsPerDay),
-      )
-      .accounts({
-        protocolConfig: yieldSplitterConfig,
-        authority: authority.publicKey,
-        lockAccount,
-        receipt: splitReceipt,
-        systemProgram: SystemProgram.programId,
-      })
-      .signers([authority])
-      .rpc();
-
-    // → assert HarvestReceipt was written + math adds up
-    const yieldReceipt: any = await yieldSplitter.account.harvestReceipt.fetch(
-      splitReceipt,
-    );
-    const platformFee = BigInt(yieldReceipt.platformFeeAmount.toString());
-    const redirected = BigInt(yieldReceipt.redirectedAmount.toString());
-    const userShare = BigInt(yieldReceipt.userShareAmount.toString());
-    expect(platformFee + redirected + userShare).toBe(BigInt(harvestAmount));
-    expect(yieldReceipt.applied).toBe(true);
-
-    // ─────────────────────────────────────────────────────────────
-    // STEP H. community_pot.record_redirect
+    // STEP G. community_pot.record_redirect
     // ─────────────────────────────────────────────────────────────
     const windowId = 1n; // i64
     const potWindow = findPDA(
@@ -616,7 +545,9 @@ describe('Lock lifecycle (lock_vault × yield_splitter × community_pot)', () =>
       [REDIRECT_RECEIPT_SEED, potWindow.toBuffer(), redirectKey],
       COMMUNITY_POT_PROGRAM_ID,
     );
-    const redirectAmount = Number(redirected) > 0 ? Number(redirected) : 1;
+    // Redirect amount the backend would record. With the gauntlet complete and
+    // no streak break, the redirected share is 0, so the recorded minimum is 1.
+    const redirectAmount = 1;
 
     await communityPot.methods
       .recordRedirect(
@@ -643,7 +574,7 @@ describe('Lock lifecycle (lock_vault × yield_splitter × community_pot)', () =>
     expect(potWinAcct.redirectCount).toBe(1);
 
     // ─────────────────────────────────────────────────────────────
-    // STEP I. Warp clock past lock_end_ts, redeem_ichor + unlock_funds
+    // STEP H. Warp clock past lock_end_ts, redeem_ichor + unlock_funds
     // ─────────────────────────────────────────────────────────────
     const lockEndTs = Number(lockAfterLock.lockEndTs);
     {

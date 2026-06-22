@@ -2,7 +2,7 @@
   "name": "locked-in-programs-tests",
   "version": "0.1.0",
   "private": true,
-  "description": "Integration tests for lock_vault + yield_splitter + community_pot Anchor programs. Runs against in-process LiteSVM.",
+  "description": "Integration tests for lock_vault + community_pot Anchor programs. Runs against in-process LiteSVM.",
   "type": "module",
   "scripts": {
     "test": "vitest run",
