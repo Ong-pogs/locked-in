@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import {
-  APP_BGM_SRC,
   APP_BGM_VOLUME_EVENT,
   clampAppBgmVolume,
+  getAppBgmTrack,
+  getScaledAppBgmVolume,
   readStoredAppBgmVolume,
   type AppBgmVolumeChangeDetail,
 } from './appBgmSettings';
@@ -16,20 +18,24 @@ import {
  * this tries immediately and then falls back to the first pointer/key event.
  */
 export function AppBgm() {
+  const pathname = usePathname();
+  const { src, volumeScale } = getAppBgmTrack(pathname);
+
   useEffect(() => {
-    const bgm = new Audio(APP_BGM_SRC);
+    const bgm = new Audio(src);
     bgm.loop = true;
-    bgm.volume = readStoredAppBgmVolume();
+    bgm.volume = getScaledAppBgmVolume(readStoredAppBgmVolume(), volumeScale);
 
     let disposed = false;
 
     const applyVolume = (event?: Event) => {
       const eventVolume = (event as CustomEvent<AppBgmVolumeChangeDetail> | undefined)?.detail
         ?.volume;
-      bgm.volume =
+      const baseVolume =
         typeof eventVolume === 'number'
           ? clampAppBgmVolume(eventVolume)
           : readStoredAppBgmVolume();
+      bgm.volume = getScaledAppBgmVolume(baseVolume, volumeScale);
     };
 
     const removeGestureFallback = () => {
@@ -63,7 +69,7 @@ export function AppBgm() {
       bgm.pause();
       bgm.currentTime = 0;
     };
-  }, []);
+  }, [src, volumeScale]);
 
   return null;
 }

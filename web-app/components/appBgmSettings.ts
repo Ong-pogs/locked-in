@@ -1,5 +1,7 @@
 export const APP_BGM_SRC = '/bgm/Midnight_in_the_Scriptorium.mp3';
+export const LESSON_BGM_SRC = '/bgm/Peak_Resistance.mp3';
 export const APP_BGM_DEFAULT_VOLUME = 0.0875;
+export const LESSON_BGM_VOLUME_SCALE = 0.5;
 export const APP_BGM_VOLUME_STORAGE_KEY = 'locked-in:bgm-volume';
 export const APP_BGM_PREVIOUS_VOLUME_STORAGE_KEY = 'locked-in:bgm-previous-volume';
 export const APP_BGM_VOLUME_EVENT = 'locked-in:bgm-volume-change';
@@ -8,9 +10,34 @@ export type AppBgmVolumeChangeDetail = {
   volume: number;
 };
 
+export type AppBgmTrack = {
+  src: string;
+  volumeScale: number;
+};
+
 export function clampAppBgmVolume(volume: number): number {
   if (!Number.isFinite(volume)) return APP_BGM_DEFAULT_VOLUME;
   return Math.min(1, Math.max(0, volume));
+}
+
+export function getAppBgmTrack(pathname: string | null): AppBgmTrack {
+  const isLessonRoute = pathname === '/lessons' || pathname?.startsWith('/lessons/');
+
+  if (isLessonRoute) {
+    return {
+      src: LESSON_BGM_SRC,
+      volumeScale: LESSON_BGM_VOLUME_SCALE,
+    };
+  }
+
+  return {
+    src: APP_BGM_SRC,
+    volumeScale: 1,
+  };
+}
+
+export function getScaledAppBgmVolume(volume: number, volumeScale: number): number {
+  return clampAppBgmVolume(clampAppBgmVolume(volume) * volumeScale);
 }
 
 export function readStoredAppBgmVolume(): number {

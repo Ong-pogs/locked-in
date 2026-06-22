@@ -7,8 +7,10 @@ Play `web-app/public/bgm/Midnight_in_the_Scriptorium.mp3` as looping background 
 ## Scope
 
 - Use the public asset URL `/bgm/Midnight_in_the_Scriptorium.mp3`.
+- Use the lesson asset URL `/bgm/Peak_Resistance.mp3` on `/lessons` routes.
 - Play one persistent audio instance from the app shell, not from `/village`.
 - Keep playback at `0.0875` volume, which is 50% quieter than the previous `0.175` setting.
+- Play lesson music at 50% of the saved base music volume.
 - Add a dashboard-only music volume control.
 - Persist the selected music volume in `localStorage`.
 - Apply dashboard volume changes to the already-mounted app-wide audio immediately.
@@ -20,7 +22,7 @@ Play `web-app/public/bgm/Midnight_in_the_Scriptorium.mp3` as looping background 
 
 Create a small `AppBgm` Client Component that owns the audio lifecycle. Render it once from `AppShell`, which is already mounted by the root layout and persists across normal App Router navigation. Remove the route-scoped BGM effect from `VillageScene` so route changes do not create duplicate audio instances or restart the track.
 
-Keep BGM setting constants and `localStorage` helpers in a shared module. `AppBgm` reads the saved volume on mount and listens for a browser event when the dashboard writes a new value. The dashboard renders a compact `MusicVolumeControl` card near the bottom of the page.
+Keep BGM setting constants and `localStorage` helpers in a shared module. `AppBgm` reads the saved volume on mount and listens for a browser event when the dashboard writes a new value. It also reads the current App Router pathname and switches to the lesson track on `/lessons` routes. The lesson track derives its effective volume from the same saved base volume multiplied by `0.5`, so an 8% setting plays lesson music at 4%. The dashboard renders a compact `MusicVolumeControl` card near the bottom of the page.
 
 ## Error Handling
 
@@ -34,6 +36,7 @@ Add focused Vitest coverage for `AppBgm`:
 - sets loop mode and `0.0875` volume;
 - reads persisted volume from `localStorage`;
 - responds to live volume-change events;
+- uses the lesson track and half-volume scale on `/lessons` routes;
 - attempts playback on mount;
 - retries on first user gesture when autoplay is blocked;
 - pauses and removes fallback listeners on unmount.
