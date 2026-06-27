@@ -32,13 +32,13 @@ const STEPS: Step[] = [
     kind: 'building',
     target: 'forge',
     title: 'Brewery',
-    body: 'Brew the Fuel you earn each day into Ichor — the in-game currency that redeems for USDC at the market.',
+    body: 'Brew the Fuel you earn each day into Ichor — your in-game currency for the Market.',
   },
   {
     kind: 'building',
     target: 'cottage',
     title: 'Market',
-    body: 'Spend Ichor on coin pouches. Pouches are how you redeem your earnings as real USDC.',
+    body: 'Spend Ichor here on Streak Savers that protect your run if you miss a day. Ichor is in-game only — it does not convert to USDC.',
   },
   {
     kind: 'building',
