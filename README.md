@@ -165,7 +165,7 @@ This repo is not just a concept write-up. The core structure already exists.
 
 ### 1. On-chain program
 
-There is a single Anchor program in the repo, `locked_in` (program ID `68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3`, deployed on devnet). It contains two modules separated only by PDA seeds:
+There is a single Anchor program in the repo, `locked_in` (program ID `3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav`, deployed on devnet). It contains two modules separated only by PDA seeds:
 
 - `vault` (seed `vault-protocol`)
 - `pot` (seed `pot-protocol`)

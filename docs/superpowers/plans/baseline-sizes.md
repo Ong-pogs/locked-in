@@ -228,7 +228,7 @@ the payout invariant is preserved.
 
 ## New program ID
 
-`locked_in = 68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3`
+`locked_in = 3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav`
 (keypair: `target/deploy/locked_in-keypair.json`; `target/` is gitignored so
 the keypair is NOT committed.)
 

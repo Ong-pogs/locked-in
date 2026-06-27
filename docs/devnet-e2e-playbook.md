@@ -1,7 +1,7 @@
 # `locked_in` — Devnet Deploy + End-to-End Test Walkthrough
 
 > Operator runbook for the **merged** `locked_in` program.
-> Program ID: **`68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3`**
+> Program ID: **`3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav`**
 > One on-chain program, two config domains (vault + pot) under distinct PDA seeds. The game layer (fuel / ichor / streak) is **off-chain** in Postgres.
 >
 > Follow top to bottom. Every command is copy-pasteable. All paths are absolute.
@@ -10,7 +10,7 @@
 
 ## 1. Overview & sequence
 
-This used to be three programs (`lock_vault`, `community_pot`, `yield_splitter`). It is now **one** program, `locked_in`, ID `68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3`. The vault and pot share that single program ID and are separated only by their PDA seeds:
+This used to be three programs (`lock_vault`, `community_pot`, `yield_splitter`). It is now **one** program, `locked_in`, ID `3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav`. The vault and pot share that single program ID and are separated only by their PDA seeds:
 
 - Vault config PDA: `seeds = [b"vault-protocol"]`
 - Pot config PDA: `seeds = [b"pot-protocol"]`
@@ -49,14 +49,14 @@ There is **no `redeem_ichor`** and no yield-splitter instruction — ichor is sp
 # The program keypair pubkey MUST equal the declared program ID.
 # If it differs, STOP: the .so was built against a different keypair.
 solana-keygen pubkey /Users/marcus/Projects/locked-in/target/deploy/locked_in-keypair.json
-# Expect: 68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3
+# Expect: 3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav
 
 # The built artifact must exist.
 ls -la /Users/marcus/Projects/locked-in/target/deploy/locked_in.so
 
 # The IDL address must match (belt and suspenders).
 node -e "console.log(require('/Users/marcus/Projects/locked-in/target/idl/locked_in.json').address)"
-# Expect: 68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3
+# Expect: 3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav
 ```
 
 > **BACK UP `target/deploy/locked_in-keypair.json` NOW.** It is gitignored and exists only on this machine. Lose it and you can never deploy or upgrade this program ID again.
@@ -112,20 +112,20 @@ Do **not** run a fresh `anchor build` unless Rust source actually changed — a 
 ### A3. Verify the deploy
 
 ```bash
-solana program show 68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3 --url https://api.devnet.solana.com
+solana program show 3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav --url https://api.devnet.solana.com
 ```
 Confirm:
-- **Program Id:** `68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3`
+- **Program Id:** `3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav`
 - **Owner:** `BPFLoaderUpgradeab1e11111111111111111111111`
 - **ProgramData Address:** present
 - **Authority:** your `solana address`
 - **Data Length:** ~360,544 bytes
 
-Explorer: `https://explorer.solana.com/address/68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3?cluster=devnet`
+Explorer: `https://explorer.solana.com/address/3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav?cluster=devnet`
 
 **Optional but recommended — publish the IDL on-chain** so explorers/clients can fetch it:
 ```bash
-anchor idl init 68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3 \
+anchor idl init 3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav \
   --filepath /Users/marcus/Projects/locked-in/target/idl/locked_in.json \
   --provider.cluster devnet \
   --provider.wallet ~/.config/solana/id.json
@@ -171,7 +171,7 @@ Derive the PDAs and confirm they're owned by the program. Run from `backend/` (h
 cd /Users/marcus/Projects/locked-in/backend
 node -e '
 const {PublicKey,Connection}=require("@solana/web3.js");
-const PROGRAM=new PublicKey("68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3");
+const PROGRAM=new PublicKey("3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav");
 const conn=new Connection("https://api.devnet.solana.com","confirmed");
 (async()=>{
   for (const seed of ["vault-protocol","pot-protocol"]) {
@@ -213,8 +213,8 @@ Set / verify these keys:
 **Cluster / program IDs (both → merged ID):**
 ```
 SOLANA_RPC_URL=https://api.devnet.solana.com      # MUST contain "devnet" (fail-closed dev-secret guard)
-LOCK_VAULT_PROGRAM_ID=68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3
-COMMUNITY_POT_PROGRAM_ID=68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3
+LOCK_VAULT_PROGRAM_ID=3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav
+COMMUNITY_POT_PROGRAM_ID=3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav
 ```
 (`YIELD_SPLITTER_PROGRAM_ID` is dead — must NOT be present.)
 
@@ -275,7 +275,7 @@ NEXT_PUBLIC_PRIVY_APP_ID=cmncshird026v0cl5n6yqq8z0          # == backend PRIVY_A
 NEXT_PUBLIC_SOLANA_CLUSTER=devnet
 NEXT_PUBLIC_SOLANA_RPC_URL=https://api.devnet.solana.com
 NEXT_PUBLIC_SOLANA_WS_URL=wss://api.devnet.solana.com
-NEXT_PUBLIC_LOCK_VAULT_PROGRAM_ID=68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3   # merged; pot PDA derived from this
+NEXT_PUBLIC_LOCK_VAULT_PROGRAM_ID=3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav   # merged; pot PDA derived from this
 NEXT_PUBLIC_LOCK_VAULT_USDC_MINT=4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU    # == backend
 ```
 `NEXT_PUBLIC_YIELD_SPLITTER_PROGRAM_ID` and `NEXT_PUBLIC_COMMUNITY_POT_PROGRAM_ID` are **not** read — `lockVault.ts` derives both the vault PDA (`vault-protocol`) and pot PDA (`pot-protocol`) from the single `NEXT_PUBLIC_LOCK_VAULT_PROGRAM_ID`. Don't set them.

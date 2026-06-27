@@ -16,7 +16,7 @@ Source of truth: `programs/locked_in/src/vault.rs` (custody logic),
 Current implementation checkpoint:
 
 - one Anchor program named `locked_in`, program ID
-  `68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3`, deployed on devnet
+  `3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav`, deployed on devnet
 - the vault is one of two modules under this program ID, separated only by
   PDA config seed: `vault` (`b"vault-protocol"`) and `pot`
   (`b"pot-protocol"`)

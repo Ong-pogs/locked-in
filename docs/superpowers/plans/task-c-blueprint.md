@@ -5,7 +5,7 @@ Make the web-app's on-chain client read only the 9 custody fields that still exi
 ## 0. Ground-Truth Verification (done — no assumptions)
 
 IDL confirms:
-- Program name `locked_in`, address `68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3`.
+- Program name `locked_in`, address `3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav`.
 - Instructions present: `close_distribution_window, distribute_window, initialize_pot, initialize_vault, lock_funds, record_redirect, unlock_funds`. **No `redeem_ichor`. No `course_policy` account anywhere.**
 - `LockAccount` discriminator `[223,64,71,124,255,86,118,192]` == hex `df40477cff5676c0` (matches current `LOCK_ACCOUNT_DISCRIMINATOR_HEX`).
 - `lock_funds` discriminator `[171,49,9,86,156,155,2,88]`; `unlock_funds` `[175,119,16,245,141,55,255,43]` — both already correct in code.
@@ -95,7 +95,7 @@ Helpers `readU8 / readU64LE / readI64LE / bytesToHex / formatAtomicAmount` stay.
 - `LOCK_ACCOUNT_DISCRIMINATOR_HEX` `df40477cff5676c0` (line 21) — verified equal to IDL. Keep.
 - `LOCK_FUNDS_DISCRIMINATOR` / `UNLOCK_FUNDS_DISCRIMINATOR` — verified equal to IDL. Keep.
 - `LOCK_SEED = Buffer.from('lock')` — keep (lock_account PDA seed).
-- **Program ID is an ENV change, not code**: set `NEXT_PUBLIC_LOCK_VAULT_PROGRAM_ID=68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3` in the web-app `.env`. `initialize_vault` is a deploy/admin instruction — the web-app does not call it, so no client code is added for it.
+- **Program ID is an ENV change, not code**: set `NEXT_PUBLIC_LOCK_VAULT_PROGRAM_ID=3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav` in the web-app `.env`. `initialize_vault` is a deploy/admin instruction — the web-app does not call it, so no client code is added for it.
 
 ### KEEP (custody-correct as-is, aside from the coursePolicy edit)
 - `buildLockFundsTransaction` (with coursePolicy removed), `buildUnlockFundsTransaction`, `batchCheckLockAccounts`, `deriveLockAccountAddress`, `fetchLockAccountSnapshot`, `fetchWalletDepositBalances`, `getLockVaultConfig`, `hasLockVaultConfig`, `parseUiTokenAmount`, `formatDepositAmountUi`, `getStableMintAddress`.

@@ -6,7 +6,7 @@ This service orchestrates user lock setup and lock lifecycle reads from the Next
 It is the transaction builder/orchestration layer, not the settlement authority.
 
 The custody escrow now lives in the single merged `locked_in` Anchor program
-(program ID `68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3`, devnet). The former
+(program ID `3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav`, devnet). The former
 separate `lock_vault` and `community_pot` programs were merged into `locked_in`
 (separated only by PDA seeds: `vault-protocol` vs `pot-protocol`); the
 `yield_splitter` program was removed entirely. The vault is CUSTODY-ONLY:
@@ -137,7 +137,7 @@ Must handle and classify:
 Client/service config must include:
 
 - cluster + RPC endpoint
-- single `locked_in` program ID (`68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3`
+- single `locked_in` program ID (`3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav`
   on devnet) — the former separate `LockVault` / `YieldSplitter` / `CommunityPot`
   IDs are gone (vault + pot merged into `locked_in`; `yield_splitter` removed)
 - supported stablecoin mint addresses

@@ -24,7 +24,7 @@ Design goals:
 ## Canonical Program Topology
 
 Locked In v4.0 uses **one** on-chain Anchor program named `locked_in`
-(program ID `68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3`, deployed on
+(program ID `3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav`, deployed on
 devnet). It contains two domains separated only by PDA seeds:
 
 1. `vault` module (seed `b"vault-protocol"`) — pure custody escrow.

@@ -79,7 +79,7 @@ It only provides:
 Business rules remain in:
 
 - the single on-chain `locked_in` program (program ID
-  `68im45BCfv8sL6WnVVV9JF4edLkB11udeU9EAApNaEx3`), which contains the
+  `3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav`), which contains the
   `vault` custody module (seed `vault-protocol`) and the `pot` module
   (seed `pot-protocol`)
 - backend lesson verification, fuel/ichor/streak counters, and scheduling
