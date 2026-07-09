@@ -225,6 +225,41 @@ export interface CourseRuntimeSnapshot {
   fireLitUntil?: string | null;
   ichorCounter?: number;
   ichorLifetimeTotal?: number;
+  // v2 shield/lapse engine state (spec §4.2) — flame gauge / shield pips /
+  // penalty banner / CLAIM CTA. Optional until every backend is redeployed.
+  shields?: number;
+  lapseCount?: number;
+  lapseOpen?: boolean;
+  consecutiveLessonDays?: number;
+  voucherAvailable?: boolean;
+  lastCompletedDay?: string | null;
+  completedToday?: boolean;
+  dayEndsAtUtc?: string;
+}
+
+/** Live lock position from GET /v1/locks/:courseId/position (spec §4.2).
+ * status is authoritative for the CLAIM CTA; liveValueUi is null when the
+ * exchange rate is unreadable (render principal instead, never fabricate). */
+export interface LockPositionResponse {
+  courseId: string;
+  status: 'NONE' | 'PENDING' | 'ACTIVE' | 'CLOSED';
+  lockAddress: string | null;
+  principalUi: string | null;
+  liveValueUi: string | null;
+  asOf: string;
+}
+
+/** Signed completion voucher from POST /v1/progress/courses/:courseId/voucher.
+ * message/signature are base64; embed in an Ed25519 precompile ix before claim_v2. */
+export interface CompletionVoucherResponse {
+  courseId: string;
+  lapseCount: number;
+  lock: string;
+  authorityPubkey: string;
+  bps: number;
+  expiry: number;
+  message: string;
+  signature: string;
 }
 
 /* ── Brewery (fire-timer model) ─────────────────────────────────────── */

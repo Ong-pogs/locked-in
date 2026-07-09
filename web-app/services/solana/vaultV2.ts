@@ -48,6 +48,7 @@ export interface VaultV2Config {
   collateralMint: PublicKey;
   potVault: PublicKey;
   feeVault: PublicKey;
+  currentTvlUi: string;
   paused: boolean;
 }
 
@@ -184,6 +185,8 @@ export async function readVaultV2Config(): Promise<VaultV2Config> {
     collateralMint: readPk(d, 232),
     potVault: readPk(d, 264),
     feeVault: readPk(d, 296),
+    // u64s follow the 10 pubkeys: min@328 max@336 cap@344 tvl@352, bps u16@360.
+    currentTvlUi: formatAtomicUsdc(d.readBigUInt64LE(352)),
     paused: d[362] === 1,
   };
 }
@@ -232,6 +235,7 @@ export async function buildDepositTransaction(
   courseId: string,
   stableAmount: bigint,
   config: VaultV2Config,
+  prepend: TransactionInstruction[] = [],
 ): Promise<Transaction> {
   const programId = getProgramId();
   const owner = new PublicKey(ownerAddress);
@@ -260,9 +264,9 @@ export async function buildDepositTransaction(
     ],
     data: encodeLockFundsData(courseIdHash, stableAmount),
   });
-  return new Transaction()
-    .add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }))
-    .add(ix);
+  const tx = new Transaction();
+  for (const pre of prepend) tx.add(pre);
+  return tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })).add(ix);
 }
 
 /**
@@ -270,12 +274,19 @@ export async function buildDepositTransaction(
  * voucher's bps, closing the lock. The tx is [ed25519_verify(voucher),
  * compute_budget, claim]; the program scans instructions for the precompile.
  * `voucher` is the backend endpoint's response for this (owner, course).
+ *
+ * MAINNET BLOCKER (docs/mainnet-readiness-checklist.md): against real Kamino
+ * this must become [compute_budget, refresh_reserve, ed25519_verify, claim] —
+ * pass refresh_reserve via `prepend`. The devnet mock reserve needs no refresh
+ * and this order is the devnet-proven one, byte-for-byte. Fix here, never in
+ * pages.
  */
 export async function buildClaimTransaction(
   ownerAddress: string,
   courseId: string,
   voucher: CompletionVoucher,
   config: VaultV2Config,
+  prepend: TransactionInstruction[] = [],
 ): Promise<Transaction> {
   const programId = getProgramId();
   const owner = new PublicKey(ownerAddress);
@@ -319,7 +330,9 @@ export async function buildClaimTransaction(
     data: encodeClaimData(voucher.bps, voucher.expiry),
   });
 
-  return new Transaction()
+  const tx = new Transaction();
+  for (const pre of prepend) tx.add(pre);
+  return tx
     .add(edIx)
     .add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }))
     .add(claimIx);

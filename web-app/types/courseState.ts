@@ -42,6 +42,15 @@ export interface CourseGameState {
 
   // Local completion timestamp (epoch ms) for sync guard
   lastLocalCompletionAt: number | null;
+
+  // v2 shield/lapse engine (spec §4.2) — synced from the backend snapshot.
+  shields: number;
+  lapseCount: number;
+  lapseOpen: boolean;
+  consecutiveLessonDays: number;
+  completedToday: boolean;
+  dayEndsAtUtc: string | null;
+  voucherAvailable: boolean;
 }
 
 export const DEFAULT_COURSE_STATE: CourseGameState = {
@@ -68,4 +77,11 @@ export const DEFAULT_COURSE_STATE: CourseGameState = {
   flameState: 'COLD',
   lightIntensity: 0.05,
   lastLocalCompletionAt: null,
+  shields: 3,
+  lapseCount: 0,
+  lapseOpen: false,
+  consecutiveLessonDays: 0,
+  completedToday: false,
+  dayEndsAtUtc: null,
+  voucherAvailable: false,
 };

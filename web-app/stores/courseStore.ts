@@ -80,6 +80,7 @@ interface CourseStore {
   getEnrolledCourses: () => Course[];
   syncCourseRuntime: (courseId: string, snapshot: CourseRuntimeSnapshot) => void;
   syncLockSnapshot: (courseId: string, snapshot: LockAccountSnapshot) => void;
+  clearLockForCourse: (courseId: string) => void;
   refreshCourseRuntime: (courseId: string, token: string) => Promise<void>;
   resetLessonProgressForCourse: (courseId: string) => void;
   syncOnChainEnrollments: (walletAddress: string) => Promise<void>;
@@ -453,6 +454,16 @@ export const useCourseStore = create<CourseStore>()(
               ichorBalance: snapshot.ichorCounter ?? existingState.ichorBalance,
               totalIchorProduced:
                 snapshot.ichorLifetimeTotal ?? existingState.totalIchorProduced,
+              // v2 shield/lapse engine — the card's flame gauge, shield pips,
+              // penalty banner, and CLAIM hint all read from these.
+              shields: snapshot.shields ?? existingState.shields,
+              lapseCount: snapshot.lapseCount ?? existingState.lapseCount,
+              lapseOpen: snapshot.lapseOpen ?? existingState.lapseOpen,
+              consecutiveLessonDays:
+                snapshot.consecutiveLessonDays ?? existingState.consecutiveLessonDays,
+              completedToday: snapshot.completedToday ?? existingState.completedToday,
+              dayEndsAtUtc: snapshot.dayEndsAtUtc ?? existingState.dayEndsAtUtc,
+              voucherAvailable: snapshot.voucherAvailable ?? existingState.voucherAvailable,
             },
           },
         });
@@ -473,6 +484,23 @@ export const useCourseStore = create<CourseStore>()(
               lockAccountAddress:
                 snapshot.lockAccountAddress ?? existingState.lockAccountAddress,
               lockStartDate: snapshot.lockStartDate,
+            },
+          },
+        });
+      },
+
+      // Post-claim: the on-chain lock is closed — drop the custody pointer so
+      // the card flips to practice mode instead of re-offering CLAIM.
+      clearLockForCourse: (courseId) => {
+        const state = get();
+        const existingState = normalizeCourseGameState(state.courseStates[courseId]);
+        set({
+          courseStates: {
+            ...state.courseStates,
+            [courseId]: {
+              ...existingState,
+              lockAccountAddress: null,
+              voucherAvailable: false,
             },
           },
         });
@@ -689,6 +717,16 @@ export const useCourseStore = create<CourseStore>()(
               totalIchorProduced:
                 enrollment.runtime.ichorLifetimeTotal ??
                 existing.totalIchorProduced,
+              // v2 shield/lapse engine (enrollments never carry voucherAvailable
+              // — the CLAIM CTA arms from the per-course snapshot instead).
+              shields: enrollment.runtime.shields ?? existing.shields,
+              lapseCount: enrollment.runtime.lapseCount ?? existing.lapseCount,
+              lapseOpen: enrollment.runtime.lapseOpen ?? existing.lapseOpen,
+              consecutiveLessonDays:
+                enrollment.runtime.consecutiveLessonDays ?? existing.consecutiveLessonDays,
+              completedToday:
+                enrollment.runtime.completedToday ?? existing.completedToday,
+              dayEndsAtUtc: enrollment.runtime.dayEndsAtUtc ?? existing.dayEndsAtUtc,
             };
           }
         }

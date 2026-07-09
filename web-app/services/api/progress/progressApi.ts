@@ -4,7 +4,9 @@ import type {
   BreweryFeedResponse,
   BreweryClaimResponse,
   BuyStreakSaverResponse,
+  CompletionVoucherResponse,
   CourseRuntimeSnapshot,
+  LockPositionResponse,
   XpSnapshot,
   CommunityPotHistoryResponse,
   LeaderboardResponse,
@@ -104,6 +106,25 @@ export function getUserEnrollments(
   token: string,
 ): Promise<UserEnrollmentsResponse> {
   return httpRequest<UserEnrollmentsResponse>('/v1/progress/enrollments', { token });
+}
+
+/** Live lock position — the card's headline value + CLAIM arming status. */
+export function getLockPosition(
+  courseId: string,
+  token: string,
+): Promise<LockPositionResponse> {
+  return httpRequest<LockPositionResponse>(`/v1/locks/${courseId}/position`, { token });
+}
+
+/** Request a signed completion voucher (403 until every lesson is complete). */
+export function getCompletionVoucher(
+  courseId: string,
+  token: string,
+): Promise<CompletionVoucherResponse> {
+  return httpRequest<CompletionVoucherResponse>(
+    `/v1/progress/courses/${courseId}/voucher`,
+    { method: 'POST', token },
+  );
 }
 
 export function getCourseRuntime(
