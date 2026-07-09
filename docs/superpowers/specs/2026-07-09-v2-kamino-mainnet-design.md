@@ -1,211 +1,249 @@
 # Locked In v2 — Real Yield (Kamino) + Mainnet Beta — Design Spec
 
-> Status: approved in design session 2026-07-09 (Ong + Claude).
+> Status: approved in design session 2026-07-09 (Ong + Claude). Rev 2 (expanded).
 > Supersedes: simulated-yield model, ichor economy, fuel/feeding, duration presets,
-> per-harvest redirect tiers (0/10/15/20), and the v3 remnants (gauntlet, fragments).
+> per-harvest redirect tiers (0/10/15/20), and all v3 remnants (gauntlet, fragments).
 > Posture: **real product**, launching as a capped, unaudited, honestly-disclosed mainnet beta.
 
-## 1. One-paragraph summary
+## 1. Summary
 
 Users deposit USDC ($10–50) into a per-course lock; the program CPIs the principal into
-Kamino's USDC reserve where it earns real, compounding yield. Finishing every lesson in the
-course unlocks CLAIM: principal + yield × (100% − penalty) in one user-signed transaction.
-Daily learning keeps a flame alive; 3 auto-burning shields (savers) absorb missed days and
-regenerate 1 per lesson-day; running out of shields and going dark = a "lapse" (1st lapse
-forfeits 50% of yield, 2nd forfeits 100% — forfeits fund the community pot). Quitting entirely
-triggers a permissionless auto-return of principal after 90 days of inactivity. Total value at
-risk is hard-capped on-chain ($1k global) until an audit unlocks higher tiers.
+Kamino Lend's USDC reserve where it earns real, compounding yield. Finishing every lesson in
+the course unlocks CLAIM: principal + yield × (100% − penalty) in one user-signed
+transaction. Daily learning keeps a flame alive; three auto-burning shields absorb missed
+days and regenerate one per lesson-day; exhausting shields and going dark is a "lapse"
+(first lapse forfeits 50% of yield, second forfeits 100% — forfeits fund the community pot).
+Quitting entirely triggers a permissionless auto-return of principal after 90 days of
+inactivity. Total value at risk is hard-capped on-chain ($1k global) until an audit unlocks
+higher tiers. No platform fee in beta (`platform_fee_bps = 0`, rails reserved).
 
-## 2. Product decision ledger (all locked)
+## 2. Product decision ledger
 
 | # | Area | Decision |
 |---|------|----------|
 | 1 | Scope | Full model on mainnet: real Kamino yield + real funded pot |
-| 2 | Posture | Real product; capped unaudited beta first; audit = first major expense later |
-| 3 | Yield | Principal deposited to Kamino USDC reserve at lock; compounds in-position; paid once at claim |
-| 4 | Claim gate | ALL lessons in course passed (score ≥ 70 each) → backend attests on-chain → owner-signed CLAIM |
-| 5 | Penalty | Lapse-based, one-mercy: 1st lapse −50% of total yield, 2nd lapse −100%. Applied to total yield at settlement (Model A) |
-| 6 | Lapse | An unprotected miss day (shields empty). Consecutive dark days = ONE lapse event; a new lapse requires activity in between |
-| 7 | Savers ("shields") | Start 3, +1 per lesson-day, cap 3, auto-burn on missed day. Shield-covered day: streak PAUSED (not grown, not reset) |
-| 8 | Streak | 1 passed lesson per UTC day, per course. Unprotected miss → streak dies + flame state worsens |
-| 9 | Multi-course | Per-course locks/streaks/shields (PDA `[b"lock", owner, course_id_hash]`), unchanged |
-| 10 | Quit path | Weekly on-chain heartbeat while active; `force_return` permissionless once `now ≥ last_heartbeat + 90d`: principal → owner, yield → pot; platform sponsors gas |
-| 11 | Unclaimed | Completed-but-unclaimed positions keep earning at the user's ratio; post-force-return-eligible positions accrue to pot until swept |
-| 12 | Pot | Funded ONLY by real forfeited yield at settlements. Monthly windows (YYYYMM), weight = principal × current streak, active streaks only |
-| 13 | Caps | On-chain: min $10, max $50/lock, $1,000 global TVL (live counter). `set_caps` authority ix; caps only constrain new locks |
-| 14 | Lessons | Unlimited retries, pass ≥ 70%, no lives/hearts system |
-| 15 | Flame | Auto "commitment health gauge": BLAZING (streak alive, 3 shields) → FLICKERING (shields burning, countdown shown) → DARK (1 lapse, −50%) → EXTINGUISHED (2 lapses, −100%). Fuel currency + manual feeding DELETED |
-| 16 | Ichor + shop | DELETED (columns, awards, buy-saver, drop animations) |
-| 17 | XP | Kept, but leaderboard ranks by CURRENT STREAK |
-| 18 | Dashboard | Course-card layout (option B): each lock = self-contained card (live position value, flame, shields, progress bar, next-lesson CTA, CLAIM state). Alchemy + inventory pages die into modals (shields, pot, history) |
-| 19 | Access | Deposit-gated progression. Lesson text remains publicly readable (marketing). NO demo course. No free tier |
-| 20 | Re-lock | Completed course cannot be re-locked. Completed users get free PRACTICE MODE (replay lessons; no XP/streak/shield effects) |
-| 21 | Gas UX | Platform fee-payer co-signs deposit/claim for embedded-wallet users; rate-limited per wallet |
-| 22 | Onramp | Privy built-in funding (MoonPay/Coinbase) + "fund your wallet" guide modal |
-| 23 | Courses | 2 polished at launch (Blockchain & Wallets, DeFi), placeholders hidden, +2–3 new courses authored during weeks 3–4 |
-| 24 | Village | Pixel village = main hub (3D dungeon retired). No separate /menu. Fireplace renders the health-gauge flame |
-| 25 | Cluster safety | Explicit `CLUSTER=devnet|mainnet` env + genesis-hash verification at boot, fail-closed; all `rpcUrl.includes('devnet')` checks deleted |
-| 26 | Keys | 3 distinct keys: program upgrade authority (cold, offline), attestor/pot authority (hot, low-power), deployer. `?? DEPLOYER_PRIVATE_KEY` fallback chain deleted; boot fails if keys missing or identical |
-| 27 | Beta disclosure | In-app + ToS: unaudited, capped, Kamino pass-through risk, "exits: finish the course, or stop for 90 days" |
+| 2 | Posture | Real product; capped unaudited beta; professional audit = first major expense post-launch |
+| 3 | Yield venue | Kamino Lend (klend) main-market USDC reserve only. Rationale: existing SDK integration, deepest Solana USDC lending liquidity (withdrawal-crunch tail risk), multiple audits, simple cToken exchange-rate accounting |
+| 4 | Yield mechanics | Deposited at lock via CPI; compounds in-position; visible live on dashboard (RPC read); paid once at settlement |
+| 5 | Claim gate | ALL lessons in course passed (each score ≥ 70) → backend attests on-chain (one-shot) → owner-signed CLAIM |
+| 6 | Penalty | Lapse-based, one-mercy: 1st lapse −50% of total yield, 2nd −100%. Applied to total yield at settlement (Model A accounting) |
+| 7 | Lapse definition | An unprotected missed day (shields empty). Consecutive dark days coalesce into ONE lapse; a subsequent lapse requires ≥1 lesson-day in between |
+| 8 | Shields (savers) | Start 3, +1 per lesson-day, cap 3, auto-burn on missed day. Shield-covered day: streak PAUSED (not grown, not reset) |
+| 9 | Streak | ≥1 passed lesson per UTC day, per course. Unprotected miss → streak dies |
+| 10 | Multi-course | Per-course locks/streaks/shields; PDA `[b"lock", owner, course_id_hash]`; one live lock per (wallet, course) |
+| 11 | Quit path | Weekly on-chain heartbeat for active locks; `force_return` permissionless once `now ≥ last_heartbeat + 90d` (uncompleted locks only): principal → owner, all yield → pot; platform sponsors gas |
+| 12 | Unclaimed positions | Attested-but-unclaimed keep earning at frozen `user_yield_bps`; uncompleted past-deadline positions accrue to pot until swept by `force_return` |
+| 13 | Pot | Funded ONLY by real forfeited yield at settlements. Monthly windows (YYYYMM), weight = principal × current streak, active streaks only, pro-rata |
+| 14 | Caps | On-chain: `min_principal` $10, `max_principal_per_lock` $50, `global_tvl_cap` $1,000 with live counter. Authority `set_caps`; caps constrain new locks only |
+| 15 | Platform fee | **0 for beta.** `platform_fee_bps` field on `VaultConfig`, default 0, max hard-capped (e.g. ≤ 2000) — enabling later = config, not upgrade. Fee (when enabled) comes from YIELD ONLY, never principal |
+| 16 | Lessons | Unlimited retries, pass ≥ 70%, no lives/hearts |
+| 17 | Flame | Auto health gauge (no feeding): BLAZING (streak alive, 3 shields) → FLICKERING (shields burning; countdown banner) → DARK (1 lapse, −50%) → EXTINGUISHED (2 lapses, −100%). Fuel currency + manual feeding DELETED |
+| 18 | Ichor + shop | DELETED entirely |
+| 19 | XP | Kept; leaderboard ranks by CURRENT STREAK |
+| 20 | Dashboard | Course-card layout: per lock — live position value, flame, shields, streak, progress bar, next-lesson CTA, CLAIM state. Alchemy/inventory/shop pages die into modals |
+| 21 | Access | Deposit-gated progression; lesson text stays publicly readable; NO demo course; no free tier |
+| 22 | Re-lock | Completed course can never be re-locked. Completed users get PRACTICE MODE (free replay; no XP/streak/shield writes) |
+| 23 | Gas UX | Platform fee-payer co-signs deposit/claim for embedded wallets; per-wallet rate limit |
+| 24 | Onramp | Privy built-in funding (MoonPay/Coinbase) + "fund your wallet" guide modal |
+| 25 | Courses | 2 polished at launch (Blockchain & Wallets, DeFi); placeholders hidden; +2–3 new courses authored weeks 3–4 |
+| 26 | Hub | Pixel village = main hub (3D dungeon retired); no /menu page; fireplace renders the flame gauge |
+| 27 | Cluster safety | Explicit `CLUSTER=devnet|mainnet` env + genesis-hash verification at boot, fail-closed; every `rpcUrl.includes('devnet')` check deleted |
+| 28 | Keys | 3 distinct keys: upgrade authority (cold/offline), attestor+pot authority (hot, low-power), deployer. Fallback chain deleted; boot fails on missing/identical keys |
+| 29 | Disclosure | In-app + ToS: unaudited, caps, "exits: finish the course, or stop for 90 days", Kamino pass-through risk, authority powers and their hard limits |
 
 ## 3. On-chain program v2 (`programs/locked_in`)
 
-Fresh program ID for mainnet (new keypair, custody documented). Devnet keeps current
-deployment as staging.
+Fresh program ID for mainnet (new keypair; custody ceremony documented in HANDOFF v2).
+Current devnet deployment (`3RC9XkPZ…kBav`) remains as staging.
 
-### 3.1 Accounts
+### 3.1 State
 
-**`VaultConfig`** (PDA `[b"vault-protocol"]`) — gains fields:
-`min_principal`, `max_principal_per_lock`, `global_tvl_cap`, `current_tvl`, `paused: bool`,
-`kamino_market`, `kamino_reserve`. `authority` becomes meaningful (attestor/ops key).
+**`VaultConfig`** — PDA `[b"vault-protocol"]`
+```
+authority: Pubkey            // attestor/ops key (hot, low-power)
+usdc_mint: Pubkey
+kamino_market: Pubkey        // pinned at init
+kamino_reserve: Pubkey       // pinned at init
+min_principal: u64           // 10_000_000 (=$10, 6dp)
+max_principal_per_lock: u64  // 50_000_000
+global_tvl_cap: u64          // 1_000_000_000
+current_tvl: u64             // live counter (principal units)
+platform_fee_bps: u16        // 0 in beta; hard max enforced ≤ 2000
+paused: bool
+bump: u8
+```
 
-**`LockAccount`** (PDA `[b"lock", owner, course_id_hash]`) — gains fields:
-`last_heartbeat_ts: i64`, `completion_attested: bool`, `user_yield_bps: u16` (10000/5000/0,
-set at attestation), `ctoken_amount: u64` (Kamino collateral held). Drops nothing user-visible;
-`lock_end_ts` semantics replaced by heartbeat + completion model.
-
-**Pot accounts** — unchanged shapes (`PotConfig`, `PotWindow`, `DistributionWindow`,
-receipts). `record_redirect` as a standalone authority-bookkeeping ix is retired on mainnet;
-pot funding happens inside settlement instructions (below) so
-`total_redirected_amount ≤ pot_vault.amount` holds structurally.
+**`LockAccount`** — PDA `[b"lock", owner, course_id_hash]`
+```
+owner, course_id_hash, stable_mint
+principal_amount: u64
+ctoken_amount: u64           // Kamino collateral held by this lock
+lock_start_ts: i64
+last_heartbeat_ts: i64       // exit clock anchor
+completion_attested: bool
+user_yield_bps: u16          // 10000 | 5000 | 0, frozen at attestation
+status: u8                   // ACTIVE | CLOSED
+bump: u8
+```
+Each lock owns a cToken ATA (authority = lock PDA). Pot accounts (`PotConfig`, `PotWindow`,
+`DistributionWindow`, receipts) keep their v1 shapes; standalone `record_redirect` retires on
+mainnet — pot funding + window accounting happen inside settlement instructions so
+`Σ window accounting ≤ pot_vault.amount` holds by construction.
 
 ### 3.2 Instructions
 
-| Ix | Signer | What it does |
-|----|--------|--------------|
-| `initialize_vault` / `initialize_pot` | upgrade authority only (programdata check) | As today + new config fields. Kills init front-run |
-| `lock_funds(course_id_hash, amount)` | owner | Checks `!paused`, `min ≤ amount ≤ max`, `current_tvl + amount ≤ cap`; transfers USDC owner→vault ATA; CPI `deposit_reserve_liquidity` into Kamino USDC reserve; stores `ctoken_amount`; `current_tvl += amount`; `last_heartbeat_ts = now` |
-| `heartbeat(batch)` | authority | Weekly, batched: bumps `last_heartbeat_ts = now` for locks with learning activity that week. Cannot set future values. Stops forever if backend dies → everyone force-returnable 90d later |
-| `attest_completion(user_yield_bps)` | authority | Requires all-lessons-passed off-chain; sets `completion_attested = true`, `user_yield_bps ∈ {10000, 5000, 0}`. One-shot, immutable after set |
-| `claim` | owner | Requires `completion_attested`. CPI `redeem_reserve_collateral` (full position); principal + yield×bps/10000 → owner ATA; remainder → `pot_vault` + pot window accounting in same ix; `current_tvl −= principal`; closes lock. NOT blockable by pause |
-| `force_return` | ANYONE (permissionless) | Requires `!completion_attested && now ≥ last_heartbeat_ts + 90d`. CPI full redeem; principal → owner ATA; ALL yield → `pot_vault` + accounting; closes lock. NOT blockable by pause. Platform runs it sponsored; users/anyone can too |
-| `set_caps` / `set_pause` | authority | Caps affect new locks only; pause blocks `lock_funds` + `heartbeat` + `attest_completion`, NEVER `claim`/`force_return` |
-| `close_distribution_window` / `distribute_window` | authority | As today + payout double-floored by `min(remaining_amount, pot_vault.amount)` |
+| Ix | Signer | Behavior |
+|----|--------|----------|
+| `initialize_vault(params)` / `initialize_pot(...)` | **program upgrade authority only** (programdata check) | Writes config incl. pinned Kamino market/reserve + caps. Kills init front-running |
+| `lock_funds(course_id_hash, amount)` | owner | Require `!paused`; `min ≤ amount ≤ max`; `current_tvl + amount ≤ cap`; USDC owner→temp; CPI klend `deposit_reserve_liquidity`; cTokens → lock's ATA; `current_tvl += amount`; `last_heartbeat_ts = now` |
+| `heartbeat(locks[])` | authority | Weekly batch: `last_heartbeat_ts = now` for locks with that week's learning activity. Clamped to `now` (no future-dating). Backend death ⇒ heartbeats stop ⇒ universal exit opens 90d later |
+| `attest_completion(user_yield_bps)` | authority | One-shot: require `!completion_attested`; `user_yield_bps ∈ {10000, 5000, 0}`; set flag + bps. Immutable afterwards |
+| `claim` | owner | Require `completion_attested && status == ACTIVE`. CPI klend `redeem_reserve_collateral` (full `ctoken_amount`); let `total = redeemed`, `yield = total − principal` (floor 0); pay owner `principal + yield × user_yield_bps/10000 − fee`; fee = `yield × platform_fee_bps/10000` → fee vault (0 in beta); remainder of yield → `pot_vault` + window accounting same-ix; `current_tvl −= principal`; close lock + ATAs, rent → owner. **Never blocked by pause** |
+| `force_return` | **anyone** | Require `!completion_attested && now ≥ last_heartbeat_ts + 7_776_000 (90d) && status == ACTIVE`. Full redeem; principal → owner ATA (init_if_needed); ALL yield − fee → `pot_vault` + accounting; `current_tvl −= principal`; close lock. **Never blocked by pause.** Platform runs sponsored crank; user or any third party can equally call |
+| `set_caps(min, max, global, fee_bps)` / `set_pause(bool)` | authority | Fee_bps ≤ hard max. Caps affect new locks only. Pause blocks `lock_funds`, `heartbeat`, `attest_completion` — never `claim`/`force_return` |
+| `close_distribution_window` / `distribute_window` | authority | v1 semantics + payout double-floored by `min(remaining_amount, pot_vault.amount)` |
 
-### 3.3 Invariants (test targets)
+### 3.3 Invariants (every one is a test)
 
-1. Principal exit never requires the backend: any lock is claimable (if attested) or
-   force-returnable (90d after last heartbeat) with no authority signature.
-2. `pot_vault.amount ≥ Σ window accounting` at all times (funding atomic with accounting).
-3. `current_tvl` conservation: Σ open lock principals == `current_tvl`.
-4. Pause never traps funds.
-5. Double-claim / double-return impossible (account closed; receipts for pot payouts).
-6. A compromised authority key can: attest generously, pause deposits, distribute the pot to
-   wrong recipients (bounded by pot balance). It can NOT: touch principal, block exits, or
-   exceed caps. This bounded-blast-radius property is the design's core safety claim.
+1. **Exit needs no backend:** every ACTIVE lock is exitable by owner (claim if attested) or by
+   anyone (`force_return` 90d after last heartbeat). No authority signature on either path.
+2. **Pot backing:** `pot_vault.amount ≥ Σ distribution-window remaining` at all times.
+3. **TVL conservation:** `current_tvl == Σ principal of ACTIVE locks` across all flows.
+4. **Pause never traps funds.**
+5. **No double-settlement:** claim/force_return close the lock account; distribution receipts
+   block double pot payouts.
+6. **Bounded authority blast radius:** a compromised authority key can attest generously,
+   pause deposits, mis-distribute the pot (≤ pot balance), and bump heartbeats (delaying
+   force_return eligibility but never blocking owner claim). It can NOT move principal,
+   block exits, raise fee above hard max, or mint state that exceeds caps.
+7. **Yield floor:** if Kamino redemption returns < principal (extreme), user absorbs
+   shortfall pro-rata (pass-through), pot gets 0 — no negative-yield claims on the pot.
 
-### 3.4 Kamino integration notes
+### 3.4 Kamino notes
 
-- Mainnet: klend main market USDC reserve (`7u3He…5PfF` per existing config).
-- No devnet klend → all pre-mainnet testing on **surfpool mainnet fork** (existing
-  `kamino_surfpool` profile rig).
-- Position value read = ctoken_amount × exchange rate (backend RPC read, cached ~60s) —
-  powers the live dashboard number; no tx needed.
-- Failure mode: Kamino reserve illiquid/paused at redeem → claim/force_return fails loudly,
-  retryable; no partial state (single atomic ix). Disclosed as pass-through risk.
+- Mainnet klend main market, USDC reserve (`7u3He…5PfF` per existing backend config).
+- No devnet klend ⇒ pre-mainnet testing on **surfpool mainnet fork** (existing rig).
+- Live position value = `ctoken_amount × exchange_rate` (backend read, ~60s cache).
+- Redemption failure (reserve illiquid/paused) ⇒ settlement ix fails atomically; retry later;
+  disclosed pass-through risk.
 
-## 4. Backend changes (`backend/`)
+## 4. Backend (`backend/`)
 
-**Deleted:** ichor columns/awards/shop, brewery claim endpoint + treasury USDC yield payout
-(`transferUsdcAtomic` yield path — the insolvency blocker), simulated harvest recording +
-`fixed_apy_dev` as prod default, fuel counters/feeding endpoints, gauntlet columns/counters,
-duration presets, `record_redirect` publisher, `?? DEPLOYER_PRIVATE_KEY` fallbacks, all
-`includes('devnet')` guards.
+### 4.1 Deletions
+Ichor (columns, awards, shop buy-saver), brewery claim endpoint + treasury USDC payout path,
+simulated harvest recorder + `fixed_apy_dev` as prod default, fuel counters + feed endpoints +
+`consumeDailyFuel`, gauntlet columns/counters/gates, duration presets, `record_redirect`
+publisher, key fallback chain, `includes('devnet')` guards, XP-less v3 leftovers.
 
-**Changed/new:**
-- Miss/lapse engine: shields regen +1/lesson-day (cap 3); shield-covered day pauses streak
-  (fixes the known saver/streak bug by design); unprotected miss = lapse event (consecutive
-  dark days coalesce); lapse count → `user_yield_bps` {0→10000, 1→5000, 2+→0}.
-- Completion watcher: all lessons passed → queue `attest_completion` (idempotent, retried).
-- Heartbeat crank: weekly batch bump for active locks.
-- Force-return crank: daily scan, fire sponsored `force_return` for eligible locks.
-- Position reader: per-lock live value endpoint (ctoken × exchange rate, cached).
-- Fee-payer service: co-sign deposit/claim for embedded wallets; per-wallet rate limit.
-- Pot cycle: monthly close + distribute cranks (weights = principal × streak from DB snapshot).
-- Boot guards: `CLUSTER` enum + genesis-hash check; secrets entropy floor; distinct-key check.
-- Practice mode: completed course → content replay allowed, no XP/streak/shield writes.
+### 4.2 New/changed engines
+- **Shield/lapse engine:** shields +1/lesson-day (cap 3); miss ⇒ auto-burn newest shield,
+  streak paused; miss at 0 shields ⇒ lapse event (streak → 0; consecutive dark days coalesce);
+  lapse_count → bps {0:10000, 1:5000, ≥2:0}.
+- **Completion watcher:** all lessons passed ⇒ enqueue `attest_completion(bps)` (idempotent,
+  retried, alerted on repeated failure).
+- **Heartbeat crank (weekly):** batch-bump locks with activity.
+- **Force-return crank (daily):** scan uncompleted locks `now − last_heartbeat ≥ 90d`, fire
+  sponsored `force_return`.
+- **Pot cycle (monthly):** snapshot weights (principal × streak, active only) → close window →
+  distribute batch.
+- **Position reader:** GET per-lock live value (ctoken × exchange rate, cached 60s).
+- **Fee-payer service:** co-sign deposit/claim for embedded wallets; per-wallet + per-IP rate
+  limits; signs ONLY known instruction shapes to our program (transaction introspection).
+- **Boot guards:** `CLUSTER` enum + genesis-hash check; ≥32-byte secret floor; worker keys
+  present + pairwise distinct; refuse boot otherwise.
+- **Practice mode:** completed course ⇒ content replay, no XP/streak/shield writes.
 
-**DB migrations:** drop ichor/fuel/gauntlet columns; add lapse_count, shield regen fields,
-heartbeat bookkeeping, attestation queue. Ship 0038+0039 (already pending) plus new 0040+.
+### 4.3 API surface changes
+- Removed: `/v1/progress/brewery/*` (claim/feed), shop buy-saver, internal fuel/harvest
+  publish routes.
+- Added: `GET /v1/locks/:courseId/position` (live value), `POST /v1/locks/:courseId/claim-tx`
+  (build + co-sign claim), `GET /v1/progress/shields/:courseId`, completion status in runtime
+  snapshot; capacity endpoint (`current_tvl`, cap) for the deposit meter.
+- Changed: runtime snapshot drops fuel/ichor/gauntlet fields, adds shields, lapse_count,
+  flame_state, attested, claimable breakdown.
 
-## 5. Frontend changes (`web-app/`)
+### 4.4 Migrations
+Apply pending 0038, 0039; new 0040+ series: drop ichor/fuel/gauntlet columns; add
+`shields`, `lapse_count`, `last_lapse_started_day`, heartbeat bookkeeping, attestation queue
+table, practice-mode flag. Each idempotent; applied to Supabase prod by hand (runner remains
+roadmap).
 
-- Dashboard: course-card layout (B) — per card: live position value (ticking), flame gauge,
-  shields (🛡×N), streak, progress bar, next-lesson CTA, CLAIM button when attested,
-  capacity-aware deposit CTA. Modals: shields, pot, history.
-- CLAIM flow (new — unlock UI currently has ZERO call sites): build+sign claim tx, success
-  screen with yield breakdown (kept vs forfeited-to-pot).
-- Deposit flow: no duration picker; $10–50 amount; capacity meter ($X/$1,000 locked);
-  Privy funding + guide modal for empty wallets.
-- Flame states: blazing/flickering(+countdown banner "🛡2 left — flame dies in N days")/
-  dark(−50% shown)/extinguished(−100% shown). Push-notification hooks on shield burns.
-- Copy purge: VillageTour ichor→USDC claims, coin pouches, card on-ramp promises, tutorial
-  yield copy → new one-liners: "Mistakes are free — quitting for a day is not." /
+## 5. Frontend (`web-app/`)
+
+- **Dashboard:** course cards (live value ticking, flame gauge, 🛡×N, streak, progress bar,
+  next-lesson CTA, CLAIM button when attested, penalty banner when lapsed). Modals: shields,
+  pot, history. Capacity meter on deposit entry ("$X / $1,000 locked").
+- **CLAIM flow (new — no unlock UI exists today):** tx build + Privy sign + confirm; success
+  screen with breakdown (principal / yield kept / forfeited to pot).
+- **Deposit flow:** amount $10–50 (no duration picker); empty-wallet path → Privy funding +
+  guide modal; fee-payer co-sign for embedded wallets.
+- **Flame states:** blazing / flickering (+"🛡N left — flame dies in D days" banner + push
+  hook) / dark (−50% badge) / extinguished (−100% badge, "finish for principal + pot rank").
+- **Copy purge:** all ichor→USDC redemption claims, coin pouches, card-on-ramp promises,
+  fuel/feeding references. New canon: "Mistakes are free — quitting for a day is not." /
   "Exits: finish the course, or stop for 90 days."
-- Pages: alchemy + inventory + shop deleted (→ modals); village = hub (no /menu); leaderboard
-  ranks by current streak; practice-mode badge on completed courses.
-- Cluster: `CLUSTER` from `NEXT_PUBLIC_SOLANA_CLUSTER` (kill the hardcode), devnet faucet UI
-  hidden on mainnet.
+- **Pages:** delete /alchemy /inventory /shop (→modals) and /menu (village = hub);
+  leaderboard = current streak; practice badge on completed courses; devnet faucet UI hidden
+  when `CLUSTER=mainnet`; `CLUSTER` read from `NEXT_PUBLIC_SOLANA_CLUSTER` (kill hardcode).
 
 ## 6. Ops, safety, incident playbook
 
-- **Keys:** upgrade authority generated offline, stored cold (paper + hardware), never in env.
-  Attestor/pot authority = hot key on Render, low-power by design (see invariant 6). Deployer
-  separate. Key ceremony documented in HANDOFF v2.
-- **Budget:** ~2–5 SOL program deploy rent + fee-payer float (~0.5 SOL) — the only capital
-  requirement.
-- **Monitoring:** Sentry (frontend+backend) free tier; alerts on /health fail, crank
-  non-execution, 5xx spike, outflow anomaly (any tx moving > $100 from pot).
-- **Incident playbook (pre-written):** (1) `set_pause` — deposits stop, exits keep working;
-  (2) status post in app + socials within 1h; (3) assess: if platform bug lost user funds ≤
-  caps → reimburse 100% from personal funds; if Kamino systemic event → pass-through,
-  communicate; (4) post-mortem public within 72h; (5) unpause only with fix + regression test.
-- **Cap ladder (roadmap):** beta $50/$1k → post-audit $100–500/lock + per-course
-  difficulty-scaled caps (courseLockPolicy already supports) → mature $1k+ expert tiers.
-  Audit is the gate for every raise.
-- **Disclosures page:** unaudited beta, caps, exits, Kamino risk, authority powers + limits.
+- **Key ceremony:** upgrade authority generated offline, cold storage (paper + hardware),
+  never in any env; attestor/pot hot key on Render (low-power by invariant 6); deployer
+  separate. Documented in HANDOFF v2.
+- **Capital needs:** 2–5 SOL deploy rent + ~0.5 SOL fee-payer/crank float. Only requirement.
+- **Monitoring:** Sentry (FE+BE) free tier; alerts: /health fail, crank missed schedule,
+  5xx spike, any pot outflow > $100, attestation queue stuck.
+- **Incident playbook:** (1) `set_pause`; (2) status post ≤ 1h; (3) platform bug losing user
+  funds ≤ caps ⇒ 100% reimbursement from personal funds; Kamino systemic event ⇒
+  pass-through, communicate; (4) public post-mortem ≤ 72h; (5) unpause only with fix +
+  regression test.
+- **Cap ladder:** beta $50/$1k → post-audit $100–500/lock + per-course difficulty-scaled caps
+  (`courseLockPolicy` already supports) → mature $1k+ tiers. Audit gates each raise.
 
 ## 7. Testing
 
-- **Surfpool mainnet-fork suite (primary):** lock→Kamino deposit; claim at bps 10000/5000/0
-  with pot funding assertions; force_return after heartbeat gap (incl. permissionless caller);
-  double-claim/double-return rejection; caps (min/max/global/counter conservation); pause
-  semantics (exits unblocked); init gating (front-run rejected); pot close/distribute floors;
-  Kamino redeem-failure path.
-- **DB integration tests:** shield regen/burn/pause-streak transitions; lapse coalescing;
-  one-mercy bps mapping; completion detection; practice-mode no-op writes; heartbeat
-  eligibility; monthly pot weights.
-- **E2E on fork:** deposit → learn → miss patterns → attest → claim, full wallet flow.
-- **Boot guards:** CLUSTER/genesis mismatch refuses to start; identical keys refuse to start.
+- **Surfpool mainnet-fork suite (primary):** every §3.3 invariant; lock→deposit; claim at bps
+  10000/5000/0 with pot-funding assertions; force_return (incl. third-party caller, incl.
+  attested-lock rejection); double-settlement rejection; caps + TVL counter conservation;
+  pause semantics; init front-run rejection; fee_bps hard-max; Kamino redeem-failure path;
+  yield-floor (invariant 7).
+- **DB integration tests:** shield regen/burn/pause; lapse coalescing + one-mercy mapping;
+  completion detection incl. re-grade edge; practice-mode no-ops; heartbeat eligibility;
+  monthly pot weights + payout invariants (sum == total, zero-weight, dust remainder).
+- **E2E (Playwright):** full browser flows against devnet staging — signup (Privy) → deposit →
+  lesson pass/fail → shield burn banner → claim (devnet uses a mock-yield adapter for
+  determinism) → leaderboard/pot pages. Runs in CI against staging; a **funded devnet wallet
+  (USDC + SOL, provided by Ong)** powers the wallet fixtures. Mainnet-fork E2E smoke (deposit
+  → claim happy path) before launch.
+- **Boot guards:** cluster/genesis mismatch and identical-keys refuse to start.
 
-## 8. Four-week plan
+## 8. Four-week plan (summary — detailed steps in implementation plan doc)
 
-- **W1 — Program v2 on surfpool:** Kamino CPI lock/claim/force_return, heartbeat, caps,
-  pause, gated init, attestation; fork test suite green.
-- **W2 — Backend surgery:** deletions (ichor/fuel/gauntlet/simulated yield), lapse+shield
-  engine, completion watcher, cranks, fee-payer, position reads, boot guards, migrations,
-  DB tests.
-- **W3 — Frontend:** course cards, claim flow, flame gauge, modals, copy purge, cluster fix,
-  Privy funding, practice mode; E2E on fork; +2–3 new courses authored (parallel).
-- **W4 — Launch:** key ceremony, mainnet deploy + init + caps, monitoring, disclosures page,
-  staged beta (own deposits first), then open; submission/marketing material.
+- **W1 — Program v2 on surfpool:** state + all instructions + fork test suite green.
+- **W2 — Backend surgery:** deletions, engines, cranks, fee-payer, guards, migrations, DB
+  tests.
+- **W3 — Frontend:** cards, claim flow, flame, modals, copy purge, cluster fix, Privy
+  funding, practice mode; Playwright E2E on devnet staging; +2–3 courses authored.
+- **W4 — Launch:** key ceremony, mainnet deploy/init/caps, monitoring, disclosures, staged
+  beta (own deposits → open), fork E2E smoke, marketing material.
 
-## 9. Post-beta roadmap (not this month)
+## 9. Post-beta roadmap
 
-Professional audit → cap raises + difficulty-scaled stakes; Squads multisig for upgrade + pot
-authority; merkle-committed pot eligibility proofs in `distribute_window`; tier-recovery
-mechanic (clean streak steps penalty back down); saver-earn variants; demo course / free
-preview funnel; card on-ramp beyond Privy defaults; migration runner + IaC completion.
+Professional audit → cap raises + difficulty-scaled stakes; Squads multisig (upgrade + pot);
+merkle-committed pot eligibility in `distribute_window`; tier-recovery mechanic; platform fee
+activation (bps > 0) with disclosure; demo course / free-preview funnel; migration runner +
+IaC; mobile PWA polish.
 
-## 10. Known accepted risks (disclosed, not hidden)
+## 10. Accepted risks (disclosed)
 
-1. Unaudited custody code holding ≤ $1k total — mitigated by caps, tests, pause, playbook.
-2. Single hot authority key (no multisig yet) — bounded by invariant 6; multisig on roadmap.
-3. Kamino pass-through risk (reserve illiquidity/exploit) — disclosed; principal exposure is
-   real.
-4. Authority can attest/pot-distribute wrongly — bounded by pot balance + caps; visible
-   on-chain.
-5. Active-but-never-finishing users stay locked while active — disclosed at deposit ("exits:
-   finish, or stop for 90 days").
-6. Model A retroactivity: a lapse taxes yield earned before it — accepted for simplicity;
-   softened by one-mercy + easy shield regen (only 4+ consecutive dark days ever lapse).
+1. Unaudited custody code holding ≤ $1k — mitigated by caps/tests/pause/playbook.
+2. Single hot authority key — bounded by invariant 6; multisig on roadmap.
+3. Kamino pass-through risk incl. rare negative-redemption (invariant 7) — disclosed.
+4. Authority mis-attestation/mis-distribution — bounded by pot balance + caps; on-chain
+   visible.
+5. Active-but-never-finishing users stay locked while active — disclosed at deposit.
+6. Model A retroactivity (lapse taxes pre-lapse yield) — accepted for simplicity; softened by
+   one-mercy + shield regen (only 4+ consecutive dark days can ever lapse).
+7. Heartbeat-bumping by a compromised authority delays quitter auto-return (never blocks an
+   attested claim) — accepted; bounded by key rotation runbook.
