@@ -1,0 +1,116 @@
+// Boot guards (spec §4.2): refuse to boot into a footgun configuration.
+//
+// Pure functions over an appConfig-shaped object — no imports from config.mjs
+// (config.mjs calls assertBootGuards at load time, so this module must stay
+// dependency-free to avoid a cycle) and no process.env reads, so the guard
+// logic is unit-testable in isolation.
+//
+// CLUSTER is detected from the *intent* of the RPC URL, not a live
+// getGenesisHash call: boot must be able to fail closed even when the RPC is
+// unreachable, and a guard that silently passes because the network was down
+// is worse than none. Anything we cannot classify is treated as strictly as
+// mainnet.
+
+export const MIN_SECRET_BYTES = 32;
+
+// Yield setups that must never sit behind a mainnet vault_v2: the fixed-APY
+// mock, and the profiles documented in config.mjs as dev/demo-only.
+const DEV_YIELD_PROFILES = new Set(['fixed_apy_dev', 'kamino_surfpool', 'kamino_devnet_demo']);
+const REAL_YIELD_KIND = 'kamino_klend_reserve_v1';
+
+/**
+ * Classify the RPC URL: 'devnet' | 'mainnet' | 'local' | 'unknown'.
+ * 'local' is checked first so a localhost mainnet-fork (Surfpool) is never
+ * mistaken for the real mainnet; 'unknown' is treated like mainnet by every
+ * guard (fail closed).
+ */
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '[::1]', '::1']);
+
+export function detectCluster(rpcUrl) {
+  const url = (rpcUrl ?? '').toLowerCase();
+  if (!url) return 'unknown';
+  // Exact-hostname match for local so `notlocalhost.example.com` can't spoof
+  // its way past the strict guards.
+  try {
+    if (LOCAL_HOSTS.has(new URL(url).hostname)) return 'local';
+  } catch {
+    // unparseable URL — fall through to the strict buckets below
+  }
+  // mainnet before devnet: a URL naming both is ambiguous and gets the
+  // stricter classification.
+  if (url.includes('mainnet')) return 'mainnet';
+  if (url.includes('devnet')) return 'devnet';
+  return 'unknown';
+}
+
+/**
+ * Collect every violated guard as a human-readable string. Returns [] when
+ * the config is safe to boot.
+ *
+ *  (a) On any non-devnet cluster, the forgeable auth secrets (JWT, scheduler)
+ *      must be at least 32 bytes.
+ *  (b) A vault_v2 program on mainnet must not run with a mock/dev yield
+ *      adapter — real principal would sit in Kamino while the backend
+ *      fabricates APY.
+ *  (c) A configured vault_v2 program without a worker/ops signing key cannot
+ *      issue vouchers or crank force-returns — refuse rather than degrade.
+ */
+export function collectBootGuardViolations(config) {
+  const violations = [];
+  const cluster = detectCluster(config.solanaRpcUrl);
+
+  // (a) secret length floor everywhere except devnet.
+  if (cluster !== 'devnet') {
+    for (const [name, value] of [
+      ['JWT_SECRET', config.jwtSecret],
+      ['SCHEDULER_SECRET', config.schedulerSecret],
+    ]) {
+      const bytes = typeof value === 'string' ? Buffer.byteLength(value, 'utf8') : 0;
+      if (bytes < MIN_SECRET_BYTES) {
+        violations.push(
+          `${name} is ${bytes} bytes; the '${cluster}' cluster requires at least ` +
+            `${MIN_SECRET_BYTES} bytes. Set a real ${name}.`,
+        );
+      }
+    }
+  }
+
+  // (b) mainnet vault_v2 must not pair with a mock/devnet yield adapter.
+  if (cluster === 'mainnet' && config.vaultV2ProgramId && config.yieldStrategyEnabled) {
+    const kind = config.yieldStrategyKind ?? '';
+    const profile = config.yieldStrategyProfile ?? '';
+    if (kind !== REAL_YIELD_KIND) {
+      violations.push(
+        `VAULT_V2_PROGRAM_ID is configured on mainnet but the yield strategy ` +
+          `'${kind}' is a mock adapter. Switch to the real Kamino adapter ` +
+          `(YIELD_STRATEGY_PROFILE=kamino_usdc_mainnet) or unset the v2 program.`,
+      );
+    } else if (DEV_YIELD_PROFILES.has(profile)) {
+      violations.push(
+        `VAULT_V2_PROGRAM_ID is configured on mainnet but YIELD_STRATEGY_PROFILE=` +
+          `'${profile}' is a dev/demo profile. Use kamino_usdc_mainnet.`,
+      );
+    }
+  }
+
+  // (c) a v2 program without a signing key can neither voucher nor crank.
+  if (config.vaultV2ProgramId && !config.lockVaultWorkerPrivateKey) {
+    violations.push(
+      `VAULT_V2_PROGRAM_ID is set but LOCK_VAULT_WORKER_PRIVATE_KEY is missing. ` +
+        `The backend cannot sign vouchers or sponsor cranks without it.`,
+    );
+  }
+
+  return violations;
+}
+
+/** Throw a single error listing every violation; no-op on a clean config. */
+export function assertBootGuards(config) {
+  const violations = collectBootGuardViolations(config);
+  if (violations.length > 0) {
+    throw new Error(
+      `Refusing to boot — ${violations.length} boot guard violation(s):\n` +
+        violations.map((v) => `  - ${v}`).join('\n'),
+    );
+  }
+}
