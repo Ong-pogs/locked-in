@@ -21,6 +21,7 @@
 use anchor_lang::prelude::*;
 
 mod caps;
+mod kamino;
 mod pot;
 mod settle;
 mod vault;
