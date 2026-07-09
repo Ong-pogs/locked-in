@@ -32,6 +32,7 @@ import {
 import { hasFaucetConfig, isDevnetOnly, transferUsdcAtomic } from '../../lib/faucet.mjs';
 import { getSaverRedirectBps, computeNextFireLitUntil } from '../../lib/yieldRouting.mjs';
 import { issueVoucher } from '../../lib/claimVoucher.mjs';
+import { applyLessonDay, applyMissDay } from '../../lib/shieldLapseEngine.mjs';
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -561,6 +562,10 @@ async function ensureCourseRuntimeState(client, walletAddress, courseId) {
         fuel_cap as "fuelCap",
         last_completed_day::text as "lastCompletedDay",
         last_miss_day::text as "lastMissDay",
+        coalesce(shields, 3) as "shields",
+        coalesce(lapse_count, 0) as "lapseCount",
+        coalesce(lapse_open, false) as "lapseOpen",
+        coalesce(consecutive_lesson_days, 0) as "consecutiveLessonDays",
         last_fuel_credit_day::text as "lastFuelCreditDay",
         last_brewer_burn_ts as "lastBrewerBurnTs",
         coalesce(fuel_fragments_today, 0)::float as "fuelFragmentsToday",
@@ -582,6 +587,42 @@ async function ensureCourseRuntimeState(client, walletAddress, courseId) {
 function deriveFuelEarnStatus(state) {
   if (state.fuelCounter >= state.fuelCap) return 'AT_CAP';
   return 'AVAILABLE';
+}
+
+// Advance the v2 shield/lapse state (spec §4.2) for one UTC day and persist the
+// four engine columns. `kind` is 'lesson' (a first-time lesson-day) or 'miss'.
+// This is the ONLY writer of lapse_count — the completion voucher's yield-kept
+// bps derives from it, so it must be maintained here, not just read.
+async function applyShieldLapseTransition(client, state, kind) {
+  const before = {
+    streak: state.currentStreak,
+    shields: state.shields,
+    lapseCount: state.lapseCount,
+    lapseOpen: state.lapseOpen,
+    consecutiveLessonDays: state.consecutiveLessonDays,
+  };
+  const next = kind === 'miss' ? applyMissDay(before) : applyLessonDay(before);
+  await client.query(
+    `
+      update lesson.user_course_runtime_state
+      set shields = $3,
+          lapse_count = $4,
+          lapse_open = $5,
+          consecutive_lesson_days = $6,
+          updated_at = now()
+      where wallet_address = $1
+        and course_id = $2
+    `,
+    [
+      state.walletAddress,
+      state.courseId,
+      next.shields,
+      next.lapseCount,
+      next.lapseOpen,
+      next.consecutiveLessonDays,
+    ],
+  );
+  return next;
 }
 
 async function applyVerifiedCompletionToCourseRuntime(
@@ -612,6 +653,10 @@ async function applyVerifiedCompletionToCourseRuntime(
       gauntletDay = Math.min(state.gauntletDay + 1, 8);
       gauntletActive = state.gauntletDay < 7;
     }
+
+    // First completion of a new UTC day = a v2 lesson-day: grow the streak,
+    // regen shields, clear an open lapse. Maintains lapse_count for the voucher.
+    await applyShieldLapseTransition(client, state, 'lesson');
   }
 
   if (saverRecoveryMode && saverCount > 0) {
@@ -3908,6 +3953,10 @@ export async function consumeSaverOrApplyFullConsequence(
         missDayValue,
       ],
     );
+
+    // v2 shield/lapse: a miss-day burns a shield or (shields gone) opens a
+    // lapse. This is what actually advances lapse_count for the voucher tier.
+    await applyShieldLapseTransition(client, state, 'miss');
 
     await client.query(
       `

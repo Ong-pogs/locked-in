@@ -141,4 +141,42 @@ describe('POST /v1/progress/courses/:courseId/voucher', () => {
     res = await app.inject({ method: 'POST', url: `/v1/progress/courses/${COURSE_ID}/voucher`, headers });
     expect(res.json().bps).toBe(0);
   });
+
+  // Regression for the audit finding: the REAL miss handler (not a direct SQL
+  // write) must advance lapse_count so the voucher tier drops. Fresh runtime
+  // starts with 3 shields; 3 misses burn them, the 4th opens a lapse.
+  it('the real miss handler feeds lapse_count -> voucher tier drops (audit HIGH)', async () => {
+    const wallet = generateTestWallet();
+    const headers = await getTestAuthHeaders(wallet);
+    await seedCourseComplete(wallet, COURSE_ID);
+    // Materialize the runtime row with default shields=3.
+    await query(
+      `INSERT INTO lesson.user_course_runtime_state (wallet_address, course_id, fuel_cap)
+       VALUES ($1, $2, 7) ON CONFLICT (wallet_address, course_id) DO NOTHING`,
+      [wallet, COURSE_ID],
+    );
+
+    let before = await app.inject({ method: 'POST', url: `/v1/progress/courses/${COURSE_ID}/voucher`, headers });
+    expect(before.json().bps).toBe(10_000); // no lapses yet
+
+    for (let i = 0; i < 4; i += 1) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/internal/consequences/miss',
+        headers: { 'x-scheduler-key': process.env.SCHEDULER_SECRET },
+        payload: { walletAddress: wallet, courseId: COURSE_ID, missEventId: `miss-${i}`, missDay: `2026-08-0${i + 1}` },
+      });
+      expect(res.statusCode).toBe(200);
+    }
+
+    const row = await query(
+      `SELECT shields, lapse_count FROM lesson.user_course_runtime_state WHERE wallet_address = $1 AND course_id = $2`,
+      [wallet, COURSE_ID],
+    );
+    expect(Number(row.rows[0].shields)).toBe(0);
+    expect(Number(row.rows[0].lapse_count)).toBe(1);
+
+    const after = await app.inject({ method: 'POST', url: `/v1/progress/courses/${COURSE_ID}/voucher`, headers });
+    expect(after.json().bps).toBe(5_000); // one lapse -> keep 50%
+  });
 });
