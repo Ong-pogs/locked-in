@@ -1,6 +1,6 @@
 'use client';
 
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties, HTMLAttributes, ReactNode } from 'react';
 
 // Cozy palette — same constants used in village hub + HubButton.
 // Indigo glass + teal-aurora border + amber window-glow accent.
@@ -23,13 +23,15 @@ export function CozyCard({
   children,
   className = '',
   style,
+  ...rest
 }: {
   children: ReactNode;
   className?: string;
   style?: CSSProperties;
-}) {
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children' | 'className' | 'style'>) {
   return (
     <div
+      {...rest}
       className={`relative rounded-[10px] border ${className}`}
       style={{
         padding: 18,

@@ -41,7 +41,7 @@ const ONBOARDING_ROUTES = ['/courses', '/onboarding/deposit', '/onboarding/tutor
  * 4. phase 'onboarding' WITH active lock → main routes
  * 5. phase 'main' → all main routes
  */
-function useFlowGuard() {
+function useFlowGuard(hydrated: boolean) {
   const pathname = usePathname();
   const router = useRouter();
   const { isAuthenticated } = useAuth();
@@ -58,6 +58,12 @@ function useFlowGuard() {
   const hasActiveLock = activeLockCourseIds.length > 0;
 
   useEffect(() => {
+    // Wait for persisted stores to rehydrate before any redirect. Zustand
+    // persist hydrates on the client AFTER mount, so acting on the pre-hydration
+    // (empty) auth state would bounce a deep-linked, logged-in user on a
+    // non-public route (e.g. /claim, /onboarding/deposit) to /village.
+    if (!hydrated) return;
+
     // Skip guard on public routes
     if (PUBLIC_ROUTES.includes(pathname)) return;
 
@@ -95,7 +101,7 @@ function useFlowGuard() {
 
     // Gate 5: phase 'main' → allow everything
     // (no redirect needed)
-  }, [pathname, walletAddress, isAuthenticated, phase, hasActiveLock, router]);
+  }, [hydrated, pathname, walletAddress, isAuthenticated, phase, hasActiveLock, router]);
 }
 
 /** Block rendering until persisted Zustand stores have rehydrated from localStorage.
@@ -146,8 +152,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const courseStates = useCourseStore((s) => s.courseStates);
   const pathname = usePathname();
 
-  // Enforce flow
-  useFlowGuard();
+  // Enforce flow (only after stores rehydrate — see useFlowGuard)
+  useFlowGuard(hydrated);
 
   // Background sync: restore enrollments + progress from backend on reconnect
   // (handles case where user returns with persisted JWT but localStorage was cleared)

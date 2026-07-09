@@ -14,7 +14,10 @@
     "test:e2e": "playwright test --config e2e/playwright.config.ts",
     "test:e2e:desktop": "playwright test --config e2e/playwright.config.ts --project=desktop-chrome",
     "test:e2e:mobile": "playwright test --config e2e/playwright.config.ts --project=mobile-iphone",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:e2e:v2": "playwright test --config e2e/playwright.v2.config.ts",
+    "test:visual": "playwright test --config e2e/visual.config.ts",
+    "test:visual:update": "playwright test --config e2e/visual.config.ts --update-snapshots"
   },
   "dependencies": {
     "@privy-io/react-auth": "^3.18.0",
