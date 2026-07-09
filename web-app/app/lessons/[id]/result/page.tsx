@@ -25,8 +25,13 @@ interface QuizReviewData {
     questionId: string;
     prompt: string;
     accepted: boolean;
-    score: number;
-    feedbackSummary: string;
+    score: number | null;
+    feedbackSummary: string | null;
+    // Present for every question (MCQ + subjective) since the answer key stopped
+    // shipping in the lesson payload; revealed only here, in the post-submit
+    // response. `isCorrect` mirrors `accepted` for MCQs.
+    isCorrect?: boolean;
+    correctAnswer?: string | null;
   }[];
 }
 
@@ -342,6 +347,9 @@ function ResultContent({ params }: { params: Promise<{ id: string }> }) {
                     : q.correctAnswer
                       ? userAnswer === q.correctAnswer
                       : null;
+                  // The answer key no longer ships in the lesson payload; the
+                  // graded (post-submit) response reveals it instead.
+                  const revealAnswer = backendResult?.correctAnswer ?? q.correctAnswer ?? null;
 
                   const accentColor =
                     isCorrect === null ? AMBER : isCorrect ? T.green : T.crimson;
@@ -397,7 +405,7 @@ function ResultContent({ params }: { params: Promise<{ id: string }> }) {
                         </p>
 
                         {/* Correct answer if wrong */}
-                        {isCorrect === false && q.correctAnswer && (
+                        {isCorrect === false && revealAnswer && (
                           <>
                             <p
                               className="text-[10px] font-pixel-mono uppercase tracking-[1.5px] mb-1"
@@ -409,7 +417,7 @@ function ResultContent({ params }: { params: Promise<{ id: string }> }) {
                               className="text-[13px] font-pixel"
                               style={{ color: T.green, textShadow: COZY_TEXT_SHADOW }}
                             >
-                              {q.correctAnswer}
+                              {revealAnswer}
                             </p>
                           </>
                         )}

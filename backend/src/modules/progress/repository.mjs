@@ -846,6 +846,25 @@ async function evaluateSubjectiveAnswer(question, answerText, startedAt, complet
   };
 }
 
+// Shape the per-question review data returned in the (post-commit) submit
+// response. Every question is included — the previous version filtered to
+// `validatorResult` present, which silently dropped all MCQs, so after the
+// answer key stopped shipping in the lesson payload the result page could no
+// longer show which MCQs were right or reveal their answers.
+export function buildQuestionResults(attempts) {
+  return attempts.map((attempt) => ({
+    questionId: attempt.questionId,
+    prompt: attempt.prompt,
+    isCorrect: attempt.isCorrect,
+    correctAnswer: attempt.correctAnswer ?? null,
+    accepted: attempt.validatorResult ? attempt.validatorResult.accepted : attempt.isCorrect,
+    score: attempt.validatorResult ? attempt.validatorResult.score : null,
+    feedbackSummary: attempt.validatorResult ? attempt.validatorResult.feedbackSummary : null,
+    validatorVersion: attempt.validatorResult ? attempt.validatorResult.validatorVersion : null,
+    decisionHash: attempt.validatorResult ? attempt.validatorResult.decisionHash : null,
+  }));
+}
+
 async function gradeAnswers(questions, submittedAnswers, startedAt = null, completedAt = null) {
   const questionIds = new Set(questions.map((question) => question.id));
   for (const questionId of submittedAnswers.keys()) {
@@ -884,6 +903,10 @@ async function gradeAnswers(questions, submittedAnswers, startedAt = null, compl
       prompt: question.prompt,
       answerText: answerText.trim().length > 0 ? answerText.trim() : null,
       isCorrect,
+      // The answer key never ships in the lesson payload (it gates real funds),
+      // but the graded submit response — which the user only sees AFTER
+      // committing — may reveal it so the result page can show what was correct.
+      correctAnswer: question.correctAnswer ?? null,
       validatorResult,
     };
   }));
@@ -4133,17 +4156,7 @@ export async function submitLessonAttempt(walletAddress, lessonId, attemptId, an
       );
     }
 
-    const questionResults = grading.attempts
-      .filter((attemptResult) => attemptResult.validatorResult)
-      .map((attemptResult) => ({
-        questionId: attemptResult.questionId,
-        prompt: attemptResult.prompt,
-        accepted: attemptResult.validatorResult.accepted,
-        score: attemptResult.validatorResult.score,
-        feedbackSummary: attemptResult.validatorResult.feedbackSummary,
-        validatorVersion: attemptResult.validatorResult.validatorVersion,
-        decisionHash: attemptResult.validatorResult.decisionHash,
-      }));
+    const questionResults = buildQuestionResults(grading.attempts);
 
     return {
       lessonId,

@@ -188,10 +188,14 @@ export interface QuestionValidationResult {
   questionId: string;
   prompt: string;
   accepted: boolean;
-  score: number;
-  feedbackSummary: string;
-  validatorVersion: string;
-  decisionHash: string;
+  // null for MCQs (no LLM validator ran); the answer key is revealed only in
+  // this post-submit response, never in the lesson payload.
+  score: number | null;
+  feedbackSummary: string | null;
+  validatorVersion: string | null;
+  decisionHash: string | null;
+  isCorrect: boolean;
+  correctAnswer: string | null;
 }
 
 export type ApiFuelEarnStatus =
