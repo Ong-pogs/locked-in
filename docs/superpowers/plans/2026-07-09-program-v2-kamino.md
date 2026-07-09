@@ -10,6 +10,28 @@
 
 **Spec:** `docs/superpowers/specs/2026-07-09-v2-kamino-mainnet-design.md` (rev 3). Every §3.5 invariant must map to a test in Task 11.
 
+## Empirically verified 2026-07-09 (against a live surfpool mainnet fork + installed crates)
+
+These supersede any conflicting text below. Each was checked, not assumed:
+
+- **Toolchain present:** cargo 1.85, anchor-cli 0.31.1, solana-cli 3.1.12, surfpool 1.2.1, node 24, psql 16.
+- **`anchor build -p locked_in` WORKS** (exit 0, 33s). The old "IDL build broken" memory referred to the deleted `community_pot` crate. The cargo package name is **`locked-in`** (hyphen) — `cargo test -p locked-in`, not `locked_in`.
+- **Existing program:** 22 unit tests pass. New modules added this session: `voucher.rs` (5 tests, Ed25519 layout pinned to solana-sdk source), `settle.rs` (12 tests, donation-proof value conservation). Both compile and pass.
+- **klend IDL is legacy format** (v1.13.0, `isMut`/`isSigner`, NO `discriminator` field). Discriminators must be computed as `sha256("global:<snake_name>")[..8]`. Verified values:
+  - `deposit_reserve_liquidity` → `[169,201,30,126,6,205,102,68]`
+  - `redeem_reserve_collateral` → `[234,117,181,125,185,142,220,29]`
+  - `refresh_reserve` → `[2,218,138,235,79,201,25,102]`
+- **klend account orders (verified, mut/signer flags included):**
+  - `deposit_reserve_liquidity`: owner(SIGNER), reserve(mut), lendingMarket, lendingMarketAuthority, reserveLiquidityMint, reserveLiquiditySupply(mut), reserveCollateralMint(mut), userSourceLiquidity(mut), userDestinationCollateral(mut), collateralTokenProgram, liquidityTokenProgram, instructionSysvarAccount
+  - `redeem_reserve_collateral`: owner(SIGNER), **lendingMarket, reserve(mut)** ← order swapped vs deposit, lendingMarketAuthority, reserveLiquidityMint, reserveCollateralMint(mut), reserveLiquiditySupply(mut), userSourceCollateral(mut), userDestinationLiquidity(mut), collateralTokenProgram, liquidityTokenProgram, instructionSysvarAccount
+  - `refresh_reserve`: reserve(mut), lendingMarket, pythOracle, switchboardPriceOracle, switchboardTwapOracle, scopePrices
+- **Real USDC-reserve fixture (Kamino main market `7u3He…5PfF`):** reserve `5xXxt9uVHrcT5b1KveAT5ZWgk2f74aDjnLEDDEeAxgpN`, liquiditySupply `B6vC48TVCsVzUxAfWwrRA2EwJRoeVMC3SXuCuE6Jceau`, collateralMint `DyoQfufdQ7HErfzst9KWE8njYzV7zgJQFkCWQ8yATLEW`, usdcMint `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`.
+  - **refresh_reserve oracle accounts for USDC:** pyth / switchboardPrice / switchboardTwap are ALL `11111111111111111111111111111111` (None). Only scope is real: `3t4JZcueEzTbVP6kLxXrL3VpWx45jDer4eqysweBchNH`. Pass the all-1s SYSTEM PROGRAM address for the None oracles (NOT the klend program id — earlier text was wrong).
+- **SDK RPC style:** the installed klend-sdk (7.3.20) uses `@solana/kit` (`createSolanaRpc`, `.send()`), NOT web3.js v1 `Connection`. Task 0's derivation script MUST use `@solana/kit`. `KaminoMarket.load(rpc, address, DEFAULT_RECENT_SLOT_DURATION_MS, PROGRAM_ID)` then **`await market.loadReserves()`**. `market.getLendingMarketAuthority()` is **async** (await it). `reserve.state.{liquidity.supplyVault, liquidity.mintPubkey, collateral.mintPubkey, config.tokenInfo.{pythConfiguration.price, switchboardConfiguration.{priceAggregator,twapAggregator}, scopeConfiguration.priceFeed}}` all exist. `reserve.totalSupplyAPY(slot)` requires the **bigint** slot from `rpc.getSlot().send()` — passing `Number(slot)` THROWS "Cannot mix BigInt".
+- **surfpool config is CLI flags, not a JSON file.** `surfpool start --rpc-url https://api.mainnet-beta.solana.com --no-tui --no-deploy -y --port 8899`. It lazily clones mainnet accounts on access (klend program + market confirmed cloned). Cheat-codes are JSON-RPC methods: **`surfnet_timeTravel`** (`{"absoluteSlot": N}` — verified), `surfnet_setTokenAccount` (mint arbitrary token balances — this is how a test obtains cUSDC/USDC without a whale), `surfnet_setAccount`, `surfnet_pauseClock`/`resumeClock`, `surfnet_cloneProgramAccount`. Task 0's `surfpool.config.json` does NOT exist — replace with the CLI invocation.
+- **Ed25519 layout confirmed** against `solana-sdk-1.18.26/src/ed25519_instruction.rs`: `SIGNATURE_OFFSETS_START=2`, `SIGNATURE_OFFSETS_SERIALIZED_SIZE=14`, 7×u16 LE fields; `new_ed25519_instruction` sets all three instruction indices to `u16::MAX`. `voucher.rs` locates the precompile ix at `current_index - 1` (via `load_current_index_checked`), NOT hardcoded index 0 — refresh_reserve + compute-budget precede claim.
+- **Anchor APIs confirmed for 0.31.1:** `ProgramData` is exported; `program.programdata_address()` and `program_data.upgrade_authority_address` exist for the init gate; `load_current_index_checked` / `load_instruction_at_checked` exist in solana-program 2.1.
+
 ## Global Constraints
 
 - New program keypair for mainnet; devnet `3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav` stays staging.

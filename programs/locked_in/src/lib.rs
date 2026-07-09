@@ -21,7 +21,9 @@
 use anchor_lang::prelude::*;
 
 mod pot;
+mod settle;
 mod vault;
+mod voucher;
 
 // Re-export domain items so the generated #[program] module and the IDL can
 // see the Accounts structs / args without fully-qualified paths.
