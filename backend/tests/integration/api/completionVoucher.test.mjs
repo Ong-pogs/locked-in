@@ -198,5 +198,37 @@ describe('POST /v1/progress/courses/:courseId/voucher', () => {
     res = await app.inject({ method: 'GET', url: `/v1/progress/runtime/courses/${COURSE_ID}`, headers });
     snap = res.json();
     expect(snap.voucherAvailable).toBe(true);
+    // Server-computed day state (client must never do UTC math).
+    expect(snap).toHaveProperty('completedToday');
+    expect(snap).toHaveProperty('dayEndsAtUtc');
+    expect(new Date(snap.dayEndsAtUtc).getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('position endpoint requires auth', async () => {
+    const res = await app.inject({ method: 'GET', url: `/v1/locks/${COURSE_ID}/position` });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('enrollments runtime carries v2 engine fields', async () => {
+    const wallet = generateTestWallet();
+    const headers = await getTestAuthHeaders(wallet);
+    // enroll + materialize runtime state
+    await query(
+      `INSERT INTO lesson.user_course_enrollments (wallet_address, course_id) VALUES ($1, $2)
+       ON CONFLICT DO NOTHING`,
+      [wallet, COURSE_ID],
+    );
+    await query(
+      `INSERT INTO lesson.user_course_runtime_state (wallet_address, course_id, fuel_cap)
+       VALUES ($1, $2, 7) ON CONFLICT (wallet_address, course_id) DO NOTHING`,
+      [wallet, COURSE_ID],
+    );
+    const res = await app.inject({ method: 'GET', url: '/v1/progress/enrollments', headers });
+    expect(res.statusCode).toBe(200);
+    const enrollment = res.json().enrollments.find((e) => e.courseId === COURSE_ID);
+    expect(enrollment?.runtime?.shields).toBe(3);
+    expect(enrollment?.runtime?.lapseCount).toBe(0);
+    expect(enrollment?.runtime?.lapseOpen).toBe(false);
+    expect(enrollment?.runtime).toHaveProperty('completedToday');
   });
 });

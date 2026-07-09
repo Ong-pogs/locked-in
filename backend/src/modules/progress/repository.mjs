@@ -169,6 +169,31 @@ function courseIdHashBytes(courseId) {
   return createHash('sha256').update(String(courseId), 'utf8').digest();
 }
 
+// Per-module completion counts for a (wallet, course). Single source for the
+// voucher gate AND the snapshot's voucherAvailable hint so they cannot drift.
+// `run` is any client/pool with .query.
+async function fetchModuleCompletion(run, walletAddress, courseId) {
+  const result = await run.query(
+    `SELECT pm.module_id,
+            count(DISTINCT pl.lesson_id) as total_lessons,
+            count(DISTINCT ulp.lesson_id) FILTER (WHERE ulp.completed) as completed_lessons
+     FROM lesson.published_modules pm
+     JOIN lesson.published_lessons pl ON pl.module_id = pm.module_id AND pl.release_id = pm.release_id
+     LEFT JOIN lesson.user_lesson_progress ulp ON ulp.lesson_id = pl.lesson_id AND ulp.wallet_address = $1
+     WHERE pm.course_id = $2
+     GROUP BY pm.module_id`,
+    [walletAddress, courseId],
+  );
+  return result.rows;
+}
+
+// True only when the backend can actually sign a voucher — mirrors the 503
+// gates in issueCourseCompletionVoucher so an unarmed deploy never advertises
+// a CLAIM it cannot honor.
+function voucherSigningConfigured() {
+  return Boolean(appConfig.vaultV2ProgramId) && Boolean(appConfig.lockVaultWorkerPrivateKey);
+}
+
 // Pure: is every module in the course fully complete? Mirrors the
 // course-complete gate in checkAndAwardMilestoneXp. Rows are
 // {total_lessons, completed_lessons} (Postgres count() returns strings).
@@ -207,22 +232,12 @@ export async function issueCourseCompletionVoucher(walletAddress, courseId) {
     );
   }
 
-  const moduleCheck = await query(
-    `SELECT pm.module_id,
-            count(DISTINCT pl.lesson_id) as total_lessons,
-            count(DISTINCT ulp.lesson_id) FILTER (WHERE ulp.completed) as completed_lessons
-     FROM lesson.published_modules pm
-     JOIN lesson.published_lessons pl ON pl.module_id = pm.module_id AND pl.release_id = pm.release_id
-     LEFT JOIN lesson.user_lesson_progress ulp ON ulp.lesson_id = pl.lesson_id AND ulp.wallet_address = $1
-     WHERE pm.course_id = $2
-     GROUP BY pm.module_id`,
-    [walletAddress, courseId],
-  );
+  const moduleRows = await fetchModuleCompletion({ query }, walletAddress, courseId);
 
-  if (moduleCheck.rows.length === 0) {
+  if (moduleRows.length === 0) {
     throw notFound(`Unknown course: ${courseId}`, 'COURSE_NOT_FOUND');
   }
-  if (!isCourseComplete(moduleCheck.rows)) {
+  if (!isCourseComplete(moduleRows)) {
     throw new HttpError(403, 'Course not yet complete', 'COURSE_NOT_COMPLETE');
   }
 
@@ -1352,7 +1367,21 @@ export async function readCourseRuntimeState(client, walletAddress, courseId) {
     lapseCount: Number(state.lapseCount ?? 0),
     lapseOpen: Boolean(state.lapseOpen),
     consecutiveLessonDays: Number(state.consecutiveLessonDays ?? 0),
+    // Server-computed day state so the client never does UTC-day math
+    // (a UTC+8 user's local "today" is not the streak day).
+    lastCompletedDay: state.lastCompletedDay ?? null,
+    completedToday: state.lastCompletedDay === currentUtcDay(),
+    dayEndsAtUtc: nextUtcMidnightIso(),
   };
+}
+
+function currentUtcDay() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function nextUtcMidnightIso() {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)).toISOString();
 }
 
 export async function syncCourseRuntimeStateWithLockSnapshot(
@@ -1496,7 +1525,12 @@ export async function getUserEnrollments(walletAddress) {
         ucrs.fuel_counter AS "fuelCounter",
         ucrs.fuel_cap AS "fuelCap",
         ucrs.last_fuel_credit_day AS "lastFuelCreditDay",
-        ucrs.last_brewer_burn_ts AS "lastBrewerBurnTs"
+        ucrs.last_brewer_burn_ts AS "lastBrewerBurnTs",
+        coalesce(ucrs.shields, 3) AS "shields",
+        coalesce(ucrs.lapse_count, 0) AS "lapseCount",
+        coalesce(ucrs.lapse_open, false) AS "lapseOpen",
+        coalesce(ucrs.consecutive_lesson_days, 0) AS "consecutiveLessonDays",
+        ucrs.last_completed_day::text AS "lastCompletedDay"
       FROM lesson.user_course_enrollments uce
       LEFT JOIN lesson.user_course_runtime_state ucrs
         ON ucrs.wallet_address = uce.wallet_address AND ucrs.course_id = uce.course_id
@@ -1542,6 +1576,16 @@ export async function getUserEnrollments(walletAddress) {
           lastBrewerBurnTs: row.lastBrewerBurnTs,
           fuelAwarded: 0,
           fuelEarnStatus: 'AVAILABLE',
+          shields: Number(row.shields),
+          lapseCount: Number(row.lapseCount),
+          lapseOpen: Boolean(row.lapseOpen),
+          consecutiveLessonDays: Number(row.consecutiveLessonDays),
+          lastCompletedDay: row.lastCompletedDay ?? null,
+          completedToday: row.lastCompletedDay === currentUtcDay(),
+          dayEndsAtUtc: nextUtcMidnightIso(),
+          // voucherAvailable intentionally omitted here: computing it per
+          // enrollment costs N module-check queries. Enrollments paint
+          // gauges; the CLAIM CTA arms from the per-course snapshot.
         }
       : null,
   }));
@@ -1571,25 +1615,27 @@ export async function getCourseRuntimeSnapshot(walletAddress, courseId) {
       lastBrewerBurnTs: null,
       fuelAwarded: 0,
       fuelEarnStatus: 'AVAILABLE',
+      shields: 3,
+      lapseCount: 0,
+      lapseOpen: false,
+      consecutiveLessonDays: 0,
+      lastCompletedDay: null,
+      completedToday: false,
+      dayEndsAtUtc: nextUtcMidnightIso(),
+      voucherAvailable: false,
     };
   }
 
   return withTransactionAsWallet(walletAddress, async (client) => {
     const snapshot = await readCourseRuntimeState(client, walletAddress, courseId);
-    // voucherAvailable: every module/lesson complete — same gate the voucher
-    // endpoint enforces. Lets the card show CLAIM without a second call.
-    const moduleCheck = await client.query(
-      `SELECT pm.module_id,
-              count(DISTINCT pl.lesson_id) as total_lessons,
-              count(DISTINCT ulp.lesson_id) FILTER (WHERE ulp.completed) as completed_lessons
-       FROM lesson.published_modules pm
-       JOIN lesson.published_lessons pl ON pl.module_id = pm.module_id AND pl.release_id = pm.release_id
-       LEFT JOIN lesson.user_lesson_progress ulp ON ulp.lesson_id = pl.lesson_id AND ulp.wallet_address = $1
-       WHERE pm.course_id = $2
-       GROUP BY pm.module_id`,
-      [walletAddress, courseId],
-    );
-    return { ...snapshot, voucherAvailable: isCourseComplete(moduleCheck.rows) };
+    // voucherAvailable: every module/lesson complete AND the signer is
+    // configured — the exact conditions under which the voucher endpoint
+    // returns 200. Fail-closed: an unarmed deploy never renders CLAIM.
+    const moduleRows = await fetchModuleCompletion(client, walletAddress, courseId);
+    return {
+      ...snapshot,
+      voucherAvailable: isCourseComplete(moduleRows) && voucherSigningConfigured(),
+    };
   });
 }
 

@@ -9,6 +9,7 @@ import { authRoutes } from './modules/auth/routes.mjs';
 import { progressRoutes } from './modules/progress/routes.mjs';
 import { faucetRoutes } from './modules/faucet/routes.mjs';
 import { yieldRoutes } from './modules/yield/routes.mjs';
+import { locksRoutes } from './modules/locks/routes.mjs';
 import { registerLeaderboardSnapshotWorker } from './workers/leaderboardSnapshotWorker.mjs';
 import { registerRuntimeSchedulerWorker } from './workers/runtimeSchedulerWorker.mjs';
 import { registerUnlockIndexerWorker } from './workers/unlockIndexerWorker.mjs';
@@ -119,6 +120,7 @@ export function buildServer() {
   app.register(progressRoutes);
   app.register(faucetRoutes);
   app.register(yieldRoutes);
+  app.register(locksRoutes);
   registerLeaderboardSnapshotWorker(app);
   registerRuntimeSchedulerWorker(app);
   registerUnlockIndexerWorker(app);
