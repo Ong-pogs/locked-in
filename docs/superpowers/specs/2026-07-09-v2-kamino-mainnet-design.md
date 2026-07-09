@@ -148,10 +148,14 @@ msg = b"lockedin:claim:v1"
    || expiry_unix_ts        (i64 LE)
 ```
 
-The client submits a transaction whose **first instruction** is the Ed25519 precompile
-(`Ed25519SigVerify111111111111111111111111111`) carrying `(authority_pubkey, msg, signature)`,
-followed by `claim`. `claim` loads instruction 0 via `sysvar::instructions::load_instruction_at_checked`
-and verifies, in this order:
+The client submits a transaction containing an Ed25519 precompile instruction
+(`Ed25519SigVerify111111111111111111111111111`) carrying `(authority_pubkey, msg, signature)`
+somewhere **before** `claim` — the exact position is not fixed, because a compute-budget
+instruction and `refresh_reserve` also precede `claim` (the real order is
+`[compute_budget, refresh_reserve, ed25519_verify, claim]`, see §5). `claim` therefore does **not**
+hardcode an index. It reads its own index via `load_current_index_checked`, then **scans every
+instruction ahead of it** (`load_instruction_at_checked` over `0..current_index`) for a precompile
+instruction that satisfies, for a message rebuilt in-program:
 
 1. `ix.program_id == ED25519_PROGRAM_ID`
 2. `data[0] == 1` (exactly one signature) and `data[1] == 0` (padding)
@@ -159,12 +163,20 @@ and verifies, in this order:
    (i.e. all data lives inside the precompile instruction itself) and lies within `data.len()`
 4. the public key at `public_key_offset` equals `vault_config.authority`
 5. the message at `message_data_offset .. + message_data_size` equals `msg` **rebuilt in-program**
-   from `program_id`, `lock.key()`, the instruction's `user_yield_bps` arg, and its `expiry` arg
+   from `program_id`, `lock.key()`, and the instruction's `user_yield_bps` + `expiry` args
 6. `user_yield_bps ∈ {10000, 5000, 0}`
 7. `clock.unix_timestamp <= expiry`
 
-Binding to `program_id` and `lock.key()` prevents cross-program and cross-lock replay; the lock
-account is closed by `claim`, so a voucher cannot be replayed against the same lock.
+A malformed or non-matching precompile instruction simply fails to match and the scan continues;
+`claim` succeeds only if some instruction matches. Scanning is safe: the message binds
+`program_id` + `lock` + `bps` + `expiry`, and the signer must equal the vault authority, so a decoy
+precompile an attacker adds cannot authorize their claim. Binding to `program_id` and `lock.key()`
+prevents cross-program and cross-lock replay; the lock account is closed by `claim`, so a voucher
+cannot be replayed against the same lock.
+
+> **This is implemented and tested** in `programs/locked_in/src/voucher.rs` (`verify_voucher` +
+> `precompile_matches`, 9 unit tests incl. the indirect-data forgery). Byte layout pinned against
+> `solana-sdk` `ed25519_instruction.rs`.
 
 **Why this is safe.** The voucher is *user-favorable*: it only ever lets a user take yield they
 earned. A hostile authority cannot forge a voucher that steals principal (principal is paid

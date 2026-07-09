@@ -29,7 +29,7 @@ These supersede any conflicting text below. Each was checked, not assumed:
   - **refresh_reserve oracle accounts for USDC:** pyth / switchboardPrice / switchboardTwap are ALL `11111111111111111111111111111111` (None). Only scope is real: `3t4JZcueEzTbVP6kLxXrL3VpWx45jDer4eqysweBchNH`. Pass the all-1s SYSTEM PROGRAM address for the None oracles (NOT the klend program id — earlier text was wrong).
 - **SDK RPC style:** the installed klend-sdk (7.3.20) uses `@solana/kit` (`createSolanaRpc`, `.send()`), NOT web3.js v1 `Connection`. Task 0's derivation script MUST use `@solana/kit`. `KaminoMarket.load(rpc, address, DEFAULT_RECENT_SLOT_DURATION_MS, PROGRAM_ID)` then **`await market.loadReserves()`**. `market.getLendingMarketAuthority()` is **async** (await it). `reserve.state.{liquidity.supplyVault, liquidity.mintPubkey, collateral.mintPubkey, config.tokenInfo.{pythConfiguration.price, switchboardConfiguration.{priceAggregator,twapAggregator}, scopeConfiguration.priceFeed}}` all exist. `reserve.totalSupplyAPY(slot)` requires the **bigint** slot from `rpc.getSlot().send()` — passing `Number(slot)` THROWS "Cannot mix BigInt".
 - **surfpool config is CLI flags, not a JSON file.** `surfpool start --rpc-url https://api.mainnet-beta.solana.com --no-tui --no-deploy -y --port 8899`. It lazily clones mainnet accounts on access (klend program + market confirmed cloned). Cheat-codes are JSON-RPC methods: **`surfnet_timeTravel`** (`{"absoluteSlot": N}` — verified), `surfnet_setTokenAccount` (mint arbitrary token balances — this is how a test obtains cUSDC/USDC without a whale), `surfnet_setAccount`, `surfnet_pauseClock`/`resumeClock`, `surfnet_cloneProgramAccount`. Task 0's `surfpool.config.json` does NOT exist — replace with the CLI invocation.
-- **Ed25519 layout confirmed** against `solana-sdk-1.18.26/src/ed25519_instruction.rs`: `SIGNATURE_OFFSETS_START=2`, `SIGNATURE_OFFSETS_SERIALIZED_SIZE=14`, 7×u16 LE fields; `new_ed25519_instruction` sets all three instruction indices to `u16::MAX`. `voucher.rs` locates the precompile ix at `current_index - 1` (via `load_current_index_checked`), NOT hardcoded index 0 — refresh_reserve + compute-budget precede claim.
+- **Ed25519 layout confirmed** against `solana-sdk-1.18.26/src/ed25519_instruction.rs`: `SIGNATURE_OFFSETS_START=2`, `SIGNATURE_OFFSETS_SERIALIZED_SIZE=14`, 7×u16 LE fields; `new_ed25519_instruction` sets all three instruction indices to `u16::MAX`. **`voucher.rs` SCANS every instruction ahead of claim** (`load_current_index_checked` then `load_instruction_at_checked` over `0..current_index`) for a matching precompile — NOT a hardcoded index and NOT `current_index - 1` (that breaks if anything sits between the precompile and claim). Adversarial verification (2026-07-09) confirmed a hardcoded index 0 would revert 100% of claims because `refresh_reserve` precedes the precompile. Task 2 is IMPLEMENTED + tested (9 unit tests).
 - **Anchor APIs confirmed for 0.31.1:** `ProgramData` is exported; `program.programdata_address()` and `program_data.upgrade_authority_address` exist for the init gate; `load_current_index_checked` / `load_instruction_at_checked` exist in solana-program 2.1.
 
 ## Global Constraints
@@ -296,8 +296,8 @@ pub const VOUCHER_DOMAIN: &[u8] = b"lockedin:claim:v1";
 
 pub fn build_message(program_id: &Pubkey, lock: &Pubkey, user_yield_bps: u16, expiry: i64) -> Vec<u8>;
 
-/// Verifies instruction 0 is an Ed25519 precompile ix signing exactly `build_message(..)`
-/// with `expected_signer`. Errors otherwise.
+/// SCANS every instruction before claim for an Ed25519 precompile ix signing exactly
+/// `build_message(..)` with `expected_signer`. Ok if one matches, else errors.
 pub fn verify_voucher(
     instructions_sysvar: &AccountInfo,
     expected_signer: &Pubkey,
@@ -310,18 +310,24 @@ pub fn verify_voucher(
 ```
 `build_message` = `VOUCHER_DOMAIN || program_id(32) || lock(32) || bps.to_le_bytes()(2) || expiry.to_le_bytes()(8)` = 17+74 = 91 bytes.
 
-`verify_voucher` MUST check, in order (each a distinct error):
+> **IMPLEMENTED (`programs/locked_in/src/voucher.rs`).** Do NOT hardcode an instruction index —
+> `refresh_reserve` and a compute-budget ix precede the precompile, so index 0 (and even
+> `current_index - 1`) is wrong. The shipped design:
+
+`verify_voucher`:
 1. `bps ∈ VALID_YIELD_BPS` → `InvalidYieldBps`
 2. `now <= expiry` → `VoucherExpired`
-3. `load_instruction_at_checked(0, sysvar)?.program_id == ED25519_PROGRAM_ID` → `VoucherNotEd25519`
-4. `data[0] == 1 && data[1] == 0` → `VoucherBadHeader`
-5. parse `Ed25519SignatureOffsets` (LE u16s at data[2..16]); require
-   `signature_instruction_index == public_key_instruction_index == message_instruction_index == u16::MAX`
-   → `VoucherIndirectData` (this is the forgery vector: a non-`MAX` index points at *another*
-   instruction the attacker controls)
-6. every offset+len is within `data.len()` → `VoucherBadOffsets`
-7. `data[public_key_offset .. +32] == expected_signer` → `VoucherWrongSigner`
-8. `message_data_size as usize == expected_msg.len()` and the bytes match → `VoucherWrongMessage`
+3. rebuild `expected_message = build_message(program_id, lock, bps, expiry)`
+4. `current_index = load_current_index_checked(sysvar)`; for `i in 0..current_index`, load ix `i`;
+   skip if `program_id != ED25519_PROGRAM_ID`; else test `precompile_matches(&ix.data, expected_signer, &expected_message)` and return `Ok` on the first match
+5. after the scan: if any ed25519 ix was seen but none matched → `VoucherWrongMessage`; if none seen → `VoucherNotEd25519`
+
+`precompile_matches(data, signer, msg) -> bool` (returns false, never errors, so a decoy just doesn't match):
+- `data.len() >= 16`; `data[0]==1 && data[1]==0`
+- parse the 7 LE-u16 offsets at `data[2..16]`; require all three `*_instruction_index == u16::MAX` (the forgery vector — a non-MAX index points the precompile at another instruction the attacker controls)
+- every offset+len within `data.len()`
+- `data[public_key_offset .. +32] == signer`
+- `data[message_data_offset .. +message_data_size] == msg`
 
 New errors: `VoucherExpired`, `VoucherNotEd25519`, `VoucherBadHeader`, `VoucherIndirectData`,
 `VoucherBadOffsets`, `VoucherWrongSigner`, `VoucherWrongMessage`.

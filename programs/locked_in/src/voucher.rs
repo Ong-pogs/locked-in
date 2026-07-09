@@ -54,20 +54,71 @@ pub fn build_message(program_id: &Pubkey, lock: &Pubkey, user_yield_bps: u16, ex
     message
 }
 
-fn read_u16(data: &[u8], offset: usize) -> Result<u16> {
-    let bytes = data
-        .get(offset..offset + 2)
-        .ok_or(VoucherError::VoucherBadOffsets)?;
-    Ok(u16::from_le_bytes([bytes[0], bytes[1]]))
+fn read_u16(data: &[u8], offset: usize) -> Option<u16> {
+    let bytes = data.get(offset..offset + 2)?;
+    Some(u16::from_le_bytes([bytes[0], bytes[1]]))
 }
 
-/// Verify that the transaction carries a precompile instruction signing exactly
-/// `build_message(program_id, lock, user_yield_bps, expiry)` under `expected_signer`.
+/// Does this Ed25519 precompile instruction carry a single, self-contained
+/// signature by `expected_signer` over exactly `expected_message`?
 ///
-/// `instructions_sysvar` must be the instructions sysvar account. The precompile
-/// instruction must immediately precede the currently-executing instruction —
-/// callers prepend `refresh_reserve` and a compute-budget instruction, so its
-/// absolute index is not fixed and must never be hardcoded.
+/// Returns `false` (never errors) for anything malformed, so a decoy precompile
+/// instruction placed before the real one merely fails to match and the scan
+/// continues, rather than aborting the whole claim.
+fn precompile_matches(data: &[u8], expected_signer: &Pubkey, expected_message: &[u8]) -> bool {
+    if data.len() < SIGNATURE_OFFSETS_START + SIGNATURE_OFFSETS_SERIALIZED_SIZE {
+        return false;
+    }
+    // Exactly one signature, plus the padding byte the precompile writes.
+    if data[0] != 1 || data[1] != 0 {
+        return false;
+    }
+
+    let field = |i: usize| read_u16(data, SIGNATURE_OFFSETS_START + i);
+    let (Some(sig_ix), Some(pk_off), Some(pk_ix), Some(msg_off), Some(msg_size), Some(msg_ix)) =
+        (field(2), field(4), field(6), field(8), field(10), field(12))
+    else {
+        return false;
+    };
+
+    // Every field must live inside THIS instruction. A non-MAX index would make
+    // the precompile verify bytes from a DIFFERENT instruction the attacker
+    // controls, while we inspect the bytes we expect.
+    if sig_ix != u16::MAX || pk_ix != u16::MAX || msg_ix != u16::MAX {
+        return false;
+    }
+
+    let pk_off = pk_off as usize;
+    let msg_off = msg_off as usize;
+    let msg_size = msg_size as usize;
+
+    let Some(signer_bytes) = data.get(pk_off..pk_off + PUBKEY_SERIALIZED_SIZE) else {
+        return false;
+    };
+    if signer_bytes != expected_signer.as_ref() {
+        return false;
+    }
+
+    if msg_size != expected_message.len() {
+        return false;
+    }
+    match data.get(msg_off..msg_off + msg_size) {
+        Some(signed) => signed == expected_message,
+        None => false,
+    }
+}
+
+/// Verify the transaction carries an Ed25519 precompile instruction (anywhere
+/// before `claim`) that signs exactly
+/// `build_message(program_id, lock, user_yield_bps, expiry)` under
+/// `expected_signer`.
+///
+/// The precompile's absolute index is NOT fixed and must never be hardcoded:
+/// callers prepend a compute-budget instruction and `refresh_reserve` before
+/// `claim`. We scan every instruction ahead of the current one. Scanning is safe
+/// because the message is bound to program+lock+bps+expiry and the signer must
+/// equal the vault authority, so a decoy precompile cannot help an attacker —
+/// it simply fails to match and the scan continues.
 pub fn verify_voucher(
     instructions_sysvar: &AccountInfo,
     expected_signer: &Pubkey,
@@ -83,60 +134,28 @@ pub fn verify_voucher(
     );
     require!(now <= expiry, VoucherError::VoucherExpired);
 
-    let current_index = load_current_index_checked(instructions_sysvar)?;
-    let voucher_index = current_index
-        .checked_sub(1)
-        .ok_or(VoucherError::VoucherNotEd25519)?;
-    let ix = load_instruction_at_checked(voucher_index as usize, instructions_sysvar)?;
-
-    require_keys_eq!(ix.program_id, ED25519_PROGRAM_ID, VoucherError::VoucherNotEd25519);
-
-    let data = ix.data.as_slice();
-    require!(
-        data.len() >= SIGNATURE_OFFSETS_START + SIGNATURE_OFFSETS_SERIALIZED_SIZE,
-        VoucherError::VoucherBadHeader
-    );
-    // Exactly one signature, and the padding byte the precompile writes.
-    require!(data[0] == 1 && data[1] == 0, VoucherError::VoucherBadHeader);
-
-    let signature_instruction_index = read_u16(data, SIGNATURE_OFFSETS_START + 2)?;
-    let public_key_offset = read_u16(data, SIGNATURE_OFFSETS_START + 4)? as usize;
-    let public_key_instruction_index = read_u16(data, SIGNATURE_OFFSETS_START + 6)?;
-    let message_data_offset = read_u16(data, SIGNATURE_OFFSETS_START + 8)? as usize;
-    let message_data_size = read_u16(data, SIGNATURE_OFFSETS_START + 10)? as usize;
-    let message_instruction_index = read_u16(data, SIGNATURE_OFFSETS_START + 12)?;
-
-    // Every field must live inside THIS instruction. Otherwise the precompile
-    // verifies bytes we never inspect, and we inspect bytes it never verified.
-    require!(
-        signature_instruction_index == u16::MAX
-            && public_key_instruction_index == u16::MAX
-            && message_instruction_index == u16::MAX,
-        VoucherError::VoucherIndirectData
-    );
-
-    let signer_bytes = data
-        .get(public_key_offset..public_key_offset + PUBKEY_SERIALIZED_SIZE)
-        .ok_or(VoucherError::VoucherBadOffsets)?;
-    require!(
-        signer_bytes == expected_signer.as_ref(),
-        VoucherError::VoucherWrongSigner
-    );
-
     let expected_message = build_message(program_id, lock, user_yield_bps, expiry);
-    require!(
-        message_data_size == expected_message.len(),
-        VoucherError::VoucherWrongMessage
-    );
-    let signed_message = data
-        .get(message_data_offset..message_data_offset + message_data_size)
-        .ok_or(VoucherError::VoucherBadOffsets)?;
-    require!(
-        signed_message == expected_message.as_slice(),
-        VoucherError::VoucherWrongMessage
-    );
+    let current_index = load_current_index_checked(instructions_sysvar)?;
 
-    Ok(())
+    let mut saw_ed25519 = false;
+    for index in 0..current_index {
+        let ix = load_instruction_at_checked(index as usize, instructions_sysvar)?;
+        if ix.program_id != ED25519_PROGRAM_ID {
+            continue;
+        }
+        saw_ed25519 = true;
+        if precompile_matches(&ix.data, expected_signer, &expected_message) {
+            return Ok(());
+        }
+    }
+
+    // Distinguish "no voucher at all" from "a voucher that did not authorize
+    // this claim" so the client can tell a missing precompile from a stale one.
+    if saw_ed25519 {
+        Err(VoucherError::VoucherWrongMessage.into())
+    } else {
+        Err(VoucherError::VoucherNotEd25519.into())
+    }
 }
 
 #[error_code]
@@ -145,17 +164,9 @@ pub enum VoucherError {
     InvalidYieldBps,
     #[msg("Voucher has expired.")]
     VoucherExpired,
-    #[msg("The instruction preceding claim is not the ed25519 precompile.")]
+    #[msg("No ed25519 precompile instruction accompanies this claim.")]
     VoucherNotEd25519,
-    #[msg("Ed25519 instruction header is malformed or signs more than one message.")]
-    VoucherBadHeader,
-    #[msg("Ed25519 instruction sources its data from another instruction.")]
-    VoucherIndirectData,
-    #[msg("Ed25519 instruction offsets fall outside its data.")]
-    VoucherBadOffsets,
-    #[msg("Voucher was signed by the wrong key.")]
-    VoucherWrongSigner,
-    #[msg("Voucher does not authorize this lock, program, tier, or expiry.")]
+    #[msg("No voucher authorizes this lock, program, tier, and expiry.")]
     VoucherWrongMessage,
 }
 
@@ -213,9 +224,83 @@ mod tests {
     }
 
     #[test]
-    fn read_u16_refuses_to_run_past_the_end() {
+    fn read_u16_returns_none_past_the_end() {
         let data = vec![1u8, 0, 5];
-        assert!(read_u16(&data, 2).is_err());
+        assert!(read_u16(&data, 2).is_none());
+    }
+
+    // Builds an ed25519 precompile instruction data blob exactly as
+    // solana_sdk::ed25519_instruction::new_ed25519_instruction lays it out.
+    fn build_precompile_data(signer: &Pubkey, message: &[u8]) -> Vec<u8> {
+        const OFFSETS: usize = 14;
+        let mut data = vec![1u8, 0]; // num_signatures, padding
+        let pk_off = SIGNATURE_OFFSETS_START + OFFSETS; // 16
+        let sig_off = pk_off + PUBKEY_SERIALIZED_SIZE; // 48
+        let msg_off = sig_off + 64; // 112
+        for f in [
+            sig_off as u16,
+            u16::MAX,
+            pk_off as u16,
+            u16::MAX,
+            msg_off as u16,
+            message.len() as u16,
+            u16::MAX,
+        ] {
+            data.extend_from_slice(&f.to_le_bytes());
+        }
+        data.extend_from_slice(signer.as_ref()); // public key
+        data.extend_from_slice(&[0u8; 64]); // signature (bytes irrelevant to us)
+        data.extend_from_slice(message);
+        data
+    }
+
+    #[test]
+    fn precompile_matches_a_well_formed_voucher() {
+        let program = Pubkey::new_unique();
+        let lock = Pubkey::new_unique();
+        let signer = Pubkey::new_unique();
+        let msg = build_message(&program, &lock, 5_000, 1_800_000_000);
+        let data = build_precompile_data(&signer, &msg);
+        assert!(precompile_matches(&data, &signer, &msg));
+    }
+
+    #[test]
+    fn precompile_rejects_wrong_signer_and_wrong_message() {
+        let program = Pubkey::new_unique();
+        let lock = Pubkey::new_unique();
+        let signer = Pubkey::new_unique();
+        let other = Pubkey::new_unique();
+        let msg = build_message(&program, &lock, 5_000, 1_800_000_000);
+        let data = build_precompile_data(&signer, &msg);
+
+        assert!(!precompile_matches(&data, &other, &msg), "wrong signer");
+        let other_msg = build_message(&program, &lock, 0, 1_800_000_000);
+        assert!(!precompile_matches(&data, &signer, &other_msg), "wrong tier");
+    }
+
+    #[test]
+    fn precompile_rejects_indirect_data_forgery() {
+        let program = Pubkey::new_unique();
+        let lock = Pubkey::new_unique();
+        let signer = Pubkey::new_unique();
+        let msg = build_message(&program, &lock, 10_000, 1_800_000_000);
+        let mut data = build_precompile_data(&signer, &msg);
+        // Point the message at another instruction (index 0 instead of u16::MAX):
+        // the precompile would verify someone else's bytes.
+        data[SIGNATURE_OFFSETS_START + 12] = 0;
+        data[SIGNATURE_OFFSETS_START + 13] = 0;
+        assert!(!precompile_matches(&data, &signer, &msg));
+    }
+
+    #[test]
+    fn precompile_rejects_multi_signature_and_truncation() {
+        let signer = Pubkey::new_unique();
+        let msg = build_message(&Pubkey::new_unique(), &Pubkey::new_unique(), 0, 1);
+        let mut data = build_precompile_data(&signer, &msg);
+        let good = data.clone();
+        data[0] = 2; // claims two signatures
+        assert!(!precompile_matches(&data, &signer, &msg));
+        assert!(!precompile_matches(&good[..10], &signer, &msg)); // truncated header
     }
 
     #[test]
