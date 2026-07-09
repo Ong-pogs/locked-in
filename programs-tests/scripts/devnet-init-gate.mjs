@@ -24,7 +24,7 @@ const conn = new Connection(RPC, 'confirmed');
 const deployer = load(homedir() + '/.config/solana/id.json');
 const user = load('/Users/ongeeshen/Project/locked-in/.e2e/devnet-e2e.json');
 
-const [config] = PublicKey.findProgramAddressSync([Buffer.from('vault-v2')], PROGRAM);
+const [config] = PublicKey.findProgramAddressSync([Buffer.from('vault-v2b')], PROGRAM);
 const [mockReserve] = PublicKey.findProgramAddressSync([Buffer.from('reserve'), USDC.toBuffer()], MOCK);
 const [mockAuth] = PublicKey.findProgramAddressSync([Buffer.from('authority'), USDC.toBuffer()], MOCK);
 const [mockCtoken] = PublicKey.findProgramAddressSync([Buffer.from('ctoken'), USDC.toBuffer()], MOCK);

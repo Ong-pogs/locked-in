@@ -37,8 +37,8 @@ const [mockCtoken] = PublicKey.findProgramAddressSync([Buffer.from('ctoken'), US
 const mockVault = getAssociatedTokenAddressSync(USDC, mockAuth, true);
 
 // v2 vault accounts.
-const [config] = PublicKey.findProgramAddressSync([Buffer.from('vault-v2a')], PROGRAM);
-const courseHash = createHash('sha256').update('devnet-e2e-course').digest();
+const [config] = PublicKey.findProgramAddressSync([Buffer.from('vault-v2b')], PROGRAM);
+const courseHash = createHash('sha256').update('devnet-e2e-v2b-hardened').digest();
 const [lock] = PublicKey.findProgramAddressSync([Buffer.from('lock-v2'), user.publicKey.toBuffer(), courseHash], PROGRAM);
 const lockLiquidity = getAssociatedTokenAddressSync(USDC, lock, true);
 const lockCollateral = getAssociatedTokenAddressSync(mockCtoken, lock, true);
