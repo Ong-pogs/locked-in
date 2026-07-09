@@ -31,7 +31,13 @@ const ACTIVE: u8 = 0;
 const PENDING: u8 = 1;
 const CLOSED: u8 = 2;
 
-pub const CONFIG_SEED: &[u8] = b"vault-v2";
+// MUST stay "vault-v2b": the live devnet binary (EUAB…GucsN) and every client
+// (web-app vaultV2.ts, backend lockPosition.mjs, all scripts) derive the config
+// PDA from "vault-v2b". A rebuild from a different seed here flips the seeds
+// constraint, breaks every existing deposit/claim (ConstraintSeeds), and can
+// strand principal in a stale-TVL config. Source was "vault-v2" while the
+// deployed binary was "vault-v2b" — realigned so source reproduces the deploy.
+pub const CONFIG_SEED: &[u8] = b"vault-v2b";
 pub const LOCK_SEED: &[u8] = b"lock-v2";
 
 // ── init ────────────────────────────────────────────────────────────────

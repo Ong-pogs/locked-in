@@ -36,8 +36,23 @@ function DepositV2Content() {
   const courseId = searchParams.get('courseId') ?? '';
 
   const walletAddress = useUserStore((s) => s.walletAddress);
-  const course = useCourseStore((s) => s.courses.find((c) => c.id === courseId));
+  const courses = useCourseStore((s) => s.courses);
+  const course = courses.find((c) => c.id === courseId);
   const activateCourse = useCourseStore((s) => s.activateCourse);
+
+  // Guard (parity with LegacyDeposit): never lock funds against a missing or
+  // unknown courseId — otherwise activateCourse('', ...) corrupts the store and
+  // USDC locks against a nonexistent course (stuck ~180 days). Wait for the
+  // courses list before bouncing so a transient empty list doesn't redirect.
+  useEffect(() => {
+    if (!courseId) {
+      router.replace('/courses');
+      return;
+    }
+    if (courses.length > 0 && !course) {
+      router.replace('/courses');
+    }
+  }, [courseId, course, courses.length, router]);
   const { wallets: solanaWallets } = useWallets();
   const { signTransaction: privySignTransaction } = useSignTransaction();
 

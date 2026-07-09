@@ -13,8 +13,8 @@ const STATE_META: Record<
 > = {
   blazing: { emoji: '🔥', label: 'Blazing', color: '#FFB84D', glow: 'rgba(255,150,50,0.55)', dim: false },
   flickering: { emoji: '🔥', label: 'Flickering', color: '#E8A24A', glow: 'rgba(232,140,60,0.35)', dim: false },
-  dark: { emoji: '🕯️', label: 'Dark', color: '#8B8FA3', glow: 'rgba(120,120,160,0.25)', dim: true },
-  extinguished: { emoji: '💀', label: 'Extinguished', color: '#5A5E70', glow: 'transparent', dim: true },
+  dark: { emoji: '🕯️', label: 'Dark', color: '#A9ADBF', glow: 'rgba(120,120,160,0.25)', dim: true },
+  extinguished: { emoji: '💀', label: 'Extinguished', color: '#9296A8', glow: 'transparent', dim: true },
 };
 
 export function FlameGauge({ state, className = '' }: { state: FlameStateV2; className?: string }) {

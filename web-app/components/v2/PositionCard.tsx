@@ -34,6 +34,8 @@ export interface PositionCardData {
 interface Props {
   data: PositionCardData;
   position: LockPositionResponse | null; // null = still loading
+  positionError?: boolean; // the last position fetch failed
+  onRetryPosition?: () => void;
   claimEnabled: boolean; // hasVaultV2Config() — passed down so the card stays pure
 }
 
@@ -64,10 +66,10 @@ function useTickingYield(position: LockPositionResponse | null): string | null {
       window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
     const compute = () =>
-      (baseYield + Math.max(0, Date.now() - asOfMs) * perMs).toFixed(7);
+      (baseYield + Math.max(0, Date.now() - asOfMs) * perMs).toFixed(4);
 
     if (reduced) {
-      setDisplay(baseYield.toFixed(7));
+      setDisplay(baseYield.toFixed(4));
       return;
     }
     const loop = () => {
@@ -92,7 +94,7 @@ function countdownTo(iso: string | null, now: number): string | null {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
-export function PositionCard({ data, position, claimEnabled }: Props) {
+export function PositionCard({ data, position, positionError, onRetryPosition, claimEnabled }: Props) {
   const router = useRouter();
   const flame = deriveFlameState(data);
   const tickingYield = useTickingYield(position);
@@ -103,7 +105,12 @@ export function PositionCard({ data, position, claimEnabled }: Props) {
     const id = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(id);
   }, []);
-  const countdown = flame === 'flickering' ? countdownTo(data.dayEndsAtUtc, now) : null;
+  // Countdown only when the user actually still needs to act today. A
+  // 'flickering' flame can mean "done today but a shield is burning" — telling
+  // them to "finish a lesson" then would be false urgency on a money card.
+  const needsLessonToday = !data.completedToday && data.lapseCount < 2;
+  const countdown =
+    flame === 'flickering' && needsLessonToday ? countdownTo(data.dayEndsAtUtc, now) : null;
 
   const progress = data.totalLessons > 0 ? data.completedLessons / data.totalLessons : 0;
   const courseComplete = data.totalLessons > 0 && data.completedLessons >= data.totalLessons;
@@ -113,6 +120,9 @@ export function PositionCard({ data, position, claimEnabled }: Props) {
     courseComplete && position != null && (position.status === 'NONE' || position.status === 'CLOSED');
 
   const headlineValue = position?.liveValueUi ?? position?.principalUi ?? null;
+  // Once lapsed, yield is being forfeited (50%/100%) — never render it as a
+  // green gain next to the penalty banner.
+  const lapsed = data.lapseCount > 0;
 
   return (
     <CozyCard
@@ -132,7 +142,21 @@ export function PositionCard({ data, position, claimEnabled }: Props) {
           </h3>
           {/* Position value */}
           <div data-testid="v2-position-value" className="mt-1.5">
-            {position == null ? (
+            {position == null && positionError ? (
+              <span className="font-pixel-mono text-sm inline-flex items-center gap-2">
+                <span style={{ color: '#F0A878' }}>Couldn&apos;t load position</span>
+                {onRetryPosition && (
+                  <button
+                    data-testid="v2-position-retry"
+                    onClick={onRetryPosition}
+                    className="underline"
+                    style={{ color: COZY_TEXT }}
+                  >
+                    Retry
+                  </button>
+                )}
+              </span>
+            ) : position == null ? (
               <span className="font-pixel-mono text-sm" style={{ color: T.textMuted }}>
                 Loading position…
               </span>
@@ -140,15 +164,20 @@ export function PositionCard({ data, position, claimEnabled }: Props) {
               <>
                 <span
                   className="font-pixel-mono text-2xl font-bold"
-                  style={{ color: '#3EE68A', textShadow: COZY_TEXT_SHADOW }}
+                  style={{ color: lapsed ? COZY_TEXT : '#3EE68A', textShadow: COZY_TEXT_SHADOW }}
                 >
                   ${headlineValue}
                 </span>
-                {tickingYield != null && (
-                  <span className="font-pixel-mono text-[11px] ml-2" style={{ color: '#3EE68A', opacity: 0.75 }}>
-                    +${tickingYield} yield
-                  </span>
-                )}
+                {tickingYield != null &&
+                  (lapsed ? (
+                    <span className="font-pixel-mono text-[11px] ml-2" style={{ color: '#F0A878', opacity: 0.85 }}>
+                      +${tickingYield} yield · penalty applies
+                    </span>
+                  ) : (
+                    <span className="font-pixel-mono text-[11px] ml-2" style={{ color: '#3EE68A', opacity: 0.75 }}>
+                      +${tickingYield} yield
+                    </span>
+                  ))}
               </>
             ) : (
               <span className="font-pixel-mono text-sm" style={{ color: T.textMuted }}>

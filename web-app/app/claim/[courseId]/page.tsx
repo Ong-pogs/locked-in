@@ -27,6 +27,7 @@ type ClaimPhase =
   | 'error'
   | 'not-configured'
   | 'no-voucher'
+  | 'already-claimed'
   | 'expired';
 
 interface ClaimSuccessRecord {
@@ -93,6 +94,14 @@ export default function ClaimPage() {
       setPhase('not-configured');
       return;
     }
+    // Custody guard: with no local lock for this course (and no success record
+    // above), the lock is already claimed or was never opened — don't fetch a
+    // voucher and walk the user into a doomed claim against a closed/absent
+    // lock. A genuinely-locked course always carries lockAccountAddress.
+    if (!courseState?.lockAccountAddress) {
+      setPhase('already-claimed');
+      return;
+    }
     if (!authToken) return; // AppShell auth gate will redirect if truly signed out
     let cancelled = false;
     getCompletionVoucher(courseId, authToken)
@@ -119,7 +128,7 @@ export default function ClaimPage() {
     return () => {
       cancelled = true;
     };
-  }, [courseId, authToken]);
+  }, [courseId, authToken, courseState?.lockAccountAddress]);
 
   const keptPct = voucher ? voucher.bps / 100 : 100;
   const forfeitPct = 100 - keptPct;
@@ -266,6 +275,20 @@ export default function ClaimPage() {
         <p className="font-pixel-mono text-[12px]" style={{ color: T.textMuted }}>
           Your stake unlocks when every lesson is complete. Keep going — the vault isn&apos;t
           going anywhere.
+        </p>
+        {backToDashboard}
+      </CozyCard>,
+    );
+  }
+
+  if (phase === 'already-claimed') {
+    return shell(
+      <CozyCard data-testid="v2-claim-already-claimed" className="text-center" style={{ padding: 28 }}>
+        <p className="font-pixel text-lg mb-2" style={{ color: COZY_TEXT, textShadow: COZY_TEXT_SHADOW }}>
+          Nothing to claim
+        </p>
+        <p className="font-pixel-mono text-[12px]" style={{ color: T.textMuted }}>
+          This position is already claimed or was never locked. Nothing is pending.
         </p>
         {backToDashboard}
       </CozyCard>,

@@ -44,7 +44,11 @@ export function DepositFormV2({
 
   const numericAmount = Number(amount);
   const validationError = useMemo(() => {
-    if (!amount.trim() || !Number.isFinite(numericAmount)) return 'Enter an amount';
+    const trimmed = amount.trim();
+    if (!trimmed || !Number.isFinite(numericAmount)) return 'Enter an amount';
+    // Reject what executeDeposit's parser rejects, up front (not after submit):
+    // plain decimal only, at most 6 fraction digits (USDC), no scientific notation.
+    if (!/^\d+(\.\d{1,6})?$/.test(trimmed)) return 'Use up to 6 decimal places';
     if (numericAmount < MIN_UI) return `Minimum is $${MIN_UI}`;
     if (numericAmount > MAX_UI) return `Maximum is $${MAX_UI} during beta`;
     if (walletBalanceUi != null && numericAmount > Number(walletBalanceUi)) {
@@ -58,9 +62,15 @@ export function DepositFormV2({
   return (
     <CozyCard data-testid="v2-deposit-form" className="w-full" style={{ padding: 20 }}>
       <CozySectionLabel>Lock your stake</CozySectionLabel>
-      <p className="font-pixel-mono text-[12px] mb-4" style={{ color: T.textMuted }}>
+      <p className="font-pixel-mono text-[12px] mb-2" style={{ color: T.textMuted }}>
         Lock USDC on <span style={{ color: COZY_TEXT }}>{courseTitle}</span>. It earns yield while
         you learn and returns — principal plus your yield — when you finish the course.
+      </p>
+      {/* Penalty disclosure BEFORE the user commits funds — the claim/dashboard
+          surfaces show it too, but consent belongs at the deposit. */}
+      <p className="font-pixel-mono text-[11px] mb-4" style={{ color: '#F0A878' }}>
+        Your principal is always returned. But go dark after your shields are spent and you forfeit
+        yield: 50% on the first lapse, 100% on the second (it goes to the community pot).
       </p>
 
       {/* Amount input + presets. No duration control: completion releases the lock. */}

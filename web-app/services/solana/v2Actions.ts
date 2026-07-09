@@ -10,6 +10,7 @@ import {
   getUsdcMint,
   readLockV2,
   readVaultV2Config,
+  LOCK_STATUS_ACTIVE,
 } from './vaultV2';
 import type { CompletionVoucher } from './vaultV2';
 
@@ -37,6 +38,7 @@ export interface V2ActionResult {
   signature: string;
   receivedUi: string | null; // USDC ATA delta (claim); null when unreadable
   lockAddress?: string; // set by deposits
+  alreadyLocked?: boolean; // deposit found the lock already ACTIVE (no-op)
 }
 
 interface TxStub {
@@ -181,8 +183,17 @@ export async function executeDeposit(
   if (frac.length > 6) throw new Error('Amount supports at most 6 decimal places');
   const atomic = BigInt(whole) * 1_000_000n + BigInt(frac.padEnd(6, '0') || '0');
 
-  // 1. open_lock_v2 — skip when the lock account already exists (PENDING).
+  // Branch on lock STATUS, not mere existence. An already-ACTIVE lock means the
+  // funds are locked — re-sending lock_funds_v2 would just fail on-chain and
+  // surface a false "transaction failed", so treat it as already done.
   const lock = await readLockV2(owner, courseId);
+  const lockPda = await deriveLockPda(owner, courseId);
+  if (lock?.status === LOCK_STATUS_ACTIVE) {
+    onPhase('success');
+    return { signature: '', receivedUi: null, lockAddress: lockPda.toBase58(), alreadyLocked: true };
+  }
+
+  // 1. open_lock_v2 — skip when the lock account already exists (PENDING).
   if (!lock) {
     const openTx = await buildOpenLockTransaction(owner, courseId, config);
     await signSendConfirm(openTx, owner, signer, onPhase);
@@ -193,7 +204,6 @@ export async function executeDeposit(
   const depositTx = await buildDepositTransaction(owner, courseId, atomic, config);
   const signature = await signSendConfirm(depositTx, owner, signer, onPhase);
 
-  const lockPda = await deriveLockPda(owner, courseId);
   onPhase('success');
   return { signature, receivedUi: null, lockAddress: lockPda.toBase58() };
 }

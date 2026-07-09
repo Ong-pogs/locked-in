@@ -231,7 +231,10 @@ export const appConfig = {
     '',
   // Completion-voucher validity window (seconds). The on-chain claim_v2 rejects
   // an expired voucher, so this bounds how long a signed voucher is claimable.
-  voucherTtlSeconds: optionalInt('VOUCHER_TTL_SECONDS', 3600),
+  // 90 days (spec §4.2 "expiry = now + 90d"). A short TTL made the claim
+  // page's date-only "valid until" display misleading and let a fetched
+  // voucher expire before the user finished signing.
+  voucherTtlSeconds: optionalInt('VOUCHER_TTL_SECONDS', 90 * 24 * 60 * 60),
   lockVaultWorkerPrivateKey:
     process.env.LOCK_VAULT_WORKER_PRIVATE_KEY ??
     process.env.DEPLOYER_PRIVATE_KEY ??

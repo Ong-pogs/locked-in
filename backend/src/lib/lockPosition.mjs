@@ -15,6 +15,11 @@ import { appConfig } from '../config.mjs';
 const LOCK_SEED = Buffer.from('lock-v2');
 const CONFIG_SEED = Buffer.from('vault-v2b');
 
+// Devnet mock reserve (share-based, slot-linear rate). NEVER on mainnet.
+const MOCK_RESERVE_PROGRAM = '3kqzsQV7Ab8aakkNugM9aXBqQrgwnshF6a47HxJcfLtp';
+const RATE_SCALE = 1_000_000_000_000n; // 1e12, mock_reserve RATE_SCALE
+const SLOTS_PER_YEAR = 63_072_000n; // mock_reserve SLOTS_PER_YEAR
+
 // LockV2 layout (fixed Anchor offsets, pinned by the devnet-proven client):
 // disc[8] owner[32] course_id_hash[32] principal u64@72 lock_start i64@80 status u8@88
 const STATUS_BY_BYTE = { 0: 'ACTIVE', 1: 'PENDING', 2: 'CLOSED' };
@@ -54,22 +59,35 @@ async function readLiveValue(conn, programId, lockPda) {
     const [configPda] = PublicKey.findProgramAddressSync([CONFIG_SEED], new PublicKey(programId));
     const configInfo = await conn.getAccountInfo(configPda);
     if (!configInfo) return null;
-    // VaultV2Config offsets: kamino_liquidity_supply @200, collateral_mint @232.
-    const liquiditySupply = new PublicKey(configInfo.data.subarray(200, 232));
+    // VaultV2Config offsets: kamino_program @72, kamino_reserve @104,
+    // collateral_mint @232.
+    const kaminoProgram = new PublicKey(configInfo.data.subarray(72, 104));
+    const kaminoReserve = new PublicKey(configInfo.data.subarray(104, 136));
     const collateralMint = new PublicKey(configInfo.data.subarray(232, 264));
 
     const lockCollateralAta = getAssociatedTokenAddressSync(collateralMint, lockPda, true);
-    const [shares, liquidity, supply] = await Promise.all([
-      conn.getTokenAccountBalance(lockCollateralAta),
-      conn.getTokenAccountBalance(liquiditySupply),
-      conn.getTokenSupply(collateralMint),
-    ]);
-    const sharesAtomic = BigInt(shares.value.amount);
-    const liquidityAtomic = BigInt(liquidity.value.amount);
-    const supplyAtomic = BigInt(supply.value.amount);
-    if (supplyAtomic === 0n) return null;
-    const valueAtomic = (sharesAtomic * liquidityAtomic) / supplyAtomic;
-    return formatAtomicUi(valueAtomic, shares.value.decimals ?? 6);
+    const sharesBal = await conn.getTokenAccountBalance(lockCollateralAta);
+    const shares = BigInt(sharesBal.value.amount);
+    if (shares === 0n) return null;
+
+    // Live value = what a redeem would pay = shares × exchange_rate. This MUST
+    // match the reserve's settlement math, not a pool-balance/share-supply
+    // ratio (which overstates: liquidity_supply pools every lock's deposit).
+    // Only the devnet mock reserve's rate is computed here; real Kamino needs
+    // the klend collateral exchange rate (mainnet-readiness blocker).
+    if (kaminoProgram.toBase58() !== MOCK_RESERVE_PROGRAM) return null;
+
+    const reserveInfo = await conn.getAccountInfo(kaminoReserve);
+    if (!reserveInfo) return null;
+    // mock Reserve layout: apy_bps u16 @104, genesis_slot u64 @106.
+    const apyBps = BigInt(reserveInfo.data.readUInt16LE(104));
+    const genesisSlot = reserveInfo.data.readBigUInt64LE(106);
+    const now = BigInt(await conn.getSlot());
+    const elapsed = now > genesisSlot ? now - genesisSlot : 0n;
+    // exchange_rate = RATE_SCALE + apy_bps*elapsed*RATE_SCALE / (10000*SLOTS_PER_YEAR)
+    const rate = RATE_SCALE + (apyBps * elapsed * RATE_SCALE) / (10_000n * SLOTS_PER_YEAR);
+    const valueAtomic = (shares * rate) / RATE_SCALE;
+    return formatAtomicUi(valueAtomic, sharesBal.value.decimals ?? 6);
   } catch {
     return null; // rate unreadable — report null, never fabricate
   }

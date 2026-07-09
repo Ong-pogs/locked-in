@@ -30,15 +30,19 @@ export function DashboardV2() {
   const refreshCourseRuntime = useCourseStore((s) => s.refreshCourseRuntime);
 
   const [positions, setPositions] = useState<Record<string, LockPositionResponse>>({});
+  const [positionErrors, setPositionErrors] = useState<Record<string, boolean>>({});
+  const [retryTick, setRetryTick] = useState(0);
   const claimEnabled = hasVaultV2Config();
 
   // Fan out runtime refresh for EVERY enrolled course (not just the active one).
+  // Re-runs with the position poll so completedToday/lapse state can't go stale
+  // across UTC midnight while the card still reads "blazing".
   useEffect(() => {
     if (!authToken) return;
     for (const courseId of enrolledCourseIds) {
       void refreshCourseRuntime(courseId, authToken);
     }
-  }, [authToken, enrolledCourseIds, refreshCourseRuntime]);
+  }, [authToken, enrolledCourseIds, refreshCourseRuntime, retryTick]);
 
   // Position polling: every 60s, paused when the tab is hidden.
   useEffect(() => {
@@ -47,13 +51,19 @@ export function DashboardV2() {
 
     const fetchAll = async () => {
       if (document.visibilityState === 'hidden') return;
+      // Also refresh runtime each poll so the flame gauge tracks day rollover.
+      for (const courseId of enrolledCourseIds) void refreshCourseRuntime(courseId, authToken);
       await Promise.all(
         enrolledCourseIds.map(async (courseId) => {
           try {
             const position = await getLockPosition(courseId, authToken);
-            if (!cancelled) setPositions((prev) => ({ ...prev, [courseId]: position }));
+            if (cancelled) return;
+            setPositions((prev) => ({ ...prev, [courseId]: position }));
+            setPositionErrors((prev) => ({ ...prev, [courseId]: false }));
           } catch {
-            // Position stays in loading/stale state — card renders a skeleton.
+            // Surface the failure so the card offers a retry instead of a
+            // permanent "Loading position…" dead state.
+            if (!cancelled) setPositionErrors((prev) => ({ ...prev, [courseId]: true }));
           }
         }),
       );
@@ -65,7 +75,7 @@ export function DashboardV2() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [authToken, enrolledCourseIds]);
+  }, [authToken, enrolledCourseIds, refreshCourseRuntime, retryTick]);
 
   const cards: PositionCardData[] = useMemo(
     () =>
@@ -163,6 +173,8 @@ export function DashboardV2() {
                   key={card.courseId}
                   data={card}
                   position={positions[card.courseId] ?? null}
+                  positionError={Boolean(positionErrors[card.courseId])}
+                  onRetryPosition={() => setRetryTick((t) => t + 1)}
                   claimEnabled={claimEnabled}
                 />
               ))}

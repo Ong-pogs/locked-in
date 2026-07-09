@@ -44,3 +44,7 @@ yarn-error.log*
 next-env.d.ts
 
 claude.md
+# Playwright v2/visual run artifacts (baselines live in e2e/visual/__screenshots__)
+test-results-v2/
+test-results-visual/
+playwright-report/

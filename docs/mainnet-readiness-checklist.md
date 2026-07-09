@@ -105,3 +105,26 @@
   smoke before cutover. Green devnet e2e does NOT certify mainnet tx shape —
   the devnet mock reserve needs no refresh. Update
   `__tests__/services/solana/vaultV2.accounts.test.ts` pins with it.
+
+## v2 audit follow-ups (adversarial swarm, 2026-07-10)
+
+- [ ] **v2 lock server-side visibility (HIGH)**: a v2 deposit writes the lock only
+  to the client Zustand store (`activateCourse`). There is no server-side writer for
+  `user_course_enrollments`/lock metadata on deposit, so a v2 lock is invisible after a
+  storage clear or on another device — `restoreFromBackend` and on-chain discovery can't
+  see it. Add an enroll-on-deposit endpoint or a v2 deposit indexer before launch.
+- [ ] **Real-Kamino exchange rate (HIGH, position value)**: `lockPosition.mjs` computes
+  live value from the devnet **mock** reserve's slot-linear rate. Real Kamino needs the
+  klend collateral exchange rate; returns `null` (falls back to principal) until then.
+- [ ] **Platform-fee display (LOW)**: the claim breakdown shows yield-kept % from
+  `voucher.bps` only; if `set_config_v2` sets a non-zero `platform_fee_bps`, "Yield kept
+  100%" overstates by the fee. Wire the fee into the breakdown if a fee is ever enabled.
+- [ ] **`Received (exact)` figure (INFO)**: the claim success "received" is a raw
+  USDC-ATA delta; concurrent credits could inflate it and RPC lag drop it. Prefer the
+  on-chain `LockV2Settled` event amount once an indexer exists.
+- [ ] **Contrast sweep (MEDIUM, a11y)**: `T.textMuted` (45% white) on the 0.28-alpha
+  glass fails WCAG 4.5:1 for 10–13px money copy. Flame labels were lightened; do a full
+  pass on the small muted labels (add text-shadow or raise luminance).
+- [ ] **Claim dust**: a fast deposit→claim at bps=10000 returns principal − 1 atomic
+  unit (double-floor: `floor(amount/rate)` then `floor(shares·rate)`). Real Kamino cTokens
+  floor the same way — surface "principal returned (±dust)" rather than an exact promise.
