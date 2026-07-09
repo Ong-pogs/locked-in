@@ -31,6 +31,7 @@ import {
 } from '../../lib/answerValidator.mjs';
 import { hasFaucetConfig, isDevnetOnly, transferUsdcAtomic } from '../../lib/faucet.mjs';
 import { getSaverRedirectBps, computeNextFireLitUntil } from '../../lib/yieldRouting.mjs';
+import { issueVoucher } from '../../lib/claimVoucher.mjs';
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -157,6 +158,93 @@ async function checkAndAwardMilestoneXp(client, walletAddress, courseId, lessonI
     xpLevel: final.rows[0]?.xpLevel ?? 1,
     xpAwarded: totalAwarded,
   };
+}
+
+// SHA-256(utf8(courseId)). MUST match the client's hashCourseId in
+// web-app/services/solana/lockVault.ts so the lock PDA the backend signs a
+// voucher for is byte-identical to the on-chain lock the user opened. A
+// mismatch here yields a voucher for the wrong PDA and claim_v2 fails.
+function courseIdHashBytes(courseId) {
+  return createHash('sha256').update(String(courseId), 'utf8').digest();
+}
+
+// Pure: is every module in the course fully complete? Mirrors the
+// course-complete gate in checkAndAwardMilestoneXp. Rows are
+// {total_lessons, completed_lessons} (Postgres count() returns strings).
+export function isCourseComplete(moduleRows) {
+  return (
+    Array.isArray(moduleRows) &&
+    moduleRows.length > 0 &&
+    moduleRows.every(
+      (m) =>
+        Number(m.total_lessons) > 0 &&
+        Number(m.completed_lessons) >= Number(m.total_lessons),
+    )
+  );
+}
+
+/**
+ * Issue a signed completion voucher for a fully-completed course. The client
+ * embeds the returned Ed25519 message+signature in a precompile instruction
+ * placed before claim_v2 in the same transaction; the program verifies the
+ * signer is the vault authority and the message matches the one it rebuilds.
+ *
+ * Fails closed: no DB, unconfigured signer/program, unknown course, or an
+ * incomplete course all reject rather than mint an unearned voucher.
+ */
+export async function issueCourseCompletionVoucher(walletAddress, courseId) {
+  if (!hasDatabase()) {
+    throw new HttpError(503, 'Completion vouchers require the database', 'DB_UNAVAILABLE');
+  }
+  const programId = appConfig.vaultV2ProgramId;
+  const authoritySecretKey = appConfig.lockVaultWorkerPrivateKey;
+  if (!programId || !authoritySecretKey) {
+    throw new HttpError(
+      503,
+      'Voucher signing is not configured',
+      'VOUCHER_SIGNING_UNCONFIGURED',
+    );
+  }
+
+  const moduleCheck = await query(
+    `SELECT pm.module_id,
+            count(DISTINCT pl.lesson_id) as total_lessons,
+            count(DISTINCT ulp.lesson_id) FILTER (WHERE ulp.completed) as completed_lessons
+     FROM lesson.published_modules pm
+     JOIN lesson.published_lessons pl ON pl.module_id = pm.module_id AND pl.release_id = pm.release_id
+     LEFT JOIN lesson.user_lesson_progress ulp ON ulp.lesson_id = pl.lesson_id AND ulp.wallet_address = $1
+     WHERE pm.course_id = $2
+     GROUP BY pm.module_id`,
+    [walletAddress, courseId],
+  );
+
+  if (moduleCheck.rows.length === 0) {
+    throw notFound(`Unknown course: ${courseId}`, 'COURSE_NOT_FOUND');
+  }
+  if (!isCourseComplete(moduleCheck.rows)) {
+    throw new HttpError(403, 'Course not yet complete', 'COURSE_NOT_COMPLETE');
+  }
+
+  const lapseRow = await query(
+    `SELECT coalesce(lapse_count, 0) as "lapseCount"
+       FROM lesson.user_course_runtime_state
+      WHERE wallet_address = $1 AND course_id = $2 LIMIT 1`,
+    [walletAddress, courseId],
+  );
+  const lapseCount = Number(lapseRow.rows[0]?.lapseCount ?? 0);
+
+  const expiry = Math.floor(Date.now() / 1000) + appConfig.voucherTtlSeconds;
+
+  const voucher = issueVoucher({
+    programId,
+    authoritySecretKey,
+    owner: walletAddress,
+    courseIdHash: courseIdHashBytes(courseId),
+    lapseCount,
+    expiry,
+  });
+
+  return { courseId, lapseCount, ...voucher };
 }
 const LESSON_ACCEPTANCE_THRESHOLD = 70;
 

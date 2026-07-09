@@ -12,6 +12,11 @@ process.env.LOCK_VAULT_PROGRAM_ID = '3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBa
 process.env.YIELD_SPLITTER_PROGRAM_ID = '8bevd3T3LWoUh2Z9348UKwFFN1p5MdbRbAe2zniCrnVv';
 process.env.COMMUNITY_POT_PROGRAM_ID = '3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav';
 process.env.LOCK_VAULT_USDC_MINT = '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU';
+// v2 completion-voucher signing (devnet-only throwaway key — NEVER a real key).
+process.env.VAULT_V2_PROGRAM_ID = 'EUABEbHUjiUn9NijapRJT2MVqQ5nSdqH3gSzTxyGucsN';
+process.env.LOCK_VAULT_WORKER_PRIVATE_KEY =
+  '5uE3uZYba8jAnvhUsvKZizKZgBW2XFkbcPFkEpqEY8g5krd8FtQiBVYN5T2TArP5koXCNVzrj6PmtM2gLyyigd7b';
+process.env.VOUCHER_TTL_SECONDS = '3600';
 process.env.LOCK_VAULT_RELAY_ENABLED = 'false';
 process.env.RUNTIME_SCHEDULER_ENABLED = 'false';
 process.env.LEADERBOARD_SNAPSHOT_ENABLED = 'false';

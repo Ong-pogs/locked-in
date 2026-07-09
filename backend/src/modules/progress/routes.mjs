@@ -18,6 +18,7 @@ import {
   getUnlockReceipts,
   getYieldHistory,
   getModuleProgress,
+  issueCourseCompletionVoucher,
   refreshLeaderboardSnapshot,
   recordUnlockReceipt,
   syncUnlockReceiptsFromChain,
@@ -404,6 +405,17 @@ export async function progressRoutes(app) {
     async (request) => {
       const courseId = assertPathParam(request.params?.courseId, 'courseId');
       return getCourseProgress(request.auth.walletAddress, courseId);
+    },
+  );
+
+  // Sign an Ed25519 completion voucher for a fully-completed course. The client
+  // embeds it in a precompile ix before claim_v2 to unlock the position.
+  app.post(
+    '/v1/progress/courses/:courseId/voucher',
+    { preHandler: requireAccessAuth },
+    async (request) => {
+      const courseId = assertPathParam(request.params?.courseId, 'courseId');
+      return issueCourseCompletionVoucher(request.auth.walletAddress, courseId);
     },
   );
 

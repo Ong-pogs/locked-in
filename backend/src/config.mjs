@@ -222,6 +222,15 @@ export const appConfig = {
     process.env.LOCK_VAULT_USDC_MINT ??
     process.env.EXPO_PUBLIC_LOCK_VAULT_USDC_MINT ??
     '',
+  // v2 custody program (vault_v2.rs). Falls back to the v1 program id only so
+  // a misconfig is loud rather than silently signing for the wrong program.
+  vaultV2ProgramId:
+    process.env.VAULT_V2_PROGRAM_ID ??
+    process.env.LOCK_VAULT_PROGRAM_ID ??
+    '',
+  // Completion-voucher validity window (seconds). The on-chain claim_v2 rejects
+  // an expired voucher, so this bounds how long a signed voucher is claimable.
+  voucherTtlSeconds: optionalInt('VOUCHER_TTL_SECONDS', 3600),
   lockVaultWorkerPrivateKey:
     process.env.LOCK_VAULT_WORKER_PRIVATE_KEY ??
     process.env.DEPLOYER_PRIVATE_KEY ??
