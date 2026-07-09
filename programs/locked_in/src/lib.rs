@@ -26,10 +26,12 @@ mod kamino_probe;
 mod pot;
 mod settle;
 mod vault;
+mod vault_v2;
 mod voucher;
 mod window;
 
 pub use kamino_probe::*;
+pub use vault_v2::*;
 
 // Re-export domain items so the generated #[program] module and the IDL can
 // see the Accounts structs / args without fully-qualified paths.
@@ -74,6 +76,28 @@ pub mod locked_in {
     /// real klend reserve. Not part of the product surface.
     pub fn kamino_roundtrip(ctx: Context<KaminoRoundtrip>, amount: u64) -> Result<()> {
         kamino_probe::kamino_roundtrip(ctx, amount)
+    }
+
+    // ── v2 custody (Kamino yield + voucher claim) ─────────────────────────
+
+    pub fn initialize_vault_v2(ctx: Context<InitializeVaultV2>, params: InitV2Params) -> Result<()> {
+        vault_v2::initialize_vault_v2(ctx, params)
+    }
+
+    pub fn open_lock_v2(ctx: Context<OpenLockV2>, course_id_hash: [u8; 32]) -> Result<()> {
+        vault_v2::open_lock_v2(ctx, course_id_hash)
+    }
+
+    pub fn lock_funds_v2(ctx: Context<LockFundsV2>, course_id_hash: [u8; 32], amount: u64) -> Result<()> {
+        vault_v2::lock_funds_v2(ctx, course_id_hash, amount)
+    }
+
+    pub fn claim_v2(ctx: Context<ClaimV2>, user_yield_bps: u16, expiry: i64) -> Result<()> {
+        vault_v2::claim_v2(ctx, user_yield_bps, expiry)
+    }
+
+    pub fn force_return_v2(ctx: Context<ForceReturnV2>) -> Result<()> {
+        vault_v2::force_return_v2(ctx)
     }
 
     // ── Pot domain (yield-redirect accumulator + payout) ─────────────────

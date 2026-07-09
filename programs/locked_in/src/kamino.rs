@@ -73,7 +73,8 @@ pub struct KaminoRedeem<'info> {
     pub instruction_sysvar: AccountInfo<'info>,
 }
 
-pub fn deposit_reserve_liquidity(a: KaminoDeposit, liquidity_amount: u64, seeds: &[&[&[u8]]]) -> Result<()> {
+#[inline(never)]
+pub fn deposit_reserve_liquidity(a: &KaminoDeposit, liquidity_amount: u64, seeds: &[&[&[u8]]]) -> Result<()> {
     let program_id = *a.klend_program.key;
 
     let mut data = Vec::with_capacity(16);
@@ -99,17 +100,18 @@ pub fn deposit_reserve_liquidity(a: KaminoDeposit, liquidity_amount: u64, seeds:
     invoke_signed(
         &ix,
         &[
-            a.owner, a.reserve, a.lending_market, a.lending_market_authority,
-            a.reserve_liquidity_mint, a.reserve_liquidity_supply, a.reserve_collateral_mint,
-            a.user_source_liquidity, a.user_destination_collateral,
-            a.collateral_token_program, a.liquidity_token_program, a.instruction_sysvar,
+            a.klend_program.clone(), a.owner.clone(), a.reserve.clone(), a.lending_market.clone(), a.lending_market_authority.clone(),
+            a.reserve_liquidity_mint.clone(), a.reserve_liquidity_supply.clone(), a.reserve_collateral_mint.clone(),
+            a.user_source_liquidity.clone(), a.user_destination_collateral.clone(),
+            a.collateral_token_program.clone(), a.liquidity_token_program.clone(), a.instruction_sysvar.clone(),
         ],
         seeds,
     )
     .map_err(|_| KaminoError::DepositFailed.into())
 }
 
-pub fn redeem_reserve_collateral(a: KaminoRedeem, collateral_amount: u64, seeds: &[&[&[u8]]]) -> Result<()> {
+#[inline(never)]
+pub fn redeem_reserve_collateral(a: &KaminoRedeem, collateral_amount: u64, seeds: &[&[&[u8]]]) -> Result<()> {
     let program_id = *a.klend_program.key;
 
     let mut data = Vec::with_capacity(16);
@@ -135,10 +137,10 @@ pub fn redeem_reserve_collateral(a: KaminoRedeem, collateral_amount: u64, seeds:
     invoke_signed(
         &ix,
         &[
-            a.owner, a.lending_market, a.reserve, a.lending_market_authority,
-            a.reserve_liquidity_mint, a.reserve_collateral_mint, a.reserve_liquidity_supply,
-            a.user_source_collateral, a.user_destination_liquidity,
-            a.collateral_token_program, a.liquidity_token_program, a.instruction_sysvar,
+            a.klend_program.clone(), a.owner.clone(), a.lending_market.clone(), a.reserve.clone(), a.lending_market_authority.clone(),
+            a.reserve_liquidity_mint.clone(), a.reserve_collateral_mint.clone(), a.reserve_liquidity_supply.clone(),
+            a.user_source_collateral.clone(), a.user_destination_liquidity.clone(),
+            a.collateral_token_program.clone(), a.liquidity_token_program.clone(), a.instruction_sysvar.clone(),
         ],
         seeds,
     )
