@@ -25,6 +25,7 @@ mod pot;
 mod settle;
 mod vault;
 mod voucher;
+mod window;
 
 // Re-export domain items so the generated #[program] module and the IDL can
 // see the Accounts structs / args without fully-qualified paths.
