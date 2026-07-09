@@ -48,13 +48,66 @@ jobs:
         run: npx vitest run --project unit
         env:
           SOLANA_RPC_URL: https://api.devnet.solana.com
-          LOCK_VAULT_PROGRAM_ID: 41TexnrHDMV4ASJmqNNFcgQ7RBk6N193yvukfiCzKQmD
-          YIELD_SPLITTER_PROGRAM_ID: 8bevd3T3LWoUh2Z9348UKwFFN1p5MdbRbAe2zniCrnVv
-          COMMUNITY_POT_PROGRAM_ID: BsJDnhJGVdLQ3mxBJ7YCMkkBitKP2RT49zFqR9XsGri1
+          # locked_in merged program (v1 lock vault + community pot live here).
+          LOCK_VAULT_PROGRAM_ID: 3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav
+          COMMUNITY_POT_PROGRAM_ID: 3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav
+          # v2 custody program (vault_v2.rs) on devnet.
+          VAULT_V2_PROGRAM_ID: EUABEbHUjiUn9NijapRJT2MVqQ5nSdqH3gSzTxyGucsN
           LOCK_VAULT_USDC_MINT: 4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU
-          LOCK_VAULT_SKR_MINT: CQAiXocPkmrr6MTDigHn1yDJ66v5nbPyxwMoUxb4PgST
           JWT_SECRET: ci-devnet-jwt-secret-at-least-32-characters-long
           JWT_ISSUER: lockedin-api
           JWT_AUDIENCE: lockedin-mobile
           JWT_ACCESS_TTL: 15m
           JWT_REFRESH_TTL: 30d
+
+  # Proves the BROWSER code path on-chain: web-app/services/solana/vaultV2.ts
+  # builders drive open_lock -> deposit -> claim against the live v2 devnet
+  # program, with the voucher signed by backend/src/lib/claimVoucher.mjs.
+  # Needs two repo secrets (JSON-array secret keys):
+  #   DEVNET_USER_KEYPAIR       funded devnet wallet (SOL for fees + >=2 USDC)
+  #   DEVNET_AUTHORITY_KEYPAIR  vault authority (voucher signer)
+  devnet-client-path:
+    name: Devnet v2 client-path e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DEVNET_USER_KEYPAIR: ${{ secrets.DEVNET_USER_KEYPAIR }}
+      DEVNET_AUTHORITY_KEYPAIR: ${{ secrets.DEVNET_AUTHORITY_KEYPAIR }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Scheduled runs skip quietly when the keypair secrets are not set; a
+      # manual dispatch without them fails loudly instead of green-skipping.
+      - name: Gate on devnet keypair secrets
+        id: gate
+        run: |
+          if [ -n "$DEVNET_USER_KEYPAIR" ] && [ -n "$DEVNET_AUTHORITY_KEYPAIR" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "DEVNET_USER_KEYPAIR / DEVNET_AUTHORITY_KEYPAIR secrets are not configured" >&2
+            exit 1
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "keypair secrets absent - skipping scheduled client-path e2e"
+          fi
+
+      - name: Install web-app dependencies
+        if: steps.gate.outputs.run == 'true'
+        working-directory: web-app
+        run: npm ci
+
+      - name: Install backend dependencies
+        if: steps.gate.outputs.run == 'true'
+        working-directory: backend
+        run: npm ci
+
+      - name: Run client-builder deposit->claim on devnet
+        if: steps.gate.outputs.run == 'true'
+        run: node programs-tests/scripts/devnet-v2-via-client.mjs
+        env:
+          # Fresh course id per run => fresh lock PDA, so reruns never collide.
+          COURSE_ID: client-path-ci-${{ github.run_id }}-${{ github.run_attempt }}
