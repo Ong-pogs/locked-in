@@ -1,0 +1,357 @@
+import { Buffer } from 'buffer';
+import {
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+  getAssociatedTokenAddressSync,
+} from '@solana/spl-token';
+import {
+  ComputeBudgetProgram,
+  Ed25519Program,
+  PublicKey,
+  SystemProgram,
+  SYSVAR_INSTRUCTIONS_PUBKEY,
+  Transaction,
+  TransactionInstruction,
+} from '@solana/web3.js';
+import { connection } from './connection';
+
+// v2 custody client. Mirrors the deposit→claim flow proven on devnet in
+// programs-tests/scripts/devnet-v2-deposit-claim.mjs. All reserve/pot/fee
+// accounts are read from the on-chain VaultV2Config, so the same builders work
+// for the devnet mock reserve and for real Kamino once config points at it.
+
+// Anchor discriminators = sha256("global:<ix>")[..8].
+const OPEN_LOCK_V2_DISCRIMINATOR = Uint8Array.from([27, 3, 244, 249, 254, 190, 169, 147]);
+const LOCK_FUNDS_V2_DISCRIMINATOR = Uint8Array.from([151, 43, 254, 68, 70, 208, 150, 164]);
+const CLAIM_V2_DISCRIMINATOR = Uint8Array.from([229, 87, 46, 162, 21, 157, 231, 114]);
+
+const CONFIG_SEED = Buffer.from('vault-v2b');
+const LOCK_SEED = Buffer.from('lock-v2');
+
+// LockV2 status.
+export const LOCK_STATUS_ACTIVE = 0;
+export const LOCK_STATUS_PENDING = 1;
+export const LOCK_STATUS_CLOSED = 2;
+
+const rawProgramId = (process.env.NEXT_PUBLIC_VAULT_V2_PROGRAM_ID ?? '').trim();
+const rawUsdcMint = (process.env.NEXT_PUBLIC_LOCK_VAULT_USDC_MINT ?? '').trim();
+
+export interface VaultV2Config {
+  configAddress: PublicKey;
+  authority: PublicKey;
+  usdcMint: PublicKey;
+  kaminoProgram: PublicKey;
+  kaminoReserve: PublicKey;
+  kaminoMarket: PublicKey;
+  kaminoLma: PublicKey;
+  kaminoLiquiditySupply: PublicKey;
+  collateralMint: PublicKey;
+  potVault: PublicKey;
+  feeVault: PublicKey;
+  paused: boolean;
+}
+
+export interface LockV2Snapshot {
+  lockAddress: string;
+  owner: string;
+  principalAmountUi: string;
+  lockStartDate: string; // ISO
+  status: number;
+}
+
+// A signed completion voucher, exactly as the backend endpoint returns it
+// (POST /v1/progress/courses/:courseId/voucher). base64 message + signature.
+export interface CompletionVoucher {
+  lock: string;
+  authorityPubkey: string;
+  bps: number;
+  expiry: number;
+  message: string; // base64
+  signature: string; // base64
+}
+
+function parsePublicKey(value: string): PublicKey | null {
+  if (!value) return null;
+  try {
+    return new PublicKey(value);
+  } catch {
+    return null;
+  }
+}
+
+export function hasVaultV2Config(): boolean {
+  return Boolean(parsePublicKey(rawProgramId) && parsePublicKey(rawUsdcMint));
+}
+
+export function getProgramId(): PublicKey {
+  const programId = parsePublicKey(rawProgramId);
+  if (!programId) {
+    throw new Error('Missing NEXT_PUBLIC_VAULT_V2_PROGRAM_ID.');
+  }
+  return programId;
+}
+
+export function getUsdcMint(): PublicKey {
+  const usdcMint = parsePublicKey(rawUsdcMint);
+  if (!usdcMint) {
+    throw new Error('Missing NEXT_PUBLIC_LOCK_VAULT_USDC_MINT.');
+  }
+  return usdcMint;
+}
+
+/** SHA-256(utf8(courseId)) — MUST match backend courseIdHashBytes + voucher.rs. */
+export async function hashCourseId(courseId: string): Promise<Uint8Array> {
+  const encoded = new TextEncoder().encode(courseId);
+  const digest = await crypto.subtle.digest('SHA-256', encoded);
+  return new Uint8Array(digest);
+}
+
+export function deriveConfigPda(programId: PublicKey = getProgramId()): PublicKey {
+  const [pda] = PublicKey.findProgramAddressSync([CONFIG_SEED], programId);
+  return pda;
+}
+
+export async function deriveLockPda(
+  ownerAddress: string,
+  courseId: string,
+  programId: PublicKey = getProgramId(),
+): Promise<PublicKey> {
+  const owner = new PublicKey(ownerAddress);
+  const courseIdHash = await hashCourseId(courseId);
+  const [pda] = PublicKey.findProgramAddressSync(
+    [LOCK_SEED, owner.toBuffer(), Buffer.from(courseIdHash)],
+    programId,
+  );
+  return pda;
+}
+
+function encodeU16LE(value: number): Buffer {
+  const b = Buffer.alloc(2);
+  b.writeUInt16LE(value);
+  return b;
+}
+
+function encodeI64LE(value: number | bigint): Buffer {
+  const b = Buffer.alloc(8);
+  b.writeBigInt64LE(BigInt(value));
+  return b;
+}
+
+function encodeU64LE(value: bigint): Buffer {
+  const b = Buffer.alloc(8);
+  b.writeBigUInt64LE(value);
+  return b;
+}
+
+export function encodeOpenLockData(courseIdHash: Uint8Array): Buffer {
+  return Buffer.concat([Buffer.from(OPEN_LOCK_V2_DISCRIMINATOR), Buffer.from(courseIdHash)]);
+}
+
+export function encodeLockFundsData(courseIdHash: Uint8Array, stableAmount: bigint): Buffer {
+  return Buffer.concat([
+    Buffer.from(LOCK_FUNDS_V2_DISCRIMINATOR),
+    Buffer.from(courseIdHash),
+    encodeU64LE(stableAmount),
+  ]);
+}
+
+export function encodeClaimData(bps: number, expiry: number): Buffer {
+  return Buffer.concat([Buffer.from(CLAIM_V2_DISCRIMINATOR), encodeU16LE(bps), encodeI64LE(expiry)]);
+}
+
+function readPk(data: Buffer, offset: number): PublicKey {
+  return new PublicKey(data.subarray(offset, offset + 32));
+}
+
+/** Decode the on-chain VaultV2Config account. Fixed Anchor offsets. */
+export async function readVaultV2Config(): Promise<VaultV2Config> {
+  const programId = getProgramId();
+  const configAddress = deriveConfigPda(programId);
+  const info = await connection.getAccountInfo(configAddress);
+  if (!info) {
+    throw new Error('Vault v2 is not initialized.');
+  }
+  const d = info.data;
+  return {
+    configAddress,
+    authority: readPk(d, 8),
+    usdcMint: readPk(d, 40),
+    kaminoProgram: readPk(d, 72),
+    kaminoReserve: readPk(d, 104),
+    kaminoMarket: readPk(d, 136),
+    kaminoLma: readPk(d, 168),
+    kaminoLiquiditySupply: readPk(d, 200),
+    collateralMint: readPk(d, 232),
+    potVault: readPk(d, 264),
+    feeVault: readPk(d, 296),
+    paused: d[362] === 1,
+  };
+}
+
+const m = (pubkey: PublicKey, isWritable: boolean, isSigner = false) => ({ pubkey, isWritable, isSigner });
+
+/**
+ * open_lock_v2 — inits the lock PDA + its collateral ATA (no CPI). Must run
+ * before the deposit. Idempotent-safe to skip if the lock already exists.
+ */
+export async function buildOpenLockTransaction(
+  ownerAddress: string,
+  courseId: string,
+  config: VaultV2Config,
+): Promise<Transaction> {
+  const programId = getProgramId();
+  const owner = new PublicKey(ownerAddress);
+  const courseIdHash = await hashCourseId(courseId);
+  const lock = await deriveLockPda(ownerAddress, courseId, programId);
+  const lockCollateral = getAssociatedTokenAddressSync(config.collateralMint, lock, true);
+
+  const ix = new TransactionInstruction({
+    programId,
+    keys: [
+      m(config.configAddress, false),
+      m(lock, true),
+      m(owner, true, true),
+      m(config.collateralMint, false),
+      m(lockCollateral, true),
+      m(TOKEN_PROGRAM_ID, false),
+      m(ASSOCIATED_TOKEN_PROGRAM_ID, false),
+      m(SystemProgram.programId, false),
+    ],
+    data: encodeOpenLockData(courseIdHash),
+  });
+  return new Transaction().add(ix);
+}
+
+/**
+ * lock_funds_v2 — CPI-deposits `stableAmount` (atomic USDC) into the reserve,
+ * banking the collateral in the lock's ATA. The lock + ATA must already exist
+ * (open_lock_v2). Prefixed with a compute-unit bump for the CPI.
+ */
+export async function buildDepositTransaction(
+  ownerAddress: string,
+  courseId: string,
+  stableAmount: bigint,
+  config: VaultV2Config,
+): Promise<Transaction> {
+  const programId = getProgramId();
+  const owner = new PublicKey(ownerAddress);
+  const courseIdHash = await hashCourseId(courseId);
+  const lock = await deriveLockPda(ownerAddress, courseId, programId);
+  const lockCollateral = getAssociatedTokenAddressSync(config.collateralMint, lock, true);
+  const userUsdc = getAssociatedTokenAddressSync(config.usdcMint, owner);
+
+  const ix = new TransactionInstruction({
+    programId,
+    keys: [
+      m(config.configAddress, true),
+      m(lock, true),
+      m(owner, true, true),
+      m(config.usdcMint, false),
+      m(userUsdc, true),
+      m(lockCollateral, true),
+      m(config.kaminoProgram, false),
+      m(config.kaminoReserve, true),
+      m(config.kaminoMarket, false),
+      m(config.kaminoLma, false),
+      m(config.kaminoLiquiditySupply, true),
+      m(config.collateralMint, true),
+      m(TOKEN_PROGRAM_ID, false),
+      m(SYSVAR_INSTRUCTIONS_PUBKEY, false),
+    ],
+    data: encodeLockFundsData(courseIdHash, stableAmount),
+  });
+  return new Transaction()
+    .add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }))
+    .add(ix);
+}
+
+/**
+ * claim_v2 — redeems collateral and splits principal/yield per the completion
+ * voucher's bps, closing the lock. The tx is [ed25519_verify(voucher),
+ * compute_budget, claim]; the program scans instructions for the precompile.
+ * `voucher` is the backend endpoint's response for this (owner, course).
+ */
+export async function buildClaimTransaction(
+  ownerAddress: string,
+  courseId: string,
+  voucher: CompletionVoucher,
+  config: VaultV2Config,
+): Promise<Transaction> {
+  const programId = getProgramId();
+  const owner = new PublicKey(ownerAddress);
+  const lock = await deriveLockPda(ownerAddress, courseId, programId);
+  if (lock.toBase58() !== voucher.lock) {
+    throw new Error('Voucher lock does not match the derived lock PDA.');
+  }
+  const lockLiquidity = getAssociatedTokenAddressSync(config.usdcMint, lock, true);
+  const lockCollateral = getAssociatedTokenAddressSync(config.collateralMint, lock, true);
+  const userUsdc = getAssociatedTokenAddressSync(config.usdcMint, owner);
+
+  const edIx = Ed25519Program.createInstructionWithPublicKey({
+    publicKey: new PublicKey(voucher.authorityPubkey).toBytes(),
+    message: Buffer.from(voucher.message, 'base64'),
+    signature: Buffer.from(voucher.signature, 'base64'),
+  });
+
+  const claimIx = new TransactionInstruction({
+    programId,
+    keys: [
+      m(config.configAddress, true),
+      m(lock, true),
+      m(owner, true, true),
+      m(config.usdcMint, false),
+      m(userUsdc, true),
+      m(lockLiquidity, true),
+      m(lockCollateral, true),
+      m(config.potVault, true),
+      m(config.feeVault, true),
+      m(config.kaminoProgram, false),
+      m(config.kaminoReserve, true),
+      m(config.kaminoMarket, false),
+      m(config.kaminoLma, false),
+      m(config.kaminoLiquiditySupply, true),
+      m(config.collateralMint, true),
+      m(TOKEN_PROGRAM_ID, false),
+      m(SYSVAR_INSTRUCTIONS_PUBKEY, false),
+      m(ASSOCIATED_TOKEN_PROGRAM_ID, false),
+      m(SystemProgram.programId, false),
+    ],
+    data: encodeClaimData(voucher.bps, voucher.expiry),
+  });
+
+  return new Transaction()
+    .add(edIx)
+    .add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }))
+    .add(claimIx);
+}
+
+/** Read + decode the LockV2 account for (owner, course). Null if it doesn't exist. */
+export async function readLockV2(
+  ownerAddress: string,
+  courseId: string,
+): Promise<LockV2Snapshot | null> {
+  const lock = await deriveLockPda(ownerAddress, courseId);
+  const info = await connection.getAccountInfo(lock);
+  if (!info) return null;
+  const d = info.data;
+  const owner = readPk(d, 8);
+  const principal = d.readBigUInt64LE(72);
+  const lockStartTs = d.readBigInt64LE(80);
+  const status = d[88];
+  return {
+    lockAddress: lock.toBase58(),
+    owner: owner.toBase58(),
+    principalAmountUi: formatAtomicUsdc(principal),
+    lockStartDate: new Date(Number(lockStartTs) * 1000).toISOString(),
+    status,
+  };
+}
+
+function formatAtomicUsdc(atomic: bigint, decimals = 6): string {
+  const base = 10n ** BigInt(decimals);
+  const whole = atomic / base;
+  const frac = atomic % base;
+  if (frac === 0n) return whole.toString();
+  const fracStr = frac.toString().padStart(decimals, '0').replace(/0+$/, '');
+  return `${whole}.${fracStr}`;
+}
