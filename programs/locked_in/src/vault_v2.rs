@@ -40,6 +40,10 @@ pub fn initialize_vault_v2(ctx: Context<InitializeVaultV2>, p: InitV2Params) -> 
     let caps = Caps { min_principal: p.min_principal, max_principal_per_lock: p.max_principal_per_lock, global_tvl_cap: p.global_tvl_cap };
     caps.validate()?;
     require!(p.platform_fee_bps <= crate::settle::MAX_PLATFORM_FEE_BPS, VaultV2Error::FeeAboveHardMax);
+    // Mainnet builds pin the CPI target to the real klend program; devnet builds
+    // (feature = "devnet") allow the mock reserve.
+    #[cfg(not(feature = "devnet"))]
+    require!(p.kamino_program == crate::kamino::KLEND_PROGRAM_ID, VaultV2Error::NotKlendProgram);
 
     let c = &mut ctx.accounts.config;
     c.authority = p.authority;
@@ -319,6 +323,30 @@ pub fn force_return_v2(ctx: Context<ForceReturnV2>) -> Result<()> {
     Ok(())
 }
 
+// ── admin ─────────────────────────────────────────────────────────────────
+
+/// Ops-key controls: pause deposits and adjust caps. Cannot touch principal,
+/// authority, the pinned accounts, or any exit path (claim/force_return never
+/// read `paused`). Caps affect only NEW locks.
+pub fn set_config_v2(ctx: Context<SetConfigV2>, min: u64, max: u64, global: u64, fee_bps: u16, paused: bool) -> Result<()> {
+    Caps { min_principal: min, max_principal_per_lock: max, global_tvl_cap: global }.validate()?;
+    require!(fee_bps <= crate::settle::MAX_PLATFORM_FEE_BPS, VaultV2Error::FeeAboveHardMax);
+    let c = &mut ctx.accounts.config;
+    c.min_principal = min;
+    c.max_principal_per_lock = max;
+    c.global_tvl_cap = global;
+    c.platform_fee_bps = fee_bps;
+    c.paused = paused;
+    Ok(())
+}
+
+/// Rotate the voucher/ops authority. Gated on the program upgrade authority
+/// (the cold key), so a compromised hot ops key cannot rotate itself away.
+pub fn set_authority_v2(ctx: Context<SetAuthorityV2>, new_authority: Pubkey) -> Result<()> {
+    ctx.accounts.config.authority = new_authority;
+    Ok(())
+}
+
 // ── state ─────────────────────────────────────────────────────────────────
 
 #[account]
@@ -376,12 +404,19 @@ pub struct InitializeVaultV2<'info> {
     #[account(init, payer = payer, space = 8 + VaultV2Config::INIT_SPACE, seeds = [CONFIG_SEED], bump)]
     pub config: Account<'info, VaultV2Config>,
     pub usdc_mint: InterfaceAccount<'info, Mint>,
-    /// CHECK: pinned kamino/mock collateral mint.
     pub collateral_mint: InterfaceAccount<'info, Mint>,
-    /// CHECK: pot USDC vault (pinned).
+    // Pot vault must hold USDC — else settlement transfers to it revert and, once
+    // any lock accrues yield, force_return reverts too, trapping principal.
+    #[account(token::mint = usdc_mint)]
     pub pot_vault: InterfaceAccount<'info, TokenAccount>,
     #[account(mut)]
     pub payer: Signer<'info>,
+    // Front-run gate: only the program's upgrade authority may initialize the
+    // singleton config (else the first caller owns the voucher key + CPI pins).
+    #[account(constraint = program.programdata_address()? == Some(program_data.key()) @ VaultV2Error::NotUpgradeAuthority)]
+    pub program: Program<'info, crate::program::LockedIn>,
+    #[account(constraint = program_data.upgrade_authority_address == Some(payer.key()) @ VaultV2Error::NotUpgradeAuthority)]
+    pub program_data: Account<'info, ProgramData>,
     pub system_program: Program<'info, System>,
 }
 
@@ -449,7 +484,7 @@ pub struct LockFundsV2<'info> {
 pub struct ClaimV2<'info> {
     #[account(mut, seeds = [CONFIG_SEED], bump = config.bump)]
     pub config: Box<Account<'info, VaultV2Config>>,
-    #[account(mut, has_one = owner, seeds = [LOCK_SEED, owner.key().as_ref(), &lock.course_id_hash], bump = lock.bump)]
+    #[account(mut, has_one = owner, close = owner, seeds = [LOCK_SEED, owner.key().as_ref(), &lock.course_id_hash], bump = lock.bump)]
     pub lock: Box<Account<'info, LockV2>>,
     #[account(mut)]
     pub owner: Signer<'info>,
@@ -495,7 +530,7 @@ pub struct ClaimV2<'info> {
 pub struct ForceReturnV2<'info> {
     #[account(mut, seeds = [CONFIG_SEED], bump = config.bump)]
     pub config: Box<Account<'info, VaultV2Config>>,
-    #[account(mut, has_one = owner, seeds = [LOCK_SEED, owner.key().as_ref(), &lock.course_id_hash], bump = lock.bump)]
+    #[account(mut, has_one = owner, close = owner, seeds = [LOCK_SEED, owner.key().as_ref(), &lock.course_id_hash], bump = lock.bump)]
     pub lock: Box<Account<'info, LockV2>>,
     /// CHECK: the lock's owner receives principal + rent; validated by has_one.
     #[account(mut)]
@@ -540,6 +575,25 @@ pub struct ForceReturnV2<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+pub struct SetConfigV2<'info> {
+    #[account(mut, seeds = [CONFIG_SEED], bump = config.bump, has_one = authority @ VaultV2Error::NotAuthority)]
+    pub config: Account<'info, VaultV2Config>,
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct SetAuthorityV2<'info> {
+    #[account(mut, seeds = [CONFIG_SEED], bump = config.bump)]
+    pub config: Account<'info, VaultV2Config>,
+    // Rotation is gated on the UPGRADE authority (cold key), not the hot ops key.
+    pub payer: Signer<'info>,
+    #[account(constraint = program.programdata_address()? == Some(program_data.key()) @ VaultV2Error::NotUpgradeAuthority)]
+    pub program: Program<'info, crate::program::LockedIn>,
+    #[account(constraint = program_data.upgrade_authority_address == Some(payer.key()) @ VaultV2Error::NotUpgradeAuthority)]
+    pub program_data: Account<'info, ProgramData>,
+}
+
 #[event]
 pub struct LockV2Created { pub lock: Pubkey, pub owner: Pubkey, pub principal_amount: u64, pub lock_start_ts: i64 }
 #[event]
@@ -555,4 +609,10 @@ pub enum VaultV2Error {
     LockNotPending,
     #[msg("A lock token account was not fully drained before close.")]
     NonZeroBalance,
+    #[msg("initialize_vault_v2 must be signed by the program upgrade authority.")]
+    NotUpgradeAuthority,
+    #[msg("kamino_program must be the canonical Kamino klend program on mainnet.")]
+    NotKlendProgram,
+    #[msg("Only the vault authority may call this instruction.")]
+    NotAuthority,
 }

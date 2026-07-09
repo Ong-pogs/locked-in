@@ -100,6 +100,14 @@ pub mod locked_in {
         vault_v2::force_return_v2(ctx)
     }
 
+    pub fn set_config_v2(ctx: Context<SetConfigV2>, min: u64, max: u64, global: u64, fee_bps: u16, paused: bool) -> Result<()> {
+        vault_v2::set_config_v2(ctx, min, max, global, fee_bps, paused)
+    }
+
+    pub fn set_authority_v2(ctx: Context<SetAuthorityV2>, new_authority: Pubkey) -> Result<()> {
+        vault_v2::set_authority_v2(ctx, new_authority)
+    }
+
     // ── Pot domain (yield-redirect accumulator + payout) ─────────────────
 
     /// Initialize the community-pot config (was `community_pot::initialize_protocol`).

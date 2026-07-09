@@ -10,6 +10,9 @@ name = "locked_in"
 
 [features]
 default = []
+# Devnet builds skip the canonical-klend-program pin so the mock reserve can be
+# used. NEVER build mainnet with this feature.
+devnet = []
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-idl = []
