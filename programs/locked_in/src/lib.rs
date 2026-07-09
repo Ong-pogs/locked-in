@@ -20,6 +20,7 @@
 
 use anchor_lang::prelude::*;
 
+mod caps;
 mod pot;
 mod settle;
 mod vault;
