@@ -74,14 +74,8 @@ export async function progressRoutes(app) {
     async (request) => {
       const lessonId = assertPathParam(request.params?.lessonId, 'lessonId');
       const attemptId = assertBodyField(request.body?.attemptId, 'attemptId');
-      const startedAt = request.body?.startedAt ?? null;
 
-      return startLessonAttempt(
-        request.auth.walletAddress,
-        lessonId,
-        attemptId,
-        startedAt,
-      );
+      return startLessonAttempt(request.auth.walletAddress, lessonId, attemptId);
     },
   );
 
@@ -92,16 +86,12 @@ export async function progressRoutes(app) {
       const lessonId = assertPathParam(request.params?.lessonId, 'lessonId');
       const attemptId = assertBodyField(request.body?.attemptId, 'attemptId');
       const answers = request.body?.answers;
-      const startedAt = request.body?.startedAt ?? null;
-      const completedAt = request.body?.completedAt ?? null;
 
       return submitLessonAttempt(
         request.auth.walletAddress,
         lessonId,
         attemptId,
         assertAnswers(answers),
-        startedAt,
-        completedAt,
       );
     },
   );

@@ -3981,21 +3981,15 @@ export async function consumeDailyFuel(
   });
 }
 
-export async function startLessonAttempt(
-  walletAddress,
-  lessonId,
-  attemptId,
-  startedAt = null,
-) {
+// Timestamps are server-authoritative: a client-supplied `startedAt` lets a
+// caller backdate attempts and mint an arbitrary streak history, which feeds
+// the yield penalty tier and the community-pot weight.
+export async function startLessonAttempt(walletAddress, lessonId, attemptId) {
   const normalizedAttemptId = assertAttemptId(attemptId);
-  const timestamp = startedAt ?? new Date().toISOString();
+  const timestamp = new Date().toISOString();
 
   if (!hasDatabase()) {
-    return {
-      lessonId,
-      attemptId: normalizedAttemptId,
-      startedAt: timestamp,
-    };
+    throw new HttpError(503, 'Progress is unavailable', 'DATABASE_UNAVAILABLE');
   }
 
   return withTransactionAsWallet(walletAddress, async (client) => {
@@ -4017,41 +4011,28 @@ export async function startLessonAttempt(
   });
 }
 
-export async function submitLessonAttempt(
-  walletAddress,
-  lessonId,
-  attemptId,
-  answers,
-  startedAt = null,
-  completedAt = null,
-) {
+// `completedAt` is never accepted from the caller — see startLessonAttempt.
+// Without a database we fail closed: the previous no-db branch returned
+// `accepted: true, score: 100`, so an outage passed every lesson.
+export async function submitLessonAttempt(walletAddress, lessonId, attemptId, answers) {
   const normalizedAttemptId = assertAttemptId(attemptId);
   const submittedAnswers = assertAnswers(answers);
-  const timestamp = completedAt ?? new Date().toISOString();
+  const timestamp = new Date().toISOString();
 
   if (!hasDatabase()) {
-    const totalQuestions = submittedAnswers.size;
-    return {
-      lessonId,
-      attemptId: normalizedAttemptId,
-      accepted: true,
-      score: 100,
-      correctAnswers: totalQuestions,
-      totalQuestions,
-      completedAt: timestamp,
-      completionEventId: normalizedAttemptId,
-    };
+    throw new HttpError(503, 'Grading is unavailable', 'DATABASE_UNAVAILABLE');
   }
 
   return withTransactionAsWallet(walletAddress, async (client) => {
     const lessonVersion = await getPublishedLessonVersion(client, lessonId);
+    // A submit without a prior /start still anchors its attempt to server time.
     const attempt = await ensureAttempt(
       client,
       walletAddress,
       lessonId,
       normalizedAttemptId,
       lessonVersion.lessonVersionId,
-      startedAt,
+      timestamp,
     );
 
     if (attempt.submittedAt) {

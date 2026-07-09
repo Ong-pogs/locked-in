@@ -9,14 +9,37 @@ function withContentHash(payload) {
   };
 }
 
-function sanitizeLessonPayload(payload) {
+// Lesson completion gates real funds, so the answer key must never reach the
+// client: grading reads `correct_answer` straight from the DB (see
+// `listLessonQuestions`), and the browser learns the answer only in the graded
+// submit response.
+export function sanitizeLessonPayload(payload) {
   if (!payload || typeof payload !== 'object') {
     return payload;
   }
 
-  // Include correctAnswer — needed for local quiz checking and recall questions.
-  // Routes are auth-protected, and answers are shown to users after submission anyway.
-  return withContentHash(payload);
+  if (!Array.isArray(payload.questions)) {
+    return withContentHash(payload);
+  }
+
+  const questions = payload.questions.map((question) => {
+    if (!question || typeof question !== 'object') {
+      return question;
+    }
+
+    const { correctAnswer, metadata, ...safeQuestion } = question;
+
+    if (metadata && typeof metadata === 'object') {
+      const { expectedTokens, ...safeMetadata } = metadata;
+      safeQuestion.metadata = safeMetadata;
+    } else if (metadata !== undefined) {
+      safeQuestion.metadata = metadata;
+    }
+
+    return safeQuestion;
+  });
+
+  return withContentHash({ ...payload, questions });
 }
 
 export async function getLatestRelease() {
