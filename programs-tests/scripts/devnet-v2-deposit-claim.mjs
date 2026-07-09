@@ -75,40 +75,50 @@ if (!(await conn.getAccountInfo(config))) {
 const userBefore = Number((await getAccount(conn, userUsdc)).amount);
 console.log('\nuser USDC before lock:', userBefore / 1e6);
 
-// 2a. open_lock_v2(courseHash) — inits lock + collateral ATA (no CPI).
-if (!(await conn.getAccountInfo(lock))) {
-  const openIx = new TransactionInstruction({
+// Detect existing lock status (0=ACTIVE,1=PENDING,2=CLOSED). If a prior run
+// already deposited (ACTIVE), skip open+deposit and go straight to claim.
+const lockAcc0 = await conn.getAccountInfo(lock);
+const alreadyActive = lockAcc0 ? lockAcc0.data[8 + 32 + 32 + 8 + 8] === 0 : false;
+const DEPOSIT = 2_000_000;
+let afterLock;
+
+if (alreadyActive) {
+  console.log('lock already ACTIVE — skipping open+deposit, going to claim');
+  afterLock = Number((await getAccount(conn, userUsdc)).amount);
+} else {
+  // 2a. open_lock_v2(courseHash) — inits lock + collateral ATA (no CPI).
+  if (!lockAcc0) {
+    const openIx = new TransactionInstruction({
+      programId: PROGRAM,
+      keys: [
+        m(config, false), m(lock, true), m(user.publicKey, true, true),
+        m(mockCtoken, false), m(lockCollateral, true),
+        m(TOKEN_PROGRAM_ID, false), m(ASSOCIATED_TOKEN_PROGRAM_ID, false), m(SystemProgram.programId, false),
+      ],
+      data: Buffer.concat([disc('open_lock_v2'), courseHash]),
+    });
+    await sendAndConfirmTransaction(conn, new Transaction().add(openIx), [user], { commitment: 'confirmed' });
+    console.log('open_lock_v2 done');
+  }
+  // 2b. lock_funds_v2 — deposit CPI (lock + ATA already exist).
+  const lockIx = new TransactionInstruction({
     programId: PROGRAM,
     keys: [
-      m(config, false), m(lock, true), m(user.publicKey, true, true),
-      m(mockCtoken, false), m(lockCollateral, true),
-      m(TOKEN_PROGRAM_ID, false), m(ASSOCIATED_TOKEN_PROGRAM_ID, false), m(SystemProgram.programId, false),
+      m(config, true), m(lock, true), m(user.publicKey, true, true),
+      m(USDC, false), m(userUsdc, true), m(lockCollateral, true),
+      m(MOCK, false), m(mockReserve, true), m(SystemProgram.programId, false), m(mockAuth, false),
+      m(mockVault, true), m(mockCtoken, true),
+      m(TOKEN_PROGRAM_ID, false), m(SYSVAR_INSTRUCTIONS_PUBKEY, false),
     ],
-    data: Buffer.concat([disc('open_lock_v2'), courseHash]),
+    data: Buffer.concat([disc('lock_funds_v2'), courseHash, u64(DEPOSIT)]),
   });
-  await sendAndConfirmTransaction(conn, new Transaction().add(openIx), [user], { commitment: 'confirmed' });
-  console.log('open_lock_v2 done');
+  await sendAndConfirmTransaction(conn,
+    new Transaction().add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })).add(lockIx),
+    [user], { commitment: 'confirmed' });
+  afterLock = Number((await getAccount(conn, userUsdc)).amount);
+  const shares = Number((await getAccount(conn, lockCollateral)).amount);
+  console.log('after lock: user USDC', afterLock / 1e6, '| lock shares', shares / 1e6);
 }
-
-// 2b. lock_funds_v2(courseHash, 10 USDC) — deposit CPI (lock + ATA already exist).
-const DEPOSIT = 2_000_000;
-const lockIx = new TransactionInstruction({
-  programId: PROGRAM,
-  keys: [
-    m(config, true), m(lock, true), m(user.publicKey, true, true),
-    m(USDC, false), m(userUsdc, true), m(lockCollateral, true),
-    m(MOCK, false), m(mockReserve, true), m(SystemProgram.programId, false), m(mockAuth, false),
-    m(mockVault, true), m(mockCtoken, true),
-    m(TOKEN_PROGRAM_ID, false), m(SYSVAR_INSTRUCTIONS_PUBKEY, false),
-  ],
-  data: Buffer.concat([disc('lock_funds_v2'), courseHash, u64(DEPOSIT)]),
-});
-await sendAndConfirmTransaction(conn,
-  new Transaction().add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })).add(lockIx),
-  [user], { commitment: 'confirmed' });
-const afterLock = Number((await getAccount(conn, userUsdc)).amount);
-const shares = Number((await getAccount(conn, lockCollateral)).amount);
-console.log('after lock: user USDC', afterLock / 1e6, '| lock shares', shares / 1e6);
 
 // 3. Sign a completion voucher (bps=10000, expiry +1h) with the vault authority.
 const bps = 10_000;

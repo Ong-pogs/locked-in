@@ -405,20 +405,23 @@ pub struct OpenLockV2<'info> {
 }
 
 // CPI-only: deposit into the reserve. The lock + collateral ATA already exist.
+// The large Account/InterfaceAccount structs are Boxed onto the heap — deserialized
+// on the stack they stack with the 13-account deposit CPI and blow the 4KB BPF
+// frame, which corrupted adjacent reads (config.paused) and faulted in the CPI.
 #[derive(Accounts)]
 pub struct LockFundsV2<'info> {
     #[account(mut, seeds = [CONFIG_SEED], bump = config.bump)]
-    pub config: Account<'info, VaultV2Config>,
+    pub config: Box<Account<'info, VaultV2Config>>,
     #[account(mut, has_one = owner, seeds = [LOCK_SEED, owner.key().as_ref(), &lock.course_id_hash], bump = lock.bump)]
-    pub lock: Account<'info, LockV2>,
+    pub lock: Box<Account<'info, LockV2>>,
     #[account(mut)]
     pub owner: Signer<'info>,
     #[account(address = config.usdc_mint)]
-    pub usdc_mint: InterfaceAccount<'info, Mint>,
+    pub usdc_mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(mut, associated_token::mint = usdc_mint, associated_token::authority = owner)]
-    pub owner_usdc: InterfaceAccount<'info, TokenAccount>,
+    pub owner_usdc: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut, associated_token::mint = reserve_collateral_mint, associated_token::authority = lock)]
-    pub lock_collateral: InterfaceAccount<'info, TokenAccount>,
+    pub lock_collateral: Box<InterfaceAccount<'info, TokenAccount>>,
     /// CHECK: pinned CPI target.
     #[account(address = config.kamino_program)]
     pub kamino_program: UncheckedAccount<'info>,
@@ -435,7 +438,7 @@ pub struct LockFundsV2<'info> {
     #[account(mut, address = config.kamino_liquidity_supply)]
     pub reserve_liquidity_supply: UncheckedAccount<'info>,
     #[account(mut, address = config.kamino_collateral_mint)]
-    pub reserve_collateral_mint: InterfaceAccount<'info, Mint>,
+    pub reserve_collateral_mint: Box<InterfaceAccount<'info, Mint>>,
     pub token_program: Interface<'info, TokenInterface>,
     /// CHECK: instructions sysvar for the reserve refresh.
     #[account(address = INSTRUCTIONS_SYSVAR_ID)]
@@ -445,21 +448,21 @@ pub struct LockFundsV2<'info> {
 #[derive(Accounts)]
 pub struct ClaimV2<'info> {
     #[account(mut, seeds = [CONFIG_SEED], bump = config.bump)]
-    pub config: Account<'info, VaultV2Config>,
+    pub config: Box<Account<'info, VaultV2Config>>,
     #[account(mut, has_one = owner, seeds = [LOCK_SEED, owner.key().as_ref(), &lock.course_id_hash], bump = lock.bump)]
-    pub lock: Account<'info, LockV2>,
+    pub lock: Box<Account<'info, LockV2>>,
     #[account(mut)]
     pub owner: Signer<'info>,
     #[account(address = config.usdc_mint)]
-    pub usdc_mint: InterfaceAccount<'info, Mint>,
+    pub usdc_mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(mut, associated_token::mint = usdc_mint, associated_token::authority = owner)]
-    pub owner_usdc: InterfaceAccount<'info, TokenAccount>,
+    pub owner_usdc: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(init_if_needed, payer = owner, associated_token::mint = usdc_mint, associated_token::authority = lock)]
-    pub lock_liquidity: InterfaceAccount<'info, TokenAccount>,
+    pub lock_liquidity: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut, associated_token::mint = reserve_collateral_mint, associated_token::authority = lock)]
-    pub lock_collateral: InterfaceAccount<'info, TokenAccount>,
+    pub lock_collateral: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut, address = config.pot_vault)]
-    pub pot_vault: InterfaceAccount<'info, TokenAccount>,
+    pub pot_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     /// CHECK: pinned fee vault (unused while fee_bps == 0).
     #[account(mut, address = config.fee_vault)]
     pub fee_vault: UncheckedAccount<'info>,
@@ -479,7 +482,7 @@ pub struct ClaimV2<'info> {
     #[account(mut, address = config.kamino_liquidity_supply)]
     pub reserve_liquidity_supply: UncheckedAccount<'info>,
     #[account(mut, address = config.kamino_collateral_mint)]
-    pub reserve_collateral_mint: InterfaceAccount<'info, Mint>,
+    pub reserve_collateral_mint: Box<InterfaceAccount<'info, Mint>>,
     pub token_program: Interface<'info, TokenInterface>,
     /// CHECK: instructions sysvar (voucher + refresh live here).
     #[account(address = INSTRUCTIONS_SYSVAR_ID)]
@@ -491,24 +494,24 @@ pub struct ClaimV2<'info> {
 #[derive(Accounts)]
 pub struct ForceReturnV2<'info> {
     #[account(mut, seeds = [CONFIG_SEED], bump = config.bump)]
-    pub config: Account<'info, VaultV2Config>,
+    pub config: Box<Account<'info, VaultV2Config>>,
     #[account(mut, has_one = owner, seeds = [LOCK_SEED, owner.key().as_ref(), &lock.course_id_hash], bump = lock.bump)]
-    pub lock: Account<'info, LockV2>,
+    pub lock: Box<Account<'info, LockV2>>,
     /// CHECK: the lock's owner receives principal + rent; validated by has_one.
     #[account(mut)]
     pub owner: UncheckedAccount<'info>,
     #[account(mut)]
     pub caller: Signer<'info>,
     #[account(address = config.usdc_mint)]
-    pub usdc_mint: InterfaceAccount<'info, Mint>,
+    pub usdc_mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(mut, associated_token::mint = usdc_mint, associated_token::authority = owner)]
-    pub owner_usdc: InterfaceAccount<'info, TokenAccount>,
+    pub owner_usdc: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(init_if_needed, payer = caller, associated_token::mint = usdc_mint, associated_token::authority = lock)]
-    pub lock_liquidity: InterfaceAccount<'info, TokenAccount>,
+    pub lock_liquidity: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut, associated_token::mint = reserve_collateral_mint, associated_token::authority = lock)]
-    pub lock_collateral: InterfaceAccount<'info, TokenAccount>,
+    pub lock_collateral: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut, address = config.pot_vault)]
-    pub pot_vault: InterfaceAccount<'info, TokenAccount>,
+    pub pot_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     /// CHECK: pinned fee vault.
     #[account(mut, address = config.fee_vault)]
     pub fee_vault: UncheckedAccount<'info>,
@@ -528,7 +531,7 @@ pub struct ForceReturnV2<'info> {
     #[account(mut, address = config.kamino_liquidity_supply)]
     pub reserve_liquidity_supply: UncheckedAccount<'info>,
     #[account(mut, address = config.kamino_collateral_mint)]
-    pub reserve_collateral_mint: InterfaceAccount<'info, Mint>,
+    pub reserve_collateral_mint: Box<InterfaceAccount<'info, Mint>>,
     pub token_program: Interface<'info, TokenInterface>,
     /// CHECK: instructions sysvar.
     #[account(address = INSTRUCTIONS_SYSVAR_ID)]
