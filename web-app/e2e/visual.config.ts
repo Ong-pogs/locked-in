@@ -36,7 +36,9 @@ export default defineConfig({
     colorScheme: 'dark',
     timezoneId: 'UTC',
     locale: 'en-US',
-    reducedMotion: 'reduce',
+    // reducedMotion is enforced per-test in the fixture's settle() via
+    // page.emulateMedia (config-level typing rejects it in this PW version).
+    contextOptions: { reducedMotion: 'reduce' },
   },
   projects: [
     { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 720 } } },
