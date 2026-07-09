@@ -22,11 +22,14 @@ use anchor_lang::prelude::*;
 
 mod caps;
 mod kamino;
+mod kamino_probe;
 mod pot;
 mod settle;
 mod vault;
 mod voucher;
 mod window;
+
+pub use kamino_probe::*;
 
 // Re-export domain items so the generated #[program] module and the IDL can
 // see the Accounts structs / args without fully-qualified paths.
@@ -65,6 +68,12 @@ pub mod locked_in {
 
     pub fn unlock_funds(ctx: Context<UnlockFunds>) -> Result<()> {
         vault::unlock_funds(ctx)
+    }
+
+    /// Dev-only: prove the kamino CPI wrappers deposit into and redeem from the
+    /// real klend reserve. Not part of the product surface.
+    pub fn kamino_roundtrip(ctx: Context<KaminoRoundtrip>, amount: u64) -> Result<()> {
+        kamino_probe::kamino_roundtrip(ctx, amount)
     }
 
     // ── Pot domain (yield-redirect accumulator + payout) ─────────────────

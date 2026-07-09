@@ -60,3 +60,4 @@ web/dungeon/node_modules/
 # generated native folders
 /ios
 /android
+.e2e/
