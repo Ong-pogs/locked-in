@@ -179,4 +179,24 @@ describe('POST /v1/progress/courses/:courseId/voucher', () => {
     const after = await app.inject({ method: 'POST', url: `/v1/progress/courses/${COURSE_ID}/voucher`, headers });
     expect(after.json().bps).toBe(5_000); // one lapse -> keep 50%
   });
+
+  // The runtime snapshot must expose the v2 engine state + voucherAvailable so
+  // the course card renders gauge/pips/CTA from one call.
+  it('runtime snapshot exposes shields/lapse state and voucherAvailable', async () => {
+    const wallet = generateTestWallet();
+    const headers = await getTestAuthHeaders(wallet);
+
+    let res = await app.inject({ method: 'GET', url: `/v1/progress/runtime/courses/${COURSE_ID}`, headers });
+    expect(res.statusCode).toBe(200);
+    let snap = res.json();
+    expect(snap.shields).toBe(3);
+    expect(snap.lapseCount).toBe(0);
+    expect(snap.lapseOpen).toBe(false);
+    expect(snap.voucherAvailable).toBe(false); // nothing completed yet
+
+    await seedCourseComplete(wallet, COURSE_ID);
+    res = await app.inject({ method: 'GET', url: `/v1/progress/runtime/courses/${COURSE_ID}`, headers });
+    snap = res.json();
+    expect(snap.voucherAvailable).toBe(true);
+  });
 });

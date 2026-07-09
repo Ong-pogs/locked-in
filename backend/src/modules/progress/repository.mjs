@@ -1346,6 +1346,12 @@ export async function readCourseRuntimeState(client, walletAddress, courseId) {
     fireLitUntil: state.fireLitUntil ? new Date(state.fireLitUntil).toISOString() : null,
     ichorCounter: Number(state.ichorCounter ?? 0),
     ichorLifetimeTotal: Number(state.ichorLifetimeTotal ?? 0),
+    // v2 shield/lapse engine state (spec §4.2) — drives the flame gauge,
+    // shield pips, and the penalty banner on the course card.
+    shields: Number(state.shields ?? 3),
+    lapseCount: Number(state.lapseCount ?? 0),
+    lapseOpen: Boolean(state.lapseOpen),
+    consecutiveLessonDays: Number(state.consecutiveLessonDays ?? 0),
   };
 }
 
@@ -1568,9 +1574,23 @@ export async function getCourseRuntimeSnapshot(walletAddress, courseId) {
     };
   }
 
-  return withTransactionAsWallet(walletAddress, async (client) =>
-    readCourseRuntimeState(client, walletAddress, courseId),
-  );
+  return withTransactionAsWallet(walletAddress, async (client) => {
+    const snapshot = await readCourseRuntimeState(client, walletAddress, courseId);
+    // voucherAvailable: every module/lesson complete — same gate the voucher
+    // endpoint enforces. Lets the card show CLAIM without a second call.
+    const moduleCheck = await client.query(
+      `SELECT pm.module_id,
+              count(DISTINCT pl.lesson_id) as total_lessons,
+              count(DISTINCT ulp.lesson_id) FILTER (WHERE ulp.completed) as completed_lessons
+       FROM lesson.published_modules pm
+       JOIN lesson.published_lessons pl ON pl.module_id = pm.module_id AND pl.release_id = pm.release_id
+       LEFT JOIN lesson.user_lesson_progress ulp ON ulp.lesson_id = pl.lesson_id AND ulp.wallet_address = $1
+       WHERE pm.course_id = $2
+       GROUP BY pm.module_id`,
+      [walletAddress, courseId],
+    );
+    return { ...snapshot, voucherAvailable: isCourseComplete(moduleCheck.rows) };
+  });
 }
 
 function mapRelayLifecycleStatus(rawStatus) {
