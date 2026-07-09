@@ -7,6 +7,10 @@ skip-lint = false
 
 [programs.localnet]
 locked_in = "3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav"
+mock_reserve = "3kqzsQV7Ab8aakkNugM9aXBqQrgwnshF6a47HxJcfLtp"
+
+[programs.devnet]
+mock_reserve = "3kqzsQV7Ab8aakkNugM9aXBqQrgwnshF6a47HxJcfLtp"
 
 [provider]
 cluster = "Localnet"

@@ -15,7 +15,11 @@ use anchor_lang::solana_program::{
     program::invoke_signed,
 };
 
-/// Kamino Lend (klend) mainnet program. Asserted on every CPI.
+/// Kamino Lend (klend) mainnet program — the value `VaultConfig.kamino_program`
+/// is pinned to at init on mainnet. On devnet it is pinned to the mock reserve
+/// program instead, so the CPI target is taken from the passed account (which
+/// the caller constrains via `address = config.kamino_program`) rather than a
+/// hardcoded const. The const remains the documented mainnet default.
 pub const KLEND_PROGRAM_ID: Pubkey =
     anchor_lang::solana_program::pubkey!("KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD");
 
@@ -70,7 +74,7 @@ pub struct KaminoRedeem<'info> {
 }
 
 pub fn deposit_reserve_liquidity(a: KaminoDeposit, liquidity_amount: u64, seeds: &[&[&[u8]]]) -> Result<()> {
-    require_keys_eq!(*a.klend_program.key, KLEND_PROGRAM_ID, KaminoError::WrongProgram);
+    let program_id = *a.klend_program.key;
 
     let mut data = Vec::with_capacity(16);
     data.extend_from_slice(&deposit_discriminator());
@@ -91,7 +95,7 @@ pub fn deposit_reserve_liquidity(a: KaminoDeposit, liquidity_amount: u64, seeds:
         AccountMeta::new_readonly(*a.instruction_sysvar.key, false),
     ];
 
-    let ix = Instruction { program_id: KLEND_PROGRAM_ID, accounts: metas, data };
+    let ix = Instruction { program_id, accounts: metas, data };
     invoke_signed(
         &ix,
         &[
@@ -106,7 +110,7 @@ pub fn deposit_reserve_liquidity(a: KaminoDeposit, liquidity_amount: u64, seeds:
 }
 
 pub fn redeem_reserve_collateral(a: KaminoRedeem, collateral_amount: u64, seeds: &[&[&[u8]]]) -> Result<()> {
-    require_keys_eq!(*a.klend_program.key, KLEND_PROGRAM_ID, KaminoError::WrongProgram);
+    let program_id = *a.klend_program.key;
 
     let mut data = Vec::with_capacity(16);
     data.extend_from_slice(&redeem_discriminator());
@@ -127,7 +131,7 @@ pub fn redeem_reserve_collateral(a: KaminoRedeem, collateral_amount: u64, seeds:
         AccountMeta::new_readonly(*a.instruction_sysvar.key, false),
     ];
 
-    let ix = Instruction { program_id: KLEND_PROGRAM_ID, accounts: metas, data };
+    let ix = Instruction { program_id, accounts: metas, data };
     invoke_signed(
         &ix,
         &[
