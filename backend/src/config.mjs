@@ -1,4 +1,5 @@
 import { config as loadEnv } from 'dotenv';
+import { detectCluster, assertBootGuards } from './lib/bootGuards.mjs';
 
 loadEnv();
 
@@ -244,6 +245,11 @@ export const appConfig = {
   faucetSolLamports: optionalInt('FAUCET_SOL_LAMPORTS', 100_000_000),
   faucetUsdcAmountUi: process.env.FAUCET_USDC_AMOUNT_UI ?? '10',
   faucetRound: optionalInt('FAUCET_ROUND', 1),
+  // One-time SOL drip for onboarding wallets (spec §4.2): ~0.005 SOL each,
+  // idempotent per wallet via lesson.sol_drips, hard-capped in total so a
+  // sybil sweep can drain at most cap × lamports from the worker key.
+  solDripLamports: optionalInt('SOL_DRIP_LAMPORTS', 5_000_000),
+  solDripMaxTotal: optionalInt('SOL_DRIP_MAX_TOTAL', 200),
   corsAllowedOrigins: sanitizeOrigins(
     configuredCorsOrigins.length > 0 ? configuredCorsOrigins : defaultCorsOrigins,
   ),
@@ -270,3 +276,11 @@ if (!__isDevnetCluster) {
     }
   }
 }
+
+// v2 boot guards (spec §4.2), same fail-closed philosophy as the block above
+// but broader: 32-byte secret floor off-devnet, no mock/dev yield adapter
+// behind a mainnet vault_v2, and no v2 program without its signing key. Pure
+// logic lives in lib/bootGuards.mjs so it stays unit-testable; anything the
+// cluster detector cannot classify is treated as strictly as mainnet.
+export const CLUSTER = detectCluster(appConfig.solanaRpcUrl);
+assertBootGuards(appConfig);
