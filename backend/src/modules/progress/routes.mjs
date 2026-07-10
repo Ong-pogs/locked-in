@@ -162,8 +162,18 @@ export async function progressRoutes(app) {
     );
   });
 
-  app.post('/v1/internal/community-pot/windows/close', async (request) => {
+  // The v1 close/distribute path computed eligibility off the legacy ledger.
+  // Once v2 is active it is superseded by the pot cycle (/v1/internal/pot-cycle/
+  // run), which is the ONLY close/distribute path — leaving these armed would be
+  // a second, unguarded way to move real pot USDC (audit L10).
+  const v2PotActive = () => Boolean(appConfig.vaultV2ProgramId);
+
+  app.post('/v1/internal/community-pot/windows/close', async (request, reply) => {
     requireSchedulerAuth(request);
+    if (v2PotActive()) {
+      reply.code(410);
+      return { error: 'v1 pot close is disabled; use /v1/internal/pot-cycle/run', code: 'V1_POT_DISABLED' };
+    }
 
     const rawWindowId = request.body?.windowId;
     const windowId = Number.parseInt(String(rawWindowId), 10);
@@ -175,8 +185,12 @@ export async function progressRoutes(app) {
     return closeCommunityPotWindowAndSnapshot(windowId, closedAt);
   });
 
-  app.post('/v1/internal/community-pot/windows/distribute', async (request) => {
+  app.post('/v1/internal/community-pot/windows/distribute', async (request, reply) => {
     requireSchedulerAuth(request);
+    if (v2PotActive()) {
+      reply.code(410);
+      return { error: 'v1 pot distribute is disabled; use /v1/internal/pot-cycle/run', code: 'V1_POT_DISABLED' };
+    }
 
     const rawWindowId = request.body?.windowId;
     const windowId = Number.parseInt(String(rawWindowId), 10);

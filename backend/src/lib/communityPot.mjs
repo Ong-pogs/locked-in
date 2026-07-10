@@ -573,7 +573,20 @@ export async function ensureCommunityPotVaultAta() {
 export async function readCommunityPotVaultBalance() {
   const { connection, programId, stableMint } = getRelay();
   const potVault = deriveCommunityPotVaultAddress(programId);
-  const account = await connection.getTokenAccountBalance(potVault, 'confirmed').catch(() => null);
+  // Only a genuinely-missing account is legitimately zero. Any other RPC error
+  // (node lag, rate limit) must surface so the pot cycle's solvency preflight
+  // treats it as retryable rather than mistaking it for an empty vault and
+  // failing POT_VAULT_UNDERFUNDED — or worse, distributing against stale data
+  // (audit L12).
+  let account = null;
+  try {
+    account = await connection.getTokenAccountBalance(potVault, 'confirmed');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!/could not find account|account does not exist|TokenAccountNotFound|Invalid param/i.test(message)) {
+      throw error;
+    }
+  }
 
   return {
     potVault: potVault.toBase58(),

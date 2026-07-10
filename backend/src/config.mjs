@@ -158,6 +158,19 @@ const yieldStrategyProfile = process.env.YIELD_STRATEGY_PROFILE ?? '';
 const yieldStrategyProfileDefaults = resolveYieldStrategyProfile(yieldStrategyProfile);
 const isYieldProfileActive = Boolean(yieldStrategyProfileDefaults);
 
+// Resolve the RPC + cluster BEFORE the config literal so money-key fallbacks
+// can be cluster-gated. The DEPLOYER_PRIVATE_KEY fallback for the worker keys
+// (which sign vouchers, faucet, drips, pot payouts) must NEVER apply on a
+// non-dev cluster — else a missing/typoed worker key silently promotes the
+// program upgrade authority into the internet-facing signer (audit H2).
+const resolvedSolanaRpcUrl =
+  process.env.SOLANA_RPC_URL ??
+  process.env.EXPO_PUBLIC_SOLANA_RPC_URL ??
+  'https://api.devnet.solana.com';
+const resolvedCluster = detectCluster(resolvedSolanaRpcUrl);
+const allowDevKeyFallback = resolvedCluster === 'devnet' || resolvedCluster === 'local';
+const deployerKeyFallback = allowDevKeyFallback ? process.env.DEPLOYER_PRIVATE_KEY : undefined;
+
 export const appConfig = {
   port: optionalInt('PORT', 3001),
   host: process.env.HOST ?? '0.0.0.0',
@@ -232,10 +245,7 @@ export const appConfig = {
     process.env.YIELD_KAMINO_RESERVE_ADDRESS ??
     (isYieldProfileActive ? yieldStrategyProfileDefaults.kaminoReserveAddress ?? '' : ''),
   yieldStrategyApyCacheMs: optionalInt('YIELD_STRATEGY_APY_CACHE_MS', 60_000),
-  solanaRpcUrl:
-    process.env.SOLANA_RPC_URL ??
-    process.env.EXPO_PUBLIC_SOLANA_RPC_URL ??
-    'https://api.devnet.solana.com',
+  solanaRpcUrl: resolvedSolanaRpcUrl,
   lockVaultProgramId:
     process.env.LOCK_VAULT_PROGRAM_ID ??
     process.env.EXPO_PUBLIC_LOCK_VAULT_PROGRAM_ID ??
@@ -262,13 +272,16 @@ export const appConfig = {
   voucherTtlSeconds: optionalInt('VOUCHER_TTL_SECONDS', 90 * 24 * 60 * 60),
   lockVaultWorkerPrivateKey:
     process.env.LOCK_VAULT_WORKER_PRIVATE_KEY ??
-    process.env.DEPLOYER_PRIVATE_KEY ??
+    deployerKeyFallback ??
     '',
   communityPotWorkerPrivateKey:
     process.env.COMMUNITY_POT_WORKER_PRIVATE_KEY ??
     process.env.LOCK_VAULT_WORKER_PRIVATE_KEY ??
-    process.env.DEPLOYER_PRIVATE_KEY ??
+    deployerKeyFallback ??
     '',
+  // Whether the program upgrade authority key is present in THIS process's env
+  // (boot guard (d) refuses this on mainnet — it must never be on the backend).
+  deployerKeyPresent: Boolean(process.env.DEPLOYER_PRIVATE_KEY),
   faucetEnabled: optionalBool('FAUCET_ENABLED', false),
   faucetSolLamports: optionalInt('FAUCET_SOL_LAMPORTS', 100_000_000),
   faucetUsdcAmountUi: process.env.FAUCET_USDC_AMOUNT_UI ?? '10',

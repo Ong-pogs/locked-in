@@ -18,6 +18,7 @@ import {
   sendAndConfirmTransaction,
 } from '@solana/web3.js';
 import { appConfig } from '../config.mjs';
+import { detectCluster } from './bootGuards.mjs';
 import { getPool } from './db.mjs';
 
 const bs58 = bs58Module.decode ? bs58Module : bs58Module.default;
@@ -60,7 +61,10 @@ export function hasFaucetConfig() {
 }
 
 export function isDevnetOnly() {
-  return (appConfig.solanaRpcUrl ?? '').includes('devnet');
+  // Canonical fail-closed classifier (not a raw substring): a local surfpool
+  // mainnet-fork or an unknown/mainnet RPC is NOT devnet, so the faucet +
+  // treasury transfers stay blocked there (audit L3).
+  return detectCluster(appConfig.solanaRpcUrl) === 'devnet';
 }
 
 export async function transferSol(walletAddress, lamports) {

@@ -20,7 +20,7 @@
 // execute=false performs ZERO on-chain sends and returns the eligibility +
 // payout preview.
 
-import { appConfig } from '../config.mjs';
+import { appConfig, CLUSTER } from '../config.mjs';
 import { getPool, hasDatabase, query } from './db.mjs';
 import {
   deriveCommunityPotWindowId,
@@ -227,15 +227,24 @@ export async function runPotCycle({
     if (!appConfig.communityPotProgramId) {
       preflightFailures.push('communityPotProgramId is empty');
     }
-    if (
-      appConfig.vaultV2ProgramId &&
-      appConfig.communityPotProgramId &&
-      appConfig.vaultV2ProgramId === appConfig.communityPotProgramId
-    ) {
-      // The config.mjs fallback chains make an env mixup silent otherwise.
-      preflightFailures.push(
-        'vaultV2ProgramId equals communityPotProgramId — env mixup (expected the vault_v2 program vs the merged locked_in program)',
-      );
+    // Program-id relationship depends on the deployment topology:
+    //  - devnet: SPLIT — vault_v2 (EUAB…) and the pot (3RC9…) are DIFFERENT
+    //    programs, so equality means an env mixup.
+    //  - mainnet/local: MERGED — pot.rs is compiled into the locked_in program,
+    //    so both ids are the SAME (e.g. FAuFtX…); INEQUALITY is the mixup.
+    // Without this split the mainnet pot cron would fail preflight forever
+    // (audit H3).
+    if (appConfig.vaultV2ProgramId && appConfig.communityPotProgramId) {
+      const equal = appConfig.vaultV2ProgramId === appConfig.communityPotProgramId;
+      if (CLUSTER === 'devnet' && equal) {
+        preflightFailures.push(
+          'vaultV2ProgramId equals communityPotProgramId on devnet — env mixup (devnet runs the vault_v2 program vs the separate pot program)',
+        );
+      } else if (CLUSTER !== 'devnet' && !equal) {
+        preflightFailures.push(
+          'vaultV2ProgramId != communityPotProgramId on the merged deployment — both must be the locked_in program id',
+        );
+      }
     }
     if (!hasCommunityPotRelayConfig()) {
       preflightFailures.push('community pot relay config is incomplete');
@@ -328,6 +337,19 @@ export async function runPotCycle({
       // ALL sends when execute=false.
       const scan = await scanSettleEvents({ log });
       const record = await recordSettleEvents({ execute, log });
+
+      // A failed record_redirect leg means some forfeited yield never made it
+      // on-chain into the pot accounting. Distributing now would underpay
+      // winners against a total that excludes those events — fail loudly and
+      // retry next run instead of silently short-distributing (audit M14).
+      if (execute && Number(record?.failed ?? 0) > 0) {
+        return finish({
+          ok: false,
+          benign: false,
+          reason: 'SETTLE_RECORD_FAILED',
+          detail: { scan: jsonSafe(scan), record: jsonSafe(record) },
+        });
+      }
 
       // ---------------------------------------------------------------- (5)
       const potWindow = await readPotWindow(target);

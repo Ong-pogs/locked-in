@@ -62,6 +62,29 @@ export function hasPositionConfig() {
   return Boolean(appConfig.vaultV2ProgramId);
 }
 
+// On-chain VaultV2Config.authority (the voucher signer the program checks in
+// claim_v2). Cached per program id. Returns null on RPC error / missing config
+// so callers can decide (voucher issuance treats null as "cannot verify, don't
+// block" — claim_v2 remains the hard guard).
+const configAuthorityCache = new Map(); // programId -> { at, authority }
+export async function readVaultV2ConfigAuthority(programId) {
+  if (!programId) return null;
+  const hit = configAuthorityCache.get(programId);
+  if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.authority;
+  try {
+    const conn = getConnection();
+    const [configPda] = PublicKey.findProgramAddressSync([CONFIG_SEED], new PublicKey(programId));
+    const info = await conn.getAccountInfo(configPda);
+    if (!info) return null;
+    // VaultV2Config: disc[8] then authority @8..40.
+    const authority = new PublicKey(info.data.subarray(8, 40)).toBase58();
+    configAuthorityCache.set(programId, { at: Date.now(), authority });
+    return authority;
+  } catch {
+    return null;
+  }
+}
+
 export function deriveLockPdaServer(programId, ownerAddress, courseId) {
   const courseHash = createHash('sha256').update(String(courseId), 'utf8').digest();
   const [pda] = PublicKey.findProgramAddressSync(

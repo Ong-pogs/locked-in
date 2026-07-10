@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { badRequest, notFound, HttpError } from '../../lib/errors.mjs';
-import { appConfig } from '../../config.mjs';
+import { appConfig, CLUSTER } from '../../config.mjs';
 import {
   hasDatabase,
   query,
@@ -36,6 +36,7 @@ import {
   deriveLockPdaServer,
   primeLockPositionCache,
   readLockV2AccountFresh,
+  readVaultV2ConfigAuthority,
 } from '../../lib/lockPosition.mjs';
 
 const UUID_RE =
@@ -271,6 +272,25 @@ export async function issueCourseCompletionVoucher(walletAddress, courseId) {
     lapseCount,
     expiry,
   });
+
+  // Fail closed on a signer/authority mismatch: claim_v2 verifies the voucher
+  // against the on-chain VaultV2Config.authority, so if LOCK_VAULT_WORKER_
+  // PRIVATE_KEY does not match it, EVERY voucher we mint is unclaimable. Catch
+  // the misconfig here rather than after the user has finished the course and
+  // hits a cryptic on-chain failure (audit M11). A null read (RPC hiccup /
+  // config not found) does not block issuance — the on-chain check still guards.
+  // Gated to non-devnet: devnet is already proven-matching, and this keeps the
+  // RPC read out of the devnet/local test path.
+  if (CLUSTER !== 'devnet') {
+    const onchainAuthority = await readVaultV2ConfigAuthority(programId);
+    if (onchainAuthority && onchainAuthority !== voucher.authorityPubkey) {
+      throw new HttpError(
+        503,
+        'Voucher signer does not match the on-chain vault authority',
+        'VOUCHER_AUTHORITY_MISMATCH',
+      );
+    }
+  }
 
   return { courseId, lapseCount, ...voucher };
 }

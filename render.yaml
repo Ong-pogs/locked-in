@@ -17,14 +17,17 @@ services:
       - key: LEADERBOARD_SNAPSHOT_PAGE_SIZE
         value: "25"
 
-  # Monthly community-pot cycle. 03:00 UTC on day 1 → closes + distributes the
-  # month that just ended (never the current/future month). Fully automatic;
-  # idempotent + advisory-locked, so a retry is a benign no-op.
+  # Community-pot cycle. Runs DAILY at 03:00 UTC but only ever targets the
+  # previous (fully elapsed) UTC month — so it distributes once shortly after
+  # month-end and every later run that month is a benign no-op (ALREADY_CLOSED /
+  # NOTHING_TO_DISTRIBUTE). Daily cadence gives automatic retry if the first
+  # post-month run hits a transient RPC/DB error, instead of waiting a month
+  # (audit M16). Idempotent + advisory-locked.
   - type: cron
     name: locked-in-pot-cycle
     runtime: node
     rootDir: backend
-    schedule: "0 3 1 * *"
+    schedule: "0 3 * * *"
     buildCommand: npm ci
     startCommand: npm run cron:pot-cycle
     envVars:

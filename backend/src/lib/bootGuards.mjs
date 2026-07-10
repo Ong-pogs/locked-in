@@ -17,6 +17,10 @@ export const MIN_SECRET_BYTES = 32;
 // mock, and the profiles documented in config.mjs as dev/demo-only.
 const DEV_YIELD_PROFILES = new Set(['fixed_apy_dev', 'kamino_surfpool', 'kamino_devnet_demo']);
 const REAL_YIELD_KIND = 'kamino_klend_reserve_v1';
+// The only yield profile that implies a real-money mainnet deployment.
+const REAL_YIELD_PROFILE = 'kamino_usdc_mainnet';
+// Canonical mainnet USDC mint (Circle).
+const MAINNET_USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 
 /**
  * Classify the RPC URL: 'devnet' | 'mainnet' | 'local' | 'unknown'.
@@ -100,6 +104,41 @@ export function collectBootGuardViolations(config) {
     violations.push(
       `VAULT_V2_PROGRAM_ID is set but LOCK_VAULT_WORKER_PRIVATE_KEY is missing. ` +
         `The backend cannot sign vouchers or sponsor cranks without it.`,
+    );
+  }
+
+  // (d) the program upgrade authority (DEPLOYER_PRIVATE_KEY) must NEVER live on
+  // an internet-facing mainnet fund-signing host — a breach would let an
+  // attacker replace the program AND drain the treasury in one step (audit H2).
+  if (cluster === 'mainnet' && config.deployerKeyPresent) {
+    violations.push(
+      `DEPLOYER_PRIVATE_KEY is set on a mainnet host. The upgrade authority must ` +
+        `never sit on the backend — deploy from a separate machine and set only ` +
+        `LOCK_VAULT_WORKER_PRIVATE_KEY / COMMUNITY_POT_WORKER_PRIVATE_KEY here.`,
+    );
+  }
+
+  // (e) the real-Kamino profile behind a devnet-classified RPC almost always
+  // means SOLANA_RPC_URL was left unset (the devnet default) — which would turn
+  // OFF every mainnet money guard. Fail closed (audit M13).
+  if (
+    (config.yieldStrategyProfile ?? '') === REAL_YIELD_PROFILE &&
+    cluster !== 'mainnet'
+  ) {
+    violations.push(
+      `YIELD_STRATEGY_PROFILE=kamino_usdc_mainnet but the RPC classifies as ` +
+        `'${cluster}'. Set SOLANA_RPC_URL to a real mainnet RPC — the devnet ` +
+        `default disables every mainnet guard.`,
+    );
+  }
+
+  // (f) on mainnet the vault must be bound to the canonical USDC mint — an
+  // env carried over from devnet would lock users into a worthless mint
+  // (audit L11).
+  if (cluster === 'mainnet' && config.lockVaultUsdcMint && config.lockVaultUsdcMint !== MAINNET_USDC_MINT) {
+    violations.push(
+      `LOCK_VAULT_USDC_MINT is '${config.lockVaultUsdcMint}' on mainnet; expected ` +
+        `the canonical USDC mint ${MAINNET_USDC_MINT}.`,
     );
   }
 

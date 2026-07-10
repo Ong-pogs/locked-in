@@ -159,8 +159,18 @@ export async function scanV2SettleEvents({ log = null, deps = {} } = {}) {
       commitment: 'confirmed',
       maxSupportedTransactionVersion: 0,
     });
-    if (!tx || tx.meta?.err) {
-      continue;
+    if (!tx) {
+      // A non-failed signature whose tx we cannot fetch (RPC history truncation
+      // or node lag) MUST NOT let the cursor advance past a settle we never
+      // recorded — that would permanently drop forfeited yield from the pot.
+      // Abort; the next scan retries from the same cursor (audit M12/M15).
+      throw new Error(
+        `pot_bridge: getTransaction returned null for non-failed signature ${info.signature}; ` +
+          `aborting scan to preserve the cursor`,
+      );
+    }
+    if (tx.meta?.err) {
+      continue; // genuinely failed on-chain — safe to skip
     }
     const events = decodeLockV2SettledFromLogs(tx.meta?.logMessages);
     if (events.length === 0) {
