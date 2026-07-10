@@ -1,5 +1,6 @@
 import { badRequest, unauthorized } from '../../lib/errors.mjs';
 import { runLapseSweepBatch } from '../../lib/lapseSweep.mjs';
+import { runPotCycle } from '../../lib/potCycle.mjs';
 import { autoMissEventId } from '../../lib/missEvents.mjs';
 import { secureEquals } from '../../lib/secureCompare.mjs';
 import { appConfig } from '../../config.mjs';
@@ -259,6 +260,32 @@ export async function progressRoutes(app) {
     const retryFailed = request.body?.retryFailed === true;
 
     return distributeCommunityPotWindowBatch(windowId, batchSize, retryFailed);
+  });
+
+  // v2 pot cycle (pot-cycle ruling 2026-07-10, R7). v2 windows are closed
+  // ONLY through this cycle; the v1 close/distribute endpoints above stay as
+  // manual v1 ops. Benign exits (NOTHING_TO_DISTRIBUTE, ALREADY_CLOSED with
+  // seeded rows and nothing pending, NO_PENDING_RECIPIENTS with all rows
+  // distributed, PREVIEW) return 200; every other outcome is 500 with the
+  // reason string. execute defaults to false (zero on-chain sends).
+  app.post('/v1/internal/pot-cycle/run', async (request, reply) => {
+    requireSchedulerAuth(request);
+
+    const rawWindowId = request.body?.windowId;
+    let windowId = null;
+    if (rawWindowId != null) {
+      windowId = Number.parseInt(String(rawWindowId), 10);
+      if (!Number.isFinite(windowId)) {
+        throw badRequest('windowId must be a number', 'INVALID_WINDOW_ID');
+      }
+    }
+
+    const execute = request.body?.execute === true;
+    const result = await runPotCycle({ windowId, execute, log: request.log });
+    if (!result.benign) {
+      reply.code(500);
+    }
+    return result;
   });
 
   // Hardened per sweep ruling R20 + practice ruling R16: this endpoint was an

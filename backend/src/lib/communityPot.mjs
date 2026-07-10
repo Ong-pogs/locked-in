@@ -3,6 +3,7 @@ import bs58Module from 'bs58';
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
+  createAssociatedTokenAccountIdempotentInstruction,
   getAssociatedTokenAddressSync,
 } from '@solana/spl-token';
 import {
@@ -489,6 +490,84 @@ export async function readCommunityPotDistributionWindow(windowId) {
     status: readU8(),
     bump: readU8(),
   };
+}
+
+// --- v2 pot-cycle support (pot-cycle ruling 2026-07-10, R6) -----------------
+
+const POT_CONFIG_DISCRIMINATOR = crypto
+  .createHash('sha256')
+  .update('account:PotConfig')
+  .digest()
+  .subarray(0, 8);
+
+/** The relay worker's public key (base58) — the only signer the cron uses. */
+export function getCommunityPotRelayAuthority() {
+  return getRelay().signer.publicKey.toBase58();
+}
+
+/**
+ * Read the PotConfig PDA (seed 'pot-protocol'). Returns null when the account
+ * does not exist — the pot cycle FAILS on that and names
+ * scripts/init-community-pot-protocol.mjs; it never auto-initializes.
+ */
+export async function readCommunityPotConfig() {
+  const { connection, programId } = getRelay();
+  const protocolConfig = deriveCommunityPotProtocol(programId);
+  const account = await connection.getAccountInfo(protocolConfig, 'confirmed');
+
+  if (!account) {
+    return null;
+  }
+
+  const data = account.data;
+  if (!data.subarray(0, 8).equals(POT_CONFIG_DISCRIMINATOR)) {
+    throw new Error('Account is not a CommunityPot PotConfig.');
+  }
+
+  return {
+    protocolConfig: protocolConfig.toBase58(),
+    authority: new PublicKey(data.subarray(8, 40)).toBase58(),
+    stableMint: new PublicKey(data.subarray(40, 72)).toBase58(),
+    bump: data.readUInt8(72),
+  };
+}
+
+/**
+ * Idempotently create the pot-protocol PDA's USDC ATA (the pot vault that
+ * distribute_window pays from). The relay worker pays the rent — per the
+ * pot-cycle ruling R6, this is the ONLY account creation the cron may do.
+ */
+export async function ensureCommunityPotVaultAta() {
+  const { connection, signer, programId, stableMint } = getRelay();
+  const protocolConfig = deriveCommunityPotProtocol(programId);
+  const potVault = deriveCommunityPotVaultAddress(programId);
+  const existing = await connection.getAccountInfo(potVault, 'confirmed');
+
+  if (existing) {
+    return { potVault: potVault.toBase58(), created: false };
+  }
+
+  const latestBlockhash = await connection.getLatestBlockhash('confirmed');
+  const transaction = new Transaction({
+    feePayer: signer.publicKey,
+    blockhash: latestBlockhash.blockhash,
+    lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+  }).add(
+    createAssociatedTokenAccountIdempotentInstruction(
+      signer.publicKey,
+      potVault,
+      protocolConfig,
+      stableMint,
+      TOKEN_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+    ),
+  );
+
+  const signature = await sendAndConfirmTransaction(connection, transaction, [signer], {
+    commitment: 'confirmed',
+  });
+
+  return { potVault: potVault.toBase58(), created: true, signature };
 }
 
 export async function readCommunityPotVaultBalance() {

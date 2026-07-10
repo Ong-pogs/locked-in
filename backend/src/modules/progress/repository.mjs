@@ -4984,3 +4984,202 @@ export async function getModuleProgress(walletAddress, moduleId) {
 
   return result.rows[0];
 }
+
+// ---------------------------------------------------------------------------
+// v2 pot cycle (pot-cycle ruling 2026-07-10, R4).
+//
+// NEW function, appended — the v1 closeCommunityPotWindowAndSnapshot above
+// (and its readLockAccountSnapshot eligibility loop) is deliberately NOT
+// modified and NOT reused for v2: it reads legacy lock PDAs, so v2 users are
+// never eligible through it. This function reuses ONLY computeWeightedPayouts
+// + seedDistributionSnapshotRows + closeCommunityPotDistributionWindow.
+//
+// Eligibility (fail closed on money):
+//   - v2-armed rows only: lock_account_address must equal the re-derived
+//     vault_v2 PDA for (wallet, course) — stale v1 rows are skipped;
+//   - FRESH on-chain read via readLockV2AccountFresh; account missing (PDA
+//     closed = settled) or mismatch (config skew) EXCLUDES the row;
+//   - INCLUDE only status === 'ACTIVE' with principal > 0 — deliberately NO
+//     course_completed_at filter, so completed-but-unclaimed ACTIVE locks
+//     stay eligible (their principal is still at stake);
+//   - weight = on-chain principal x DB current_streak;
+//   - any THROWN RPC read error aborts the ENTIRE run — never silently skip
+//     a row the way the v1 loop does (a skipped row here mis-pays money).
+//
+// `overrides` is a test-injection surface (same philosophy as
+// runLapseSweepBatch's readLockFresh param); production callers pass nothing.
+// overrides.execute=false computes the full eligibility + payout preview but
+// performs ZERO on-chain sends and ZERO snapshot-row writes (a preview seed
+// would pin stale payout amounts via ON CONFLICT DO NOTHING).
+export async function closeCommunityPotWindowAndSnapshotV2(
+  windowId,
+  closedAt = null,
+  overrides = {},
+) {
+  const {
+    execute = true,
+    readDistributionWindow = readCommunityPotDistributionWindow,
+    readPotWindow = readCommunityPotWindow,
+    closeDistributionWindow = closeCommunityPotDistributionWindow,
+  } = overrides;
+
+  if (!hasDatabase()) {
+    return {
+      processed: false,
+      reason: 'NO_DATABASE',
+    };
+  }
+
+  if (!hasCommunityPotRelayConfig()) {
+    return {
+      processed: false,
+      reason: 'COMMUNITY_POT_RELAY_DISABLED',
+    };
+  }
+
+  // A v2 window may only close once its UTC month has fully elapsed.
+  if (Number(windowId) >= deriveCommunityPotWindowId(new Date())) {
+    throw badRequest(
+      `windowId ${windowId} is not a fully elapsed UTC month`,
+      'WINDOW_NOT_PAST',
+    );
+  }
+
+  // Mirror of the v1 ALREADY_CLOSED / repairable-empty-window check
+  // (closeCommunityPotWindowAndSnapshot above), verbatim.
+  const existingDistributionWindow = await readDistributionWindow(windowId);
+  const existingRows = await readDistributionSnapshotRows(windowId);
+  const repairableEmptyWindow =
+    existingDistributionWindow &&
+    Number(existingDistributionWindow.totalWeight) === 0 &&
+    Number(existingDistributionWindow.eligibleRecipientCount) === 0 &&
+    Number(existingDistributionWindow.distributionCount) === 0 &&
+    existingRows.length === 0;
+
+  if (existingDistributionWindow && !repairableEmptyWindow) {
+    return {
+      processed: false,
+      reason: 'ALREADY_CLOSED',
+      distributionWindow: existingDistributionWindow,
+      recipients: existingRows,
+    };
+  }
+
+  const potWindow = await readPotWindow(windowId);
+  if (!potWindow || BigInt(potWindow.totalRedirectedAmount ?? 0) === 0n) {
+    return {
+      processed: false,
+      reason: 'NOTHING_TO_DISTRIBUTE',
+      windowId,
+    };
+  }
+
+  const runtimeResult = await query(
+    `
+      select
+        wallet_address as "walletAddress",
+        course_id as "courseId",
+        current_streak as "currentStreak",
+        lock_account_address as "lockAccountAddress"
+      from lesson.user_course_runtime_state
+      where lock_account_address is not null
+        and current_streak > 0
+      order by wallet_address asc, course_id asc
+    `,
+  );
+
+  const eligible = [];
+  for (const row of runtimeResult.rows) {
+    // v2-armed check: the stored custody address must be THIS wallet+course's
+    // derived vault_v2 PDA. Legacy-PDA rows are never eligible here.
+    const derived = deriveLockPdaServer(
+      appConfig.vaultV2ProgramId,
+      row.walletAddress,
+      row.courseId,
+    ).toBase58();
+    if (row.lockAccountAddress !== derived) {
+      continue;
+    }
+
+    // FRESH read — a thrown RPC error aborts the entire run (fail closed).
+    const fresh = await readLockV2AccountFresh(row.walletAddress, row.courseId);
+    if (fresh === null || fresh.mismatch) {
+      continue; // settled (PDA closed) or config-skewed — excluded
+    }
+    if (fresh.status !== 'ACTIVE' || fresh.principal <= 0n) {
+      continue;
+    }
+
+    const currentStreak = Number(row.currentStreak);
+    eligible.push({
+      walletAddress: row.walletAddress,
+      courseId: row.courseId,
+      currentStreak,
+      principalAmount: fresh.principal,
+      weight: fresh.principal * BigInt(currentStreak),
+    });
+  }
+
+  if (eligible.length === 0) {
+    // DO NOT close: leaving the window open lets a later re-run distribute
+    // the same window once active locks exist again.
+    return {
+      processed: false,
+      reason: 'NO_ELIGIBLE_RECIPIENTS',
+      windowId,
+      potWindow,
+    };
+  }
+
+  // Zero-payout filter: largest-remainder allocation keeps the filtered sum
+  // exactly equal to totalRedirectedAmount, so dropping zero rows never
+  // drops money.
+  const payouts = computeWeightedPayouts(
+    BigInt(potWindow.totalRedirectedAmount),
+    eligible,
+  ).filter((entry) => entry.payoutAmount > 0n);
+  const totalWeight = payouts.reduce((sum, entry) => sum + entry.weight, 0n);
+
+  if (!execute) {
+    return {
+      processed: false,
+      reason: 'PREVIEW',
+      windowId,
+      potWindow,
+      eligibleRecipientCount: payouts.length,
+      totalWeight: totalWeight.toString(),
+      payouts: payouts.map((entry) => ({
+        walletAddress: entry.walletAddress,
+        courseId: entry.courseId,
+        currentStreak: entry.currentStreak,
+        principalAmount: entry.principalAmount.toString(),
+        weight: entry.weight.toString(),
+        payoutAmount: entry.payoutAmount.toString(),
+      })),
+    };
+  }
+
+  const rows = await seedDistributionSnapshotRows(windowId, payouts);
+  const closedAtValue = closedAt ?? new Date().toISOString();
+  const closeResult = await closeDistributionWindow({
+    windowId,
+    totalWeight: totalWeight.toString(),
+    eligibleRecipientCount: payouts.length,
+    closedAt: closedAtValue,
+  });
+  const distributionWindow = await readDistributionWindow(windowId);
+
+  return {
+    processed: true,
+    reason: 'CLOSED',
+    windowId,
+    potWindow,
+    distributionWindow,
+    signature: closeResult.signature,
+    recipients: rows,
+  };
+}
+
+// Re-exported for the pot-cycle R14 unit tests (zero-payout filtering must
+// preserve the exact total); not part of the route surface.
+export { computeWeightedPayouts };

@@ -67,7 +67,12 @@ async function ensureMigrated() {
     }
   }
 
-  await runMigrations({ databaseUrl: TEST_DB_URL });
+  // allowMissing: the local test DB is shared across git worktrees, so a
+  // sibling worktree's migration can be recorded in the tracker while its
+  // file is absent from THIS checkout. That must warn, not abort (the strict
+  // MISSING_FILES failure still protects real deployments, where migrate.mjs
+  // runs without the flag).
+  await runMigrations({ databaseUrl: TEST_DB_URL, allowMissing: true });
 }
 
 // Check if DB is already running (e.g., CI service container)
