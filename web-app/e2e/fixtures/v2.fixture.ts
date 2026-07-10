@@ -122,6 +122,18 @@ export const test = base.extend<V2Fixtures>({
         return route.fulfill(json(runtimeSnapshot(s)));
       if (reqUrl.includes(`/v1/locks/${COURSE_ID}/position`))
         return route.fulfill(json(positionResponse(s)));
+      // Eligibility pre-gate: completed-course scenarios are ineligible
+      // (relock blocked forever); everything else may lock.
+      if (reqUrl.includes(`/v1/locks/${COURSE_ID}/eligibility`)) {
+        const complete = s.completedLessons >= 3;
+        return route.fulfill(
+          json(complete ? { eligible: false, code: 'COURSE_COMPLETED' } : { eligible: true }),
+        );
+      }
+      if (method === 'POST' && reqUrl.includes(`/v1/locks/${COURSE_ID}/enroll`))
+        return route.fulfill(
+          json({ enrolled: true, courseId: COURSE_ID, lockAddress: positionResponse(s).lockAddress, principalUi: s.principalUi, status: 'ACTIVE' }),
+        );
       if (method === 'POST' && reqUrl.includes(`/v1/progress/courses/${COURSE_ID}/voucher`)) {
         if (voucherStatus === 200) return route.fulfill(json(voucherResponse(s)));
         return route.fulfill({

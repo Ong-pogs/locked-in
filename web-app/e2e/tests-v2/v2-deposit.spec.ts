@@ -43,3 +43,15 @@ test.describe('v2 deposit', () => {
     await page.waitForURL('**/village', { timeout: 15_000 });
   });
 });
+
+// Relock-forever gate (spec item 21): a completed course can never take a new
+// stake — the eligibility pre-gate blocks BEFORE any amount can be entered.
+test.describe('v2 deposit — relock blocked on completed course', () => {
+  test.use({ scenario: 'practice' });
+  test('eligibility gate renders the blocked card, no deposit form', async ({ v2Page: page }) => {
+    await page.goto(`/onboarding/deposit?courseId=${COURSE_ID}`);
+    await expect(page.getByTestId('v2-eligibility-blocked')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId('v2-eligibility-blocked')).toContainText(/practice mode/i);
+    await expect(page.getByTestId('v2-deposit-form')).toHaveCount(0);
+  });
+});
