@@ -13,6 +13,17 @@ test.describe('v2 dashboard — gate sanity', () => {
     ).toBeVisible({ timeout: 20_000 });
     await expect(page.locator('h1')).toHaveText('Dashboard');
   });
+
+  // Carried-over sections (XP hero, journey stats, activity heatmap).
+  test('renders the XP hero, journey stats, and activity heatmap', async ({ v2Page: page }) => {
+    await page.goto('/dashboard');
+    await expect(page.getByTestId('v2-xp-hero')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId('v2-xp-bar')).toBeVisible();
+    await expect(page.getByTestId('v2-journey')).toBeVisible();
+    await expect(page.getByTestId('v2-journey')).toContainText('Lessons Completed');
+    await expect(page.getByTestId('v2-heatmap')).toBeVisible();
+    await expect(page.getByTestId('v2-heatmap')).toContainText('Past Year of Activity');
+  });
 });
 
 test.describe('v2 dashboard — active (blazing)', () => {

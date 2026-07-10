@@ -7,10 +7,17 @@ import { T } from '@/components/theme';
 import { HubButton } from '@/components/HubButton';
 import { LiveApyChip } from '@/components/LiveApyChip';
 import { useCourseStore, useUserStore } from '@/stores';
-import { getLockPosition } from '@/services/api/progress/progressApi';
+import { getLockPosition, getUserXp } from '@/services/api/progress/progressApi';
 import { retryPendingEnrolls } from '@/services/enroll/pendingEnroll';
 import { hasVaultV2Config } from '@/services/solana/vaultV2';
 import { PositionCard, type PositionCardData } from './PositionCard';
+import {
+  ActivityHeatmap,
+  JourneyStats,
+  XpHero,
+  LEVEL_NAMES,
+  buildYearActivity,
+} from './DashboardExtras';
 import type { LockPositionResponse } from '@/services/api/types';
 
 // v2 dashboard (spec §5): one PositionCard per enrolled course. Positions are
@@ -24,6 +31,8 @@ export function DashboardV2() {
   const router = useRouter();
   const authToken = useUserStore((s) => s.authToken);
   const walletAddress = useUserStore((s) => s.walletAddress);
+  const displayName = useUserStore((s) => s.displayName);
+  const createdAt = useUserStore((s) => s.createdAt);
   const courses = useCourseStore((s) => s.courses);
   const lessons = useCourseStore((s) => s.lessons);
   const lessonProgress = useCourseStore((s) => s.lessonProgress);
@@ -31,6 +40,11 @@ export function DashboardV2() {
   const courseStates = useCourseStore((s) => s.courseStates);
   const refreshCourseRuntime = useCourseStore((s) => s.refreshCourseRuntime);
 
+  const [xp, setXp] = useState<{ xpTotal: number; xpLevel: number; thresholds: number[] }>({
+    xpTotal: 0,
+    xpLevel: 1,
+    thresholds: [0, 500, 1500, 3500, 7000, 12000, 20000],
+  });
   const [positions, setPositions] = useState<Record<string, LockPositionResponse>>({});
   const [positionErrors, setPositionErrors] = useState<Record<string, boolean>>({});
   const [retryTick, setRetryTick] = useState(0);
@@ -43,6 +57,20 @@ export function DashboardV2() {
     if (!authToken || !walletAddress) return;
     void retryPendingEnrolls(walletAddress);
   }, [authToken, walletAddress]);
+
+  // XP for the hero bar (carried over from the legacy dashboard).
+  useEffect(() => {
+    if (!authToken) return;
+    getUserXp(authToken)
+      .then((d) =>
+        setXp({
+          xpTotal: d.xpTotal ?? 0,
+          xpLevel: d.xpLevel ?? 1,
+          thresholds: d.levelThresholds ?? [0, 500, 1500, 3500, 7000, 12000, 20000],
+        }),
+      )
+      .catch(() => {});
+  }, [authToken]);
 
   // Fan out runtime refresh for EVERY enrolled course (not just the active one).
   // Re-runs with the position poll so completedToday/lapse state can't go stale
@@ -114,6 +142,33 @@ export function DashboardV2() {
     [enrolledCourseIds, courses, lessons, lessonProgress, courseStates],
   );
 
+  // XP hero derivations.
+  const level = Math.max(1, xp.xpLevel);
+  const levelName = LEVEL_NAMES[level - 1] ?? `Level ${level}`;
+  const xpFromLevel = xp.thresholds[level - 1] ?? 0;
+  const xpToNext = xp.thresholds[level] ?? xpFromLevel + Math.max(1, xp.xpTotal - xpFromLevel) * 2;
+  const xpInLevel = Math.max(0, xp.xpTotal - xpFromLevel);
+  const xpRange = Math.max(1, xpToNext - xpFromLevel);
+  const truncatedWallet = walletAddress
+    ? `${walletAddress.slice(0, 4)}…${walletAddress.slice(-4)}`
+    : '';
+  const heroStreak = Math.max(0, ...cards.map((c) => c.currentStreak), 0);
+
+  // Journey + heatmap derivations.
+  const yearActivity = useMemo(
+    () => buildYearActivity(Object.values(lessonProgress).filter((p) => p.completed).map((p) => p.completedAt)),
+    [lessonProgress],
+  );
+  const lessonsCompleted = useMemo(
+    () => Object.values(lessonProgress).filter((p) => p.completed).length,
+    [lessonProgress],
+  );
+  const longestStreak = Math.max(0, ...Object.values(courseStates).map((s) => s?.longestStreak ?? 0), 0);
+  const coursesEnrolled = enrolledCourseIds.length;
+  const memberSince = createdAt
+    ? new Date(createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+    : '—';
+
   return (
     <div data-testid="v2-dashboard" className="min-h-screen relative" style={{ backgroundColor: T.bg }}>
       {/* Cottage interior backdrop, same treatment as the rest of the app. */}
@@ -153,6 +208,17 @@ export function DashboardV2() {
           <LiveApyChip />
         </div>
 
+        {/* XP hero (carried from the legacy dashboard). */}
+        <XpHero
+          displayName={displayName ?? 'Learner'}
+          truncatedWallet={truncatedWallet}
+          level={level}
+          levelName={levelName}
+          xpInLevel={xpInLevel}
+          xpRange={xpRange}
+          currentStreak={heroStreak}
+        />
+
         {cards.length === 0 ? (
           <CozyCard data-testid="v2-empty-state" className="text-center" style={{ padding: 28 }}>
             <p className="font-pixel text-lg mb-2" style={{ color: COZY_TEXT, textShadow: COZY_TEXT_SHADOW }}>
@@ -180,7 +246,7 @@ export function DashboardV2() {
         ) : (
           <>
             <CozySectionLabel>Your positions</CozySectionLabel>
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4 mb-5">
               {cards.map((card) => (
                 <PositionCard
                   key={card.courseId}
@@ -194,6 +260,15 @@ export function DashboardV2() {
             </div>
           </>
         )}
+
+        {/* Journey + activity (carried from the legacy dashboard). */}
+        <JourneyStats
+          lessonsCompleted={lessonsCompleted}
+          longestStreak={longestStreak}
+          coursesEnrolled={coursesEnrolled}
+          memberSince={memberSince}
+        />
+        <ActivityHeatmap yearActivity={yearActivity} longestStreak={longestStreak} />
       </div>
     </div>
   );
