@@ -21,6 +21,7 @@ import {
   getYieldHistory,
   getModuleProgress,
   issueCourseCompletionVoucher,
+  persistCompletionVoucher,
   refreshLeaderboardSnapshot,
   recordUnlockReceipt,
   syncUnlockReceiptsFromChain,
@@ -95,6 +96,7 @@ export async function progressRoutes(app) {
         lessonId,
         attemptId,
         assertAnswers(answers),
+        { log: request.log },
       );
     },
   );
@@ -463,7 +465,26 @@ export async function progressRoutes(app) {
     { preHandler: requireAccessAuth },
     async (request) => {
       const courseId = assertPathParam(request.params?.courseId, 'courseId');
-      return issueCourseCompletionVoucher(request.auth.walletAddress, courseId);
+      const voucher = await issueCourseCompletionVoucher(
+        request.auth.walletAddress,
+        courseId,
+      );
+      // Best-effort store (voucher-autoissue ruling R8): a storage failure
+      // must never turn a signable voucher into an error response — this POST
+      // remains the client's claim-path safety net forever.
+      try {
+        await persistCompletionVoucher(request.auth.walletAddress, courseId, voucher);
+      } catch (error) {
+        request.log.warn(
+          {
+            walletAddress: request.auth.walletAddress,
+            courseId,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          'voucher.persist_failed',
+        );
+      }
+      return voucher;
     },
   );
 

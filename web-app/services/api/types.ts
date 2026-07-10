@@ -247,6 +247,11 @@ export interface LockPositionResponse {
   principalUi: string | null;
   liveValueUi: string | null;
   asOf: string;
+  /** Stored/lazily-issued completion voucher (voucher-autoissue ruling R6):
+   * non-null only for an ACTIVE lock on a completed course. Optional so older
+   * backends parse cleanly; the POST voucher endpoint remains the claim-path
+   * fallback and may never be removed. */
+  voucher?: CompletionVoucherResponse | null;
 }
 
 /** GET /v1/locks/:courseId/eligibility (ruling R12) — the fail-closed

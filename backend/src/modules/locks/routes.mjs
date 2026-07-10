@@ -6,6 +6,7 @@ import { hasDatabase, queryAsWallet } from '../../lib/db.mjs';
 import {
   assertCourseLockable,
   enrollActiveLockServerSide,
+  getStoredCompletionVoucher,
 } from '../progress/repository.mjs';
 
 // Lazy-heal throttle (enroll ruling R14): at most one heal attempt per
@@ -85,7 +86,29 @@ export async function locksRoutes(app) {
         }
       }
 
-      return position;
+      // Voucher embed (voucher-autoissue ruling R6): only an ACTIVE lock is
+      // ever signed for — settled/absent locks get voucher:null with zero DB
+      // work. A DB blip yields voucher:null, never a 500 on the course card.
+      let voucher = null;
+      if (position?.status === 'ACTIVE' && hasDatabase()) {
+        try {
+          voucher = await getStoredCompletionVoucher(walletAddress, courseId, {
+            log: request.log,
+          });
+        } catch (error) {
+          request.log.warn(
+            {
+              walletAddress,
+              courseId,
+              error: error instanceof Error ? error.message : String(error),
+            },
+            'locks.voucher.attach_failed',
+          );
+        }
+      }
+
+      // Spread — NEVER mutate the object held by lockPosition.mjs's 60s cache.
+      return { ...position, voucher };
     },
   );
 

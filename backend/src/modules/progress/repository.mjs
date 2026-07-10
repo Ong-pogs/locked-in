@@ -31,7 +31,7 @@ import {
 } from '../../lib/answerValidator.mjs';
 import { hasFaucetConfig, isDevnetOnly, transferUsdcAtomic } from '../../lib/faucet.mjs';
 import { getSaverRedirectBps, computeNextFireLitUntil } from '../../lib/yieldRouting.mjs';
-import { issueVoucher } from '../../lib/claimVoucher.mjs';
+import { issueVoucher, yieldBpsForLapses } from '../../lib/claimVoucher.mjs';
 import { applyLessonDay, applyMissDay, userYieldBps } from '../../lib/shieldLapseEngine.mjs';
 import { autoMissEventId } from '../../lib/missEvents.mjs';
 import {
@@ -276,6 +276,142 @@ export async function issueCourseCompletionVoucher(walletAddress, courseId) {
   });
 
   return { courseId, lapseCount, ...voucher };
+}
+
+/**
+ * UPSERT the full signed voucher (voucher-autoissue ruling R5). Pool-based —
+ * NEVER call from inside the submit transaction (ruling R3). Last-write-wins
+ * is acceptable: every signed voucher is user-favorable by construction, the
+ * lock PDA is deterministic per (owner, courseHash), and re-lock of a
+ * completed course is blocked by the COURSE_COMPLETED eligibility gate.
+ */
+export async function persistCompletionVoucher(walletAddress, courseId, voucher) {
+  await query(
+    `INSERT INTO lesson.completion_vouchers
+       (wallet_address, course_id, lock_address, lapse_count, bps, expiry,
+        authority_pubkey, message, signature, issued_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+     ON CONFLICT (wallet_address, course_id) DO UPDATE SET
+       lock_address = excluded.lock_address,
+       lapse_count = excluded.lapse_count,
+       bps = excluded.bps,
+       expiry = excluded.expiry,
+       authority_pubkey = excluded.authority_pubkey,
+       message = excluded.message,
+       signature = excluded.signature,
+       issued_at = now()`,
+    [
+      walletAddress,
+      courseId,
+      voucher.lock,
+      voucher.lapseCount,
+      voucher.bps,
+      voucher.expiry,
+      voucher.authorityPubkey,
+      voucher.message,
+      voucher.signature,
+    ],
+  );
+}
+
+// pg returns bigint (expiry) as a string and the client claim builder needs
+// numbers (web-app types.ts declares them) — the Number() casts are mandatory
+// (voucher-autoissue ruling R7).
+function voucherRowToResponse(courseId, row) {
+  return {
+    courseId,
+    lapseCount: Number(row.voucher_lapse_count),
+    lock: row.lock_address,
+    authorityPubkey: row.authority_pubkey,
+    bps: Number(row.bps),
+    expiry: Number(row.expiry),
+    message: row.message,
+    signature: row.signature,
+  };
+}
+
+/**
+ * Read (and lazily heal) the stored completion voucher for the position
+ * endpoint (voucher-autoissue ruling R7). Pool-based. Decision table:
+ *   (a) no runtime row OR course_completed_at IS NULL -> null, sign nothing;
+ *   (b) stored + unexpired -> return it (on bps drift vs the frozen
+ *       lapse_count, log at ERROR and STILL return it unchanged — the GET
+ *       never re-signs on drift: silent re-signing could only cut a finished
+ *       user's yield);
+ *   (c) stored + expired + signing configured -> re-issue + persist + return
+ *       (frozen lapse_count makes the bps identical);
+ *   (d) no stored row + completed + signing configured -> issue + persist +
+ *       return — the mandatory heal for every pre-0047 completer (the 0043
+ *       backfill guarantees their course_completed_at stamp);
+ *   (e) signing unconfigured -> stored row if unexpired else null; the 503
+ *       never escapes this helper.
+ */
+export async function getStoredCompletionVoucher(walletAddress, courseId, { log = null } = {}) {
+  const result = await query(
+    `SELECT v.lock_address,
+            v.lapse_count AS voucher_lapse_count,
+            v.bps,
+            v.expiry,
+            v.authority_pubkey,
+            v.message,
+            v.signature,
+            v.issued_at,
+            coalesce(r.lapse_count, 0) AS runtime_lapse_count,
+            r.course_completed_at
+       FROM lesson.user_course_runtime_state r
+       LEFT JOIN lesson.completion_vouchers v
+         ON v.wallet_address = r.wallet_address AND v.course_id = r.course_id
+      WHERE r.wallet_address = $1 AND r.course_id = $2
+      LIMIT 1`,
+    [walletAddress, courseId],
+  );
+  const row = result.rows[0];
+
+  // (a) not a completed course — never sign, never store.
+  if (!row || row.course_completed_at == null) {
+    return null;
+  }
+
+  const hasStoredVoucher = row.signature != null;
+  if (hasStoredVoucher) {
+    const unexpired = Number(row.expiry) * 1000 > Date.now();
+    if (unexpired) {
+      // (b) lapse_count is frozen at completion, so a stored-bps mismatch is
+      // by definition a bug — log loudly, serve the stored voucher unchanged.
+      const expectedBps = yieldBpsForLapses(Number(row.runtime_lapse_count));
+      if (Number(row.bps) !== expectedBps) {
+        log?.error?.(
+          {
+            walletAddress,
+            courseId,
+            storedBps: Number(row.bps),
+            expectedBps,
+          },
+          'voucher.bps_drift',
+        );
+      }
+      return voucherRowToResponse(courseId, row);
+    }
+    // (c) expired — re-issue at the (frozen) current tier.
+    if (voucherSigningConfigured()) {
+      const voucher = await issueCourseCompletionVoucher(walletAddress, courseId);
+      await persistCompletionVoucher(walletAddress, courseId, voucher);
+      return voucher;
+    }
+    // (e) expired and unarmed — nothing servable.
+    return null;
+  }
+
+  // (d) completed but never stored (pre-0047 completer, or a crash between
+  // commit and persist) — the mandatory lazy heal.
+  if (voucherSigningConfigured()) {
+    const voucher = await issueCourseCompletionVoucher(walletAddress, courseId);
+    await persistCompletionVoucher(walletAddress, courseId, voucher);
+    return voucher;
+  }
+
+  // (e) unarmed env — behave exactly like today.
+  return null;
 }
 const LESSON_ACCEPTANCE_THRESHOLD = 70;
 
@@ -4682,7 +4818,13 @@ export async function startLessonAttempt(walletAddress, lessonId, attemptId) {
 // `completedAt` is never accepted from the caller — see startLessonAttempt.
 // Without a database we fail closed: the previous no-db branch returned
 // `accepted: true, score: 100`, so an outage passed every lesson.
-export async function submitLessonAttempt(walletAddress, lessonId, attemptId, answers) {
+export async function submitLessonAttempt(
+  walletAddress,
+  lessonId,
+  attemptId,
+  answers,
+  { log = null } = {},
+) {
   const normalizedAttemptId = assertAttemptId(attemptId);
   const submittedAnswers = assertAnswers(answers);
   const timestamp = new Date().toISOString();
@@ -4691,7 +4833,13 @@ export async function submitLessonAttempt(walletAddress, lessonId, attemptId, an
     throw new HttpError(503, 'Grading is unavailable', 'DATABASE_UNAVAILABLE');
   }
 
-  return withTransactionAsWallet(walletAddress, async (client) => {
+  // Voucher auto-issue (voucher-autoissue ruling R4): set inside the freeze
+  // branch, consumed strictly AFTER the transaction commits. Signing/storing
+  // inside the submit transaction is forbidden (ruling R3) — a voucher
+  // failure could silently roll back the user's final-lesson completion.
+  let completedCourseId = null;
+
+  const result = await withTransactionAsWallet(walletAddress, async (client) => {
     const lessonVersion = await getPublishedLessonVersion(client, lessonId);
     // A submit without a prior /start still anchors its attempt to server time.
     const attempt = await ensureAttempt(
@@ -4870,6 +5018,7 @@ export async function submitLessonAttempt(walletAddress, lessonId, attemptId, an
            where wallet_address = $1 and course_id = $2`,
           [walletAddress, completionEvent.courseId],
         );
+        completedCourseId = completionEvent.courseId;
       }
     }
 
@@ -4897,6 +5046,29 @@ export async function submitLessonAttempt(walletAddress, lessonId, attemptId, an
       xp: accepted && !isReplay ? xpResult : null,
     };
   });
+
+  // Best-effort post-commit voucher issue+store (ruling R4). Post-commit the
+  // pool sees the committed final lesson AND the frozen lapse_count, so the
+  // existing pool-based signer cuts the correct tier. Never rethrows, never
+  // alters the submit response; a crash here is healed lazily by the position
+  // read (R7) or the POST voucher endpoint (R8).
+  if (completedCourseId && voucherSigningConfigured()) {
+    try {
+      const voucher = await issueCourseCompletionVoucher(walletAddress, completedCourseId);
+      await persistCompletionVoucher(walletAddress, completedCourseId, voucher);
+    } catch (error) {
+      log?.warn?.(
+        {
+          walletAddress,
+          courseId: completedCourseId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        'voucher.autoissue_failed',
+      );
+    }
+  }
+
+  return result;
 }
 
 export async function getCourseProgress(walletAddress, courseId) {
