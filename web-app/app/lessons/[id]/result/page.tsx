@@ -128,6 +128,9 @@ function ResultContent({ params }: { params: Promise<{ id: string }> }) {
   const score = Number(searchParams.get('score') ?? 0);
   const totalQuestions = Number(searchParams.get('total') ?? 0);
   const accepted = searchParams.get('accepted') !== 'false';
+  // Practice-mode ruling R10: replays / post-completion attempts are graded
+  // but write nothing server-side — say so instead of implying rewards.
+  const practice = searchParams.get('practice') === 'true';
   const fuelAwarded = Number(searchParams.get('fuel') ?? 0);
   const fuelTotal = Number(searchParams.get('fuelTotal') ?? 0);
   const xpAwarded = Number(searchParams.get('xp') ?? 0);
@@ -203,6 +206,23 @@ function ResultContent({ params }: { params: Promise<{ id: string }> }) {
         >
           {correctCount}/{totalQuestions} Questions Correct
         </p>
+
+        {/* Practice notice (ruling R10) — themed like the dashboard's
+            practice badge; streak/shields/rewards were NOT touched. */}
+        {practice && (
+          <div
+            data-testid="practice-notice"
+            className="mt-5 w-full py-2.5 px-3 rounded-lg border text-center font-pixel-mono text-[11px] uppercase tracking-[1.5px]"
+            style={{
+              backgroundColor: 'rgba(153,69,255,0.10)',
+              borderColor: 'rgba(153,69,255,0.4)',
+              color: '#B98AFF',
+              textShadow: COZY_TEXT_SHADOW,
+            }}
+          >
+            Practice — streak, shields and rewards unchanged
+          </div>
+        )}
 
         {/* Reward cards */}
         <div className="mt-7 w-full flex flex-col gap-3">

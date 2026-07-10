@@ -8,6 +8,7 @@ import { HubButton } from '@/components/HubButton';
 import { LiveApyChip } from '@/components/LiveApyChip';
 import { useCourseStore, useUserStore } from '@/stores';
 import { getLockPosition } from '@/services/api/progress/progressApi';
+import { retryPendingEnrolls } from '@/services/enroll/pendingEnroll';
 import { hasVaultV2Config } from '@/services/solana/vaultV2';
 import { PositionCard, type PositionCardData } from './PositionCard';
 import type { LockPositionResponse } from '@/services/api/types';
@@ -22,6 +23,7 @@ const POSITION_POLL_MS = 60_000;
 export function DashboardV2() {
   const router = useRouter();
   const authToken = useUserStore((s) => s.authToken);
+  const walletAddress = useUserStore((s) => s.walletAddress);
   const courses = useCourseStore((s) => s.courses);
   const lessons = useCourseStore((s) => s.lessons);
   const lessonProgress = useCourseStore((s) => s.lessonProgress);
@@ -33,6 +35,14 @@ export function DashboardV2() {
   const [positionErrors, setPositionErrors] = useState<Record<string, boolean>>({});
   const [retryTick, setRetryTick] = useState(0);
   const claimEnabled = hasVaultV2Config();
+
+  // Pending-enroll heal (ruling R13): deposits whose server-side enroll failed
+  // left a localStorage record — retry them on every dashboard mount until the
+  // server accepts (200) or terminally refuses (403/404). Fire-and-forget.
+  useEffect(() => {
+    if (!authToken || !walletAddress) return;
+    void retryPendingEnrolls(walletAddress);
+  }, [authToken, walletAddress]);
 
   // Fan out runtime refresh for EVERY enrolled course (not just the active one).
   // Re-runs with the position poll so completedToday/lapse state can't go stale
@@ -148,7 +158,10 @@ export function DashboardV2() {
             <p className="font-pixel text-lg mb-2" style={{ color: COZY_TEXT, textShadow: COZY_TEXT_SHADOW }}>
               No courses yet
             </p>
-            <p className="font-pixel-mono text-[12px] mb-5" style={{ color: T.textMuted }}>
+            <p
+              className="font-pixel-mono text-[12px] mb-5"
+              style={{ color: T.textMutedStrong, textShadow: '0 1px 2px rgba(0,0,0,0.7)' }}
+            >
               Lock a small stake on a course. Learn daily, keep the flame lit, claim it back with yield.
             </p>
             <button

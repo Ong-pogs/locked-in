@@ -30,4 +30,15 @@ describe('ApiError', () => {
     expect(error.status).toBe(0);
     expect(error.code).toBe('NETWORK_ERROR');
   });
+
+  it('carries the parsed error body as details (e.g. ENROLL_RETRY)', () => {
+    const error = new ApiError('Retry', 409, 'ENROLL_RETRY', {
+      retryable: true,
+      retryAfterMs: 4000,
+    });
+    expect(error.details).toEqual({ retryable: true, retryAfterMs: 4000 });
+
+    const bare = new ApiError('Server error', 500);
+    expect(bare.details).toBeUndefined();
+  });
 });

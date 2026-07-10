@@ -157,7 +157,10 @@ export function PositionCard({ data, position, positionError, onRetryPosition, c
                 )}
               </span>
             ) : position == null ? (
-              <span className="font-pixel-mono text-sm" style={{ color: T.textMuted }}>
+              <span
+                className="font-pixel-mono text-sm"
+                style={{ color: T.textMutedStrong, textShadow: '0 1px 2px rgba(0,0,0,0.7)' }}
+              >
                 Loading position…
               </span>
             ) : headlineValue != null ? (
@@ -218,7 +221,10 @@ export function PositionCard({ data, position, positionError, onRetryPosition, c
       {/* Progress */}
       <div className="mt-3">
         <div className="flex justify-between mb-1">
-          <span className="font-pixel-mono text-[10px] uppercase tracking-[1px]" style={{ color: T.textMuted }}>
+          <span
+            className="font-pixel-mono text-[10px] uppercase tracking-[1px]"
+            style={{ color: T.textMutedStrong, textShadow: '0 1px 2px rgba(0,0,0,0.7)' }}
+          >
             Progress
           </span>
           <span className="font-pixel-mono text-[10px]" style={{ color: COZY_TEXT, opacity: 0.8 }}>

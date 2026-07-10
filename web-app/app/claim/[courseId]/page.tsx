@@ -59,6 +59,26 @@ const PHASE_COPY: Record<V2ActionPhase, string> = {
   error: 'Transaction failed',
 };
 
+// Contrast-audit style for small money copy on CozyCard glass (10-13px):
+// brighter muted white + shadow so the painted backdrop can't wash it out.
+const MUTED_STRONG = {
+  color: T.textMutedStrong,
+  textShadow: '0 1px 2px rgba(0,0,0,0.7)',
+} as const;
+
+// Claim dust honesty (docs/mainnet-readiness-checklist.md "Claim dust"): the
+// vault floors twice — floor(amount/rate) into shares, floor(shares·rate) back
+// out — so a claim can return principal minus 1 atomic unit ($0.000001).
+// Surface the tolerance instead of promising exactness.
+function DustFootnote() {
+  return (
+    <p className="font-pixel-mono text-[10px] mt-1" style={MUTED_STRONG}>
+      Principal returned (±$0.000001 rounding) — vault share math floors twice,
+      so the last micro-cent can round down.
+    </p>
+  );
+}
+
 export default function ClaimPage() {
   const params = useParams<{ courseId: string }>();
   const courseId = params?.courseId ?? '';
@@ -130,6 +150,12 @@ export default function ClaimPage() {
     };
   }, [courseId, authToken, courseState?.lockAccountAddress]);
 
+  // Honesty note (docs/mainnet-readiness-checklist.md "Platform-fee display"):
+  // these percentages derive from voucher.bps ALONE, which is correct only
+  // while platform_fee_bps is 0 and unwired. If the voucher/backend ever
+  // reports a platform fee, keep/forfeit MUST derive from it instead of
+  // assuming user% + pot% == 100 — and only then render a fee row (do not
+  // invent a fee display for a fee that doesn't exist).
   const keptPct = voucher ? voucher.bps / 100 : 100;
   const forfeitPct = 100 - keptPct;
   const expiryDate = useMemo(
@@ -245,7 +271,7 @@ export default function ClaimPage() {
   if (phase === 'loading') {
     return shell(
       <CozyCard data-testid="v2-claim-loading" className="text-center" style={{ padding: 28 }}>
-        <p className="font-pixel-mono text-[13px]" style={{ color: T.textMuted }}>
+        <p className="font-pixel-mono text-[13px]" style={MUTED_STRONG}>
           Checking your completion voucher…
         </p>
       </CozyCard>,
@@ -258,7 +284,7 @@ export default function ClaimPage() {
         <p className="font-pixel text-lg mb-2" style={{ color: COZY_TEXT, textShadow: COZY_TEXT_SHADOW }}>
           Claims aren&apos;t live here yet
         </p>
-        <p className="font-pixel-mono text-[12px]" style={{ color: T.textMuted }}>
+        <p className="font-pixel-mono text-[12px]" style={MUTED_STRONG}>
           On-chain claims are not enabled in this environment.
         </p>
         {backToDashboard}
@@ -272,7 +298,7 @@ export default function ClaimPage() {
         <p className="font-pixel text-lg mb-2" style={{ color: COZY_TEXT, textShadow: COZY_TEXT_SHADOW }}>
           Finish the course first
         </p>
-        <p className="font-pixel-mono text-[12px]" style={{ color: T.textMuted }}>
+        <p className="font-pixel-mono text-[12px]" style={MUTED_STRONG}>
           Your stake unlocks when every lesson is complete. Keep going — the vault isn&apos;t
           going anywhere.
         </p>
@@ -287,7 +313,7 @@ export default function ClaimPage() {
         <p className="font-pixel text-lg mb-2" style={{ color: COZY_TEXT, textShadow: COZY_TEXT_SHADOW }}>
           Nothing to claim
         </p>
-        <p className="font-pixel-mono text-[12px]" style={{ color: T.textMuted }}>
+        <p className="font-pixel-mono text-[12px]" style={MUTED_STRONG}>
           This position is already claimed or was never locked. Nothing is pending.
         </p>
         {backToDashboard}
@@ -301,7 +327,7 @@ export default function ClaimPage() {
         <p className="font-pixel text-lg mb-2" style={{ color: COZY_TEXT, textShadow: COZY_TEXT_SHADOW }}>
           Voucher expired
         </p>
-        <p className="font-pixel-mono text-[12px]" style={{ color: T.textMuted }}>
+        <p className="font-pixel-mono text-[12px]" style={MUTED_STRONG}>
           Head back to the dashboard and reopen the claim — a fresh voucher will be issued.
         </p>
         {backToDashboard}
@@ -315,7 +341,7 @@ export default function ClaimPage() {
         <p className="font-pixel text-lg mb-2" style={{ color: '#FF8FA3', textShadow: COZY_TEXT_SHADOW }}>
           Something went wrong
         </p>
-        <p className="font-pixel-mono text-[12px] mb-4" style={{ color: T.textMuted }}>
+        <p className="font-pixel-mono text-[12px] mb-4" style={MUTED_STRONG}>
           {errorMessage ?? 'The claim could not be completed. Your funds are untouched.'}
         </p>
         <button
@@ -364,10 +390,11 @@ export default function ClaimPage() {
           {successRecord.receivedUi && (
             <BreakdownRow label="Received (exact)" value={`$${successRecord.receivedUi}`} highlight />
           )}
+          <DustFootnote />
         </div>
         <p
           className="font-pixel-mono text-[10px] break-all"
-          style={{ color: T.textMuted }}
+          style={MUTED_STRONG}
           title="Transaction signature"
         >
           tx: {successRecord.signature}
@@ -381,7 +408,7 @@ export default function ClaimPage() {
   return shell(
     <CozyCard data-testid="v2-claim-review" style={{ padding: 24 }}>
       <CozySectionLabel>{course?.title ?? courseId}</CozySectionLabel>
-      <p className="font-pixel-mono text-[12px] mb-4" style={{ color: T.textMuted }}>
+      <p className="font-pixel-mono text-[12px] mb-4" style={MUTED_STRONG}>
         Course complete. Here&apos;s exactly what happens when you claim:
       </p>
 
@@ -389,6 +416,7 @@ export default function ClaimPage() {
         <BreakdownRow label="Principal returned" value={principalUi ? `$${principalUi}` : 'In full'} />
         <BreakdownRow label="Yield you keep" value={`${keptPct}%`} highlight={keptPct === 100} />
         <BreakdownRow label="To community pot" value={`${forfeitPct}%`} />
+        <DustFootnote />
       </div>
 
       {voucher && voucher.lapseCount > 0 && (
@@ -396,7 +424,7 @@ export default function ClaimPage() {
       )}
 
       {expiryDate && (
-        <p className="font-pixel-mono text-[10px] mb-4" style={{ color: T.textMuted }}>
+        <p className="font-pixel-mono text-[10px] mb-4" style={MUTED_STRONG}>
           Voucher valid until {expiryDate}
         </p>
       )}
@@ -448,7 +476,7 @@ function BreakdownRow({
         borderColor: highlight ? 'rgba(62,230,138,0.35)' : T.borderDormant,
       }}
     >
-      <span className="font-pixel-mono text-[11px] uppercase tracking-[1px]" style={{ color: T.textMuted }}>
+      <span className="font-pixel-mono text-[11px] uppercase tracking-[1px]" style={MUTED_STRONG}>
         {label}
       </span>
       <span

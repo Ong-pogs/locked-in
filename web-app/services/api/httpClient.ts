@@ -110,6 +110,9 @@ export async function httpRequest<T>(
                 : `Request failed with status ${response.status}`),
             response.status,
             errorPayload.code,
+            // Full parsed body: contracts like ENROLL_RETRY carry extra
+            // fields ({ retryable, retryAfterMs }) beyond message/code.
+            data,
           );
         }
 
