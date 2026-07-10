@@ -128,3 +128,15 @@
 - [ ] **Claim dust**: a fast deposit→claim at bps=10000 returns principal − 1 atomic
   unit (double-floor: `floor(amount/rate)` then `floor(shares·rate)`). Real Kamino cTokens
   floor the same way — surface "principal returned (±dust)" rather than an exact promise.
+
+## Pot-cycle addendum (pot-cycle ruling, 2026-07-10 — R15)
+
+- [ ] **Mainnet `initialize_vault_v2` MUST pass DISTINCT `pot_vault` and
+  `fee_vault` token accounts.** The devnet init commingled them into one
+  deployer ATA (`GCWEHFyJPS3ARfXk9V3jnfsZfaFCe8xmQfPKknjMM3yJ`), which
+  permanently forces event-derived pot accounting on this deployment because
+  `set_config_v2` cannot repoint either vault.
+- [ ] **The mainnet `pot_vault` owner must be a dedicated ops key** that is
+  neither the program upgrade authority nor anyone's personal ATA wallet, so
+  the pot funding bridge (`scripts/bridge-v2-pot-transfer.mjs`'s role) can be
+  automated without expanding hot-key blast radius.
