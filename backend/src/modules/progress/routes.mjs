@@ -1,4 +1,6 @@
 import { badRequest, unauthorized } from '../../lib/errors.mjs';
+import { runLapseSweepBatch } from '../../lib/lapseSweep.mjs';
+import { autoMissEventId } from '../../lib/missEvents.mjs';
 import { secureEquals } from '../../lib/secureCompare.mjs';
 import { appConfig } from '../../config.mjs';
 import { requireAccessAuth } from '../../plugins/auth.mjs';
@@ -259,13 +261,17 @@ export async function progressRoutes(app) {
     return distributeCommunityPotWindowBatch(windowId, batchSize, retryFailed);
   });
 
+  // Hardened per sweep ruling R20 + practice ruling R16: this endpoint was an
+  // unbounded punishment oracle (caller-supplied missEventId + missDay). Now:
+  // missDay is required, must be a calendar date STRICTLY before today (UTC),
+  // and the missEventId is ALWAYS derived server-side — day-level dedupe
+  // (0045) then makes any replay or id games inert.
   app.post('/v1/internal/consequences/miss', async (request) => {
     requireSchedulerAuth(request);
 
     const walletAddress = request.body?.walletAddress;
     const courseId = request.body?.courseId;
-    const missEventId = request.body?.missEventId;
-    const missDay = request.body?.missDay ?? null;
+    const missDay = request.body?.missDay;
 
     if (!walletAddress || typeof walletAddress !== 'string') {
       throw badRequest('walletAddress is required', 'MISSING_WALLET_ADDRESS');
@@ -275,12 +281,54 @@ export async function progressRoutes(app) {
       throw badRequest('courseId is required', 'MISSING_COURSE_ID');
     }
 
+    if (typeof missDay !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(missDay)) {
+      throw badRequest('missDay must be YYYY-MM-DD', 'INVALID_MISS_DAY');
+    }
+    const todayUtc = new Date().toISOString().slice(0, 10);
+    if (missDay >= todayUtc) {
+      throw badRequest('missDay must be strictly before today (UTC)', 'INVALID_MISS_DAY');
+    }
+
     return consumeSaverOrApplyFullConsequence(
       walletAddress,
       courseId,
-      missEventId,
+      autoMissEventId(walletAddress, courseId, missDay),
       missDay,
     );
+  });
+
+  // Daily lapse sweep (sweep ruling R16, as amended): runs exactly ONE
+  // bounded batch synchronously; callers loop until nextCursor is null.
+  // Per-row transactions inside the batch mean an LB timeout or cron retry
+  // can never truncate mid-row or double-apply. Never judges today.
+  app.post('/v1/internal/lapse/sweep', async (request) => {
+    requireSchedulerAuth(request);
+
+    const rawBatchSize = request.body?.batchSize;
+    let batchSize = 200;
+    if (rawBatchSize != null) {
+      batchSize = Number.parseInt(String(rawBatchSize), 10);
+      if (!Number.isFinite(batchSize) || batchSize < 1 || batchSize > 1000) {
+        throw badRequest('batchSize must be an integer 1..1000', 'INVALID_BATCH_SIZE');
+      }
+    }
+
+    const cursor = request.body?.cursor ?? null;
+    if (cursor != null && typeof cursor !== 'string') {
+      throw badRequest('cursor must be a string', 'INVALID_SWEEP_CURSOR');
+    }
+
+    const asOfDay = request.body?.asOfDay;
+    if (asOfDay != null && (typeof asOfDay !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(asOfDay))) {
+      throw badRequest('asOfDay must be YYYY-MM-DD', 'INVALID_SWEEP_DAY');
+    }
+
+    return runLapseSweepBatch({
+      ...(asOfDay != null ? { asOfDay } : {}),
+      batchSize,
+      cursor,
+      log: request.log,
+    });
   });
 
   app.post('/v1/internal/lock-vault/consequences/miss/publish', async (request) => {

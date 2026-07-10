@@ -80,9 +80,21 @@ describe('collectBootGuardViolations — (a) secret length floor', () => {
     expect(violations.some((v) => v.includes('JWT_SECRET'))).toBe(true);
   });
 
-  it('allows short secrets on devnet only', () => {
+  it('flags short secrets on devnet too — internet-facing devnet moves voucher state (sweep ruling R21)', () => {
     const violations = collectBootGuardViolations(
       cleanConfig({ jwtSecret: SHORT_SECRET, schedulerSecret: SHORT_SECRET }),
+    );
+    expect(violations.some((v) => v.includes('JWT_SECRET'))).toBe(true);
+    expect(violations.some((v) => v.includes('SCHEDULER_SECRET'))).toBe(true);
+  });
+
+  it('allows short secrets on local only', () => {
+    const violations = collectBootGuardViolations(
+      cleanConfig({
+        solanaRpcUrl: 'http://127.0.0.1:8899',
+        jwtSecret: SHORT_SECRET,
+        schedulerSecret: SHORT_SECRET,
+      }),
     );
     expect(violations).toEqual([]);
   });
