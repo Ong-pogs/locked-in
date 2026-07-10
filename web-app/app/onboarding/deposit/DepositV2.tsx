@@ -8,7 +8,7 @@ import { CozyCard, CozySectionLabel, COZY_TEXT, COZY_TEXT_SHADOW } from '@/compo
 import { HubButton } from '@/components/HubButton';
 import { DepositFormV2 } from '@/components/v2/DepositFormV2';
 import { useCourseStore, useUserStore } from '@/stores';
-import { fetchWalletDepositBalances } from '@/services/solana/lockVault';
+import { readWalletUsdcUi } from '@/services/solana/vaultV2';
 import { fetchWithAuth } from '@/services/api/httpClient';
 import { getLockEligibility } from '@/services/api/locks/locksApi';
 import { enrollLockWithRetry, writePendingEnroll } from '@/services/enroll/pendingEnroll';
@@ -124,8 +124,8 @@ function DepositV2Content() {
   // Wallet balance + vault TVL — best-effort reads, graceful fallbacks.
   useEffect(() => {
     if (!walletAddress) return;
-    fetchWalletDepositBalances(walletAddress)
-      .then((b) => setWalletBalanceUi(b.stableBalanceUi))
+    readWalletUsdcUi(walletAddress)
+      .then((ui) => setWalletBalanceUi(ui))
       .catch(() => setWalletBalanceUi(null));
     import('@/services/solana/vaultV2')
       .then((m) => m.readVaultV2Config())

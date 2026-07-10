@@ -5,6 +5,7 @@ import { Activity } from 'lucide-react';
 import { CozyCard } from '@/components/cozy';
 import { T } from '@/components/theme';
 import { getLessonApiBaseUrl } from '@/services/api/config';
+import { CLUSTER } from '@/services/solana/connection';
 
 const AMBER = '#FFD580';
 const TEAL = '#2AE8D4';
@@ -61,12 +62,19 @@ export function LiveApyChip() {
   if (!data || data.apyPct == null) return null;
 
   const accent = data.live ? TEAL : AMBER;
-  const sourceLabel =
+  // The cluster suffix must reflect the ACTUAL cluster, not be inferred from
+  // the backend source string — e.g. the devnet-demo profile reads the real
+  // mainnet Kamino rate but custody is on devnet, so labelling it "· mainnet"
+  // would mislead (audit M2).
+  const clusterSuffix =
+    CLUSTER === 'mainnet-beta' ? 'mainnet' : CLUSTER === 'testnet' ? 'testnet' : 'devnet';
+  const sourceDesc =
     data.source === 'kamino_klend_usdc'
-      ? 'Kamino USDC reserve · mainnet'
+      ? 'Kamino USDC reserve'
       : data.source === 'fixed_apy'
-        ? 'Simulated APY · devnet'
+        ? 'Simulated APY'
         : data.source;
+  const sourceLabel = `${sourceDesc} · ${clusterSuffix}`;
 
   return (
     <CozyCard className="flex items-center gap-3" style={{ padding: 14 }}>

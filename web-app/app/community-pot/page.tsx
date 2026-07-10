@@ -191,7 +191,14 @@ export default function CommunityPotPage() {
                 if (!state || !course) return null;
                 const isActive = courseId === activeCourseId;
                 const pct = Math.round((state.currentYieldRedirectBps ?? 0) / 100);
-                const saversRemaining = Math.max(0, 3 - state.saverCount);
+                // v2 status uses shields + lapse, not v1 savers/recovery.
+                const shields = state.shields ?? 3;
+                const statusLabel =
+                  (state.lapseCount ?? 0) >= 2
+                    ? 'Extinguished'
+                    : state.lapseOpen
+                      ? 'At risk'
+                      : `${shields} shields`;
                 return (
                   <div
                     key={courseId}
@@ -221,9 +228,7 @@ export default function CommunityPotPage() {
                       className="font-pixel-mono text-[10px]"
                       style={{ color: T.textMuted }}
                     >
-                      {state.saverRecoveryMode
-                        ? 'Recovery'
-                        : `${saversRemaining}/3 savers`}
+                      {statusLabel}
                     </span>
                   </div>
                 );
@@ -481,10 +486,11 @@ export default function CommunityPotPage() {
             className="text-[13px] leading-7"
             style={{ color: T.textSecondary }}
           >
-            When players break their streak, a percentage of their yield is
-            redirected to the Community Pot. This pool is distributed among
-            active streak holders proportional to their streak length. The
-            longer you maintain your streak, the larger your share.
+            When learners lapse, a percentage of their yield is redirected to
+            the Community Pot. The pool is distributed among learners with an
+            active lock, weighted by their locked stake times their current
+            streak. The larger your stake and the longer your streak, the
+            larger your share.
           </p>
         </CozyCard>
       </div>

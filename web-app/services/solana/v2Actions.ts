@@ -75,6 +75,17 @@ async function confirmByPolling(signature: string, timeoutMs = 30_000): Promise<
   throw new Error('Transaction confirmation timed out.');
 }
 
+// Balance reads use the env mint while the tx builders use the on-chain
+// config.usdcMint; a stale env after a cluster migration would silently read
+// the wrong ATA. Assert they agree before moving money (audit L5).
+function assertConfigMintMatchesEnv(config: { usdcMint: PublicKey }): void {
+  if (!config.usdcMint.equals(getUsdcMint())) {
+    throw new Error(
+      'Configuration error: the vault USDC mint does not match NEXT_PUBLIC_LOCK_VAULT_USDC_MINT.',
+    );
+  }
+}
+
 async function readUsdcBalance(owner: string): Promise<bigint | null> {
   try {
     const ata = getAssociatedTokenAddressSync(getUsdcMint(), new PublicKey(owner));
@@ -144,6 +155,9 @@ export async function executeClaim(
 
   onPhase('building');
   const config = await readVaultV2Config();
+  assertConfigMintMatchesEnv(config);
+  // NOTE: claims are intentionally NOT gated on config.paused — a paused vault
+  // must still let users redeem (set_config_v2 never pauses claim_v2).
   const before = await readUsdcBalance(owner);
   const tx = await buildClaimTransaction(owner, courseId, voucher, config);
 
@@ -179,6 +193,12 @@ export async function executeDeposit(
 
   onPhase('building');
   const config = await readVaultV2Config();
+  assertConfigMintMatchesEnv(config);
+  // Fail before prompting a signature if the vault is paused (audit L7) — the
+  // on-chain deposit would revert anyway and surface as a false "tx failed".
+  if (config.paused) {
+    throw new Error('Deposits are temporarily paused. Please try again later.');
+  }
   const [whole = '0', frac = ''] = amountUi.trim().split('.');
   if (frac.length > 6) throw new Error('Amount supports at most 6 decimal places');
   const atomic = BigInt(whole) * 1_000_000n + BigInt(frac.padEnd(6, '0') || '0');

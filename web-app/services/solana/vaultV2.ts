@@ -184,6 +184,21 @@ function encodeU64LE(value: bigint): Buffer {
   return b;
 }
 
+/**
+ * Wallet USDC balance (UI string) for the deposit form — v2-native: needs only
+ * the USDC mint, NOT the legacy v1 lock-vault program env (which does not exist
+ * on a v2/mainnet build). Best-effort; null when the ATA is absent (audit M7).
+ */
+export async function readWalletUsdcUi(ownerAddress: string): Promise<string | null> {
+  try {
+    const ata = getAssociatedTokenAddressSync(getUsdcMint(), new PublicKey(ownerAddress));
+    const { value } = await connection.getTokenAccountBalance(ata);
+    return value.uiAmountString ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function encodeOpenLockData(courseIdHash: Uint8Array): Buffer {
   return Buffer.concat([Buffer.from(OPEN_LOCK_V2_DISCRIMINATOR), Buffer.from(courseIdHash)]);
 }

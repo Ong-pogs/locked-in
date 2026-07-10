@@ -8,7 +8,7 @@ import { T } from '@/components/theme';
 import { HubButton } from '@/components/HubButton';
 import { PenaltyBanner } from '@/components/v2/PenaltyBanner';
 import { useCourseStore, useUserStore } from '@/stores';
-import { getCompletionVoucher } from '@/services/api/progress/progressApi';
+import { getCompletionVoucher, getLockPosition } from '@/services/api/progress/progressApi';
 import { hasVaultV2Config } from '@/services/solana/vaultV2';
 import { ApiError } from '@/services/api/errors';
 import type { CompletionVoucherResponse } from '@/services/api/types';
@@ -114,37 +114,59 @@ export default function ClaimPage() {
       setPhase('not-configured');
       return;
     }
-    // Custody guard: with no local lock for this course (and no success record
-    // above), the lock is already claimed or was never opened — don't fetch a
-    // voucher and walk the user into a doomed claim against a closed/absent
-    // lock. A genuinely-locked course always carries lockAccountAddress.
-    if (!courseState?.lockAccountAddress) {
-      setPhase('already-claimed');
-      return;
-    }
     if (!authToken) return; // AppShell auth gate will redirect if truly signed out
     let cancelled = false;
-    getCompletionVoucher(courseId, authToken)
-      .then((v) => {
-        if (cancelled) return;
-        if (v.expiry * 1000 <= Date.now()) {
-          setPhase('expired');
-          return;
-        }
-        setVoucher(v);
-        setPhase('review');
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        if (error instanceof ApiError && error.status === 403) {
-          setPhase('no-voucher');
-        } else if (error instanceof ApiError && error.status === 503) {
-          setPhase('not-configured');
-        } else {
-          setErrorMessage(error instanceof Error ? error.message : 'Could not fetch your voucher');
-          setPhase('error');
-        }
-      });
+
+    const fetchVoucher = () => {
+      getCompletionVoucher(courseId, authToken)
+        .then((v) => {
+          if (cancelled) return;
+          if (v.expiry * 1000 <= Date.now()) {
+            setPhase('expired');
+            return;
+          }
+          setVoucher(v);
+          setPhase('review');
+        })
+        .catch((error) => {
+          if (cancelled) return;
+          if (error instanceof ApiError && error.status === 403) {
+            setPhase('no-voucher');
+          } else if (error instanceof ApiError && error.status === 503) {
+            setPhase('not-configured');
+          } else {
+            setErrorMessage(error instanceof Error ? error.message : 'Could not fetch your voucher');
+            setPhase('error');
+          }
+        });
+    };
+
+    // Custody guard: a locally-known lock proceeds straight to the voucher. But
+    // v2 locks are NOT hydrated into the store on a fresh device or after PWA
+    // storage eviction, so a missing lockAccountAddress must NOT be treated as
+    // "already claimed" — that would tell a user their real principal doesn't
+    // exist. Verify server truth first: only NONE/CLOSED is genuinely done;
+    // ACTIVE proceeds (and heals the store) (audit H1).
+    if (courseState?.lockAccountAddress) {
+      fetchVoucher();
+    } else {
+      getLockPosition(courseId, authToken)
+        .then((pos) => {
+          if (cancelled) return;
+          // ACTIVE → the lock exists on-chain; proceed. executeClaim derives the
+          // lock PDA from (owner, courseId) itself, so the missing store field is
+          // not needed for the claim to succeed.
+          if (pos.status === 'ACTIVE') {
+            fetchVoucher();
+          } else {
+            setPhase('already-claimed');
+          }
+        })
+        .catch(() => {
+          // Cannot verify (RPC/API down) — do not fabricate a claim path.
+          if (!cancelled) setPhase('already-claimed');
+        });
+    }
     return () => {
       cancelled = true;
     };
