@@ -62,3 +62,7 @@ web/dungeon/node_modules/
 /android
 .e2e/
 .vercel
+
+.surfpool/
+.agents/
+claude-session.jsonl
