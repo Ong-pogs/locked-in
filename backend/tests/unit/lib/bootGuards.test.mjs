@@ -22,9 +22,55 @@ function cleanConfig(overrides = {}) {
     yieldStrategyEnabled: false,
     yieldStrategyKind: 'fixed_apy_v1',
     yieldStrategyProfile: null,
+    deployerKeyPresent: false,
+    lockVaultUsdcMint: '',
     ...overrides,
   };
 }
+
+const MAINNET_RPC = 'https://api.mainnet-beta.solana.com';
+const CANONICAL_USDC = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+
+describe('collectBootGuardViolations — (d) upgrade key off the backend', () => {
+  it('flags DEPLOYER_PRIVATE_KEY present on a mainnet host', () => {
+    const v = collectBootGuardViolations(
+      cleanConfig({ solanaRpcUrl: MAINNET_RPC, deployerKeyPresent: true, lockVaultUsdcMint: CANONICAL_USDC }),
+    );
+    expect(v.some((x) => x.includes('DEPLOYER_PRIVATE_KEY'))).toBe(true);
+  });
+  it('allows the deployer key on devnet', () => {
+    const v = collectBootGuardViolations(cleanConfig({ deployerKeyPresent: true }));
+    expect(v.some((x) => x.includes('DEPLOYER_PRIVATE_KEY'))).toBe(false);
+  });
+});
+
+describe('collectBootGuardViolations — (e) real yield behind non-mainnet RPC', () => {
+  it('flags kamino_usdc_mainnet behind a devnet RPC (forgotten SOLANA_RPC_URL)', () => {
+    const v = collectBootGuardViolations(cleanConfig({ yieldStrategyProfile: 'kamino_usdc_mainnet' }));
+    expect(v.some((x) => x.includes('kamino_usdc_mainnet'))).toBe(true);
+  });
+  it('passes kamino_usdc_mainnet on a real mainnet RPC', () => {
+    const v = collectBootGuardViolations(
+      cleanConfig({ solanaRpcUrl: MAINNET_RPC, yieldStrategyProfile: 'kamino_usdc_mainnet', lockVaultUsdcMint: CANONICAL_USDC }),
+    );
+    expect(v.some((x) => x.includes('kamino_usdc_mainnet'))).toBe(false);
+  });
+});
+
+describe('collectBootGuardViolations — (f) canonical USDC mint on mainnet', () => {
+  it('flags a non-canonical mint on mainnet', () => {
+    const v = collectBootGuardViolations(
+      cleanConfig({ solanaRpcUrl: MAINNET_RPC, lockVaultUsdcMint: 'So11111111111111111111111111111111111111112' }),
+    );
+    expect(v.some((x) => x.includes('canonical USDC'))).toBe(true);
+  });
+  it('accepts the canonical mint on mainnet', () => {
+    const v = collectBootGuardViolations(
+      cleanConfig({ solanaRpcUrl: MAINNET_RPC, lockVaultUsdcMint: CANONICAL_USDC }),
+    );
+    expect(v.some((x) => x.includes('canonical USDC'))).toBe(false);
+  });
+});
 
 describe('detectCluster', () => {
   it('detects devnet from the RPC URL', () => {
