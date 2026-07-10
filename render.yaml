@@ -16,3 +16,19 @@ services:
         sync: false
       - key: LEADERBOARD_SNAPSHOT_PAGE_SIZE
         value: "25"
+
+  # Monthly community-pot cycle. 03:00 UTC on day 1 → closes + distributes the
+  # month that just ended (never the current/future month). Fully automatic;
+  # idempotent + advisory-locked, so a retry is a benign no-op.
+  - type: cron
+    name: locked-in-pot-cycle
+    runtime: node
+    rootDir: backend
+    schedule: "0 3 1 * *"
+    buildCommand: npm ci
+    startCommand: npm run cron:pot-cycle
+    envVars:
+      - key: SCHEDULER_SECRET
+        sync: false
+      - key: POT_CYCLE_BASE_URL
+        sync: false

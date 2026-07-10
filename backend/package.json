@@ -17,6 +17,7 @@
     "test:api": "vitest run --project api",
     "test:watch": "vitest watch --project unit",
     "cron:leaderboard-refresh": "node scripts/refresh-leaderboard-snapshot.mjs",
+    "cron:pot-cycle": "node scripts/run-pot-cycle.mjs",
     "test:db:up": "docker compose -f docker-compose.test.yml up -d --wait",
     "test:db:down": "docker compose -f docker-compose.test.yml down -v"
   },
