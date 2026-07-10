@@ -1102,7 +1102,7 @@ function buildValidatorDecisionHash(questionId, answerText, validatorResult) {
     .digest('hex');
 }
 
-async function evaluateSubjectiveAnswer(question, answerText, startedAt, completedAt) {
+export async function evaluateSubjectiveAnswer(question, answerText, startedAt, completedAt) {
   const rubric = extractRubricConfig(question);
   const integrityFlags = buildIntegrityFlags(answerText, startedAt, completedAt);
   const criteriaBreakdown = rubric.criteria.map((criterion) =>
@@ -1200,14 +1200,16 @@ async function gradeAnswers(questions, submittedAnswers, startedAt = null, compl
       isCorrect =
         normalizedAnswer.length > 0 && normalizedAnswer === normalizedCorrectAnswer;
     } else {
-      // Non-MCQ answers are semantically graded by the LLM validator.
-      // If the grader is unavailable it returns an explicit fail-closed decision.
-      validatorResult = await gradeSubjectiveAnswerWithLlm({
-        question,
-        answerText,
-        startedAt,
-        completedAt,
-      });
+      // Non-MCQ answers: LLM semantic grader when configured, else the
+      // deterministic rubric grader (keyword match from the answer key) so
+      // short-text lessons still grade + still gate funds when the LLM is
+      // off/unavailable, instead of a hard "grader unavailable" that blocks
+      // completion entirely.
+      const llmConfigured =
+        appConfig.answerValidatorHybridEnabled && Boolean(appConfig.openaiApiKey);
+      validatorResult = llmConfigured
+        ? await gradeSubjectiveAnswerWithLlm({ question, answerText, startedAt, completedAt })
+        : await evaluateSubjectiveAnswer(question, answerText, startedAt, completedAt);
       isCorrect = validatorResult.accepted;
     }
 

@@ -181,7 +181,10 @@ export function DepositFormV2({
         data-testid="v2-deposit-submit"
         disabled={busy || Boolean(validationError)}
         onClick={() => onSubmit(amount)}
-        className="w-full py-3.5 rounded-lg border font-pixel text-sm uppercase tracking-[2px] font-bold min-h-[44px]"
+        // font-pixel-mono (not the decorative font-pixel): the dollar amount is
+        // ambiguous in the pixel display font ("$25" reads as "$2S", "LOCK" as
+        // "LOOK"). Mono renders numbers + the word clearly.
+        className="w-full py-3.5 rounded-lg border font-pixel-mono text-sm uppercase tracking-[1.5px] font-bold min-h-[44px]"
         style={{
           backgroundColor: busy || validationError ? 'rgba(255,213,128,0.06)' : 'rgba(255,213,128,0.16)',
           borderColor: 'rgba(255,213,128,0.5)',
