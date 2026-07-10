@@ -45,4 +45,17 @@ describe('evaluateSubjectiveAnswer (rubric fallback, no LLM)', () => {
     const r = await evaluateSubjectiveAnswer(q('Program Derived Address'), 'a program derived address', null, null);
     expect(JSON.stringify(r)).not.toContain('grader is unavailable');
   });
+
+  it('gives PARTIAL credit for a half-right answer (chill grading)', async () => {
+    // Answer key has ~7 key concepts; an answer covering roughly half should
+    // score partial (not 0, not 100) so it contributes to the lesson total.
+    const r = await evaluateSubjectiveAnswer(
+      q('SOL is the fuel token whose price fluctuates while USDC is a stable dollar pegged to one'),
+      'SOL is the fuel token and its price fluctuates',
+      null,
+      null,
+    );
+    expect(r.score).toBeGreaterThan(0);
+    expect(r.score).toBeLessThan(100);
+  });
 });

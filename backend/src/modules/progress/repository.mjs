@@ -410,7 +410,7 @@ export async function getStoredCompletionVoucher(walletAddress, courseId, { log 
   // (e) unarmed env — behave exactly like today.
   return null;
 }
-const LESSON_ACCEPTANCE_THRESHOLD = 70;
+const LESSON_ACCEPTANCE_THRESHOLD = 55;
 
 function assertAttemptId(attemptId) {
   if (!attemptId || typeof attemptId !== 'string' || !UUID_RE.test(attemptId)) {
@@ -461,11 +461,11 @@ function tokenizeMeaningful(value) {
 // stake tokens" for a model answer of "validators stake tokens to secure
 // the network" should not fail on the missing "to secure the network"
 // words. 0.6 is a starting point — increase if cheating becomes a thing.
-const RUBRIC_KEYWORD_MATCH_RATIO = 0.6;
+const RUBRIC_KEYWORD_MATCH_RATIO = 0.4;
 // Auto-generated rubric (when an author did not supply explicit criteria)
 // uses this lower acceptance threshold to match the relaxed keyword rule.
 // Author rubrics keep whatever acceptThreshold they declared.
-const AUTO_RUBRIC_ACCEPT_THRESHOLD = 60;
+const AUTO_RUBRIC_ACCEPT_THRESHOLD = 45;
 
 function diffDays(fromDay, toDay) {
   const from = new Date(`${fromDay}T00:00:00.000Z`).getTime();
@@ -1032,6 +1032,7 @@ function evaluateRubricCriterion(criterion, answerText) {
       label: criterion.label,
       weight: criterion.weight,
       passed,
+      matchRatio: passed ? 1 : 0, // exact criteria are all-or-nothing
       matched: passed ? [criterion.expected] : [],
       feedback:
         passed
@@ -1053,6 +1054,7 @@ function evaluateRubricCriterion(criterion, answerText) {
     label: criterion.label,
     weight: criterion.weight,
     passed,
+    matchRatio, // fraction of keywords present — drives partial credit
     matched,
     feedback:
       passed
@@ -1109,8 +1111,11 @@ export async function evaluateSubjectiveAnswer(question, answerText, startedAt, 
     evaluateRubricCriterion(criterion, answerText),
   );
   const totalWeight = rubric.criteria.reduce((sum, criterion) => sum + criterion.weight, 0);
+  // Partial credit: each criterion earns weight × its keyword match ratio, not
+  // all-or-nothing. So an answer with 3 of 7 key concepts scores ~43, not 0 —
+  // the granular per-question grade the lesson total averages.
   const achievedWeight = criteriaBreakdown.reduce(
-    (sum, criterion) => sum + (criterion.passed ? criterion.weight : 0),
+    (sum, criterion) => sum + criterion.weight * (criterion.matchRatio ?? (criterion.passed ? 1 : 0)),
     0,
   );
   const score = totalWeight > 0 ? Math.round((achievedWeight / totalWeight) * 100) : 0;
@@ -1171,6 +1176,9 @@ export function buildQuestionResults(attempts) {
     isCorrect: attempt.isCorrect,
     correctAnswer: attempt.correctAnswer ?? null,
     accepted: attempt.validatorResult ? attempt.validatorResult.accepted : attempt.isCorrect,
+    // Uniform 0-100 partial score for every question (MCQ = 0/100, short-text
+    // = keyword-match %), so the result page can show per-question credit.
+    questionScore: attempt.questionScore ?? (attempt.isCorrect ? 100 : 0),
     score: attempt.validatorResult ? attempt.validatorResult.score : null,
     feedbackSummary: attempt.validatorResult ? attempt.validatorResult.feedbackSummary : null,
     validatorVersion: attempt.validatorResult ? attempt.validatorResult.validatorVersion : null,
@@ -1194,11 +1202,13 @@ async function gradeAnswers(questions, submittedAnswers, startedAt = null, compl
     let validatorResult = null;
     let isCorrect = false;
 
+    let questionScore = 0; // 0-100 partial credit toward the lesson total
     if (question.questionType === 'mcq') {
       const normalizedAnswer = normalizeAnswerText(answerText);
       const normalizedCorrectAnswer = normalizeAnswerText(question.correctAnswer);
       isCorrect =
         normalizedAnswer.length > 0 && normalizedAnswer === normalizedCorrectAnswer;
+      questionScore = isCorrect ? 100 : 0;
     } else {
       // Non-MCQ answers: LLM semantic grader when configured, else the
       // deterministic rubric grader (keyword match from the answer key) so
@@ -1211,6 +1221,11 @@ async function gradeAnswers(questions, submittedAnswers, startedAt = null, compl
         ? await gradeSubjectiveAnswerWithLlm({ question, answerText, startedAt, completedAt })
         : await evaluateSubjectiveAnswer(question, answerText, startedAt, completedAt);
       isCorrect = validatorResult.accepted;
+      // Partial credit: use the grader's 0-100 quality score, NOT a binary
+      // pass/fail. A short-text answer that covers most of the key concepts
+      // (e.g. 70% keyword match) now contributes 70 toward the lesson instead
+      // of a hard 0 — so one imperfect answer no longer tanks the lesson.
+      questionScore = Math.max(0, Math.min(100, Number(validatorResult.score) || 0));
     }
 
     return {
@@ -1218,6 +1233,7 @@ async function gradeAnswers(questions, submittedAnswers, startedAt = null, compl
       prompt: question.prompt,
       answerText: answerText.trim().length > 0 ? answerText.trim() : null,
       isCorrect,
+      questionScore,
       // The answer key never ships in the lesson payload (it gates real funds),
       // but the graded submit response — which the user only sees AFTER
       // committing — may reveal it so the result page can show what was correct.
@@ -1228,8 +1244,14 @@ async function gradeAnswers(questions, submittedAnswers, startedAt = null, compl
 
   const correctAnswers = attempts.filter((attempt) => attempt.isCorrect).length;
   const totalQuestions = questions.length;
+  // Lesson score = AVERAGE of per-question partial scores (each question is an
+  // equal slice — 4 questions => each worth 25 points, graded 0-25, summed).
+  // Previously binary correct-count/total, which zeroed a whole question for a
+  // near-miss subjective answer.
   const score =
-    totalQuestions === 0 ? 0 : Math.round((correctAnswers / totalQuestions) * 100);
+    totalQuestions === 0
+      ? 0
+      : Math.round(attempts.reduce((sum, a) => sum + a.questionScore, 0) / totalQuestions);
 
   return {
     attempts,
