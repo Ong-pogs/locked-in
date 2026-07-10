@@ -5,7 +5,6 @@ import { secureEquals } from '../../lib/secureCompare.mjs';
 import { appConfig } from '../../config.mjs';
 import { requireAccessAuth } from '../../plugins/auth.mjs';
 import {
-  consumeDailyFuel,
   getUserXp,
   closeCommunityPotWindowAndSnapshot,
   distributeCommunityPotWindowBatch,
@@ -24,7 +23,6 @@ import {
   refreshLeaderboardSnapshot,
   recordUnlockReceipt,
   syncUnlockReceiptsFromChain,
-  publishFuelBurnReceipt,
   publishHarvestRedirectToCommunityPot,
   publishHarvestResultReceipt,
   publishMissConsequenceReceipt,
@@ -32,10 +30,6 @@ import {
   recordHarvestResult,
   startLessonAttempt,
   submitLessonAttempt,
-  feedFireForCourse,
-  claimUnclaimedYield,
-  getBreweryState,
-  buyStreakSaver,
 } from './repository.mjs';
 
 function assertPathParam(value, fieldName) {
@@ -107,66 +101,9 @@ export async function progressRoutes(app) {
     },
   );
 
-  // Brewery (fire-timer model) -----------------------------------------
-  // Each fuel feeds the fire for 24h. While the fire burns, harvested yield
-  // routes to the user's unclaimed pool. When out, yield routes to the
-  // community pot. Feeding while lit stacks the timer additively.
-
-  app.get(
-    '/v1/progress/brewery',
-    { preHandler: requireAccessAuth },
-    async (request) => {
-      const courseId = assertPathParam(request.query?.courseId, 'courseId');
-      return getBreweryState(request.auth.walletAddress, courseId);
-    },
-  );
-
-  app.post(
-    '/v1/progress/brewery/feed',
-    { preHandler: requireAccessAuth },
-    async (request) => {
-      const courseId = assertBodyField(request.body?.courseId, 'courseId');
-      return feedFireForCourse(request.auth.walletAddress, courseId);
-    },
-  );
-
-  app.post(
-    '/v1/progress/brewery/claim',
-    { preHandler: requireAccessAuth },
-    async (request) => {
-      const courseId = assertBodyField(request.body?.courseId, 'courseId');
-      return claimUnclaimedYield(request.auth.walletAddress, courseId);
-    },
-  );
-
-  // Shop: spend 500 ichor for one streak saver.
-  app.post(
-    '/v1/progress/shop/buy-saver',
-    { preHandler: requireAccessAuth },
-    async (request) => {
-      const courseId = assertBodyField(request.body?.courseId, 'courseId');
-      return buyStreakSaver(request.auth.walletAddress, courseId);
-    },
-  );
-
-  app.post('/v1/internal/fuel/burn', async (request) => {
-    requireSchedulerAuth(request);
-
-    const walletAddress = request.body?.walletAddress;
-    const courseId = request.body?.courseId;
-    const cycleId = request.body?.cycleId;
-    const burnedAt = request.body?.burnedAt ?? null;
-
-    if (!walletAddress || typeof walletAddress !== 'string') {
-      throw badRequest('walletAddress is required', 'MISSING_WALLET_ADDRESS');
-    }
-
-    if (!courseId || typeof courseId !== 'string') {
-      throw badRequest('courseId is required', 'MISSING_COURSE_ID');
-    }
-
-    return consumeDailyFuel(walletAddress, courseId, cycleId, burnedAt);
-  });
+  // Brewery/shop/fuel routes deleted (legacy-deletion ruling): GET+feed+claim
+  // /v1/progress/brewery, POST /v1/progress/shop/buy-saver,
+  // POST /v1/internal/fuel/burn, POST /v1/internal/lock-vault/fuel-burn/publish.
 
   app.post('/v1/internal/lock-vault/completions/publish', async (request) => {
     requireSchedulerAuth(request);
@@ -175,17 +112,6 @@ export async function progressRoutes(app) {
     const retryFailed = request.body?.retryFailed === true;
 
     return publishVerifiedCompletionEvent(eventId, retryFailed);
-  });
-
-  app.post('/v1/internal/lock-vault/fuel-burn/publish', async (request) => {
-    requireSchedulerAuth(request);
-
-    const walletAddress = assertBodyField(request.body?.walletAddress, 'walletAddress');
-    const courseId = assertBodyField(request.body?.courseId, 'courseId');
-    const cycleId = assertBodyField(request.body?.cycleId, 'cycleId');
-    const retryFailed = request.body?.retryFailed === true;
-
-    return publishFuelBurnReceipt(walletAddress, courseId, cycleId, retryFailed);
   });
 
   app.post('/v1/internal/yield/harvest', async (request) => {

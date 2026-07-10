@@ -29,8 +29,6 @@ import {
   enhanceValidatorFeedback,
   gradeSubjectiveAnswerWithLlm,
 } from '../../lib/answerValidator.mjs';
-import { hasFaucetConfig, isDevnetOnly, transferUsdcAtomic } from '../../lib/faucet.mjs';
-import { getSaverRedirectBps, computeNextFireLitUntil } from '../../lib/yieldRouting.mjs';
 import { issueVoucher } from '../../lib/claimVoucher.mjs';
 import { applyLessonDay, applyMissDay, userYieldBps } from '../../lib/shieldLapseEngine.mjs';
 import { autoMissEventId } from '../../lib/missEvents.mjs';
@@ -42,7 +40,6 @@ import {
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const DEFAULT_FUEL_CAP = 7;
 
 const SUBJECTIVE_VALIDATOR_VERSION = 'rubric-v1';
 
@@ -591,17 +588,19 @@ async function ensureCourseRuntimeState(
   courseId,
   { forUpdate = false } = {},
 ) {
+  // Legacy-deletion ruling: the INSERT carries only the primary key — the
+  // doomed legacy columns (fuel/ichor/gauntlet/saver) are never referenced,
+  // read or write, so the deferred column DROP can promote safely.
   await client.query(
     `
       insert into lesson.user_course_runtime_state (
         wallet_address,
-        course_id,
-        fuel_cap
+        course_id
       )
-      values ($1, $2, $3)
+      values ($1, $2)
       on conflict (wallet_address, course_id) do nothing
     `,
-    [walletAddress, courseId, DEFAULT_FUEL_CAP],
+    [walletAddress, courseId],
   );
 
   const result = await client.query(
@@ -611,14 +610,8 @@ async function ensureCourseRuntimeState(
         course_id as "courseId",
         current_streak as "currentStreak",
         longest_streak as "longestStreak",
-        gauntlet_active as "gauntletActive",
-        gauntlet_day as "gauntletDay",
-        saver_count as "saverCount",
-        saver_recovery_mode as "saverRecoveryMode",
         current_yield_redirect_bps as "currentYieldRedirectBps",
         extension_days as "extensionDays",
-        fuel_counter as "fuelCounter",
-        fuel_cap as "fuelCap",
         last_completed_day::text as "lastCompletedDay",
         last_miss_day::text as "lastMissDay",
         coalesce(shields, 3) as "shields",
@@ -627,11 +620,7 @@ async function ensureCourseRuntimeState(
         coalesce(consecutive_lesson_days, 0) as "consecutiveLessonDays",
         last_fuel_credit_day::text as "lastFuelCreditDay",
         last_brewer_burn_ts as "lastBrewerBurnTs",
-        coalesce(fuel_fragments_today, 0)::float as "fuelFragmentsToday",
-        fuel_fragments_day::text as "fuelFragmentsDay",
         fire_lit_until as "fireLitUntil",
-        coalesce(ichor_counter, 0)::bigint as "ichorCounter",
-        coalesce(ichor_lifetime_total, 0)::bigint as "ichorLifetimeTotal",
         course_completed_at as "courseCompletedAt",
         lock_account_address as "lockAccountAddress",
         lock_start_at as "lockStartAt"
@@ -645,11 +634,6 @@ async function ensureCourseRuntimeState(
   );
 
   return result.rows[0];
-}
-
-function deriveFuelEarnStatus(state) {
-  if (state.fuelCounter >= state.fuelCap) return 'AT_CAP';
-  return 'AVAILABLE';
 }
 
 // Advance the v2 shield/lapse state (spec §4.2) for one UTC day and persist
@@ -744,15 +728,8 @@ async function applyVerifiedCompletionToCourseRuntime(
 
   let currentStreak = state.currentStreak;
   let longestStreak = state.longestStreak;
-  let gauntletActive = state.gauntletActive;
-  let gauntletDay = state.gauntletDay;
 
   if (!sameDay) {
-    if (state.gauntletActive) {
-      gauntletDay = Math.min(state.gauntletDay + 1, 8);
-      gauntletActive = state.gauntletDay < 7;
-    }
-
     // First completion of a new UTC day = a v2 lesson-day: grow the streak,
     // regen shields, clear an open lapse. Maintains lapse_count for the
     // voucher. The ENGINE output is the streak (R12) — a shield-paused streak
@@ -762,42 +739,17 @@ async function applyVerifiedCompletionToCourseRuntime(
     longestStreak = Math.max(state.longestStreak, currentStreak);
   }
 
-  let fuelCounter = state.fuelCounter;
-  let fuelAwarded = 0;
-
-  // +1 fuel per lesson completion, capped at fuel_cap. No daily limit —
-  // active learners bank a buffer of fire-days by doing multiple lessons,
-  // then can coast through travel/sick days. The streak mechanic enforces
-  // the daily-habit pressure separately.
-  if (rewardUnits > 0 && fuelCounter < state.fuelCap) {
-    fuelCounter = Math.min(state.fuelCap, fuelCounter + 1);
-    fuelAwarded = fuelCounter > state.fuelCounter ? 1 : 0;
-  }
-
-  // Random 20-50 ichor per lesson completion. Slot-machine-style reward
-  // — fixed amount would feel mechanical, the random pull gives the
-  // dopamine hit. Saver in the shop costs 500, so ~10-25 lessons per
-  // saver if the player wants to protect their streak.
-  const ichorReward =
-    Math.floor(Math.random() * (50 - 20 + 1)) + 20;
-  const ichorCounterBefore = Number(state.ichorCounter ?? 0);
-  const ichorLifetimeBefore = Number(state.ichorLifetimeTotal ?? 0);
-  const ichorCounterAfter = ichorCounterBefore + ichorReward;
-  const ichorLifetimeAfter = ichorLifetimeBefore + ichorReward;
-
-  // NOTE: saver_count / saver_recovery_mode / current_yield_redirect_bps are
+  // Legacy-deletion ruling: gauntlet/fuel/ichor writes are gone — the
+  // completion writes exactly day + streak. last_completed_day stays HERE:
+  // it is what makes sameDay true and prevents +1-streak-per-lesson
+  // inflation of pot weight and leaderboard. Saver/redirect columns are
   // deliberately absent — completions must never touch yield routing (R12).
   await client.query(
     `
       update lesson.user_course_runtime_state
       set current_streak = $3,
           longest_streak = $4,
-          gauntlet_active = $5,
-          gauntlet_day = $6,
-          fuel_counter = $7,
-          last_completed_day = $8::date,
-          ichor_counter = $9::bigint,
-          ichor_lifetime_total = $10::bigint,
+          last_completed_day = $5::date,
           updated_at = now()
       where wallet_address = $1
         and course_id = $2
@@ -807,34 +759,33 @@ async function applyVerifiedCompletionToCourseRuntime(
       courseId,
       currentStreak,
       longestStreak,
-      gauntletActive,
-      gauntletDay,
-      fuelCounter,
       completionDay,
-      ichorCounterAfter,
-      ichorLifetimeAfter,
     ],
   );
 
+  // Return shape kept (legacy keys as coalesced zero/default passthroughs)
+  // so stale service-worker-cached clients reading the submit response's
+  // courseRuntime don't crash. The legacy columns are no longer selected,
+  // so these coalesce to their post-deletion constants.
   return {
     courseId,
     currentStreak,
     longestStreak,
-    gauntletActive,
-    gauntletDay,
-    saverCount: state.saverCount,
-    saverRecoveryMode: state.saverRecoveryMode,
+    gauntletActive: state.gauntletActive ?? false,
+    gauntletDay: state.gauntletDay ?? 1,
+    saverCount: state.saverCount ?? 0,
+    saverRecoveryMode: state.saverRecoveryMode ?? false,
     currentYieldRedirectBps: state.currentYieldRedirectBps,
     extensionDays: state.extensionDays,
-    fuelCounter,
-    fuelCap: state.fuelCap,
-    lastFuelCreditDay: state.lastFuelCreditDay,
-    lastBrewerBurnTs: state.lastBrewerBurnTs,
-    fuelAwarded,
-    ichorCounter: ichorCounterAfter,
-    ichorLifetimeTotal: ichorLifetimeAfter,
-    ichorReward,
-    fuelEarnStatus: fuelCounter >= state.fuelCap ? 'AT_CAP' : 'AVAILABLE',
+    fuelCounter: state.fuelCounter ?? 0,
+    fuelCap: state.fuelCap ?? 7,
+    lastFuelCreditDay: state.lastFuelCreditDay ?? null,
+    lastBrewerBurnTs: state.lastBrewerBurnTs ?? null,
+    fuelAwarded: 0,
+    ichorCounter: Number(state.ichorCounter ?? 0),
+    ichorLifetimeTotal: Number(state.ichorLifetimeTotal ?? 0),
+    ichorReward: 0,
+    fuelEarnStatus: 'AVAILABLE',
   };
 }
 
@@ -1424,21 +1375,8 @@ export async function readCourseRuntimeState(client, walletAddress, courseId) {
     courseId,
     currentStreak: state.currentStreak,
     longestStreak: state.longestStreak,
-    gauntletActive: state.gauntletActive,
-    gauntletDay: state.gauntletDay,
-    saverCount: state.saverCount,
-    saverRecoveryMode: state.saverRecoveryMode,
     currentYieldRedirectBps: state.currentYieldRedirectBps,
     extensionDays: state.extensionDays,
-    fuelCounter: state.fuelCounter,
-    fuelCap: state.fuelCap,
-    lastFuelCreditDay: state.lastFuelCreditDay,
-    lastBrewerBurnTs: state.lastBrewerBurnTs,
-    fuelAwarded: 0,
-    fuelEarnStatus: deriveFuelEarnStatus(state),
-    fireLitUntil: state.fireLitUntil ? new Date(state.fireLitUntil).toISOString() : null,
-    ichorCounter: Number(state.ichorCounter ?? 0),
-    ichorLifetimeTotal: Number(state.ichorLifetimeTotal ?? 0),
     // v2 shield/lapse engine state (spec §4.2) — drives the flame gauge,
     // shield pips, and the penalty banner on the course card.
     shields: Number(state.shields ?? 3),
@@ -1554,8 +1492,6 @@ export async function listRuntimeSchedulerCandidates(limit = 10) {
         runtime.wallet_address as "walletAddress",
         runtime.course_id as "courseId",
         runtime.current_streak as "currentStreak",
-        runtime.gauntlet_active as "gauntletActive",
-        runtime.fuel_counter as "fuelCounter",
         runtime.last_completed_day::text as "lastCompletedDay",
         runtime.last_miss_day::text as "lastMissDay",
         runtime.last_brewer_burn_ts as "lastBrewerBurnTs",
@@ -1891,14 +1827,8 @@ export async function getUserEnrollments(walletAddress) {
         uce.enrolled_at AS "enrolledAt",
         ucrs.current_streak AS "currentStreak",
         ucrs.longest_streak AS "longestStreak",
-        ucrs.gauntlet_active AS "gauntletActive",
-        ucrs.gauntlet_day AS "gauntletDay",
-        ucrs.saver_count AS "saverCount",
-        ucrs.saver_recovery_mode AS "saverRecoveryMode",
         ucrs.current_yield_redirect_bps AS "currentYieldRedirectBps",
         ucrs.extension_days AS "extensionDays",
-        ucrs.fuel_counter AS "fuelCounter",
-        ucrs.fuel_cap AS "fuelCap",
         ucrs.last_fuel_credit_day AS "lastFuelCreditDay",
         ucrs.last_brewer_burn_ts AS "lastBrewerBurnTs",
         coalesce(ucrs.shields, 3) AS "shields",
@@ -1939,18 +1869,8 @@ export async function getUserEnrollments(walletAddress) {
           courseId: row.courseId,
           currentStreak: row.currentStreak,
           longestStreak: row.longestStreak,
-          gauntletActive: row.gauntletActive,
-          gauntletDay: row.gauntletDay,
-          saverCount: row.saverCount,
-          saverRecoveryMode: row.saverRecoveryMode,
           currentYieldRedirectBps: row.currentYieldRedirectBps,
           extensionDays: row.extensionDays,
-          fuelCounter: row.fuelCounter,
-          fuelCap: row.fuelCap,
-          lastFuelCreditDay: row.lastFuelCreditDay,
-          lastBrewerBurnTs: row.lastBrewerBurnTs,
-          fuelAwarded: 0,
-          fuelEarnStatus: 'AVAILABLE',
           shields: Number(row.shields),
           lapseCount: Number(row.lapseCount),
           lapseOpen: Boolean(row.lapseOpen),
@@ -1977,19 +1897,8 @@ export async function getCourseRuntimeSnapshot(walletAddress, courseId) {
       courseId,
       currentStreak: 0,
       longestStreak: 0,
-      // Gauntlet dropped — no-db fallback also reports post-gauntlet state.
-      gauntletActive: false,
-      gauntletDay: 1,
-      saverCount: 0,
-      saverRecoveryMode: false,
       currentYieldRedirectBps: 0,
       extensionDays: 0,
-      fuelCounter: 0,
-      fuelCap: DEFAULT_FUEL_CAP,
-      lastFuelCreditDay: null,
-      lastBrewerBurnTs: null,
-      fuelAwarded: 0,
-      fuelEarnStatus: 'AVAILABLE',
       shields: 3,
       lapseCount: 0,
       lapseOpen: false,
@@ -2547,18 +2456,15 @@ export async function getUnlockReceipts(walletAddress, limit = 20) {
 }
 
 // ── Dead on-chain lock_vault game-layer publishes (now inert) ─────────────
-// The custody-core lock_vault program no longer has apply_verified_completion,
-// consume_daily_fuel, or consume_saver_or_apply_full_consequence. The game
-// layer is fully off-chain — these DB rows are the source of truth and are
-// already written by the recording paths (persistVerifiedCompletionEvent,
-// consumeDailyFuel, consumeSaverOrApplyFullConsequence). These exported stubs
-// remain only so the legacy /v1/internal/.../publish routes return cleanly.
-// The *_publish_status columns are left inert (deferred destructive cleanup).
+// The custody-core lock_vault program no longer has apply_verified_completion
+// or consume_saver_or_apply_full_consequence. The game layer is fully
+// off-chain — these DB rows are the source of truth and are already written
+// by the recording paths (persistVerifiedCompletionEvent,
+// consumeSaverOrApplyFullConsequence). These exported stubs remain only so
+// the legacy /v1/internal/.../publish routes return cleanly. The
+// *_publish_status columns are left inert (deferred destructive cleanup).
+// publishFuelBurnReceipt was deleted with its route (legacy-deletion ruling).
 export async function publishVerifiedCompletionEvent() {
-  return { processed: false, reason: 'ONCHAIN_PUBLISH_REMOVED' };
-}
-
-export async function publishFuelBurnReceipt() {
   return { processed: false, reason: 'ONCHAIN_PUBLISH_REMOVED' };
 }
 
@@ -2689,299 +2595,10 @@ export async function recordHarvestResult(
   });
 }
 
-/**
- * Feed the fire: consume 1 fuel, extend fire_lit_until by 24 hours.
- * Extension is additive — feeding while the fire is still burning stacks the
- * timer (6h remaining + feed = 30h remaining). Caps naturally at 7×24h
- * because fuel_counter itself caps at 7.
- */
-export async function feedFireForCourse(walletAddress, courseId) {
-  if (!hasDatabase()) {
-    return { applied: false, reason: 'NO_DATABASE' };
-  }
-
-  return withTransactionAsWallet(walletAddress, async (client) => {
-    const state = await ensureCourseRuntimeState(client, walletAddress, courseId, {
-      forUpdate: true,
-    });
-    if (state.fuelCounter <= 0) {
-      const courseRuntime = await readCourseRuntimeState(client, walletAddress, courseId);
-      return { applied: false, reason: 'NO_FUEL', courseRuntime };
-    }
-
-    const nextFireLitUntil = computeNextFireLitUntil(state.fireLitUntil, new Date());
-
-    await client.query(
-      `update lesson.user_course_runtime_state
-       set fuel_counter = $3,
-           fire_lit_until = $4::timestamptz,
-           updated_at = now()
-       where wallet_address = $1 and course_id = $2`,
-      [walletAddress, courseId, state.fuelCounter - 1, nextFireLitUntil.toISOString()],
-    );
-
-    const courseRuntime = await readCourseRuntimeState(client, walletAddress, courseId);
-    return { applied: true, reason: 'FIRE_FED', courseRuntime };
-  });
-}
-
-/**
- * Claim all unclaimed user-side yield for a (wallet, course).
- *
- * Two-phase to keep the DB transaction short and the Solana transfer
- * outside it:
- *  1. Inside a DB tx: SELECT FOR UPDATE the unclaimed receipts, mark them
- *     claimed_at = now(), commit. This locks them so a concurrent claim
- *     sees nothing to do.
- *  2. After commit: sign and send a USDC transfer from the treasury
- *     (lockVaultWorkerPrivateKey) to the user's wallet.
- *  3. If the transfer fails: revert claimed_at = null so the user can
- *     retry. If it succeeds: return the signature so the UI can link to
- *     Solana Explorer.
- *
- * Devnet-only path. Once Phase 2 wires lock_vault -> kamino_lending
- * CPI deposits, this gets replaced with a kamino::withdraw CPI.
- */
-export async function claimUnclaimedYield(walletAddress, courseId) {
-  // INSOLVENCY GUARD. This path pays REAL USDC from the treasury wallet,
-  // but the yield it pays out is a simulation (computeQuotedYieldFromApy)
-  // with no real Kamino deposit backing it. On devnet that's harmless test
-  // USDC. On mainnet it would drain the treasury 1:1 against zero
-  // collateral. Refuse on any non-devnet cluster. The faucet path already
-  // self-guards via isDevnetOnly(); this closes the matching hole here.
-  // Remove ONLY after a real on-chain Kamino withdraw CPI replaces the
-  // treasury transfer.
-  if (!isDevnetOnly()) {
-    throw new HttpError(
-      403,
-      'Yield claim is disabled on this cluster. Treasury-funded claim is devnet-only until on-chain Kamino redemption is wired.',
-      'CLAIM_MAINNET_BLOCKED',
-    );
-  }
-
-  if (!hasDatabase()) {
-    return { applied: false, reason: 'NO_DATABASE', claimedAmount: '0', receiptCount: 0 };
-  }
-
-  // Phase 1: reserve the rows (mark claimed) and capture which ones.
-  const reservation = await withTransactionAsWallet(walletAddress, async (client) => {
-    const rowsResult = await client.query(
-      `select
-         harvest_id as "harvestId",
-         (gross_yield_amount - coalesce(redirected_amount, gross_yield_amount))::text as "amount"
-       from lesson.harvest_result_receipts
-       where wallet_address = $1 and course_id = $2 and claimed_at is null
-       for update`,
-      [walletAddress, courseId],
-    );
-    if (rowsResult.rowCount === 0) {
-      return { unclaimedAmount: 0n, harvestIds: [] };
-    }
-    const harvestIds = [];
-    let total = 0n;
-    for (const row of rowsResult.rows) {
-      total += BigInt(row.amount ?? '0');
-      harvestIds.push(row.harvestId);
-    }
-    if (total <= 0n) {
-      return { unclaimedAmount: 0n, harvestIds: [] };
-    }
-    await client.query(
-      `update lesson.harvest_result_receipts
-       set claimed_at = now()
-       where wallet_address = $1 and course_id = $2 and harvest_id = any($3)`,
-      [walletAddress, courseId, harvestIds],
-    );
-    return { unclaimedAmount: total, harvestIds };
-  });
-
-  if (reservation.unclaimedAmount <= 0n) {
-    return {
-      applied: false,
-      reason: 'NOTHING_TO_CLAIM',
-      claimedAmount: '0',
-      receiptCount: 0,
-    };
-  }
-
-  // Phase 2: send the devnet USDC transfer. If the faucet isn't
-  // configured (no treasury wallet), we still report success — the DB
-  // says claimed, no transfer happens. This matches the pre-Option-1
-  // behaviour and keeps local dev easy.
-  if (!hasFaucetConfig()) {
-    return {
-      applied: true,
-      reason: 'CLAIMED',
-      claimedAmount: reservation.unclaimedAmount.toString(),
-      receiptCount: reservation.harvestIds.length,
-      transfer: { simulated: true },
-    };
-  }
-
-  try {
-    const { signature } = await transferUsdcAtomic(
-      walletAddress,
-      reservation.unclaimedAmount,
-    );
-    return {
-      applied: true,
-      reason: 'CLAIMED',
-      claimedAmount: reservation.unclaimedAmount.toString(),
-      receiptCount: reservation.harvestIds.length,
-      transfer: { signature },
-    };
-  } catch (err) {
-    // Phase 3: rollback. The transfer failed, so put the receipts back
-    // into the unclaimed pool. Best-effort — if THIS update fails too,
-    // the receipts stay marked claimed and the user effectively loses
-    // that yield (rare but should monitor).
-    try {
-      await query(
-        `update lesson.harvest_result_receipts
-         set claimed_at = null
-         where wallet_address = $1 and course_id = $2 and harvest_id = any($3)`,
-        [walletAddress, courseId, reservation.harvestIds],
-      );
-    } catch {
-      // swallow — surface the original transfer error to the caller
-    }
-    throw err;
-  }
-}
-
-/**
- * Brewery dashboard: fuel state, fire timer, claimable yield, and a 7-day
- * strip showing per-day user vs pot yield split.
- */
-
-const STREAK_SAVER_ICHOR_COST = 500;
-
-/**
- * Spend 500 ichor to restore one streak saver (i.e. decrement
- * saver_count). Refuses if the user has fewer than 500 ichor or if all
- * 3 savers are already banked (saver_count = 0).
- */
-export async function buyStreakSaver(walletAddress, courseId) {
-  if (!hasDatabase()) {
-    return { applied: false, reason: 'NO_DATABASE' };
-  }
-
-  return withTransactionAsWallet(walletAddress, async (client) => {
-    const state = await ensureCourseRuntimeState(client, walletAddress, courseId, {
-      forUpdate: true,
-    });
-    const ichorBalance = Number(state.ichorCounter ?? 0);
-    const saversUsed = Number(state.saverCount ?? 0);
-
-    if (saversUsed <= 0) {
-      const courseRuntime = await readCourseRuntimeState(client, walletAddress, courseId);
-      return { applied: false, reason: 'SAVERS_FULL', courseRuntime };
-    }
-    if (ichorBalance < STREAK_SAVER_ICHOR_COST) {
-      const courseRuntime = await readCourseRuntimeState(client, walletAddress, courseId);
-      return {
-        applied: false,
-        reason: 'INSUFFICIENT_ICHOR',
-        required: STREAK_SAVER_ICHOR_COST,
-        have: ichorBalance,
-        courseRuntime,
-      };
-    }
-
-    const nextSaversUsed = saversUsed - 1;
-    // R24 clamp: an ichor purchase may clear legacy saver debt, but it can
-    // never route more yield to the user than their lapse tier allows —
-    // lapse_count is the money-authoritative floor on the redirect.
-    const nextRedirectBps = Math.max(
-      getSaverRedirectBps(nextSaversUsed),
-      10_000 - userYieldBps(state.lapseCount),
-    );
-    const nextIchor = ichorBalance - STREAK_SAVER_ICHOR_COST;
-
-    await client.query(
-      `update lesson.user_course_runtime_state
-       set saver_count = $3,
-           current_yield_redirect_bps = $4,
-           ichor_counter = $5::bigint,
-           updated_at = now()
-       where wallet_address = $1 and course_id = $2`,
-      [walletAddress, courseId, nextSaversUsed, nextRedirectBps, nextIchor],
-    );
-
-    const courseRuntime = await readCourseRuntimeState(client, walletAddress, courseId);
-    return {
-      applied: true,
-      reason: 'SAVER_BOUGHT',
-      ichorSpent: STREAK_SAVER_ICHOR_COST,
-      courseRuntime,
-    };
-  });
-}
-
-export async function getBreweryState(walletAddress, courseId) {
-  if (!hasDatabase()) {
-    return {
-      fuelCounter: 0,
-      fuelCap: 7,
-      fireLitUntil: null,
-      isLit: false,
-      saverCount: 0,
-      saversBanked: 3,
-      currentYieldRedirectBps: 0,
-      ichorCounter: 0,
-      unclaimedYieldAmount: '0',
-      claimedYieldAmount: '0',
-      last7Days: [],
-    };
-  }
-
-  return withTransactionAsWallet(walletAddress, async (client) => {
-    const runtime = await readCourseRuntimeState(client, walletAddress, courseId);
-    const now = new Date();
-    const fireLitUntilDate = runtime.fireLitUntil ? new Date(runtime.fireLitUntil) : null;
-    const isLit = fireLitUntilDate != null && fireLitUntilDate > now;
-
-    const totalsResult = await client.query(
-      `select
-         coalesce(sum(case when claimed_at is null then gross_yield_amount - coalesce(redirected_amount, gross_yield_amount) else 0 end), 0)::text as "unclaimed",
-         coalesce(sum(case when claimed_at is not null then gross_yield_amount - coalesce(redirected_amount, gross_yield_amount) else 0 end), 0)::text as "claimed"
-       from lesson.harvest_result_receipts
-       where wallet_address = $1 and course_id = $2`,
-      [walletAddress, courseId],
-    );
-
-    const stripResult = await client.query(
-      `select
-         (harvested_at at time zone 'UTC')::date::text as "day",
-         coalesce(sum(gross_yield_amount - coalesce(redirected_amount, gross_yield_amount)), 0)::text as "userAmount",
-         coalesce(sum(coalesce(redirected_amount, 0)), 0)::text as "potAmount",
-         count(*)::int as "harvestCount"
-       from lesson.harvest_result_receipts
-       where wallet_address = $1
-         and course_id = $2
-         and harvested_at > now() - interval '7 days'
-       group by 1
-       order by 1 desc`,
-      [walletAddress, courseId],
-    );
-
-    const saverCount = runtime.saverCount ?? 0;
-    const redirectBps = runtime.currentYieldRedirectBps ?? 0;
-    return {
-      fuelCounter: runtime.fuelCounter ?? 0,
-      fuelCap: runtime.fuelCap ?? 7,
-      fireLitUntil: runtime.fireLitUntil,
-      isLit,
-      saverCount, // savers USED (0=full inventory, 3=all spent)
-      saversBanked: Math.max(0, 3 - saverCount),
-      currentYieldRedirectBps: redirectBps,
-      ichorCounter: Number(runtime.ichorCounter ?? 0),
-      unclaimedYieldAmount: totalsResult.rows[0]?.unclaimed ?? '0',
-      claimedYieldAmount: totalsResult.rows[0]?.claimed ?? '0',
-      last7Days: stripResult.rows,
-    };
-  });
-}
+// feedFireForCourse, claimUnclaimedYield, buyStreakSaver, and
+// getBreweryState were deleted with their routes (legacy-deletion ruling).
+// Unclaimed legacy yield in harvest_result_receipts is accepted as stranded
+// (devnet-era value; CSV-exported before the deploy per the ruling).
 
 // Inert: the custody-core lock_vault has no apply_harvest_result instruction.
 // Harvest results live in lesson.harvest_result_receipts (written by
@@ -4252,34 +3869,6 @@ export async function getLeaderboardSnapshot(walletAddress, page = 1, pageSize =
   };
 }
 
-async function readFuelBurnReceipt(client, walletAddress, courseId, cycleId) {
-  const result = await client.query(
-    `
-      select
-        wallet_address as "walletAddress",
-        course_id as "courseId",
-        cycle_id as "cycleId",
-        burned_at as "burnedAt",
-        applied,
-        fuel_before as "fuelBefore",
-        fuel_after as "fuelAfter",
-        reason,
-        lock_vault_status as "lockVaultStatus",
-        lock_vault_published_at as "lockVaultPublishedAt",
-        lock_vault_last_error as "lockVaultLastError",
-        lock_vault_transaction_signature as "lockVaultTransactionSignature"
-      from lesson.fuel_burn_cycle_receipts
-      where wallet_address = $1
-        and course_id = $2
-        and cycle_id = $3
-      limit 1
-    `,
-    [walletAddress, courseId, cycleId],
-  );
-
-  return result.rows[0] ?? null;
-}
-
 async function readMissConsequenceReceipt(client, walletAddress, courseId, missEventId) {
   const result = await client.query(
     `
@@ -4419,7 +4008,10 @@ async function applyMissConsequenceLocked(client, state, missDay, missEventId) {
   // Receipt insert stays STRICT (no on-conflict): a racing duplicate violates
   // 0045's unique day index and rolls this whole transaction — including the
   // state mutation above — back. Fail closed. Legacy NOT NULL saver/extension
-  // columns are filled with unchanged before==after values.
+  // columns are fed fail-closed literal 0 constants (legacy-deletion ruling):
+  // the doomed runtime columns are never read here, which decouples the
+  // money-critical miss path (lapse_count → voucher bps) from the deferred
+  // column DROP in one move. redirect_bps_* stay real.
   await client.query(
     `
       insert into lesson.miss_consequence_receipts (
@@ -4445,12 +4037,12 @@ async function applyMissConsequenceLocked(client, state, missDay, missEventId) {
       missDay,
       true,
       reason,
-      state.saverCount,
-      state.saverCount,
+      0,
+      0,
       state.currentYieldRedirectBps,
       redirectBpsAfter,
-      state.extensionDays,
-      state.extensionDays,
+      0,
+      0,
     ],
   );
 
@@ -4520,133 +4112,6 @@ export async function consumeSaverOrApplyFullConsequence(
     }
     throw error;
   }
-}
-
-export async function consumeDailyFuel(
-  walletAddress,
-  courseId,
-  cycleId,
-  burnedAt = null,
-) {
-  if (!cycleId || typeof cycleId !== 'string') {
-    throw badRequest('cycleId is required', 'MISSING_CYCLE_ID');
-  }
-
-  const timestamp = burnedAt ?? new Date().toISOString();
-
-  if (!hasDatabase()) {
-    return {
-      cycleId,
-      applied: false,
-      fuelBurned: 0,
-      burnedAt: timestamp,
-      reason: 'NO_DATABASE',
-    };
-  }
-
-  return withTransactionAsWallet(walletAddress, async (client) => {
-    const existingReceipt = await readFuelBurnReceipt(
-      client,
-      walletAddress,
-      courseId,
-      cycleId,
-    );
-
-    if (existingReceipt) {
-      const courseRuntime = await readCourseRuntimeState(client, walletAddress, courseId);
-      return {
-        cycleId,
-        applied: existingReceipt.applied,
-        fuelBurned: existingReceipt.applied ? 1 : 0,
-        burnedAt: existingReceipt.burnedAt,
-        reason: existingReceipt.reason ?? 'ALREADY_PROCESSED',
-        courseRuntime,
-      };
-    }
-
-    const state = await ensureCourseRuntimeState(client, walletAddress, courseId, {
-      forUpdate: true,
-    });
-    const burnedAtDate = new Date(timestamp);
-    const lastBurnAt = state.lastBrewerBurnTs
-      ? new Date(state.lastBrewerBurnTs)
-      : null;
-    const enoughTimeElapsed =
-      !lastBurnAt ||
-      burnedAtDate.getTime() - lastBurnAt.getTime() >= 24 * 60 * 60 * 1000;
-
-    let applied = false;
-    let fuelAfter = state.fuelCounter;
-    let reason = 'NO_FUEL';
-
-    if (state.gauntletActive) {
-      reason = 'GAUNTLET_LOCKED';
-    } else if (!enoughTimeElapsed) {
-      reason = 'TOO_EARLY';
-    } else if (state.fuelCounter > 0) {
-      applied = true;
-      fuelAfter = state.fuelCounter - 1;
-      reason = 'BURNED';
-
-      await client.query(
-        `
-          update lesson.user_course_runtime_state
-          set fuel_counter = $3,
-              last_brewer_burn_ts = $4::timestamptz,
-              updated_at = now()
-          where wallet_address = $1
-            and course_id = $2
-        `,
-        [walletAddress, courseId, fuelAfter, timestamp],
-      );
-    }
-
-    await client.query(
-      `
-        insert into lesson.fuel_burn_cycle_receipts (
-          wallet_address,
-          course_id,
-          cycle_id,
-          burned_at,
-          applied,
-          fuel_before,
-          fuel_after,
-          reason
-        )
-        values (
-          $1,
-          $2,
-          $3,
-          $4::timestamptz,
-          $5,
-          $6,
-          $7,
-          $8
-        )
-      `,
-      [
-        walletAddress,
-        courseId,
-        cycleId,
-        timestamp,
-        applied,
-        state.fuelCounter,
-        fuelAfter,
-        reason,
-      ],
-    );
-
-    const courseRuntime = await readCourseRuntimeState(client, walletAddress, courseId);
-
-    return {
-      cycleId,
-      applied,
-      fuelBurned: applied ? 1 : 0,
-      burnedAt: timestamp,
-      reason,
-      courseRuntime,
-    };
-  });
 }
 
 // Timestamps are server-authoritative: a client-supplied `startedAt` lets a
