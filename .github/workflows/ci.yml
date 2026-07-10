@@ -102,12 +102,13 @@ jobs:
         working-directory: backend
         run: npm install --prefer-offline --no-audit
 
+      # Single executor rule (ruling R22): ONLY scripts/migrate.mjs may apply
+      # sql/ files — the tracker records what ran and catches drift.
       - name: Run migrations
         working-directory: backend
-        run: |
-          for f in sql/*.sql; do
-            PGPASSWORD=test psql -h localhost -p 5433 -U test -d lockedin_test -f "$f"
-          done
+        run: npm run migrate
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5433/lockedin_test
 
       - name: Run unit tests
         working-directory: backend
