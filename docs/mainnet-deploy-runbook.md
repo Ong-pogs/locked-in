@@ -60,21 +60,34 @@ MAINNET_RPC_URL=https://<paid-rpc> DEPLOY_KEYPAIR=<deploy-wallet.json> \
   scripts/deploy/deploy-mainnet.sh
 ```
 
-## 6. Initialize the vault config `[RUN]` — BEFORE the authority transfer
+## 6. Initialize the pot + vault `[RUN]` — BEFORE the authority transfer
 
-`initialize_vault_v2` requires the payer to be the program's CURRENT upgrade
-authority. After step 5 that is the deploy wallet, so init now, then transfer
-in step 7.
+Both inits require the payer/authority relationships below; `initialize_vault_v2`
+needs the payer to be the program's CURRENT upgrade authority (the deploy wallet
+after step 5), so do all of step 6 now, then transfer in step 7.
+
+**6a. Community-pot config** (creates the `pot-protocol` PDA). `POT_AUTHORITY_KEYPAIR`
+MUST be the keypair whose bs58 secret is the backend's `COMMUNITY_POT_WORKER_PRIVATE_KEY`
+— the pot cycle refuses to run otherwise.
+
+```bash
+MAINNET_RPC_URL=https://<paid-rpc> POT_AUTHORITY_KEYPAIR=<ops-relay.json> \
+  node scripts/deploy/init-mainnet-pot.mjs
+```
+
+**6b. Vault config.** The pot vault is auto-derived as the pot-protocol PDA's
+USDC ATA, so forfeited yield lands straight in the vault `distribute_window`
+pays from — no funding bridge. `VAULT_AUTHORITY` = pubkey of your ops voucher
+key (`LOCK_VAULT_WORKER_PRIVATE_KEY`); `FEE_VAULT_OWNER` = the Squads vault
+(must differ from the pot-protocol PDA).
 
 ```bash
 # resolve the real reserve account set (writes /tmp/reserve.json)
 node backend/scripts/resolve-kamino-usdc-reserve.mjs https://<paid-rpc> /tmp/reserve.json
 
-# init: VAULT_AUTHORITY = pubkey of your ops voucher key;
-# pot/fee owners = the Squads vault (distinct USDC vaults are created for it).
 MAINNET_RPC_URL=https://<paid-rpc> DEPLOY_KEYPAIR=<deploy-wallet.json> \
-  VAULT_AUTHORITY=<ops-key-pubkey> \
-  POT_VAULT_OWNER=<SQUADS_VAULT> FEE_VAULT_OWNER=<SQUADS_VAULT> \
+  VAULT_AUTHORITY=<ops-voucher-key-pubkey> \
+  FEE_VAULT_OWNER=<SQUADS_VAULT> \
   RESERVE_JSON=/tmp/reserve.json \
   node scripts/deploy/init-mainnet-vault.mjs
 ```

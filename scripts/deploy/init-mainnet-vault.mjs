@@ -32,9 +32,15 @@ const deployer = loadKp(req('DEPLOY_KEYPAIR'));
 const programKp = loadKp(process.env.PROGRAM_KEYPAIR || 'keys/mainnet/locked_in-mainnet-keypair.json');
 const PROGRAM_ID = programKp.publicKey;
 const authority = new PublicKey(req('VAULT_AUTHORITY'));       // voucher/ops signer
-const potOwner = new PublicKey(req('POT_VAULT_OWNER'));        // e.g. Squads vault
-const feeOwner = new PublicKey(req('FEE_VAULT_OWNER'));        // e.g. Squads vault
+const feeOwner = new PublicKey(req('FEE_VAULT_OWNER'));        // platform-fee dest (e.g. Squads vault)
 const R = JSON.parse(readFileSync(req('RESERVE_JSON'), 'utf8'));
+
+// The pot vault IS the community-pot distribution vault: config.pot_vault =
+// ATA(USDC, pot-protocol PDA). Then v2 settle sends forfeited yield straight
+// into the vault distribute_window pays from — no separate funding bridge
+// needed (audit H4). Requires init-mainnet-pot.mjs to have run first.
+const POT_CONFIG_SEED = Buffer.from('pot-protocol');
+const [potProtocolPda] = PublicKey.findProgramAddressSync([POT_CONFIG_SEED], programKp.publicKey);
 
 const MIN = BigInt(process.env.CAP_MIN ?? 10_000_000);         // $10
 const MAX = BigInt(process.env.CAP_MAX ?? 50_000_000);         // $50
@@ -60,24 +66,32 @@ async function main() {
   }
   const [config] = PublicKey.findProgramAddressSync([CONFIG_SEED], PROGRAM_ID);
   const [programData] = PublicKey.findProgramAddressSync([PROGRAM_ID.toBuffer()], BPF_LOADER_UPGRADEABLE);
-  const potVault = getAssociatedTokenAddressSync(USDC, potOwner, true);
+  // pot vault = the community-pot distribution vault (ATA of the pot-protocol
+  // PDA). fee vault = a distinct account for platform fees.
+  const potVault = getAssociatedTokenAddressSync(USDC, potProtocolPda, true);
   const feeVault = getAssociatedTokenAddressSync(USDC, feeOwner, true);
 
-  console.log('program   :', PROGRAM_ID.toBase58());
-  console.log('config PDA:', config.toBase58());
-  console.log('authority :', authority.toBase58());
-  console.log('pot vault :', potVault.toBase58(), '(owner', potOwner.toBase58() + ')');
-  console.log('fee vault :', feeVault.toBase58(), '(owner', feeOwner.toBase58() + ')');
-  console.log('reserve   :', RESERVE.toBase58());
-  console.log('caps      : min', Number(MIN) / 1e6, 'max', Number(MAX) / 1e6, 'global', Number(GLOBAL) / 1e6, 'fee_bps', FEE_BPS);
-  if (potVault.equals(feeVault)) throw new Error('pot and fee vaults must be DISTINCT — use different owners');
+  console.log('program    :', PROGRAM_ID.toBase58());
+  console.log('config PDA :', config.toBase58());
+  console.log('authority  :', authority.toBase58());
+  console.log('pot vault  :', potVault.toBase58(), '(pot-protocol PDA', potProtocolPda.toBase58() + ') — forfeits auto-fund distribution');
+  console.log('fee vault  :', feeVault.toBase58(), '(owner', feeOwner.toBase58() + ')');
+  console.log('reserve    :', RESERVE.toBase58());
+  console.log('caps       : min', Number(MIN) / 1e6, 'max', Number(MAX) / 1e6, 'global', Number(GLOBAL) / 1e6, 'fee_bps', FEE_BPS);
+  if (potVault.equals(feeVault)) throw new Error('pot and fee vaults collided — FEE_VAULT_OWNER must not be the pot-protocol PDA');
+
+  // PotConfig must exist first (init-mainnet-pot.mjs) — else the pot vault ATA
+  // has no owning program state and the pot cycle can never distribute.
+  if (!(await conn.getAccountInfo(potProtocolPda))) {
+    throw new Error('PotConfig (pot-protocol PDA) does not exist — run scripts/deploy/init-mainnet-pot.mjs first.');
+  }
 
   const existing = await conn.getAccountInfo(config);
   if (existing) { console.log('\nconfig already initialized — nothing to do.'); return; }
 
   // Create pot + fee vaults if absent (idempotent).
   const ixs = [];
-  for (const [ata, owner] of [[potVault, potOwner], [feeVault, feeOwner]]) {
+  for (const [ata, owner] of [[potVault, potProtocolPda], [feeVault, feeOwner]]) {
     if (!(await conn.getAccountInfo(ata))) {
       ixs.push(createAssociatedTokenAccountInstruction(deployer.publicKey, ata, owner, USDC));
     }
