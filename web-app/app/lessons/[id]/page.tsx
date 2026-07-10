@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCourseStore, useUserStore, useFlameStore } from '@/stores';
 import { hasRemoteLessonApi, startLesson, submitLesson, fetchWithAuth } from '@/services/api';
+import { buildLessonResultParams } from '@/services/lessons/resultParams';
 import type { Question, Lesson } from '@/types';
 import { T } from '@/components/theme';
 import { CozyCard } from '@/components/cozy';
@@ -406,20 +407,9 @@ export default function LessonPage(props: {
             // so we don't double-count locally.
             applyLessonCompletion(result.score, Boolean(result.courseRuntime));
           }
-          const params = new URLSearchParams({
-            score: String(result.score),
-            total: String(result.totalQuestions),
-            accepted: String(result.accepted),
-          });
-          if (result.courseRuntime?.fuelAwarded) {
-            params.set('fuel', String(result.courseRuntime.fuelAwarded));
-            params.set('fuelTotal', String(result.courseRuntime.fuelCounter ?? 0));
-          }
-          if (result.xp?.xpAwarded) {
-            params.set('xp', String(result.xp.xpAwarded));
-            params.set('xpTotal', String(result.xp.xpTotal));
-            params.set('xpLevel', String(result.xp.xpLevel));
-          }
+          // Includes practice=true/false (practice ruling R10) so the results
+          // view can show "streak, shields and rewards unchanged".
+          const params = buildLessonResultParams(result);
           // Store question review data for result page (lesson-specific, persists across revisits)
           try {
             localStorage.setItem(`quizReview::${lessonId}`, JSON.stringify({

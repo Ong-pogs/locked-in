@@ -249,6 +249,38 @@ export interface LockPositionResponse {
   asOf: string;
 }
 
+/** GET /v1/locks/:courseId/eligibility (ruling R12) — the fail-closed
+ * pre-deposit gate. Only a literal `{ eligible: true }` unblocks money;
+ * no response / network error / eligible:false all block the deposit. */
+export type LockIneligibleCode =
+  | 'COURSE_NOT_FOUND'
+  | 'COURSE_NOT_LOCKABLE'
+  | 'COURSE_COMPLETED';
+
+export type LockEligibilityResponse =
+  | { eligible: true }
+  | { eligible: false; code: LockIneligibleCode };
+
+/** POST /v1/locks/:courseId/enroll 200 body (ruling R9). Failure codes:
+ * 400 INVALID_LOCK_ADDRESS, 403 COURSE_COMPLETED / COURSE_NOT_LOCKABLE,
+ * 404 COURSE_NOT_FOUND, 409 LOCK_ADDRESS_MISMATCH (config-skew tripwire),
+ * 409 ENROLL_RETRY with { retryable: true, retryAfterMs } (RPC lag — retry). */
+export interface EnrollLockResponse {
+  enrolled: true;
+  courseId: string;
+  lockAddress: string;
+  principalUi: string;
+  status: 'ACTIVE';
+  freshEnrollment: boolean;
+  engineReset: boolean;
+}
+
+/** Extra fields on the 409 ENROLL_RETRY error body (ruling R6). */
+export interface EnrollRetryErrorDetails {
+  retryable: boolean;
+  retryAfterMs: number;
+}
+
 /** Signed completion voucher from POST /v1/progress/courses/:courseId/voucher.
  * message/signature are base64; embed in an Ed25519 precompile ix before claim_v2. */
 export interface CompletionVoucherResponse {
@@ -346,6 +378,10 @@ export interface ProgressSubmitLessonResponse {
   correctAnswers: number;
   completedAt: string;
   completionEventId?: string;
+  /** Practice-mode ruling R8/R10: true when the attempt was a replay or the
+   * course is complete — graded normally, but streak/shields/rewards are
+   * untouched server-side. Results page shows a notice when true. */
+  practiceMode?: boolean;
   courseRuntime?: CourseRuntimeSnapshot;
   questionResults?: QuestionValidationResult[];
   xp?: XpSnapshot;

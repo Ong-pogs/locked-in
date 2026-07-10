@@ -8,3 +8,4 @@ export * from './content/contentApi';
 export * from './auth/authApi';
 export * from './progress/progressApi';
 export * from './faucet/faucetApi';
+export * from './locks/locksApi';

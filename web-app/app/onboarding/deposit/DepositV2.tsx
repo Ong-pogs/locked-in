@@ -4,15 +4,46 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useWallets, useSignTransaction } from '@privy-io/react-auth/solana';
 import { T } from '@/components/theme';
-import { CozySectionLabel, COZY_TEXT, COZY_TEXT_SHADOW } from '@/components/cozy';
+import { CozyCard, CozySectionLabel, COZY_TEXT, COZY_TEXT_SHADOW } from '@/components/cozy';
 import { HubButton } from '@/components/HubButton';
 import { DepositFormV2 } from '@/components/v2/DepositFormV2';
 import { useCourseStore, useUserStore } from '@/stores';
 import { fetchWalletDepositBalances } from '@/services/solana/lockVault';
+import { fetchWithAuth } from '@/services/api/httpClient';
+import { getLockEligibility } from '@/services/api/locks/locksApi';
+import { enrollLockWithRetry, writePendingEnroll } from '@/services/enroll/pendingEnroll';
+import type { LockIneligibleCode } from '@/services/api/types';
 import type { V2ActionPhase } from '@/services/solana/v2Actions';
 
 // v2 deposit page: $10–50, no duration — the lock releases on course
 // completion. Builds via vaultV2 (open_lock + lock_funds), NEVER the v1 path.
+
+// R12 pre-deposit eligibility gate: money never moves unless the backend
+// answered { eligible: true }. 'error' (no response) blocks too — fail closed.
+type EligibilityState =
+  | { status: 'checking' }
+  | { status: 'eligible' }
+  | { status: 'ineligible'; code: LockIneligibleCode }
+  | { status: 'error' };
+
+const INELIGIBLE_COPY: Record<LockIneligibleCode, { title: string; body: string }> = {
+  COURSE_COMPLETED: {
+    title: 'Course complete — practice mode',
+    body:
+      'You already finished this course, so it lives on in practice mode. ' +
+      'Relocking a stake here is permanently closed — pick a new course to lock in.',
+  },
+  COURSE_NOT_LOCKABLE: {
+    title: "This course can't hold a stake yet",
+    body:
+      'No lessons are published for this course, so a lock here could never be completed. ' +
+      'Your funds stay in your wallet — choose a course with lessons.',
+  },
+  COURSE_NOT_FOUND: {
+    title: 'Course not found',
+    body: "This course doesn't exist on the server. Nothing was deposited — head back and pick another.",
+  },
+};
 
 export function DepositV2() {
   return (
@@ -60,6 +91,35 @@ function DepositV2Content() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [walletBalanceUi, setWalletBalanceUi] = useState<string | null>(null);
   const [currentTvlUi, setCurrentTvlUi] = useState(0);
+  const [eligibility, setEligibility] = useState<EligibilityState>({ status: 'checking' });
+  const [eligibilityTick, setEligibilityTick] = useState(0);
+
+  // R12 eligibility pre-gate, mount-time: paint the blocked state before the
+  // user even types an amount. Fail closed — an error is a block, not a pass.
+  // The submit handler re-verifies right before money moves (binding gate).
+  useEffect(() => {
+    if (!courseId) return;
+    let cancelled = false;
+    setEligibility({ status: 'checking' });
+    fetchWithAuth((token) => getLockEligibility(courseId, token))
+      .then((res) => {
+        if (cancelled) return;
+        if (res?.eligible === true) {
+          setEligibility({ status: 'eligible' });
+        } else {
+          setEligibility({
+            status: 'ineligible',
+            code: res?.eligible === false ? res.code : 'COURSE_NOT_LOCKABLE',
+          });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setEligibility({ status: 'error' });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [courseId, eligibilityTick]);
 
   // Wallet balance + vault TVL — best-effort reads, graceful fallbacks.
   useEffect(() => {
@@ -75,9 +135,35 @@ function DepositV2Content() {
 
   const handleSubmit = async (amountUi: string) => {
     if (!walletAddress || !courseId) return;
+    if (eligibility.status !== 'eligible') return;
     setPhase('building');
     setStatusMessage(null);
     try {
+      // R12 binding gate: re-verify eligibility immediately before building
+      // any transaction. Fail closed — no positive answer means no deposit
+      // (network errors included). This is where spec item 21 protects money.
+      let eligible = false;
+      let ineligibleCode: LockIneligibleCode | null = null;
+      try {
+        const res = await fetchWithAuth((token) => getLockEligibility(courseId, token));
+        if (res?.eligible === true) eligible = true;
+        else if (res?.eligible === false) ineligibleCode = res.code;
+      } catch {
+        // fall through: eligible stays false
+      }
+      if (!eligible) {
+        if (ineligibleCode) {
+          // Server ruled the course un-lockable — flip the page to the
+          // blocked state; there is nothing to retry.
+          setEligibility({ status: 'ineligible', code: ineligibleCode });
+          setPhase('idle');
+          return;
+        }
+        throw new Error(
+          "Couldn't confirm this course can be locked. Nothing was deposited — try again.",
+        );
+      }
+
       const { executeDeposit } = await import('@/services/solana/v2Actions');
       const wallet = solanaWallets[0] ?? null;
       const result = await executeDeposit(
@@ -91,6 +177,24 @@ function DepositV2Content() {
         },
         setPhase,
       );
+
+      // R13 enroll-on-deposit: register the lock server-side (both fresh
+      // success and alreadyLocked carry lockAddress). On 409 ENROLL_RETRY,
+      // enrollLockWithRetry waits retryAfterMs (else 2s/5s/10s) up to 3
+      // retries. On persistent failure: persist a pending-enroll record and
+      // continue — funds are safe on-chain, the dashboard retries on mount,
+      // and the backend heals lazily via the position endpoint (R14).
+      if (result.lockAddress) {
+        const enrollOutcome = await enrollLockWithRetry(courseId, result.lockAddress);
+        if (enrollOutcome.status === 'pending') {
+          writePendingEnroll(courseId, {
+            lockAddress: result.lockAddress,
+            walletAddress,
+            attemptedAt: new Date().toISOString(),
+          });
+        }
+      }
+
       activateCourse(courseId, {
         amount: Number(amountUi),
         duration: 30, // legacy store field — v2 locks have no duration
@@ -138,14 +242,80 @@ function DepositV2Content() {
         </h1>
         <CozySectionLabel>{course?.title ?? 'Selected course'}</CozySectionLabel>
         <div className="mt-3">
-          <DepositFormV2
-            courseTitle={course?.title ?? courseId}
-            currentTvlUi={currentTvlUi}
-            walletBalanceUi={walletBalanceUi}
-            phase={phase}
-            statusMessage={statusMessage}
-            onSubmit={handleSubmit}
-          />
+          {eligibility.status === 'checking' ? (
+            <CozyCard data-testid="v2-eligibility-checking" className="text-center" style={{ padding: 28 }}>
+              <p
+                className="font-pixel-mono text-[13px]"
+                style={{ color: T.textMutedStrong, textShadow: '0 1px 2px rgba(0,0,0,0.7)' }}
+              >
+                Checking this course can hold your stake…
+              </p>
+            </CozyCard>
+          ) : eligibility.status === 'ineligible' ? (
+            <CozyCard data-testid="v2-eligibility-blocked" className="text-center" style={{ padding: 28 }}>
+              <p
+                className="font-pixel text-lg mb-2"
+                style={{ color: COZY_TEXT, textShadow: COZY_TEXT_SHADOW }}
+              >
+                {INELIGIBLE_COPY[eligibility.code].title}
+              </p>
+              <p
+                className="font-pixel-mono text-[12px] mb-5"
+                style={{ color: T.textMutedStrong, textShadow: '0 1px 2px rgba(0,0,0,0.7)' }}
+              >
+                {INELIGIBLE_COPY[eligibility.code].body}
+              </p>
+              <button
+                onClick={() => router.push('/courses')}
+                className="px-6 py-3 rounded-lg border font-pixel text-sm uppercase tracking-[2px] font-bold min-h-[44px]"
+                style={{
+                  backgroundColor: 'rgba(255,213,128,0.12)',
+                  borderColor: 'rgba(255,213,128,0.4)',
+                  color: COZY_TEXT,
+                  textShadow: COZY_TEXT_SHADOW,
+                }}
+              >
+                Browse courses
+              </button>
+            </CozyCard>
+          ) : eligibility.status === 'error' ? (
+            <CozyCard data-testid="v2-eligibility-error" className="text-center" style={{ padding: 28 }}>
+              <p
+                className="font-pixel text-lg mb-2"
+                style={{ color: '#F0A878', textShadow: COZY_TEXT_SHADOW }}
+              >
+                Can&apos;t verify this course right now
+              </p>
+              <p
+                className="font-pixel-mono text-[12px] mb-5"
+                style={{ color: T.textMutedStrong, textShadow: '0 1px 2px rgba(0,0,0,0.7)' }}
+              >
+                Deposits stay blocked until we can confirm this course can hold a stake.
+                Nothing was deposited — your funds are untouched.
+              </p>
+              <button
+                onClick={() => setEligibilityTick((t) => t + 1)}
+                className="px-6 py-3 rounded-lg border font-pixel text-sm uppercase tracking-[2px] font-bold min-h-[44px]"
+                style={{
+                  backgroundColor: 'rgba(255,213,128,0.12)',
+                  borderColor: 'rgba(255,213,128,0.4)',
+                  color: COZY_TEXT,
+                  textShadow: COZY_TEXT_SHADOW,
+                }}
+              >
+                Retry
+              </button>
+            </CozyCard>
+          ) : (
+            <DepositFormV2
+              courseTitle={course?.title ?? courseId}
+              currentTvlUi={currentTvlUi}
+              walletBalanceUi={walletBalanceUi}
+              phase={phase}
+              statusMessage={statusMessage}
+              onSubmit={handleSubmit}
+            />
+          )}
         </div>
       </div>
     </div>

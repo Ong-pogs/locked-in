@@ -62,7 +62,10 @@ export function DepositFormV2({
   return (
     <CozyCard data-testid="v2-deposit-form" className="w-full" style={{ padding: 20 }}>
       <CozySectionLabel>Lock your stake</CozySectionLabel>
-      <p className="font-pixel-mono text-[12px] mb-2" style={{ color: T.textMuted }}>
+      <p
+        className="font-pixel-mono text-[12px] mb-2"
+        style={{ color: T.textMutedStrong, textShadow: '0 1px 2px rgba(0,0,0,0.7)' }}
+      >
         Lock USDC on <span style={{ color: COZY_TEXT }}>{courseTitle}</span>. It earns yield while
         you learn and returns — principal plus your yield — when you finish the course.
       </p>
@@ -120,14 +123,20 @@ export function DepositFormV2({
           aria-label="Deposit amount in USDC"
         />
       </div>
-      <p className="font-pixel-mono text-[10px] mb-3" style={{ color: T.textMuted }}>
+      <p
+        className="font-pixel-mono text-[10px] mb-3"
+        style={{ color: T.textMutedStrong, textShadow: '0 1px 2px rgba(0,0,0,0.7)' }}
+      >
         ${MIN_UI}–${MAX_UI} during beta{walletBalanceUi != null ? ` · balance $${walletBalanceUi}` : ''}
       </p>
 
       {/* Capacity meter */}
       <div data-testid="v2-capacity-meter" className="mb-4">
         <div className="flex justify-between mb-1">
-          <span className="font-pixel-mono text-[10px] uppercase tracking-[1px]" style={{ color: T.textMuted }}>
+          <span
+            className="font-pixel-mono text-[10px] uppercase tracking-[1px]"
+            style={{ color: T.textMutedStrong, textShadow: '0 1px 2px rgba(0,0,0,0.7)' }}
+          >
             Beta capacity
           </span>
           <span className="font-pixel-mono text-[10px]" style={{ color: COZY_TEXT, opacity: 0.8 }}>

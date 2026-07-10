@@ -18,6 +18,10 @@ export const T = {
   textPrimary: '#E8DED0',
   textSecondary: 'rgba(255,255,255,0.42)',
   textMuted: 'rgba(255,255,255,0.45)',
+  // Contrast-audit variant: small (10-13px) money copy on CozyCard glass needs
+  // more than 0.45 alpha to clear WCAG on the painted backdrops. Use this (plus
+  // a text shadow) there; do NOT change textMuted — legacy pages depend on it.
+  textMutedStrong: 'rgba(255,255,255,0.66)',
   borderAlive: 'rgba(212,160,74,0.18)',
   borderDormant: 'rgba(255,255,255,0.06)',
 };
