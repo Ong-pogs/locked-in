@@ -4789,28 +4789,38 @@ export async function submitLessonAttempt(walletAddress, lessonId, attemptId, an
 
     let isReplay = false;
     if (courseId != null) {
-      const progressRow = await client.query(
-        `select completed from lesson.user_lesson_progress
-         where wallet_address = $1 and lesson_id = $2
-         limit 1`,
-        [walletAddress, lessonId],
-      );
-      const lessonCompleted = progressRow.rows[0]?.completed === true;
       if (accepted) {
-        // Writers take the row lock (R11); the same locked read serves the
-        // freeze check.
+        // Writers take the row lock FIRST (R11) — a concurrent duplicate
+        // first-time submit blocks here and then reads the winner's committed
+        // user_lesson_progress row, classifying itself as practice instead of
+        // double-applying the lesson-day.
         const state = await ensureCourseRuntimeState(client, walletAddress, courseId, {
           forUpdate: true,
         });
-        isReplay = lessonCompleted || state.courseCompletedAt != null;
+        const progressRow = await client.query(
+          `select completed from lesson.user_lesson_progress
+           where wallet_address = $1 and lesson_id = $2
+           limit 1`,
+          [walletAddress, lessonId],
+        );
+        isReplay =
+          progressRow.rows[0]?.completed === true || state.courseCompletedAt != null;
       } else {
+        const progressRow = await client.query(
+          `select completed from lesson.user_lesson_progress
+           where wallet_address = $1 and lesson_id = $2
+           limit 1`,
+          [walletAddress, lessonId],
+        );
         const frozenRow = await client.query(
           `select course_completed_at from lesson.user_course_runtime_state
            where wallet_address = $1 and course_id = $2
            limit 1`,
           [walletAddress, courseId],
         );
-        isReplay = lessonCompleted || frozenRow.rows[0]?.course_completed_at != null;
+        isReplay =
+          progressRow.rows[0]?.completed === true ||
+          frozenRow.rows[0]?.course_completed_at != null;
       }
     }
 

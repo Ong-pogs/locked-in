@@ -227,8 +227,9 @@ export async function runLapseSweepBatch({
       const lockStartDay =
         toUtcDay(state.lockStartAt) ??
         toUtcDay(new Date(Number(account.lockStartTs) * 1000));
-      // The lock-start day itself is never judged; the first judged day is
-      // the first FULL UTC day after lock start.
+      // Same baseDay predicate as the submit-time catch-up (practice ruling
+      // R13, verbatim): the first judgeable day is the lock-start UTC day
+      // itself — one day-fold everywhere, receipts arbitrate between engines.
       const baseDay = maxUtcDay(
         state.lastCompletedDay,
         state.lastMissDay,
