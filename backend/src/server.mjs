@@ -47,6 +47,27 @@ export function buildServer() {
     disableRequestLogging: true,
   });
 
+  // Treat an empty JSON body as {} instead of erroring. Several endpoints are
+  // POSTs with no body (e.g. the completion voucher); a client that still sets
+  // Content-Type: application/json would otherwise hit FST_ERR_CTP_EMPTY_JSON_BODY
+  // and surface as a 500. Parse empty/whitespace bodies to an empty object.
+  app.addContentTypeParser(
+    'application/json',
+    { parseAs: 'string' },
+    (_req, body, done) => {
+      if (body == null || body.trim() === '') {
+        done(null, {});
+        return;
+      }
+      try {
+        done(null, JSON.parse(body));
+      } catch (err) {
+        err.statusCode = 400;
+        done(err, undefined);
+      }
+    },
+  );
+
   const corsAllowlist = new Set(appConfig.corsAllowedOrigins);
 
   app.register(cors, {
