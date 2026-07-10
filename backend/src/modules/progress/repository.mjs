@@ -32,7 +32,13 @@ import {
 import { hasFaucetConfig, isDevnetOnly, transferUsdcAtomic } from '../../lib/faucet.mjs';
 import { getSaverRedirectBps, computeNextFireLitUntil } from '../../lib/yieldRouting.mjs';
 import { issueVoucher } from '../../lib/claimVoucher.mjs';
-import { applyLessonDay, applyMissDay } from '../../lib/shieldLapseEngine.mjs';
+import { applyLessonDay, applyMissDay, userYieldBps } from '../../lib/shieldLapseEngine.mjs';
+import { autoMissEventId } from '../../lib/missEvents.mjs';
+import {
+  deriveLockPdaServer,
+  primeLockPositionCache,
+  readLockV2AccountFresh,
+} from '../../lib/lockPosition.mjs';
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -78,7 +84,9 @@ async function ensureUserXp(client, walletAddress) {
 async function awardXp(client, walletAddress, amount, source, sourceId = null) {
   if (amount <= 0) return null;
 
-  // Idempotency: skip if this exact event was already recorded
+  // Fast-path: skip if this exact event was already recorded. NOT the
+  // correctness mechanism — the ON CONFLICT below (backed by 0044's partial
+  // unique index) is what makes concurrent double-submits award once.
   if (sourceId) {
     const existing = await client.query(
       `SELECT 1 FROM lesson.user_xp_events WHERE wallet_address = $1 AND source = $2 AND source_id = $3 LIMIT 1`,
@@ -87,10 +95,14 @@ async function awardXp(client, walletAddress, amount, source, sourceId = null) {
     if (existing.rowCount > 0) return null;
   }
 
-  await client.query(
-    `INSERT INTO lesson.user_xp_events (wallet_address, xp_amount, source, source_id) VALUES ($1, $2, $3, $4)`,
+  const inserted = await client.query(
+    `INSERT INTO lesson.user_xp_events (wallet_address, xp_amount, source, source_id)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (wallet_address, source, source_id) WHERE source_id IS NOT NULL
+     DO NOTHING`,
     [walletAddress, amount, source, sourceId],
   );
+  if (inserted.rowCount === 0) return null;
 
   const result = await client.query(
     `UPDATE lesson.user_xp SET xp_total = xp_total + $2, xp_level = $3, updated_at = now()
@@ -158,6 +170,9 @@ async function checkAndAwardMilestoneXp(client, walletAddress, courseId, lessonI
     xpTotal: final.rows[0]?.xpTotal ?? 0,
     xpLevel: final.rows[0]?.xpLevel ?? 1,
     xpAwarded: totalAwarded,
+    // Practice-mode ruling R5: the completing submit uses this to freeze the
+    // engine (course_completed_at) in the same transaction.
+    courseComplete: allModulesDone,
   };
 }
 
@@ -323,6 +338,26 @@ function diffDays(fromDay, toDay) {
   const from = new Date(`${fromDay}T00:00:00.000Z`).getTime();
   const to = new Date(`${toDay}T00:00:00.000Z`).getTime();
   return Math.round((to - from) / (24 * 60 * 60 * 1000));
+}
+
+// UTC-day arithmetic on 'YYYY-MM-DD' strings (shared by the submit-time
+// catch-up loop and the lapse sweep — same day-fold everywhere).
+export function addUtcDays(dayText, delta) {
+  const date = new Date(`${dayText}T00:00:00.000Z`);
+  return new Date(date.getTime() + delta * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+}
+
+function toUtcDayString(value) {
+  if (value == null) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString().slice(0, 10);
+}
+
+function maxUtcDay(...days) {
+  return days.filter(Boolean).sort().at(-1) ?? null;
 }
 
 function percentageOfAmount(amount, bps) {
@@ -546,7 +581,16 @@ async function getCourseIdForPublishedLesson(client, lessonId, lessonVersionId) 
   return result.rows[0].courseId;
 }
 
-async function ensureCourseRuntimeState(client, walletAddress, courseId) {
+// All WRITERS must pass { forUpdate: true } so the (wallet_address, course_id)
+// row lock serializes concurrent engine transitions (practice ruling R11 /
+// sweep ruling R10). Read-only snapshot paths stay unlocked. Single-row lock
+// ordering — no deadlock surface.
+async function ensureCourseRuntimeState(
+  client,
+  walletAddress,
+  courseId,
+  { forUpdate = false } = {},
+) {
   await client.query(
     `
       insert into lesson.user_course_runtime_state (
@@ -587,11 +631,15 @@ async function ensureCourseRuntimeState(client, walletAddress, courseId) {
         fuel_fragments_day::text as "fuelFragmentsDay",
         fire_lit_until as "fireLitUntil",
         coalesce(ichor_counter, 0)::bigint as "ichorCounter",
-        coalesce(ichor_lifetime_total, 0)::bigint as "ichorLifetimeTotal"
+        coalesce(ichor_lifetime_total, 0)::bigint as "ichorLifetimeTotal",
+        course_completed_at as "courseCompletedAt",
+        lock_account_address as "lockAccountAddress",
+        lock_start_at as "lockStartAt"
       from lesson.user_course_runtime_state
       where wallet_address = $1
         and course_id = $2
       limit 1
+      ${forUpdate ? 'for update' : ''}
     `,
     [walletAddress, courseId],
   );
@@ -604,11 +652,16 @@ function deriveFuelEarnStatus(state) {
   return 'AVAILABLE';
 }
 
-// Advance the v2 shield/lapse state (spec §4.2) for one UTC day and persist the
-// four engine columns. `kind` is 'lesson' (a first-time lesson-day) or 'miss'.
-// This is the ONLY writer of lapse_count — the completion voucher's yield-kept
-// bps derives from it, so it must be maintained here, not just read.
-async function applyShieldLapseTransition(client, state, kind) {
+// Advance the v2 shield/lapse state (spec §4.2) for one UTC day and persist
+// the engine columns INCLUDING current_streak — the engine output is
+// authoritative for the streak (practice ruling R12; the old diffDays
+// recompute reset a shield-paused streak). `kind` is 'lesson' (a first-time
+// lesson-day) or 'miss'. This is the ONLY writer of lapse_count — the
+// completion voucher's yield-kept bps derives from it, so it must be
+// maintained here, not just read. Exported for the lapse sweep (sweep ruling
+// R9): reimplementing this writer anywhere is forbidden. Callers must hold
+// the runtime row lock (ensureCourseRuntimeState with forUpdate: true).
+export async function applyShieldLapseTransition(client, state, kind) {
   const before = {
     streak: state.currentStreak,
     shields: state.shields,
@@ -624,6 +677,7 @@ async function applyShieldLapseTransition(client, state, kind) {
           lapse_count = $4,
           lapse_open = $5,
           consecutive_lesson_days = $6,
+          current_streak = $7,
           updated_at = now()
       where wallet_address = $1
         and course_id = $2
@@ -635,11 +689,19 @@ async function applyShieldLapseTransition(client, state, kind) {
       next.lapseCount,
       next.lapseOpen,
       next.consecutiveLessonDays,
+      next.streak,
     ],
   );
   return next;
 }
 
+// The caller must run inside withTransactionAsWallet — this function takes the
+// runtime row lock (R11), settles any unprocessed dark days BEFORE the
+// lesson-day transition (R13: fail closed in the money direction — a
+// completion may not advance the streak or leave lapse_count understated for
+// the voucher while gap days are unjudged), then applies the engine
+// lesson-day. Completions never touch saver_count / saver_recovery_mode /
+// current_yield_redirect_bps (R12 deleted the dormant saver-recovery block).
 async function applyVerifiedCompletionToCourseRuntime(
   client,
   walletAddress,
@@ -647,37 +709,57 @@ async function applyVerifiedCompletionToCourseRuntime(
   completionDay,
   rewardUnits,
 ) {
-  const state = await ensureCourseRuntimeState(client, walletAddress, courseId);
+  let state = await ensureCourseRuntimeState(client, walletAddress, courseId, {
+    forUpdate: true,
+  });
   const sameDay = state.lastCompletedDay === completionDay;
+
+  if (!sameDay) {
+    // R13 catch-up: judge every fully-elapsed UTC day between the last known
+    // day (last lesson, last miss, or the day before lock-up) and this
+    // completion. Day-keyed receipts (0045) make this idempotent against the
+    // worker and the sweep. Cap 200 iterations; skip when there is no anchor.
+    const lockStartDay = toUtcDayString(state.lockStartAt);
+    const baseDay = maxUtcDay(
+      state.lastCompletedDay,
+      state.lastMissDay,
+      lockStartDay ? addUtcDays(lockStartDay, -1) : null,
+    );
+    if (baseDay != null) {
+      let day = addUtcDays(baseDay, 1);
+      let iterations = 0;
+      while (day < completionDay && iterations < 200) {
+        await applyMissConsequenceLocked(
+          client,
+          state,
+          day,
+          autoMissEventId(walletAddress, courseId, day),
+        );
+        state = await ensureCourseRuntimeState(client, walletAddress, courseId);
+        day = addUtcDays(day, 1);
+        iterations += 1;
+      }
+    }
+  }
 
   let currentStreak = state.currentStreak;
   let longestStreak = state.longestStreak;
   let gauntletActive = state.gauntletActive;
   let gauntletDay = state.gauntletDay;
-  let saverCount = state.saverCount;
-  let saverRecoveryMode = state.saverRecoveryMode;
-  let currentYieldRedirectBps = state.currentYieldRedirectBps;
 
   if (!sameDay) {
-    const consecutive =
-      state.lastCompletedDay != null && diffDays(state.lastCompletedDay, completionDay) === 1;
-    currentStreak = state.lastCompletedDay == null ? 1 : consecutive ? state.currentStreak + 1 : 1;
-    longestStreak = Math.max(state.longestStreak, currentStreak);
-
     if (state.gauntletActive) {
       gauntletDay = Math.min(state.gauntletDay + 1, 8);
       gauntletActive = state.gauntletDay < 7;
     }
 
     // First completion of a new UTC day = a v2 lesson-day: grow the streak,
-    // regen shields, clear an open lapse. Maintains lapse_count for the voucher.
-    await applyShieldLapseTransition(client, state, 'lesson');
-  }
-
-  if (saverRecoveryMode && saverCount > 0) {
-    saverCount = Math.max(0, saverCount - 1);
-    saverRecoveryMode = saverCount > 0;
-    currentYieldRedirectBps = getSaverRedirectBps(saverCount);
+    // regen shields, clear an open lapse. Maintains lapse_count for the
+    // voucher. The ENGINE output is the streak (R12) — a shield-paused streak
+    // resumes at N+1 instead of resetting to 1.
+    const next = await applyShieldLapseTransition(client, state, 'lesson');
+    currentStreak = next.streak;
+    longestStreak = Math.max(state.longestStreak, currentStreak);
   }
 
   let fuelCounter = state.fuelCounter;
@@ -703,6 +785,8 @@ async function applyVerifiedCompletionToCourseRuntime(
   const ichorCounterAfter = ichorCounterBefore + ichorReward;
   const ichorLifetimeAfter = ichorLifetimeBefore + ichorReward;
 
+  // NOTE: saver_count / saver_recovery_mode / current_yield_redirect_bps are
+  // deliberately absent — completions must never touch yield routing (R12).
   await client.query(
     `
       update lesson.user_course_runtime_state
@@ -710,13 +794,10 @@ async function applyVerifiedCompletionToCourseRuntime(
           longest_streak = $4,
           gauntlet_active = $5,
           gauntlet_day = $6,
-          saver_count = $7,
-          saver_recovery_mode = $8,
-          current_yield_redirect_bps = $9,
-          fuel_counter = $10,
-          last_completed_day = $11::date,
-          ichor_counter = $12::bigint,
-          ichor_lifetime_total = $13::bigint,
+          fuel_counter = $7,
+          last_completed_day = $8::date,
+          ichor_counter = $9::bigint,
+          ichor_lifetime_total = $10::bigint,
           updated_at = now()
       where wallet_address = $1
         and course_id = $2
@@ -728,9 +809,6 @@ async function applyVerifiedCompletionToCourseRuntime(
       longestStreak,
       gauntletActive,
       gauntletDay,
-      saverCount,
-      saverRecoveryMode,
-      currentYieldRedirectBps,
       fuelCounter,
       completionDay,
       ichorCounterAfter,
@@ -744,9 +822,9 @@ async function applyVerifiedCompletionToCourseRuntime(
     longestStreak,
     gauntletActive,
     gauntletDay,
-    saverCount,
-    saverRecoveryMode,
-    currentYieldRedirectBps,
+    saverCount: state.saverCount,
+    saverRecoveryMode: state.saverRecoveryMode,
+    currentYieldRedirectBps: state.currentYieldRedirectBps,
     extensionDays: state.extensionDays,
     fuelCounter,
     fuelCap: state.fuelCap,
@@ -1372,6 +1450,11 @@ export async function readCourseRuntimeState(client, walletAddress, courseId) {
     lastCompletedDay: state.lastCompletedDay ?? null,
     completedToday: state.lastCompletedDay === currentUtcDay(),
     dayEndsAtUtc: nextUtcMidnightIso(),
+    // Engine freeze marker (practice ruling R6): non-null once every published
+    // lesson of the course is complete; the miss writer refuses past it.
+    courseCompletedAt: state.courseCompletedAt
+      ? new Date(state.courseCompletedAt).toISOString()
+      : null,
   };
 }
 
@@ -1396,7 +1479,7 @@ export async function syncCourseRuntimeStateWithLockSnapshot(
   const snapshot = lockSnapshot ?? (await readLockAccountSnapshot(walletAddress, courseId));
 
   return withTransactionAsWallet(walletAddress, async (client) => {
-    await ensureCourseRuntimeState(client, walletAddress, courseId);
+    await ensureCourseRuntimeState(client, walletAddress, courseId, { forUpdate: true });
     // The custody-core LockAccount only carries custody fields now
     // (owner, mint, principal, timestamps, status). The game layer — streak,
     // savers, redirect_bps, fuel, ichor, last_completed_day — is OWNED BY THE
@@ -1477,6 +1560,8 @@ export async function listRuntimeSchedulerCandidates(limit = 10) {
         runtime.last_miss_day::text as "lastMissDay",
         runtime.last_brewer_burn_ts as "lastBrewerBurnTs",
         runtime.updated_at as "updatedAt",
+        runtime.lock_account_address as "lockAccountAddress",
+        runtime.course_completed_at as "courseCompletedAt",
         latest_harvest.harvested_at as "lastHarvestedAt"
       from lesson.user_course_runtime_state runtime
       left join lateral (
@@ -1496,6 +1581,296 @@ export async function listRuntimeSchedulerCandidates(limit = 10) {
   );
 
   return result.rows;
+}
+
+/**
+ * Push a runtime-scheduler candidate to the back of the updated_at-asc queue
+ * (enroll ruling R11c). The legacy worker calls this for rows it must not
+ * process (v2-armed rows, dead lock reads) so one skipped candidate cannot
+ * pin the queue and starve every other lock (batch default is 5).
+ */
+export async function touchRuntimeSchedulerCandidate(walletAddress, courseId) {
+  if (!hasDatabase()) return;
+  await query(
+    `update lesson.user_course_runtime_state
+     set updated_at = now()
+     where wallet_address = $1 and course_id = $2`,
+    [walletAddress, courseId],
+  );
+}
+
+/**
+ * Lazy completion backfill (sweep ruling R9): when every published lesson of
+ * the course is complete, stamp course_completed_at (if not already) and
+ * return true. Used by the lapse sweep so a finished-but-unclaimed user never
+ * accrues lapses that cut their signed voucher bps (spec item 21). `client`
+ * must carry the wallet RLS claim (user_lesson_progress is FORCE RLS).
+ */
+export async function markCourseCompletedIfComplete(client, walletAddress, courseId) {
+  const moduleRows = await fetchModuleCompletion(client, walletAddress, courseId);
+  if (!isCourseComplete(moduleRows)) return false;
+  await client.query(
+    `update lesson.user_course_runtime_state
+     set course_completed_at = coalesce(course_completed_at, now()),
+         updated_at = now()
+     where wallet_address = $1 and course_id = $2`,
+    [walletAddress, courseId],
+  );
+  return true;
+}
+
+/**
+ * Shared course gate for the enroll + eligibility endpoints (enroll ruling
+ * R2/R3/R12). Runs BEFORE any RPC: unknown course -> 404 COURSE_NOT_FOUND,
+ * lessonless/placeholder course -> 403 COURSE_NOT_LOCKABLE (never armed into
+ * a guaranteed-lapse trap), completed course -> 403 COURSE_COMPLETED (spec
+ * item 21: relock of a completed course is blocked forever — the on-chain
+ * PDA close+re-init makes relock always possible on-chain, so this endpoint
+ * IS the off-chain block). Returns the module rows on success.
+ */
+export async function assertCourseLockable(walletAddress, courseId, { log = null } = {}) {
+  const moduleRows = await fetchModuleCompletion({ query }, walletAddress, courseId);
+
+  if (moduleRows.length === 0) {
+    const course = await query(`select 1 from lesson.courses where id = $1`, [courseId]);
+    if (course.rowCount === 0) {
+      throw notFound(`Unknown course: ${courseId}`, 'COURSE_NOT_FOUND');
+    }
+    throw new HttpError(
+      403,
+      'Course has no published lessons and cannot be locked against',
+      'COURSE_NOT_LOCKABLE',
+    );
+  }
+
+  const totalLessons = moduleRows.reduce((sum, m) => sum + Number(m.total_lessons), 0);
+  if (totalLessons === 0) {
+    throw new HttpError(
+      403,
+      'Course has no published lessons and cannot be locked against',
+      'COURSE_NOT_LOCKABLE',
+    );
+  }
+
+  if (isCourseComplete(moduleRows)) {
+    log?.warn?.({ walletAddress, courseId }, 'locks.enroll.relock_blocked');
+    throw new HttpError(
+      403,
+      'Course is already complete; relocking a completed course is not allowed',
+      'COURSE_COMPLETED',
+    );
+  }
+
+  return moduleRows;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Server-side enroll-on-deposit (enroll ruling R1-R10). Every acceptance
+ * decision is made exclusively from server-derived data: the PDA is derived
+ * here, the lock is read fresh from the chain, and the client's lockAddress
+ * is only a config-skew tripwire. Fail-closed: enroll ONLY on verified
+ * status ACTIVE with principal > 0; account-missing / PENDING / principal-0
+ * are the RPC-lag race and are bounded-retried, never persisted.
+ *
+ * `readLockFresh` / `retryDelayMs` are injectable for deterministic tests.
+ */
+export async function enrollActiveLockServerSide(
+  walletAddress,
+  courseId,
+  {
+    claimedLockAddress = null,
+    log = null,
+    readLockFresh = readLockV2AccountFresh,
+    retryDelayMs = appConfig.enrollRetryDelayMs,
+  } = {},
+) {
+  if (!hasDatabase()) {
+    throw new HttpError(503, 'Enrollment requires the database', 'DB_UNAVAILABLE');
+  }
+
+  // R2 + R3: course gate first — no RPC yet, FK made unreachable, completed
+  // course blocked.
+  await assertCourseLockable(walletAddress, courseId, { log });
+
+  // R4: server-derived PDA; the client's address is only a tripwire.
+  const programId = appConfig.vaultV2ProgramId;
+  const expected = deriveLockPdaServer(programId, walletAddress, courseId);
+  const expectedAddress = expected.toBase58();
+  if (claimedLockAddress != null && claimedLockAddress !== expectedAddress) {
+    log?.error?.(
+      { walletAddress, courseId, expected: expectedAddress, received: claimedLockAddress, programId },
+      'locks.enroll.pda_mismatch',
+    );
+    throw new HttpError(
+      409,
+      'Client lock address does not match the server-derived lock PDA',
+      'LOCK_ADDRESS_MISMATCH',
+    );
+  }
+
+  // R5 + R6: fresh reads, accept ONLY ACTIVE with principal > 0. Retry the
+  // RPC-lag states (missing / PENDING / principal 0) up to 3 more times.
+  let account = null;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    if (attempt > 0) await sleep(retryDelayMs);
+    account = await readLockFresh(walletAddress, courseId);
+    if (account?.mismatch) {
+      log?.error?.(
+        {
+          walletAddress,
+          courseId,
+          expected: expectedAddress,
+          received: account.lockAddress ?? null,
+          reason: account.reason,
+          programId,
+        },
+        'locks.enroll.pda_mismatch',
+      );
+      throw new HttpError(
+        409,
+        'On-chain lock account is not a lock owned by this wallet under the configured program',
+        'LOCK_ADDRESS_MISMATCH',
+      );
+    }
+    if (account && account.status === 'ACTIVE' && account.principal > 0n) break;
+    account = null;
+  }
+
+  if (!account) {
+    log?.warn?.({ walletAddress, courseId }, 'locks.enroll.retry_exhausted');
+    const retryError = new HttpError(
+      409,
+      'Lock is not yet ACTIVE on-chain; retry shortly',
+      'ENROLL_RETRY',
+    );
+    retryError.retryable = true;
+    retryError.retryAfterMs = 4000;
+    throw retryError;
+  }
+
+  const principal = account.principal;
+  const lockStartTs = Number(account.lockStartTs);
+
+  // R7: all writes in ONE wallet-scoped transaction (FORCE RLS on
+  // user_course_enrollments keys on the request.jwt.claim.wallet_address GUC).
+  const outcome = await withTransactionAsWallet(walletAddress, async (client) => {
+    const enrollInsert = await client.query(
+      `insert into lesson.user_course_enrollments (wallet_address, course_id)
+       values ($1, $2)
+       on conflict (wallet_address, course_id) do nothing`,
+      [walletAddress, courseId],
+    );
+    const freshEnrollment = enrollInsert.rowCount === 1;
+
+    await ensureCourseRuntimeState(client, walletAddress, courseId);
+
+    // FOR UPDATE serializes concurrent enrolls so the reset decision can
+    // never run twice.
+    const custodyRow = await client.query(
+      `select lock_account_address,
+              extract(epoch from lock_start_at)::bigint as lock_start_epoch
+       from lesson.user_course_runtime_state
+       where wallet_address = $1 and course_id = $2
+       for update`,
+      [walletAddress, courseId],
+    );
+    const stored = custodyRow.rows[0]?.lock_account_address ?? null;
+    const storedEpoch =
+      custodyRow.rows[0]?.lock_start_epoch != null
+        ? Number(custodyRow.rows[0].lock_start_epoch)
+        : null;
+
+    // R8 engine-reset matrix, keyed to ON-CHAIN LOCK IDENTITY, never to the
+    // enrollments INSERT:
+    //   first v2 arm  (stored NULL or != derived PDA, incl. legacy PDAs) -> reset
+    //   replay        (same PDA, same immutable lock_start_ts)           -> no reset
+    //   relock-after-settlement (same PDA, changed lock_start_ts)        -> reset
+    //     (reachable only by settling the old lock, which already forfeited
+    //     its yield — not exploitable)
+    const firstV2Arm = stored == null || stored !== expectedAddress;
+    const relockAfterSettlement = !firstV2Arm && storedEpoch !== lockStartTs;
+    const engineReset = firstV2Arm || relockAfterSettlement;
+    if (relockAfterSettlement) {
+      log?.info?.(
+        { walletAddress, courseId, storedEpoch, lockStartTs },
+        'locks.enroll.relock_after_settlement',
+      );
+    }
+
+    // R9 custody update. NEVER write lock_end_at or stable_mint from v2 data —
+    // LockV2 has neither field; fabricating an end date corrupts the sweep
+    // and the UI (on reset both are cleared).
+    if (engineReset) {
+      await client.query(
+        `update lesson.user_course_runtime_state
+         set lock_account_address = $3,
+             principal_amount = $4::bigint,
+             lock_start_at = to_timestamp($5),
+             current_streak = 0,
+             shields = 3,
+             lapse_count = 0,
+             lapse_open = false,
+             consecutive_lesson_days = 0,
+             stable_mint = null,
+             lock_end_at = null,
+             updated_at = now()
+         where wallet_address = $1 and course_id = $2`,
+        [walletAddress, courseId, expectedAddress, principal.toString(), lockStartTs],
+      );
+    } else {
+      await client.query(
+        `update lesson.user_course_runtime_state
+         set lock_account_address = $3,
+             principal_amount = $4::bigint,
+             updated_at = now()
+         where wallet_address = $1 and course_id = $2`,
+        [walletAddress, courseId, expectedAddress, principal.toString()],
+      );
+    }
+
+    return { freshEnrollment, engineReset };
+  });
+
+  const principalUi = formatAtomicUsdcUi(principal);
+
+  // R10: prime the position cache so the course card cannot show a stale NONE
+  // for 60s after a successful enroll.
+  primeLockPositionCache(walletAddress, courseId, {
+    courseId,
+    status: 'ACTIVE',
+    lockAddress: expectedAddress,
+    principalUi,
+    principalAtomic: principal.toString(),
+    lockStartTs,
+    liveValueUi: null,
+    asOf: new Date().toISOString(),
+  });
+
+  log?.info?.(
+    {
+      walletAddress,
+      courseId,
+      freshEnrollment: outcome.freshEnrollment,
+      engineReset: outcome.engineReset,
+      principalAmount: principal.toString(),
+      lockAddress: expectedAddress,
+    },
+    'locks.enroll.success',
+  );
+
+  return {
+    enrolled: true,
+    courseId,
+    lockAddress: expectedAddress,
+    principalUi,
+    status: 'ACTIVE',
+    freshEnrollment: outcome.freshEnrollment,
+    engineReset: outcome.engineReset,
+  };
 }
 
 /**
@@ -2326,7 +2701,9 @@ export async function feedFireForCourse(walletAddress, courseId) {
   }
 
   return withTransactionAsWallet(walletAddress, async (client) => {
-    const state = await ensureCourseRuntimeState(client, walletAddress, courseId);
+    const state = await ensureCourseRuntimeState(client, walletAddress, courseId, {
+      forUpdate: true,
+    });
     if (state.fuelCounter <= 0) {
       const courseRuntime = await readCourseRuntimeState(client, walletAddress, courseId);
       return { applied: false, reason: 'NO_FUEL', courseRuntime };
@@ -2490,7 +2867,9 @@ export async function buyStreakSaver(walletAddress, courseId) {
   }
 
   return withTransactionAsWallet(walletAddress, async (client) => {
-    const state = await ensureCourseRuntimeState(client, walletAddress, courseId);
+    const state = await ensureCourseRuntimeState(client, walletAddress, courseId, {
+      forUpdate: true,
+    });
     const ichorBalance = Number(state.ichorCounter ?? 0);
     const saversUsed = Number(state.saverCount ?? 0);
 
@@ -2510,7 +2889,13 @@ export async function buyStreakSaver(walletAddress, courseId) {
     }
 
     const nextSaversUsed = saversUsed - 1;
-    const nextRedirectBps = getSaverRedirectBps(nextSaversUsed);
+    // R24 clamp: an ichor purchase may clear legacy saver debt, but it can
+    // never route more yield to the user than their lapse tier allows —
+    // lapse_count is the money-authoritative floor on the redirect.
+    const nextRedirectBps = Math.max(
+      getSaverRedirectBps(nextSaversUsed),
+      10_000 - userYieldBps(state.lapseCount),
+    );
     const nextIchor = ichorBalance - STREAK_SAVER_ICHOR_COST;
 
     await client.query(
@@ -3927,6 +4312,166 @@ async function readMissConsequenceReceipt(client, walletAddress, courseId, missE
   return result.rows[0] ?? null;
 }
 
+/**
+ * Miss-day core (practice ruling R15) — the ONE place a miss-day mutates
+ * engine state. Used by consumeSaverOrApplyFullConsequence (worker + internal
+ * endpoint), the submit-time catch-up loop (R13), and the daily lapse sweep.
+ *
+ * Caller contract: `client` is inside a wallet-scoped transaction and the
+ * caller holds the runtime row lock (ensureCourseRuntimeState forUpdate) for
+ * this (wallet, course); `state` is the locked row.
+ *
+ * Semantics replace the legacy dual penalty:
+ *  (a) existing receipt for this missEventId OR this (wallet, course, day)
+ *      -> return it, write NOTHING (day-level dedupe regardless of caller id);
+ *  (b) completed course -> refuse, write NOTHING (freeze, R6);
+ *  (c) shields banked -> SHIELD_ABSORBED: shield burns, streak PAUSES,
+ *      saver_count and current_yield_redirect_bps are NOT touched — a
+ *      shielded miss is free;
+ *      shields gone -> lapse: streak 0, redirect = 10000 - userYieldBps(lapse)
+ *      (5000 at lapse 1, 10000 at lapse 2+); consecutive dark days coalesce
+ *      into one lapse via lapse_open (LAPSE_ALREADY_OPEN);
+ *  (d) engine columns + streak + redirect + last_miss_day + the receipt all
+ *      persist in the caller's transaction. saver_count is frozen forever.
+ */
+async function applyMissConsequenceLocked(client, state, missDay, missEventId) {
+  const { walletAddress, courseId } = state;
+
+  // (a) day-keyed idempotency shared by every producer.
+  const existing = await client.query(
+    `
+      select miss_event_id as "missEventId", applied, reason
+      from lesson.miss_consequence_receipts
+      where wallet_address = $1
+        and course_id = $2
+        and (miss_event_id = $3 or miss_day = $4::date)
+      limit 1
+    `,
+    [walletAddress, courseId, missEventId, missDay],
+  );
+  if (existing.rowCount > 0) {
+    const receipt = existing.rows[0];
+    if (receipt.missEventId === missEventId) {
+      return {
+        missEventId,
+        applied: receipt.applied,
+        reason: receipt.reason,
+        duplicate: true,
+      };
+    }
+    return { missEventId, applied: false, reason: 'DUPLICATE_MISS_DAY', duplicate: true };
+  }
+
+  // (b) freeze enforcement at the writer, not only the caller (R6).
+  if (state.courseCompletedAt != null) {
+    return { missEventId, applied: false, reason: 'COURSE_COMPLETED' };
+  }
+
+  // (c) engine transition.
+  const shielded = Number(state.shields) > 0;
+  const next = applyMissDay({
+    streak: state.currentStreak,
+    shields: state.shields,
+    lapseCount: state.lapseCount,
+    lapseOpen: state.lapseOpen,
+    consecutiveLessonDays: state.consecutiveLessonDays,
+  });
+
+  let reason;
+  let redirectBpsAfter = state.currentYieldRedirectBps;
+  if (shielded) {
+    reason = 'SHIELD_ABSORBED';
+  } else {
+    reason = next.lapseOpen && state.lapseOpen ? 'LAPSE_ALREADY_OPEN' : 'LAPSE_APPLIED';
+    redirectBpsAfter = 10_000 - userYieldBps(next.lapseCount);
+  }
+
+  // (d) persist engine columns + streak (+ redirect only past the shields) +
+  // last_miss_day. saver_count / saver_recovery_mode / extension_days are
+  // never written by the miss path again.
+  await client.query(
+    `
+      update lesson.user_course_runtime_state
+      set shields = $3,
+          lapse_count = $4,
+          lapse_open = $5,
+          consecutive_lesson_days = $6,
+          current_streak = $7,
+          current_yield_redirect_bps = $8,
+          last_miss_day = greatest(coalesce(last_miss_day, $9::date), $9::date),
+          updated_at = now()
+      where wallet_address = $1
+        and course_id = $2
+    `,
+    [
+      walletAddress,
+      courseId,
+      next.shields,
+      next.lapseCount,
+      next.lapseOpen,
+      next.consecutiveLessonDays,
+      next.streak,
+      redirectBpsAfter,
+      missDay,
+    ],
+  );
+
+  // Receipt insert stays STRICT (no on-conflict): a racing duplicate violates
+  // 0045's unique day index and rolls this whole transaction — including the
+  // state mutation above — back. Fail closed. Legacy NOT NULL saver/extension
+  // columns are filled with unchanged before==after values.
+  await client.query(
+    `
+      insert into lesson.miss_consequence_receipts (
+        wallet_address,
+        course_id,
+        miss_event_id,
+        miss_day,
+        applied,
+        reason,
+        saver_count_before,
+        saver_count_after,
+        redirect_bps_before,
+        redirect_bps_after,
+        extension_days_before,
+        extension_days_after
+      )
+      values ($1, $2, $3, $4::date, $5, $6, $7, $8, $9, $10, $11, $12)
+    `,
+    [
+      walletAddress,
+      courseId,
+      missEventId,
+      missDay,
+      true,
+      reason,
+      state.saverCount,
+      state.saverCount,
+      state.currentYieldRedirectBps,
+      redirectBpsAfter,
+      state.extensionDays,
+      state.extensionDays,
+    ],
+  );
+
+  return { missEventId, applied: true, reason, next };
+}
+
+// Sweep-facing exports (lapse-sweep ruling): the sweep must use THIS miss
+// core and THIS row lock — reimplementing either anywhere is forbidden.
+// Caller contract is applyMissConsequenceLocked's: wallet-scoped transaction,
+// row lock held via lockRuntimeStateForSweep.
+export const applyMissConsequenceForSweep = applyMissConsequenceLocked;
+
+export async function lockRuntimeStateForSweep(client, walletAddress, courseId) {
+  return ensureCourseRuntimeState(client, walletAddress, courseId, { forUpdate: true });
+}
+
+// Re-read inside the same transaction (the row lock is already held).
+export async function rereadRuntimeStateForSweep(client, walletAddress, courseId) {
+  return ensureCourseRuntimeState(client, walletAddress, courseId);
+}
+
 export async function consumeSaverOrApplyFullConsequence(
   walletAddress,
   courseId,
@@ -3947,139 +4492,34 @@ export async function consumeSaverOrApplyFullConsequence(
     };
   }
 
-  return withTransactionAsWallet(walletAddress, async (client) => {
-    const existingReceipt = await readMissConsequenceReceipt(
-      client,
-      walletAddress,
-      courseId,
-      missEventId,
-    );
-
-    if (existingReceipt) {
+  try {
+    return await withTransactionAsWallet(walletAddress, async (client) => {
+      const state = await ensureCourseRuntimeState(client, walletAddress, courseId, {
+        forUpdate: true,
+      });
+      const result = await applyMissConsequenceLocked(
+        client,
+        state,
+        missDayValue,
+        missEventId,
+      );
       const courseRuntime = await readCourseRuntimeState(client, walletAddress, courseId);
       return {
         missEventId,
-        applied: existingReceipt.applied,
-        reason: existingReceipt.reason,
+        applied: result.applied,
+        reason: result.reason,
         courseRuntime,
       };
+    });
+  } catch (error) {
+    // A concurrent producer won the unique day index race (0045). The losing
+    // transaction — state mutation included — rolled back; report the day as
+    // already judged instead of throwing (enroll ruling R16).
+    if (error?.code === '23505') {
+      return { missEventId, applied: false, reason: 'DUPLICATE_MISS_DAY' };
     }
-
-    const state = await ensureCourseRuntimeState(client, walletAddress, courseId);
-    const saverCountBefore = state.saverCount;
-    const redirectBpsBefore = state.currentYieldRedirectBps;
-    const extensionDaysBefore = state.extensionDays;
-
-    // New saver model:
-    //   savers banked > 0 → consume one, redirect ramps a tier, streak STAYS
-    //   no savers banked → streak resets to 0, redirect caps at 20%, no
-    //                       further escalation. User can re-buy savers
-    //                       from the shop with ichor to undo the ramp.
-    let applied = true;
-    let reason = 'SAVER_CONSUMED';
-    let saverCountAfter = saverCountBefore;
-    let redirectBpsAfter = redirectBpsBefore;
-    const extensionDaysAfter = extensionDaysBefore; // no extension-day penalty
-    const saverRecoveryMode = false; // gauntlet-era flag, kept dormant
-    let currentStreak = state.currentStreak;
-
-    if (state.saverCount < 3) {
-      // Has savers to consume — protect the streak, bump the redirect tier.
-      saverCountAfter = state.saverCount + 1;
-      redirectBpsAfter = getSaverRedirectBps(saverCountAfter);
-      reason = 'SAVER_CONSUMED';
-    } else {
-      // All savers exhausted — streak resets, redirect stays at 20% cap.
-      currentStreak = 0;
-      redirectBpsAfter = getSaverRedirectBps(3);
-      reason = 'STREAK_BROKEN';
-    }
-
-    await client.query(
-      `
-        update lesson.user_course_runtime_state
-        set current_streak = $3,
-            saver_count = $4,
-            saver_recovery_mode = $5,
-            current_yield_redirect_bps = $6,
-            extension_days = $7,
-            last_miss_day = $8::date,
-            updated_at = now()
-        where wallet_address = $1
-          and course_id = $2
-      `,
-      [
-        walletAddress,
-        courseId,
-        currentStreak,
-        saverCountAfter,
-        saverRecoveryMode,
-        redirectBpsAfter,
-        extensionDaysAfter,
-        missDayValue,
-      ],
-    );
-
-    // v2 shield/lapse: a miss-day burns a shield or (shields gone) opens a
-    // lapse. This is what actually advances lapse_count for the voucher tier.
-    await applyShieldLapseTransition(client, state, 'miss');
-
-    await client.query(
-      `
-        insert into lesson.miss_consequence_receipts (
-          wallet_address,
-          course_id,
-          miss_event_id,
-          miss_day,
-          applied,
-          reason,
-          saver_count_before,
-          saver_count_after,
-          redirect_bps_before,
-          redirect_bps_after,
-          extension_days_before,
-          extension_days_after
-        )
-        values (
-          $1,
-          $2,
-          $3,
-          $4::date,
-          $5,
-          $6,
-          $7,
-          $8,
-          $9,
-          $10,
-          $11,
-          $12
-        )
-      `,
-      [
-        walletAddress,
-        courseId,
-        missEventId,
-        missDayValue,
-        applied,
-        reason,
-        saverCountBefore,
-        saverCountAfter,
-        redirectBpsBefore,
-        redirectBpsAfter,
-        extensionDaysBefore,
-        extensionDaysAfter,
-      ],
-    );
-
-    const courseRuntime = await readCourseRuntimeState(client, walletAddress, courseId);
-
-    return {
-      missEventId,
-      applied,
-      reason,
-      courseRuntime,
-    };
-  });
+    throw error;
+  }
 }
 
 export async function consumeDailyFuel(
@@ -4124,7 +4564,9 @@ export async function consumeDailyFuel(
       };
     }
 
-    const state = await ensureCourseRuntimeState(client, walletAddress, courseId);
+    const state = await ensureCourseRuntimeState(client, walletAddress, courseId, {
+      forUpdate: true,
+    });
     const burnedAtDate = new Date(timestamp);
     const lastBurnAt = state.lastBrewerBurnTs
       ? new Date(state.lastBrewerBurnTs)
@@ -4285,6 +4727,10 @@ export async function submitLessonAttempt(walletAddress, lessonId, attemptId, an
       );
       const questionResults = await readAnswerValidationDecisions(client, attempt.attemptId);
 
+      // Practice ruling R9: never fabricate a completionEventId from the
+      // attempt id. A post-gate practice attempt has no verified completion
+      // event, so its absence on an accepted attempt identifies practice;
+      // pre-gate historical replays have events and report practiceMode false.
       return {
         lessonId,
         attemptId: attempt.attemptId,
@@ -4293,7 +4739,8 @@ export async function submitLessonAttempt(walletAddress, lessonId, attemptId, an
         correctAnswers,
         totalQuestions,
         completedAt: attempt.submittedAt,
-        completionEventId: completionEvent?.eventId ?? attempt.attemptId,
+        completionEventId: completionEvent?.eventId ?? null,
+        practiceMode: Boolean(attempt.accepted) && completionEvent == null,
         courseRuntime,
         questionResults,
       };
@@ -4323,10 +4770,54 @@ export async function submitLessonAttempt(walletAddress, lessonId, attemptId, an
       [normalizedAttemptId, timestamp, grading.score, accepted],
     );
 
+    // Practice gate (practice ruling R2): a lesson already completed in
+    // user_lesson_progress, or ANY lesson of a course frozen by
+    // course_completed_at, is practice — grade it, keep the per-attempt audit
+    // rows, but write NOTHING to progress/runtime/events/XP (R3). The
+    // courseCompletedAt clause keeps completion permanent (spec item 21) even
+    // if a catalog reseed later adds new lessons to a completed course; do
+    // NOT use a live fetchModuleCompletion recompute here.
+    let courseId = null;
+    try {
+      courseId = await getCourseIdForPublishedLesson(client, lessonId, attempt.lessonVersionId);
+    } catch (error) {
+      // Fail closed where money moves: an accepted completion cannot proceed
+      // without its course context. Not-accepted responses only report
+      // practiceMode informationally, so they tolerate a missing context.
+      if (accepted) throw error;
+    }
+
+    let isReplay = false;
+    if (courseId != null) {
+      const progressRow = await client.query(
+        `select completed from lesson.user_lesson_progress
+         where wallet_address = $1 and lesson_id = $2
+         limit 1`,
+        [walletAddress, lessonId],
+      );
+      const lessonCompleted = progressRow.rows[0]?.completed === true;
+      if (accepted) {
+        // Writers take the row lock (R11); the same locked read serves the
+        // freeze check.
+        const state = await ensureCourseRuntimeState(client, walletAddress, courseId, {
+          forUpdate: true,
+        });
+        isReplay = lessonCompleted || state.courseCompletedAt != null;
+      } else {
+        const frozenRow = await client.query(
+          `select course_completed_at from lesson.user_course_runtime_state
+           where wallet_address = $1 and course_id = $2
+           limit 1`,
+          [walletAddress, courseId],
+        );
+        isReplay = lessonCompleted || frozenRow.rows[0]?.course_completed_at != null;
+      }
+    }
+
     let completionEvent = null;
     let courseRuntime = null;
     let xpResult = null;
-    if (accepted) {
+    if (accepted && !isReplay) {
       await persistLessonProgress(
         client,
         walletAddress,
@@ -4357,6 +4848,26 @@ export async function submitLessonAttempt(walletAddress, lessonId, attemptId, an
         completionEvent.courseId,
         lessonId,
       );
+
+      // Freeze writer (R5): the completing submit stamps course_completed_at
+      // in ITS OWN transaction so the engine can never advance lapse_count —
+      // and cut the voucher bps — after the course is done.
+      if (xpResult?.courseComplete) {
+        await client.query(
+          `update lesson.user_course_runtime_state
+           set course_completed_at = coalesce(course_completed_at, now()),
+               updated_at = now()
+           where wallet_address = $1 and course_id = $2`,
+          [walletAddress, completionEvent.courseId],
+        );
+      }
+    }
+
+    if (accepted && isReplay) {
+      // R8 response contract: practice always carries the CURRENT, unmodified
+      // courseRuntime so the client keeps serverHandled=true and never
+      // double-bumps the local streak.
+      courseRuntime = await readCourseRuntimeState(client, walletAddress, courseId);
     }
 
     const questionResults = buildQuestionResults(grading.attempts);
@@ -4369,10 +4880,11 @@ export async function submitLessonAttempt(walletAddress, lessonId, attemptId, an
       correctAnswers: grading.correctAnswers,
       totalQuestions: grading.totalQuestions,
       completedAt: timestamp,
-      completionEventId: completionEvent?.eventId,
+      completionEventId: accepted && !isReplay ? completionEvent?.eventId : null,
+      practiceMode: isReplay,
       courseRuntime,
       questionResults,
-      xp: xpResult,
+      xp: accepted && !isReplay ? xpResult : null,
     };
   });
 }

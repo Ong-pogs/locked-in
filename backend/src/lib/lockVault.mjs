@@ -72,6 +72,27 @@ function deriveLockAccount(programId, walletAddress, courseId) {
   return lockAccount;
 }
 
+/**
+ * Legacy (v1 lock_vault) lock PDA as base58, derived from the configured
+ * lockVaultProgramId. The runtime scheduler fence (enroll ruling R11) compares
+ * a candidate's stored lock_account_address against this: anything else is a
+ * v2-armed row the legacy worker must never process. Returns null when the
+ * legacy program id is not configured (then nothing can match, so the fence
+ * fails closed by skipping).
+ */
+export function deriveLegacyLockAccountAddress(walletAddress, courseId) {
+  if (!appConfig.lockVaultProgramId) return null;
+  try {
+    return deriveLockAccount(
+      new PublicKey(appConfig.lockVaultProgramId),
+      walletAddress,
+      courseId,
+    ).toBase58();
+  } catch {
+    return null;
+  }
+}
+
 // Custody-core LockAccount: 8 fields. Layout/order/types mirror
 // target/idl/locked_in.json -> types.LockAccount:
 //   owner(pubkey) course_id_hash([u8;32]) stable_mint(pubkey)
