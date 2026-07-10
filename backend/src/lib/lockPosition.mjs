@@ -145,7 +145,13 @@ export async function readLockPosition(walletAddress, courseId, { bypassCache = 
     throw error;
   }
 
-  cache.set(key, { at: Date.now(), value });
+  // Cache the result — but NOT a transient live-value miss on an ACTIVE lock.
+  // Right after a deposit the RPC can briefly not see the just-created
+  // collateral ATA, so readLiveValue returns null; caching that for the full
+  // TTL would show principal-only (no accrual) for a whole minute. Skip the
+  // cache so the next poll recomputes and self-heals.
+  const transientLiveMiss = value.status === 'ACTIVE' && value.liveValueUi == null;
+  if (!transientLiveMiss) cache.set(key, { at: Date.now(), value });
   return value;
 }
 
