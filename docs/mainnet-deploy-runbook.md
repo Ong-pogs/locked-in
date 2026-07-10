@@ -60,7 +60,26 @@ MAINNET_RPC_URL=https://<paid-rpc> DEPLOY_KEYPAIR=<deploy-wallet.json> \
   scripts/deploy/deploy-mainnet.sh
 ```
 
-## 6. `[⚠][RUN]` Transfer upgrade authority to Squads
+## 6. Initialize the vault config `[RUN]` — BEFORE the authority transfer
+
+`initialize_vault_v2` requires the payer to be the program's CURRENT upgrade
+authority. After step 5 that is the deploy wallet, so init now, then transfer
+in step 7.
+
+```bash
+# resolve the real reserve account set (writes /tmp/reserve.json)
+node backend/scripts/resolve-kamino-usdc-reserve.mjs https://<paid-rpc> /tmp/reserve.json
+
+# init: VAULT_AUTHORITY = pubkey of your ops voucher key;
+# pot/fee owners = the Squads vault (distinct USDC vaults are created for it).
+MAINNET_RPC_URL=https://<paid-rpc> DEPLOY_KEYPAIR=<deploy-wallet.json> \
+  VAULT_AUTHORITY=<ops-key-pubkey> \
+  POT_VAULT_OWNER=<SQUADS_VAULT> FEE_VAULT_OWNER=<SQUADS_VAULT> \
+  RESERVE_JSON=/tmp/reserve.json \
+  node scripts/deploy/init-mainnet-vault.mjs
+```
+
+## 7. `[⚠][RUN]` Transfer upgrade authority to Squads
 
 ```bash
 solana program set-upgrade-authority FAuFtXbTAT9SiJTghxdZ1ZD4ShgrdTk2EqgyPxfq2gZ6 \
@@ -68,24 +87,6 @@ solana program set-upgrade-authority FAuFtXbTAT9SiJTghxdZ1ZD4ShgrdTk2EqgyPxfq2gZ
   --url https://<paid-rpc>
 ```
 Do NOT leave the hot deploy wallet as upgrade authority.
-
-## 7. Initialize the vault config `[RUN]`
-
-```bash
-# resolve the real reserve account set (writes /tmp/reserve.json)
-node backend/scripts/resolve-kamino-usdc-reserve.mjs https://<paid-rpc> /tmp/reserve.json
-
-# init: VAULT_AUTHORITY = pubkey of your ops voucher key;
-# pot/fee owners = the Squads vault (distinct vaults are created for it).
-MAINNET_RPC_URL=https://<paid-rpc> DEPLOY_KEYPAIR=<deploy-wallet.json> \
-  VAULT_AUTHORITY=<ops-key-pubkey> \
-  POT_VAULT_OWNER=<SQUADS_VAULT> FEE_VAULT_OWNER=<SQUADS_VAULT> \
-  RESERVE_JSON=/tmp/reserve.json \
-  node scripts/deploy/init-mainnet-vault.mjs
-```
-(The payer must be the current upgrade authority at init time — so init BEFORE
-step 6, or run init from the Squads vault after. Simplest: init in step 5's
-window, then transfer authority in step 6.)
 
 ## 8. Backend env + deploy `[YOU]`
 
