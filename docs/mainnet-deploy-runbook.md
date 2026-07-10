@@ -164,3 +164,19 @@ cd backend && DATABASE_URL=<prod> npm run migrate
 
 These are the reasons "fund + deploy = done" is the *minimal* launch, not the
 *safe-at-scale* launch. Start tiny, your own funds, caps on.
+
+## Deferred audit follow-ups (non-blocking, nice-to-have)
+
+The 2026-07-11 adversarial audit found 34 gaps; the HIGH + money-critical +
+mainnet-functional ones are all fixed (commits `ae38202..298167d`). These
+remain as polish and do not block a capped, own-funds-first launch:
+
+- **M8/M9** — deposit form does not pre-check the global TVL cap or that the
+  wallet holds enough SOL for fees before prompting a signature (the on-chain
+  program still rejects an over-cap deposit; the tx just fails later).
+- **M10** — deposit min/max/cap are hardcoded (10/50/1000) rather than decoded
+  from the on-chain config; correct as long as init uses those values.
+- **L1** — yield tick extrapolates at a fixed 5% with no staleness clamp.
+- **L6** — claim confirmation gives up at 30s without a final history check.
+- **L8** — two lesson-complete paths skip the server call (voucher issuance is
+  still server-gated, so this is a local-state, not money-integrity, issue).
