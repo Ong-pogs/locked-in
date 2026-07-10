@@ -66,3 +66,5 @@ web/dungeon/node_modules/
 .surfpool/
 .agents/
 claude-session.jsonl
+
+keys/
