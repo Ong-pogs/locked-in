@@ -94,7 +94,7 @@ describe('vaultV2 account-order pins', () => {
     ]);
   });
 
-  it('claim_v2: [ed25519, compute_budget, claim] with 19 keys in the proven order', async () => {
+  it('claim_v2: [compute_budget, ed25519, claim] with 19 keys in the proven order (devnet/mock: no refresh)', async () => {
     const config = syntheticConfig(v2);
     const lock = await v2.deriveLockPda(OWNER.toBase58(), 'test-kitchen');
     const voucher = {
@@ -107,8 +107,13 @@ describe('vaultV2 account-order pins', () => {
     };
     const tx = await v2.buildClaimTransaction(OWNER.toBase58(), 'test-kitchen', voucher, config);
     expect(tx.instructions).toHaveLength(3);
-    // ix0 = ed25519 precompile, ix1 = compute budget, ix2 = claim
+    // ix0 = compute budget, ix1 = ed25519 precompile, ix2 = claim (mock reserve
+    // → no refresh_reserve). verify_voucher scans all ixs, so ed25519 position
+    // is flexible; claim stays last.
     expect(tx.instructions[0].programId.toBase58()).toBe(
+      'ComputeBudget111111111111111111111111111111',
+    );
+    expect(tx.instructions[1].programId.toBase58()).toBe(
       'Ed25519SigVerify111111111111111111111111111',
     );
     const lockLiquidity = getAssociatedTokenAddressSync(config.usdcMint, lock, true);
@@ -135,6 +140,43 @@ describe('vaultV2 account-order pins', () => {
       [ASSOCIATED_TOKEN_PROGRAM_ID.toBase58(), false, false],
       [SystemProgram.programId.toBase58(), false, false],
     ]);
+  });
+
+  it('real klend: deposit + claim inject refresh_reserve; devnet mock does not', async () => {
+    const KLEND = 'KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD';
+    const SCOPE = '3t4JZcueEzTbVP6kLxXrL3VpWx45jDer4eqysweBchNH';
+    const config = { ...syntheticConfig(v2), kaminoProgram: new PublicKey(KLEND) };
+
+    const dep = await v2.buildDepositTransaction(OWNER.toBase58(), 'test-kitchen', 25_000_000n, config);
+    // [compute_budget, refresh_reserve, lock_funds]
+    expect(dep.instructions).toHaveLength(3);
+    const refresh = dep.instructions[1];
+    expect(refresh.programId.toBase58()).toBe(KLEND);
+    expect(refresh.data).toEqual(Buffer.from([2, 218, 138, 235, 79, 201, 25, 102]));
+    expect(refresh.keys).toHaveLength(6);
+    // reserve(writable), market, pyth=KLEND, sbPrice=KLEND, sbTwap=KLEND, scope
+    expect(meta(refresh)).toEqual([
+      [config.kaminoReserve.toBase58(), true, false],
+      [config.kaminoMarket.toBase58(), false, false],
+      [KLEND, false, false],
+      [KLEND, false, false],
+      [KLEND, false, false],
+      [SCOPE, false, false],
+    ]);
+
+    const voucher = {
+      lock: (await v2.deriveLockPda(OWNER.toBase58(), 'test-kitchen')).toBase58(),
+      authorityPubkey: Keypair.generate().publicKey.toBase58(),
+      bps: 10_000,
+      expiry: 1_893_456_000,
+      message: Buffer.alloc(91).toString('base64'),
+      signature: Buffer.alloc(64).toString('base64'),
+    };
+    const claim = await v2.buildClaimTransaction(OWNER.toBase58(), 'test-kitchen', voucher, config);
+    // [compute_budget, refresh_reserve, ed25519, claim]
+    expect(claim.instructions).toHaveLength(4);
+    expect(claim.instructions[1].programId.toBase58()).toBe(KLEND);
+    expect(claim.instructions[2].programId.toBase58()).toBe('Ed25519SigVerify111111111111111111111111111');
   });
 
   it('rejects a voucher whose lock does not match the derived PDA', async () => {

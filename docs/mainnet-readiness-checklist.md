@@ -98,13 +98,21 @@
 **Phase 4 — Infra hardening (parallel with 3).** Migration runner with a tracking table wired to predeploy; Sentry + alerting; promote services to IaC; verified backup/restore runbook; paid/proxied RPC; per-IP/per-wallet rate limiting; `trustProxy`.
 
 **Phase 5 — Staged rollout.** Launch with small per-deposit and global TVL caps, monitored outflows, and a kill switch (pause). Increase limits gradually only after clean operation and audit remediation are confirmed.
-- [ ] **Client tx shape vs real Kamino**: `buildClaimTransaction`/`buildDepositTransaction`
-  (web-app/services/solana/vaultV2.ts) must adopt the spec §3 order
-  `[compute_budget, refresh_reserve, ed25519_verify, claim]` (pass
-  `refresh_reserve` via the `prepend` param) and pass a surfpool mainnet-fork
-  smoke before cutover. Green devnet e2e does NOT certify mainnet tx shape —
-  the devnet mock reserve needs no refresh. Update
-  `__tests__/services/solana/vaultV2.accounts.test.ts` pins with it.
+- [x] **Client tx shape vs real Kamino — PROVEN 2026-07-10 on a surfpool
+  mainnet fork.** `buildDepositTransaction`/`buildClaimTransaction`
+  (web-app/services/solana/vaultV2.ts) now inject `refresh_reserve` via
+  `buildRefreshReserveIx` when `config.kaminoProgram == klend` (null on the
+  devnet mock): deposit `[compute_budget, refresh_reserve, lock_funds]`, claim
+  `[compute_budget, refresh_reserve, ed25519_verify, claim]`. A full
+  deposit→claim round-trip against the REAL Kamino main-market USDC reserve
+  (`D6q6wuQSrifJKZYpR1M8R4YawnLDtDsMmWM1NbBmgJ59`) was accepted by klend on a
+  surfpool fork — deposit CPI minted cTokens, redeem CPI + settle returned
+  principal (minus klend integer-rounding dust), lock closed. Reproduce:
+  `backend/scripts/fork-proof-kamino-roundtrip.mjs` (see
+  `docs/real-kamino-fork-proof.md`). Account pins updated in
+  `__tests__/services/solana/vaultV2.accounts.test.ts` (klend-path case).
+  NOTE: yield MAGNITUDE is not demonstrable on a frozen-oracle fork (klend
+  max_age 180s); it accrues live on mainnet.
 
 ## v2 audit follow-ups (adversarial swarm, 2026-07-10)
 
@@ -113,9 +121,15 @@
   `user_course_enrollments`/lock metadata on deposit, so a v2 lock is invisible after a
   storage clear or on another device — `restoreFromBackend` and on-chain discovery can't
   see it. Add an enroll-on-deposit endpoint or a v2 deposit indexer before launch.
-- [ ] **Real-Kamino exchange rate (HIGH, position value)**: `lockPosition.mjs` computes
-  live value from the devnet **mock** reserve's slot-linear rate. Real Kamino needs the
-  klend collateral exchange rate; returns `null` (falls back to principal) until then.
+- [x] **Real-Kamino exchange rate (HIGH, position value) — DONE 2026-07-10.**
+  `lockPosition.mjs` now branches on `config.kamino_program`: for real klend it
+  reads the collateral exchange rate via klend-sdk
+  (`getCollateralExchangeRate()`), value = shares ÷ rate, cached 60s per reserve
+  (one market load/min across all locks). Mock path unchanged for devnet.
+  Verified against the fork: 20,992,045 shares ÷ 0.8397 = exactly 25.000000
+  USDC (matches the deposit). Also fixed: the APY reader and this reader must
+  pin the ACTIVE reserve `D6q6wuQS…` — `getReserveBySymbol('USDC')` returns an
+  obsolete status=2 reserve whose live APY reads 0.000% (active reads ~4.4%).
 - [ ] **Platform-fee display (LOW)**: the claim breakdown shows yield-kept % from
   `voucher.bps` only; if `set_config_v2` sets a non-zero `platform_fee_bps`, "Yield kept
   100%" overstates by the fee. Wire the fee into the breakdown if a fee is ever enabled.

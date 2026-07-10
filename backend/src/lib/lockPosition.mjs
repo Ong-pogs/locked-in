@@ -2,10 +2,9 @@
 // a (wallet, course) lock. The card arms CLAIM only on status === 'ACTIVE';
 // the live value is collateral shares × the reserve exchange rate.
 //
-// Exchange-rate source: the VaultV2Config's liquidity-supply token account
-// divided by the collateral mint supply — exact for the devnet mock reserve
-// (share-based). For real Kamino this must switch to the klend SDK exchange
-// rate; if the rate is unreadable we return liveValueUi: null, never a guess.
+// Exchange-rate source: the devnet mock reserve's slot-linear rate (inline);
+// for real Kamino, the klend SDK collateral exchange rate (cached per reserve).
+// If the rate is unreadable we return liveValueUi: null, never a guess.
 
 import { Connection, PublicKey } from '@solana/web3.js';
 import { getAssociatedTokenAddressSync } from '@solana/spl-token';
@@ -19,6 +18,32 @@ const CONFIG_SEED = Buffer.from('vault-v2b');
 const MOCK_RESERVE_PROGRAM = '3kqzsQV7Ab8aakkNugM9aXBqQrgwnshF6a47HxJcfLtp';
 const RATE_SCALE = 1_000_000_000_000n; // 1e12, mock_reserve RATE_SCALE
 const SLOTS_PER_YEAR = 63_072_000n; // mock_reserve SLOTS_PER_YEAR
+
+// Real Kamino Lend (klend) mainnet program. Live value on real Kamino =
+// shares ÷ collateral_exchange_rate (klend SDK) — proven to match the deposit
+// exactly on a surfpool fork (fork-proof-kamino-roundtrip.mjs).
+const KLEND_PROGRAM = 'KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD';
+// One market load per TTL across all locks (rate is per-reserve, not per-lock).
+const klendRateCache = new Map(); // reserveB58 -> { at, rate }
+async function klendCollateralExchangeRate(marketB58, reserveB58) {
+  const hit = klendRateCache.get(reserveB58);
+  if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.rate;
+  const { KaminoMarket } = await import('@kamino-finance/klend-sdk');
+  const { createSolanaRpc, address } = await import('@solana/kit');
+  const rpc = createSolanaRpc(appConfig.solanaRpcUrl);
+  const market = await KaminoMarket.load(rpc, address(marketB58), 450, address(KLEND_PROGRAM));
+  if (!market) throw new Error('KaminoMarket.load returned null');
+  await market.loadReserves();
+  let reserve = null;
+  for (const [pk, r] of market.reserves) {
+    if (pk.toString() === reserveB58) { reserve = r; break; }
+  }
+  if (!reserve) throw new Error(`klend reserve ${reserveB58} not in market ${marketB58}`);
+  const rate = Number(reserve.getCollateralExchangeRate().toString()); // collateral per liquidity
+  if (!Number.isFinite(rate) || rate <= 0) throw new Error('bad klend exchange rate');
+  klendRateCache.set(reserveB58, { at: Date.now(), rate });
+  return rate;
+}
 
 // LockV2 layout (fixed Anchor offsets, pinned by the devnet-proven client):
 // disc[8] owner[32] course_id_hash[32] principal u64@72 lock_start i64@80 status u8@88
@@ -63,6 +88,7 @@ async function readLiveValue(conn, programId, lockPda) {
     // collateral_mint @232.
     const kaminoProgram = new PublicKey(configInfo.data.subarray(72, 104));
     const kaminoReserve = new PublicKey(configInfo.data.subarray(104, 136));
+    const kaminoMarket = new PublicKey(configInfo.data.subarray(136, 168));
     const collateralMint = new PublicKey(configInfo.data.subarray(232, 264));
 
     const lockCollateralAta = getAssociatedTokenAddressSync(collateralMint, lockPda, true);
@@ -73,9 +99,17 @@ async function readLiveValue(conn, programId, lockPda) {
     // Live value = what a redeem would pay = shares × exchange_rate. This MUST
     // match the reserve's settlement math, not a pool-balance/share-supply
     // ratio (which overstates: liquidity_supply pools every lock's deposit).
-    // Only the devnet mock reserve's rate is computed here; real Kamino needs
-    // the klend collateral exchange rate (mainnet-readiness blocker).
-    if (kaminoProgram.toBase58() !== MOCK_RESERVE_PROGRAM) return null;
+    const programB58 = kaminoProgram.toBase58();
+
+    // Real Kamino: value = shares ÷ collateral_exchange_rate (klend SDK).
+    if (programB58 === KLEND_PROGRAM) {
+      const rate = await klendCollateralExchangeRate(kaminoMarket.toBase58(), kaminoReserve.toBase58());
+      const valueAtomic = BigInt(Math.round(Number(shares) / rate));
+      return formatAtomicUi(valueAtomic, sharesBal.value.decimals ?? 6);
+    }
+
+    // Only the devnet mock reserve's rate is computed inline below.
+    if (programB58 !== MOCK_RESERVE_PROGRAM) return null;
 
     const reserveInfo = await conn.getAccountInfo(kaminoReserve);
     if (!reserveInfo) return null;

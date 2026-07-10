@@ -80,11 +80,12 @@ export async function readKaminoSupplyApyBps() {
   const now = Date.now();
   const marketAddressValue = getKaminoMarketAddressValue();
   const reserveSymbol = appConfig.yieldKaminoReserveSymbol.trim().toUpperCase();
+  const reserveSelector = (appConfig.yieldKaminoReserveAddress ?? '').trim() || reserveSymbol;
   if (
     cachedKaminoApy &&
     cachedKaminoApy.rpcUrl === appConfig.yieldKaminoRpcUrl &&
     cachedKaminoApy.marketAddress === marketAddressValue &&
-    cachedKaminoApy.reserveSymbol === reserveSymbol &&
+    cachedKaminoApy.reserveSelector === reserveSelector &&
     cachedKaminoApy.expiresAt > now
   ) {
     return cachedKaminoApy.apyBps;
@@ -110,9 +111,19 @@ export async function readKaminoSupplyApyBps() {
   }
 
   await market.loadReserves();
-  const reserve = market.getReserveBySymbol(reserveSymbol);
-  if (!reserve) {
-    throw new Error(`Kamino reserve ${reserveSymbol} was not found in the configured market.`);
+  // Prefer an explicit reserve address: getReserveBySymbol('USDC') returns an
+  // OBSOLETE (status=2, deposit-limit-0) reserve on the main market — its APY
+  // is not the live rate. Pin the active reserve by address on mainnet.
+  const reserveAddress = (appConfig.yieldKaminoReserveAddress ?? '').trim();
+  let reserve = null;
+  if (reserveAddress) {
+    for (const [pk, r] of market.reserves) {
+      if (pk.toString() === reserveAddress) { reserve = r; break; }
+    }
+    if (!reserve) throw new Error(`Kamino reserve ${reserveAddress} was not found in the configured market.`);
+  } else {
+    reserve = market.getReserveBySymbol(reserveSymbol);
+    if (!reserve) throw new Error(`Kamino reserve ${reserveSymbol} was not found in the configured market.`);
   }
 
   const currentSlot = await rpc.getSlot({ commitment: 'confirmed' }).send();
@@ -122,7 +133,7 @@ export async function readKaminoSupplyApyBps() {
   cachedKaminoApy = {
     rpcUrl: appConfig.yieldKaminoRpcUrl,
     marketAddress: marketAddressValue,
-    reserveSymbol,
+    reserveSelector,
     apyBps,
     fetchedAt: new Date(now).toISOString(),
     expiresAt: now + Math.max(1_000, Number(appConfig.yieldStrategyApyCacheMs ?? 60_000)),

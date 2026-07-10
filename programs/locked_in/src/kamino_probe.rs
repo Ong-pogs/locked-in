@@ -22,7 +22,7 @@ pub fn kamino_roundtrip(ctx: Context<KaminoRoundtrip>, amount: u64) -> Result<()
     let seeds: &[&[&[u8]]] = &[&[PROBE_SEED, &[bump]]];
 
     deposit_reserve_liquidity(
-        KaminoDeposit {
+        &KaminoDeposit {
             klend_program: ctx.accounts.klend_program.to_account_info(),
             owner: ctx.accounts.probe_authority.to_account_info(),
             reserve: ctx.accounts.reserve.to_account_info(),
@@ -45,7 +45,7 @@ pub fn kamino_roundtrip(ctx: Context<KaminoRoundtrip>, amount: u64) -> Result<()
     let collateral = ctx.accounts.probe_collateral.amount;
 
     redeem_reserve_collateral(
-        KaminoRedeem {
+        &KaminoRedeem {
             klend_program: ctx.accounts.klend_program.to_account_info(),
             owner: ctx.accounts.probe_authority.to_account_info(),
             lending_market: ctx.accounts.lending_market.to_account_info(),

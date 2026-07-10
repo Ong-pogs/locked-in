@@ -36,6 +36,46 @@ export const LOCK_STATUS_CLOSED = 2;
 const rawProgramId = (process.env.NEXT_PUBLIC_VAULT_V2_PROGRAM_ID ?? '').trim();
 const rawUsdcMint = (process.env.NEXT_PUBLIC_LOCK_VAULT_USDC_MINT ?? '').trim();
 
+// Real Kamino Lend (klend) mainnet program. When config.kaminoProgram equals
+// this, deposit/claim MUST carry a klend refresh_reserve instruction (klend
+// rejects a stale reserve, max oracle age 180s). The devnet mock reserve is a
+// different program and needs no refresh, so the prepend is gated on this
+// equality — never added on devnet. Proven on a surfpool mainnet fork by
+// backend/scripts/fork-proof-kamino-roundtrip.mjs.
+const KLEND_PROGRAM_ID = new PublicKey('KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD');
+// sha256("global:refresh_reserve")[..8]
+const REFRESH_RESERVE_DISCRIMINATOR = Buffer.from([2, 218, 138, 235, 79, 201, 25, 102]);
+// Scope prices account for the pinned USDC reserve (public account, not a
+// secret). Default = Kamino main-market USDC scope oracle; override per reserve.
+const rawScopePrices = (
+  process.env.NEXT_PUBLIC_KAMINO_SCOPE_PRICES ?? '3t4JZcueEzTbVP6kLxXrL3VpWx45jDer4eqysweBchNH'
+).trim();
+
+/**
+ * klend refresh_reserve, byte-for-byte as klend-sdk builds it: accounts
+ * [reserve(w), lendingMarket, pyth, switchboardPrice, switchboardTwap,
+ * scopePrices]; absent oracles use the klend program-id sentinel. USDC is
+ * Scope-only. Returns null for the devnet mock reserve (no refresh needed).
+ */
+export function buildRefreshReserveIx(config: VaultV2Config): TransactionInstruction | null {
+  if (!config.kaminoProgram.equals(KLEND_PROGRAM_ID)) return null;
+  const scope = parsePublicKey(rawScopePrices);
+  if (!scope) throw new Error('Missing NEXT_PUBLIC_KAMINO_SCOPE_PRICES for real Kamino refresh_reserve.');
+  const ro = (pk: PublicKey) => ({ pubkey: pk, isSigner: false, isWritable: false });
+  return new TransactionInstruction({
+    programId: KLEND_PROGRAM_ID,
+    keys: [
+      { pubkey: config.kaminoReserve, isSigner: false, isWritable: true },
+      ro(config.kaminoMarket),
+      ro(KLEND_PROGRAM_ID), // pyth (unused → sentinel)
+      ro(KLEND_PROGRAM_ID), // switchboard price (unused → sentinel)
+      ro(KLEND_PROGRAM_ID), // switchboard twap (unused → sentinel)
+      ro(scope),
+    ],
+    data: REFRESH_RESERVE_DISCRIMINATOR,
+  });
+}
+
 export interface VaultV2Config {
   configAddress: PublicKey;
   authority: PublicKey;
@@ -266,7 +306,10 @@ export async function buildDepositTransaction(
   });
   const tx = new Transaction();
   for (const pre of prepend) tx.add(pre);
-  return tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })).add(ix);
+  tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }));
+  const refresh = buildRefreshReserveIx(config); // null on devnet/mock
+  if (refresh) tx.add(refresh);
+  return tx.add(ix);
 }
 
 /**
@@ -275,11 +318,10 @@ export async function buildDepositTransaction(
  * compute_budget, claim]; the program scans instructions for the precompile.
  * `voucher` is the backend endpoint's response for this (owner, course).
  *
- * MAINNET BLOCKER (docs/mainnet-readiness-checklist.md): against real Kamino
- * this must become [compute_budget, refresh_reserve, ed25519_verify, claim] —
- * pass refresh_reserve via `prepend`. The devnet mock reserve needs no refresh
- * and this order is the devnet-proven one, byte-for-byte. Fix here, never in
- * pages.
+ * Against real Kamino the tx is [compute_budget, refresh_reserve,
+ * ed25519_verify, claim]; buildRefreshReserveIx injects refresh_reserve when
+ * config.kaminoProgram == klend (null on the devnet mock). Proven byte-for-byte
+ * on a surfpool mainnet fork (backend/scripts/fork-proof-kamino-roundtrip.mjs).
  */
 export async function buildClaimTransaction(
   ownerAddress: string,
@@ -332,10 +374,13 @@ export async function buildClaimTransaction(
 
   const tx = new Transaction();
   for (const pre of prepend) tx.add(pre);
-  return tx
-    .add(edIx)
-    .add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }))
-    .add(claimIx);
+  tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }));
+  const refresh = buildRefreshReserveIx(config); // null on devnet/mock
+  if (refresh) tx.add(refresh);
+  // [compute_budget, refresh_reserve?, ed25519_verify, claim]. The program
+  // scans instructions for the precompile, so ed25519 position is flexible;
+  // refresh must precede the redeem CPI. Proven on the surfpool mainnet fork.
+  return tx.add(edIx).add(claimIx);
 }
 
 /** Read + decode the LockV2 account for (owner, course). Null if it doesn't exist. */

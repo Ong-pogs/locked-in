@@ -91,6 +91,9 @@ function resolveYieldStrategyProfile(profile) {
         kaminoRpcUrl: 'https://api.mainnet-beta.solana.com',
         kaminoMarketAddress: '7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF',
         kaminoReserveSymbol: 'USDC',
+        // Active main-market USDC reserve (getReserveBySymbol returns an
+        // obsolete status=2 one). Pinned so displayed APY is the live rate.
+        kaminoReserveAddress: 'D6q6wuQSrifJKZYpR1M8R4YawnLDtDsMmWM1NbBmgJ59',
       };
     case 'kamino_surfpool':
       return {
@@ -101,6 +104,9 @@ function resolveYieldStrategyProfile(profile) {
         kaminoRpcUrl: 'http://127.0.0.1:8899',
         kaminoMarketAddress: '7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF',
         kaminoReserveSymbol: 'USDC',
+        // Active main-market USDC reserve (getReserveBySymbol returns an
+        // obsolete status=2 one). Pinned so displayed APY is the live rate.
+        kaminoReserveAddress: 'D6q6wuQSrifJKZYpR1M8R4YawnLDtDsMmWM1NbBmgJ59',
       };
     case 'kamino_devnet_demo':
       return {
@@ -111,6 +117,9 @@ function resolveYieldStrategyProfile(profile) {
         kaminoRpcUrl: 'https://api.mainnet-beta.solana.com',
         kaminoMarketAddress: '7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF',
         kaminoReserveSymbol: 'USDC',
+        // Active main-market USDC reserve (getReserveBySymbol returns an
+        // obsolete status=2 one). Pinned so displayed APY is the live rate.
+        kaminoReserveAddress: 'D6q6wuQSrifJKZYpR1M8R4YawnLDtDsMmWM1NbBmgJ59',
       };
     case 'kamino_usdc_mainnet':
       return {
@@ -122,6 +131,9 @@ function resolveYieldStrategyProfile(profile) {
         kaminoRpcUrl: 'https://api.mainnet-beta.solana.com',
         kaminoMarketAddress: '7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF',
         kaminoReserveSymbol: 'USDC',
+        // Active main-market USDC reserve (getReserveBySymbol returns an
+        // obsolete status=2 one). Pinned so displayed APY is the live rate.
+        kaminoReserveAddress: 'D6q6wuQSrifJKZYpR1M8R4YawnLDtDsMmWM1NbBmgJ59',
       };
     default:
       return null;
@@ -214,6 +226,11 @@ export const appConfig = {
   yieldKaminoReserveSymbol: isYieldProfileActive
     ? yieldStrategyProfileDefaults.kaminoReserveSymbol
     : process.env.YIELD_KAMINO_RESERVE_SYMBOL ?? 'USDC',
+  // Explicit reserve address wins over symbol — getReserveBySymbol('USDC')
+  // returns an obsolete main-market reserve whose APY is not the live rate.
+  yieldKaminoReserveAddress:
+    process.env.YIELD_KAMINO_RESERVE_ADDRESS ??
+    (isYieldProfileActive ? yieldStrategyProfileDefaults.kaminoReserveAddress ?? '' : ''),
   yieldStrategyApyCacheMs: optionalInt('YIELD_STRATEGY_APY_CACHE_MS', 60_000),
   solanaRpcUrl:
     process.env.SOLANA_RPC_URL ??

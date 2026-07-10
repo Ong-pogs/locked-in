@@ -1,3 +1,4 @@
 node_modules/
 .vitest/
 coverage/
+programs/mock_reserve/mock_reserve-keypair.json
