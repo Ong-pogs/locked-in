@@ -93,18 +93,15 @@ export const NAV_ITEMS: { href: string; label: string; icon: (props: { color: st
   { href: '/dashboard', label: 'Dashboard', icon: IconFlame, group: 'learn' },
   // Streaks folded into /dashboard. Sidebar/BottomNav are also disabled
   // app-wide (showChrome=false in AppShell) — kept here in case re-enabled.
-  { href: '/alchemy', label: 'Alchemy', icon: IconAlchemy, group: 'economy' },
-  { href: '/shop', label: 'Rewards', icon: IconRewards, group: 'economy' },
-  { href: '/inventory', label: 'Inventory', icon: IconInventory, group: 'economy', isNew: true },
+  // /alchemy, /shop, /inventory removed in the v2 legacy-deletion phase 2 so
+  // re-enabling chrome cannot resurrect dead tabs.
   { href: '/leaderboard', label: 'Leaderboard', icon: IconLeaderboard, group: 'social' },
   { href: '/community-pot', label: 'Community', icon: IconCommunity, group: 'social' },
   // Profile folded into /dashboard.
 ];
 
-/** Primary 5 tabs for mobile bottom bar */
+/** Primary tabs for mobile bottom bar */
 export const BOTTOM_NAV_ITEMS = [
   { href: '/courses', label: 'Courses', icon: IconCourses },
   { href: '/dashboard', label: 'Dashboard', icon: IconFlame },
-  { href: '/alchemy', label: 'Alchemy', icon: IconAlchemy },
-  { href: '/shop', label: 'Rewards', icon: IconRewards },
 ];

@@ -31,17 +31,14 @@ type Building = {
 const BUILDINGS: Building[] = [
   // Far-left tudor (biggest)        → Courses (Academy)
   { id: 'academy', outline: '/images/village/outlines/outline-academy.png', route: '/courses', label: 'Academy' },
-  // Left-middle tudor                → Shop (Market)
-  { id: 'cottage', outline: '/images/village/outlines/outline-cottage.png', route: '/shop', label: 'Market' },
   // Small painted notice board       → Leaderboard
   { id: 'notice', outline: '/images/village/outlines/outline-notice.png', route: '/leaderboard', label: 'Leaderboard' },
-  // Center awning stall              → Inventory
-  { id: 'inventory', outline: '/images/village/outlines/outline-inventory.png', route: '/inventory', label: 'Inventory' },
   // Wishing well — decorative (history folded into dashboard activity log)
   // Right-center building            → Tavern (community pot)
   { id: 'tavern', outline: '/images/village/outlines/outline-tavern.png', route: '/community-pot', label: 'Tavern' },
-  // Far-right church-like            → Brewery (alchemy route)
-  { id: 'forge', outline: '/images/village/outlines/outline-forge.png', route: '/alchemy', label: 'Brewery' },
+  // Shop (cottage), Inventory (awning stall), and Brewery (forge) hotspots
+  // were removed in the v2 legacy-deletion phase 2 — their pages are now
+  // redirect stubs to /dashboard and the buildings are decorative.
 ];
 
 // Cozy palette — pulled from the painted village's own colors so the UI
