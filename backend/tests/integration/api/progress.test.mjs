@@ -117,6 +117,9 @@ describe('progress routes - with authentication', () => {
     expect(response.statusCode).not.toBe(401);
   });
 
+  // Longer timeout: with no snapshot the leaderboard computes live with one
+  // devnet RPC per runtime row, and parallel test files add rows to the
+  // shared DB while this runs.
   it('GET /v1/progress/leaderboard returns data with valid auth', async () => {
     const wallet = generateTestWallet();
     const headers = await getTestAuthHeaders(wallet);
@@ -128,7 +131,7 @@ describe('progress routes - with authentication', () => {
     });
 
     expect(response.statusCode).not.toBe(401);
-  });
+  }, 90_000);
 
   it('GET /v1/progress/enrollments returns data with valid auth', async () => {
     const wallet = generateTestWallet();

@@ -12,19 +12,25 @@
 //     (bumps redirect_bps). If all 3 savers are already used → streak
 //     resets to 0, redirect stays at 20% cap.
 import { appConfig } from '../config.mjs';
-import { hasLockVaultReadConfig, readLockAccountSnapshot } from '../lib/lockVault.mjs';
+import {
+  deriveLegacyLockAccountAddress,
+  hasLockVaultReadConfig,
+  readLockAccountSnapshot,
+} from '../lib/lockVault.mjs';
 import {
   createYieldStrategyAdapter,
   deriveHarvestBucketTimestamp,
   hasYieldStrategyConfig,
 } from '../lib/yieldStrategy.mjs';
 import { isFireLit, computeRedirectedAmount } from '../lib/yieldRouting.mjs';
+import { autoMissEventId } from '../lib/missEvents.mjs';
 import {
   consumeSaverOrApplyFullConsequence,
   listRuntimeSchedulerCandidates,
   publishHarvestRedirectToCommunityPot,
   recordHarvestResult,
   syncCourseRuntimeStateWithLockSnapshot,
+  touchRuntimeSchedulerCandidate,
 } from '../modules/progress/repository.mjs';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -110,12 +116,37 @@ function deriveDueMiss(runtime, snapshot, now) {
     return null;
   }
   return {
-    missEventId: `auto-miss:${runtime.walletAddress}:${runtime.courseId}:${nextMissDay}`,
+    missEventId: autoMissEventId(runtime.walletAddress, runtime.courseId, nextMissDay),
     missDay: nextMissDay,
   };
 }
 
-async function processRuntimeCandidate(app, candidate, now) {
+// Exported for tests (the fence is a money-path invariant).
+export async function processRuntimeCandidate(app, candidate, now) {
+  // FENCE (enroll ruling R11): once a row is v2-armed — its stored
+  // lock_account_address is anything but this wallet+course's LEGACY lock
+  // PDA — the legacy worker permanently stops processing that (wallet,
+  // course). v2 owns the row: no legacy harvest, no legacy miss, and no
+  // syncCourseRuntimeStateWithLockSnapshot clobbering v2 custody columns for
+  // dual-lock wallets. Touch the row so it cannot pin the updated_at-asc
+  // queue (batch default 5) and starve legacy processing.
+  const legacyLockAddress = deriveLegacyLockAccountAddress(
+    candidate.walletAddress,
+    candidate.courseId,
+  );
+  if (candidate.lockAccountAddress !== legacyLockAddress) {
+    app.log.info(
+      {
+        walletAddress: candidate.walletAddress,
+        courseId: candidate.courseId,
+        lockAccountAddress: candidate.lockAccountAddress,
+      },
+      'runtime_scheduler.skipped_v2_lock',
+    );
+    await touchRuntimeSchedulerCandidate(candidate.walletAddress, candidate.courseId);
+    return { harvestProcessed: 0, missProcessed: 0 };
+  }
+
   let snapshot;
 
   try {
@@ -129,6 +160,8 @@ async function processRuntimeCandidate(app, candidate, now) {
       },
       'runtime_scheduler.lock_missing',
     );
+    // A dead candidate must not pin the updated_at-asc queue forever.
+    await touchRuntimeSchedulerCandidate(candidate.walletAddress, candidate.courseId);
     return { harvestProcessed: 0, missProcessed: 0 };
   }
 
@@ -216,15 +249,24 @@ async function processRuntimeCandidate(app, candidate, now) {
   }
 
   // ── Miss-day consequence ───────────────────────────────────────────
-  const dueMiss = deriveDueMiss(
-    {
-      ...runtime,
-      walletAddress: candidate.walletAddress,
-      lastMissDay: candidate.lastMissDay,
-    },
-    snapshot,
-    now,
-  );
+  // Retired by default (lapse-sweep ruling R19): the daily sweep is the miss
+  // judge now; this block only runs when LEGACY_MISS_ENGINE_ENABLED is set.
+  // A completed course is frozen (practice ruling R6) — its lapse_count is
+  // voucher money and must never advance after completion.
+  const courseCompleted =
+    candidate.courseCompletedAt != null || runtime?.courseCompletedAt != null;
+  const dueMiss =
+    appConfig.legacyMissEngineEnabled && !courseCompleted
+      ? deriveDueMiss(
+          {
+            ...runtime,
+            walletAddress: candidate.walletAddress,
+            lastMissDay: candidate.lastMissDay,
+          },
+          snapshot,
+          now,
+        )
+      : null;
 
   if (dueMiss) {
     try {

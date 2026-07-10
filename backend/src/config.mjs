@@ -169,6 +169,14 @@ export const appConfig = {
   runtimeSchedulerEnabled: optionalBool('RUNTIME_SCHEDULER_ENABLED', false),
   runtimeSchedulerIntervalMs: optionalInt('RUNTIME_SCHEDULER_INTERVAL_MS', 15_000),
   runtimeSchedulerBatchSize: optionalInt('RUNTIME_SCHEDULER_BATCH_SIZE', 5),
+  // Legacy v1 miss engine kill-switch (lapse-sweep ruling R19): the daily
+  // lapse sweep is the miss judge now; the in-process worker's miss block
+  // only runs when this is explicitly re-enabled. Default OFF everywhere.
+  legacyMissEngineEnabled: optionalBool('LEGACY_MISS_ENGINE_ENABLED', false),
+  // Enroll fresh-read retry pacing (enroll ruling R6): PENDING/missing on
+  // enroll is RPC propagation lag; re-read up to 3 times at this interval.
+  // Overridable so tests don't sleep 4.5s per retry-exhaustion case.
+  enrollRetryDelayMs: optionalInt('ENROLL_RETRY_DELAY_MS', 1500),
   answerValidatorHybridEnabled: optionalBool('ANSWER_VALIDATOR_HYBRID_ENABLED', false),
   openaiApiKey: process.env.OPENAI_API_KEY ?? '',
   openaiResponsesBaseUrl: process.env.OPENAI_RESPONSES_BASE_URL ?? 'https://api.openai.com/v1',

@@ -5,7 +5,11 @@ process.env.JWT_ISSUER = 'lockedin-api';
 process.env.JWT_AUDIENCE = 'lockedin-mobile';
 process.env.JWT_ACCESS_TTL = '15m';
 process.env.JWT_REFRESH_TTL = '30d';
-process.env.SCHEDULER_SECRET = 'test-scheduler-secret';
+// >= 32 bytes: boot guard (a) binds on every non-local cluster now (sweep
+// ruling R21) and the test env points at devnet RPC.
+process.env.SCHEDULER_SECRET = 'test-scheduler-secret-that-is-32-bytes-plus';
+// Enroll fresh-read retry pacing — keep retry-exhaustion tests fast.
+process.env.ENROLL_RETRY_DELAY_MS = '20';
 process.env.SOLANA_RPC_URL = 'https://api.devnet.solana.com';
 // lock_vault + community_pot merged into ONE program (`locked_in`); both IDs match.
 process.env.LOCK_VAULT_PROGRAM_ID = '3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav';

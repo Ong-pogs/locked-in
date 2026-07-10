@@ -159,12 +159,14 @@ describe('POST /v1/progress/courses/:courseId/voucher', () => {
     let before = await app.inject({ method: 'POST', url: `/v1/progress/courses/${COURSE_ID}/voucher`, headers });
     expect(before.json().bps).toBe(10_000); // no lapses yet
 
+    // missDay must be a fully-elapsed UTC day (sweep ruling R20); the
+    // endpoint derives the miss_event_id server-side from the day.
     for (let i = 0; i < 4; i += 1) {
       const res = await app.inject({
         method: 'POST',
         url: '/v1/internal/consequences/miss',
         headers: { 'x-scheduler-key': process.env.SCHEDULER_SECRET },
-        payload: { walletAddress: wallet, courseId: COURSE_ID, missEventId: `miss-${i}`, missDay: `2026-08-0${i + 1}` },
+        payload: { walletAddress: wallet, courseId: COURSE_ID, missDay: `2026-06-0${i + 1}` },
       });
       expect(res.statusCode).toBe(200);
     }

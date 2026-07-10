@@ -47,8 +47,10 @@ export function detectCluster(rpcUrl) {
  * Collect every violated guard as a human-readable string. Returns [] when
  * the config is safe to boot.
  *
- *  (a) On any non-devnet cluster, the forgeable auth secrets (JWT, scheduler)
- *      must be at least 32 bytes.
+ *  (a) On any non-local cluster, the forgeable auth secrets (JWT, scheduler)
+ *      must be at least 32 bytes. Devnet is NOT exempt (lapse-sweep ruling
+ *      R21): the long-lived internet-facing devnet deployment now exposes
+ *      scheduler-keyed endpoints that move voucher-relevant state.
  *  (b) A vault_v2 program on mainnet must not run with a mock/dev yield
  *      adapter — real principal would sit in Kamino while the backend
  *      fabricates APY.
@@ -59,8 +61,8 @@ export function collectBootGuardViolations(config) {
   const violations = [];
   const cluster = detectCluster(config.solanaRpcUrl);
 
-  // (a) secret length floor everywhere except devnet.
-  if (cluster !== 'devnet') {
+  // (a) secret length floor everywhere except local development.
+  if (cluster !== 'local') {
     for (const [name, value] of [
       ['JWT_SECRET', config.jwtSecret],
       ['SCHEDULER_SECRET', config.schedulerSecret],
