@@ -4336,8 +4336,10 @@ export async function devCompleteCourse(walletAddress, courseId, { log = null } 
   if (!hasDatabase()) {
     throw new HttpError(503, 'Dev complete requires the database', 'DATABASE_UNAVAILABLE');
   }
-  const pool = getPool();
-  const lessonsRes = await pool.query(
+  // `query` is the pooled helper; wrap it as a { query } client for the readers
+  // that expect a pg-style client.
+  const db = { query };
+  const lessonsRes = await query(
     `SELECT DISTINCT pl.lesson_id as "lessonId", pm.module_order as "mo", pl.lesson_order as "lo"
        FROM lesson.published_modules pm
        JOIN lesson.published_lessons pl
@@ -4351,18 +4353,27 @@ export async function devCompleteCourse(walletAddress, courseId, { log = null } 
   }
 
   const results = [];
+  let accepted = 0;
   for (const { lessonId } of lessonsRes.rows) {
-    const lessonVersion = await getPublishedLessonVersion(pool, lessonId);
-    const questions = await listLessonQuestions(pool, lessonVersion.lessonVersionId);
-    // Submit each question's own correct answer → grades 100%.
-    const answers = questions.map((q) => ({
-      questionId: q.id,
-      answerText: String(q.correctAnswer ?? ''),
-    }));
-    const r = await submitLessonAttempt(walletAddress, lessonId, randomUUID(), answers, { log });
-    results.push({ lessonId, score: r.score, accepted: r.accepted });
+    try {
+      const lessonVersion = await getPublishedLessonVersion(db, lessonId);
+      const questions = await listLessonQuestions(db, lessonVersion.lessonVersionId);
+      // Submit each question's own correct answer → grades 100%.
+      const answers = questions.map((q) => ({
+        questionId: q.id,
+        answerText: String(q.correctAnswer ?? ''),
+      }));
+      const r = await submitLessonAttempt(walletAddress, lessonId, randomUUID(), answers, { log });
+      if (r.accepted) accepted += 1;
+      results.push({ lessonId, score: r.score, accepted: r.accepted });
+    } catch (e) {
+      // Don't fail the whole run on one lesson (e.g. a flaky LLM grade) — record
+      // and continue so the rest of the course still completes.
+      log?.warn?.({ lessonId, err: e instanceof Error ? e.message : String(e) }, 'dev_complete.lesson_failed');
+      results.push({ lessonId, error: e instanceof Error ? e.message : String(e) });
+    }
   }
-  return { courseId, lessonsCompleted: results.length, results };
+  return { courseId, lessonsCompleted: accepted, totalLessons: lessonsRes.rows.length, results };
 }
 
 export async function submitLessonAttempt(
