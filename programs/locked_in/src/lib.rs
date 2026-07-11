@@ -22,14 +22,20 @@ use anchor_lang::prelude::*;
 
 mod caps;
 mod kamino;
+// Dev-only test probe for the klend CPI wrappers — excluded from the mainnet
+// build to shrink the program (smaller .so = less rent).
+#[cfg(feature = "devnet")]
 mod kamino_probe;
 mod pot;
 mod settle;
+// v1 custody escrow (fixed-duration lock, no yield). Superseded by vault_v2;
+// kept only for the devnet legacy path and excluded from mainnet.
+#[cfg(feature = "devnet")]
 mod vault;
 mod vault_v2;
 mod voucher;
-mod window;
 
+#[cfg(feature = "devnet")]
 pub use kamino_probe::*;
 pub use vault_v2::*;
 
@@ -43,6 +49,7 @@ pub use vault_v2::*;
 // re-exports exist purely to surface the Accounts structs + event/error types.
 #[allow(ambiguous_glob_reexports)]
 pub use pot::*;
+#[cfg(feature = "devnet")]
 #[allow(ambiguous_glob_reexports)]
 pub use vault::*;
 
@@ -52,13 +59,15 @@ declare_id!("3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav");
 pub mod locked_in {
     use super::*;
 
-    // ── Vault domain (custody escrow) ────────────────────────────────────
+    // ── Vault domain (v1 custody escrow — devnet-only, excluded from mainnet) ─
 
     /// Initialize the vault custody config (was `lock_vault::initialize_protocol`).
+    #[cfg(feature = "devnet")]
     pub fn initialize_vault(ctx: Context<InitializeVault>, usdc_mint: Pubkey) -> Result<()> {
         vault::initialize_vault(ctx, usdc_mint)
     }
 
+    #[cfg(feature = "devnet")]
     pub fn lock_funds(
         ctx: Context<LockFunds>,
         course_id_hash: [u8; 32],
@@ -68,12 +77,14 @@ pub mod locked_in {
         vault::lock_funds(ctx, course_id_hash, lock_duration_days, stable_amount)
     }
 
+    #[cfg(feature = "devnet")]
     pub fn unlock_funds(ctx: Context<UnlockFunds>) -> Result<()> {
         vault::unlock_funds(ctx)
     }
 
     /// Dev-only: prove the kamino CPI wrappers deposit into and redeem from the
-    /// real klend reserve. Not part of the product surface.
+    /// real klend reserve. Not part of the product surface — devnet-only.
+    #[cfg(feature = "devnet")]
     pub fn kamino_roundtrip(ctx: Context<KaminoRoundtrip>, amount: u64) -> Result<()> {
         kamino_probe::kamino_roundtrip(ctx, amount)
     }
@@ -152,7 +163,9 @@ pub mod locked_in {
     }
 }
 
-#[cfg(test)]
+// Exercises the v1 VaultConfig ↔ PotConfig seed separation, so it only builds
+// when the v1 vault module is present (devnet).
+#[cfg(all(test, feature = "devnet"))]
 mod merge_tests {
     use super::*;
 
