@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { badRequest, notFound, HttpError } from '../../lib/errors.mjs';
 import { appConfig, CLUSTER } from '../../config.mjs';
 import {
@@ -4327,6 +4327,44 @@ export async function startLessonAttempt(walletAddress, lessonId, attemptId) {
 // `completedAt` is never accepted from the caller — see startLessonAttempt.
 // Without a database we fail closed: the previous no-db branch returned
 // `accepted: true, score: 100`, so an outage passed every lesson.
+// DEV-ONLY (devnet-gated at the route): force-complete every lesson in a course
+// at 100% by submitting each lesson's correct answers through the real submit
+// path — so XP, completion events, course_completed_at and voucher auto-issue
+// all fire exactly as a genuine pass. Lets us reach the claim flow without
+// hand-grinding every lesson. REMOVE before mainnet.
+export async function devCompleteCourse(walletAddress, courseId, { log = null } = {}) {
+  if (!hasDatabase()) {
+    throw new HttpError(503, 'Dev complete requires the database', 'DATABASE_UNAVAILABLE');
+  }
+  const pool = getPool();
+  const lessonsRes = await pool.query(
+    `SELECT DISTINCT pl.lesson_id as "lessonId", pm.module_order as "mo", pl.lesson_order as "lo"
+       FROM lesson.published_modules pm
+       JOIN lesson.published_lessons pl
+         ON pl.module_id = pm.module_id AND pl.release_id = pm.release_id
+      WHERE pm.course_id = $1
+      ORDER BY pm.module_order, pl.lesson_order`,
+    [courseId],
+  );
+  if (lessonsRes.rows.length === 0) {
+    throw notFound(`No published lessons for course: ${courseId}`, 'COURSE_NOT_FOUND');
+  }
+
+  const results = [];
+  for (const { lessonId } of lessonsRes.rows) {
+    const lessonVersion = await getPublishedLessonVersion(pool, lessonId);
+    const questions = await listLessonQuestions(pool, lessonVersion.lessonVersionId);
+    // Submit each question's own correct answer → grades 100%.
+    const answers = questions.map((q) => ({
+      questionId: q.id,
+      answerText: String(q.correctAnswer ?? ''),
+    }));
+    const r = await submitLessonAttempt(walletAddress, lessonId, randomUUID(), answers, { log });
+    results.push({ lessonId, score: r.score, accepted: r.accepted });
+  }
+  return { courseId, lessonsCompleted: results.length, results };
+}
+
 export async function submitLessonAttempt(
   walletAddress,
   lessonId,

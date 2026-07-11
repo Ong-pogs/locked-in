@@ -36,6 +36,18 @@ export function startLesson(
   );
 }
 
+// DEV-ONLY (devnet gate on the server): force-complete a course at 100% to test
+// the claim flow. Returns 404 off devnet. REMOVE before mainnet.
+export function devCompleteCourse(
+  courseId: string,
+  token: string,
+): Promise<{ courseId: string; lessonsCompleted: number }> {
+  return httpRequest<{ courseId: string; lessonsCompleted: number }>(
+    '/v1/progress/dev/complete-course',
+    { method: 'POST', body: { courseId }, token },
+  );
+}
+
 export function submitLesson(
   lessonId: string,
   payload: ProgressSubmitLessonRequest,

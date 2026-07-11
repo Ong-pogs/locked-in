@@ -8,6 +8,9 @@ import { FlameGauge } from './FlameGauge';
 import { ShieldPips } from './ShieldPips';
 import { PenaltyBanner } from './PenaltyBanner';
 import { deriveFlameState } from '@/services/flame/deriveFlameState';
+import { CLUSTER } from '@/services/solana/connection';
+import { useUserStore } from '@/stores';
+import { devCompleteCourse } from '@/services/api/progress/progressApi';
 import type { LockPositionResponse } from '@/services/api/types';
 
 // v2 course card (spec §5): live position value, flame gauge, shields, streak,
@@ -96,6 +99,22 @@ function countdownTo(iso: string | null, now: number): string | null {
 
 export function PositionCard({ data, position, positionError, onRetryPosition, claimEnabled }: Props) {
   const router = useRouter();
+  const authToken = useUserStore((s) => s.authToken);
+  const [devBusy, setDevBusy] = useState(false);
+
+  // DEV-ONLY (devnet): jump the whole course to 100% so the claim CTA arms.
+  const handleDevComplete = async () => {
+    if (!authToken || devBusy) return;
+    setDevBusy(true);
+    try {
+      await devCompleteCourse(data.courseId, authToken);
+      window.location.reload();
+    } catch (e) {
+      setDevBusy(false);
+      // eslint-disable-next-line no-alert
+      alert(`Dev complete failed: ${e instanceof Error ? e.message : e}`);
+    }
+  };
   const flame = deriveFlameState(data);
   const tickingYield = useTickingYield(position);
 
@@ -285,6 +304,16 @@ export function PositionCard({ data, position, positionError, onRetryPosition, c
             }}
           >
             ▶ {data.nextLessonTitle}
+          </button>
+        )}
+        {CLUSTER === 'devnet' && !claimArmed && (
+          <button
+            onClick={handleDevComplete}
+            disabled={devBusy}
+            className="w-full py-2 rounded-lg border border-dashed font-pixel-mono text-[10px] uppercase tracking-[1.5px] min-h-[36px]"
+            style={{ borderColor: 'rgba(255,68,102,0.4)', color: '#FF7A99', opacity: devBusy ? 0.5 : 1 }}
+          >
+            {devBusy ? 'Completing…' : '⚙ DEV: pass course 100%'}
           </button>
         )}
       </div>

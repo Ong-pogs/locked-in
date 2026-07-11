@@ -462,7 +462,28 @@ function ResultContent({ params }: { params: Promise<{ id: string }> }) {
 
         {/* Continue CTAs — Next Lesson is the primary if there is one. */}
         <div className="mt-6 w-full flex flex-col gap-3">
-          {nextLessonId ? (
+          {!accepted ? (
+            // Below the pass mark: you do NOT advance. Retake this lesson —
+            // review the answers above to see what to fix first.
+            <>
+              <CozyPrimary onClick={() => router.push(`/lessons/${_lessonId}`)}>
+                Retake Lesson
+              </CozyPrimary>
+              <button
+                type="button"
+                onClick={() => router.push('/courses')}
+                className="w-full py-3 rounded-[10px] text-center transition-opacity hover:opacity-80 cursor-pointer font-pixel-mono font-bold uppercase tracking-[1.5px] text-[11px]"
+                style={{
+                  color: AMBER,
+                  border: `1px solid ${COZY_BORDER}`,
+                  backgroundColor: 'rgba(14,14,28,0.5)',
+                  textShadow: COZY_TEXT_SHADOW,
+                }}
+              >
+                Back to Courses
+              </button>
+            </>
+          ) : nextLessonId ? (
             <>
               <CozyPrimary onClick={() => router.push(`/lessons/${nextLessonId}`)}>
                 Next Lesson

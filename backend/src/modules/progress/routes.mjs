@@ -32,7 +32,9 @@ import {
   recordHarvestResult,
   startLessonAttempt,
   submitLessonAttempt,
+  devCompleteCourse,
 } from './repository.mjs';
+import { isDevnetOnly } from '../../lib/faucet.mjs';
 
 function assertPathParam(value, fieldName) {
   if (!value || typeof value !== 'string') {
@@ -101,6 +103,22 @@ export async function progressRoutes(app) {
     { preHandler: requireAccessAuth },
     async (request) => {
       return getUserXp(request.auth.walletAddress);
+    },
+  );
+
+  // DEV-ONLY (devnet gate): force-complete a course at 100% so the claim flow
+  // is testable without grinding every lesson. Returns 404 off devnet. REMOVE
+  // before mainnet.
+  app.post(
+    '/v1/progress/dev/complete-course',
+    { preHandler: requireAccessAuth },
+    async (request, reply) => {
+      if (!isDevnetOnly()) {
+        reply.code(404);
+        return { error: 'Not found' };
+      }
+      const courseId = assertBodyField(request.body?.courseId, 'courseId');
+      return devCompleteCourse(request.auth.walletAddress, courseId, { log: request.log });
     },
   );
 
