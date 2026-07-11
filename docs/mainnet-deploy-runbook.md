@@ -23,7 +23,11 @@ run the prepared script/command. `[⚠]` = safety-critical, do not skip.
 ## 1. Prerequisites you must have `[YOU]`
 
 - A **paid mainnet RPC** (Helius/Triton) — public RPC will be rate-limited.
-- A **funded deploy wallet** keypair (~8 SOL for program deploy + rent).
+- A **funded deploy wallet** keypair (**~3.7 SOL** — the 505 KB program's data
+  rent is ~3.6 SOL, recoverable if you ever close the program; the rest is fees
+  + init-account rent). Deploys at 1x (`solana program deploy` default) with
+  zero upgrade headroom — pass `--max-len` if you want room to patch a larger
+  binary later.
 - A **Squads multisig** (2-of-3) — this is the `[⚠]` key ceremony; do it with
   your co-signers/hardware wallets. You need its vault address.
 - An **ops voucher key** (a fresh keypair). Its pubkey = `VAULT_AUTHORITY`
@@ -55,7 +59,7 @@ scripts/deploy/build-mainnet-program.sh
 ## 5. Fund + deploy the program `[YOU]` fund, `[RUN]` deploy
 
 ```bash
-# fund the deploy wallet with ~8 SOL first, then:
+# fund the deploy wallet with ~3.7 SOL first, then:
 MAINNET_RPC_URL=https://<paid-rpc> DEPLOY_KEYPAIR=<deploy-wallet.json> \
   scripts/deploy/deploy-mainnet.sh
 ```
