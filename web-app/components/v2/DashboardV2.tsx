@@ -155,9 +155,14 @@ export function DashboardV2() {
   const heroStreak = Math.max(0, ...cards.map((c) => c.currentStreak), 0);
 
   // Journey + heatmap derivations.
+  const activeToday = cards.some((c) => c.completedToday);
   const yearActivity = useMemo(
-    () => buildYearActivity(Object.values(lessonProgress).filter((p) => p.completed).map((p) => p.completedAt)),
-    [lessonProgress],
+    () =>
+      buildYearActivity(
+        Object.values(lessonProgress).filter((p) => p.completed).map((p) => p.completedAt),
+        activeToday,
+      ),
+    [lessonProgress, activeToday],
   );
   const lessonsCompleted = useMemo(
     () => Object.values(lessonProgress).filter((p) => p.completed).length,

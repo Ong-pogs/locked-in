@@ -20,8 +20,16 @@ const HEATMAP_LEVEL_BG = [
   'rgba(255,213,128,0.95)',
 ];
 
-/** 365 daily buckets (index 0 = oldest, last = today) → level 0-4 from completion counts. */
-export function buildYearActivity(completedAtList: (string | null | undefined)[]): number[] {
+/**
+ * 365 daily buckets (index 0 = oldest, last = today) → level 0-4 from completion
+ * counts. `activeToday` forces today's bucket to at least level 1 — it reflects
+ * the authoritative "completed a lesson today" signal, so the calendar always
+ * updates for a same-day session even if a completedAt timestamp is missing.
+ */
+export function buildYearActivity(
+  completedAtList: (string | null | undefined)[],
+  activeToday = false,
+): number[] {
   const days = 365;
   const buckets = new Array<number>(days).fill(0);
   const today = new Date();
@@ -36,6 +44,7 @@ export function buildYearActivity(completedAtList: (string | null | undefined)[]
     if (dayDiff < 0 || dayDiff >= days) continue;
     buckets[days - 1 - dayDiff] += 1;
   }
+  if (activeToday && buckets[days - 1] < 1) buckets[days - 1] = 1;
   return buckets.map((count) => (count <= 0 ? 0 : count >= 4 ? 4 : count));
 }
 
