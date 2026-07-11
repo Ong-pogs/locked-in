@@ -20,6 +20,9 @@ import { HubButton } from '@/components/HubButton';
 // ── Constants ─────────────────────────────────────────────────────────────
 const AMBER = '#FFD580';
 
+// Internal/test courses hidden from the product surface.
+const HIDDEN_COURSE_IDS = new Set<string>(['test-kitchen']);
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 const DIFFICULTY_COLORS: Record<CourseDifficulty, string> = {
   beginner: T.green,
@@ -431,8 +434,10 @@ export default function CoursesPage() {
         Boolean(courseStates[courseId]?.lockAccountAddress),
       )
     : [];
-  const activeCourses = courses.filter((c) => activeCourseIds.includes(c.id));
-  const availableCourses = courses.filter((c) => !activeCourseIds.includes(c.id));
+  // Hide the internal Test Kitchen course from the product surface.
+  const visibleCourses = courses.filter((c) => !HIDDEN_COURSE_IDS.has(c.id));
+  const activeCourses = visibleCourses.filter((c) => activeCourseIds.includes(c.id));
+  const availableCourses = visibleCourses.filter((c) => !activeCourseIds.includes(c.id));
 
   const isOnboardingMode = activeCourses.length === 0;
 
@@ -486,12 +491,10 @@ export default function CoursesPage() {
     router.push(`/onboarding/deposit?courseId=${parked.courseId}`);
   }, [isAuthenticated, router]);
 
-  // Split available into ready vs coming-soon
+  // Only real, content-bearing courses are shown. Empty placeholders (the old
+  // "Coming Soon" cards) are dropped from the product surface entirely.
   const readyCourses = availableCourses.filter(
     (c) => (lessons[c.id] ?? []).length > 0 || c.totalLessons > 0,
-  );
-  const comingSoonCourses = availableCourses.filter(
-    (c) => (lessons[c.id] ?? []).length === 0 && c.totalLessons === 0,
   );
 
   // XP bar math (real values from store)
@@ -730,24 +733,6 @@ export default function CoursesPage() {
                   onLock={
                     isOnboardingMode ? () => handleEnroll(course.id) : undefined
                   }
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Coming soon */}
-        {comingSoonCourses.length > 0 && (
-          <div className="mt-5">
-            <CozySectionLabel>Coming Soon</CozySectionLabel>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {comingSoonCourses.map((course) => (
-                <CourseCard
-                  key={course.id}
-                  course={course}
-                  actualLessonCount={0}
-                  onSelect={() => {}}
-                  forceComingSoon
                 />
               ))}
             </div>
