@@ -142,10 +142,13 @@ function CourseCard({
 
   return (
     <div
-      className={`w-full text-left transition-all duration-150 will-change-transform ${
+      className={`group w-full text-left transition-all duration-150 will-change-transform ${
         isComingSoon
           ? 'opacity-40 pointer-events-none'
-          : 'cursor-pointer hover:scale-[1.01] hover:brightness-110'
+          : // On hover: SOLIDIFY the panel (raise the CozyCard bg alpha var so the
+            // dungeon art stops showing through) + a small lift. Do NOT brighten —
+            // that washed the semi-transparent card out and made text unreadable.
+            'cursor-pointer hover:scale-[1.01] hover:-translate-y-0.5 hover:[--cozy-bg-alpha:0.72] hover:drop-shadow-[0_14px_30px_rgba(0,0,0,0.55)]'
       }`}
       onClick={isComingSoon ? undefined : onSelect}
       role={isComingSoon ? undefined : 'button'}
