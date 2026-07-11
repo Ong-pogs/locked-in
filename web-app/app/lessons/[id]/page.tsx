@@ -242,8 +242,41 @@ export default function LessonPage(props: {
   const [error, setError] = useState<string | null>(null);
   const [inputFocused, setInputFocused] = useState(false);
 
+  // Retake-only-wrong: after a failed attempt, a prior quizReview is stored with
+  // per-question results + the answers given. On retake (lesson still not
+  // completed) we re-serve ONLY the questions that were wrong, and re-submit the
+  // previously-correct answers for the rest so the score reflects the whole set.
+  const lessonCompleted = Boolean(lessonProgress[lessonId]?.completed);
+  const retakeWrong = useMemo(() => {
+    if (typeof window === 'undefined' || lessonCompleted) return null;
+    try {
+      const raw = window.localStorage.getItem(`quizReview::${lessonId}`);
+      if (!raw) return null;
+      const review = JSON.parse(raw) as {
+        questionResults?: { questionId: string; accepted?: boolean; isCorrect?: boolean }[];
+        userAnswers?: Record<string, string>;
+      };
+      const wrongIds = new Set(
+        (review.questionResults ?? [])
+          .filter((r) => r.accepted === false || r.isCorrect === false)
+          .map((r) => r.questionId),
+      );
+      if (wrongIds.size === 0) return null;
+      return { wrongIds, priorAnswers: review.userAnswers ?? {} };
+    } catch {
+      return null;
+    }
+  }, [lessonId, lessonCompleted]);
+
   // Derived values
-  const questions = useMemo(() => lesson?.questions ?? [], [lesson?.questions]);
+  const allLessonQuestions = useMemo(() => lesson?.questions ?? [], [lesson?.questions]);
+  const questions = useMemo(
+    () =>
+      retakeWrong
+        ? allLessonQuestions.filter((q) => retakeWrong.wrongIds.has(q.id))
+        : allLessonQuestions,
+    [allLessonQuestions, retakeWrong],
+  );
   const currentQuestion: Question | undefined = questions[currentQuestionIndex];
   const totalQuestions = questions.length;
   const isLastQuestion = currentQuestionIndex === totalQuestions - 1;
@@ -300,6 +333,22 @@ export default function LessonPage(props: {
   const courseLessons = useCourseStore((s) => s.getLessonsForCourse(courseId));
   const lessonOrder = lesson?.order ?? 0;
   const totalLessonsInCourse = courseLessons.length;
+
+  // Progression gate: a lesson is locked until EVERY earlier lesson in the
+  // course is completed (passed). Landing on a later lesson while an earlier one
+  // is incomplete — deep link, or a failed lesson the user tried to skip —
+  // bounces to the first incomplete earlier lesson. A failed lesson is not
+  // "completed", so it can't be skipped past.
+  useEffect(() => {
+    if (!lesson || !courseId || courseLessons.length === 0) return;
+    const priorIncomplete = [...courseLessons]
+      .filter((l) => l.order < lessonOrder)
+      .sort((a, b) => a.order - b.order)
+      .find((l) => !lessonProgress[l.id]?.completed);
+    if (priorIncomplete && priorIncomplete.id !== lessonId) {
+      router.replace(`/lessons/${priorIncomplete.id}`);
+    }
+  }, [lesson, courseId, courseLessons, lessonOrder, lessonProgress, lessonId, router]);
 
   // Lesson completion. `serverHandled` tells us whether the backend already
   // applied today's streak increment via syncCourseRuntime — in that case
@@ -379,9 +428,12 @@ export default function LessonPage(props: {
             attemptId,
             startedAt: attemptStartedAt,
             completedAt: new Date().toISOString(),
-            answers: questions.map((q) => ({
+            // Submit the WHOLE question set (the server grades all of them). On a
+            // wrong-only retake, questions the user isn't re-shown carry their
+            // previously-correct answer so they still count.
+            answers: allLessonQuestions.map((q) => ({
               questionId: q.id,
-              answerText: answerMap[q.id] ?? '',
+              answerText: answerMap[q.id] ?? retakeWrong?.priorAnswers[q.id] ?? '',
             })),
           },
           token,
@@ -390,7 +442,7 @@ export default function LessonPage(props: {
       if (!response) throw new Error('Backend session expired.');
       return response;
     },
-    [attemptId, attemptStartedAt, lessonId, questions, startSynced],
+    [attemptId, attemptStartedAt, lessonId, allLessonQuestions, retakeWrong, startSynced],
   );
 
   const finalizeLesson = useCallback(
