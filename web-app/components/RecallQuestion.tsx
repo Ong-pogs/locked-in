@@ -3,38 +3,14 @@
 import { useState } from 'react';
 import type { Question } from '@/types';
 import { T } from './theme';
-import { CozyCard } from './cozy';
 
 const AMBER = '#FFD580';
-const COZY_BORDER = 'rgba(58, 143, 168, 0.45)';
+const GREEN = '#3EE68A';
+const CRIMSON = '#FF4466';
+const COZY_BORDER = 'rgba(58, 143, 168, 0.5)';
 
-function CozyPrimary({
-  children,
-  onClick,
-  disabled,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="w-full py-3 rounded-lg text-center font-bold uppercase tracking-[1.5px] font-pixel text-[12px] transition-colors"
-      style={{
-        border: `1px solid ${disabled ? COZY_BORDER : AMBER}`,
-        background: disabled ? 'transparent' : 'rgba(255,213,128,0.12)',
-        color: disabled ? T.textMuted : AMBER,
-        boxShadow: disabled ? 'none' : `0 0 12px ${AMBER}55`,
-        opacity: disabled ? 0.4 : 1,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-      }}
-    >
-      {children}
-    </button>
-  );
+function normalize(s: string): string {
+  return s.trim().toLowerCase();
 }
 
 interface RecallQuestionProps {
@@ -44,126 +20,171 @@ interface RecallQuestionProps {
 }
 
 /**
- * Spaced-retrieval recall question shown before starting a new lesson.
- * Tests the user on a random question from a previously completed lesson.
- * Not graded — purely for retention reinforcement.
+ * Spaced-retrieval recall shown before a new lesson. Not graded (doesn't affect
+ * the lesson score). We DO give a right/wrong read when the answer key is
+ * present in the payload — reinforcement lands better with feedback. In prod
+ * the backend omits the key, so we fall back to "you picked X, continue".
  */
 export function RecallQuestion({ question, lessonTitle, onComplete }: RecallQuestionProps) {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [textAnswer, setTextAnswer] = useState('');
+  const [revealed, setRevealed] = useState(false);
 
   const isMcq = question.type === 'mcq';
+  const correct = (question as { correctAnswer?: string }).correctAnswer ?? null;
+  const hasKey = Boolean(correct);
 
-  // Recall is spaced-retrieval, not graded. Backend deliberately omits the
-  // answer key from the cached lesson payload, so we can't verify locally.
-  // The interaction is therefore: pick an answer (engages memory), then
-  // continue. No fake "Check Answer" step, no green/red theater. If the
-  // payload does ship correctAnswer (local dev / mocks), we still don't
-  // grade — keeping the flow consistent everywhere.
+  const isOptionCorrect = (optId: string, optText: string) =>
+    hasKey && (normalize(optId) === normalize(correct!) || normalize(optText) === normalize(correct!));
+
+  const answeredCorrectly =
+    hasKey && selectedOption != null
+      ? // reveal uses the option currently selected
+        (question.options ?? []).some((o) => {
+          const id = typeof o === 'string' ? o : o.id;
+          const text = typeof o === 'string' ? o : o.text;
+          return id === selectedOption && isOptionCorrect(id, text);
+        })
+      : false;
+
   const hasSelection =
-    (isMcq && Boolean(selectedOption)) ||
-    (!isMcq && textAnswer.trim().length > 0);
+    (isMcq && Boolean(selectedOption)) || (!isMcq && textAnswer.trim().length > 0);
+
+  const pickMcq = (optId: string) => {
+    if (revealed) return; // lock after reveal
+    setSelectedOption(optId);
+    if (hasKey) setRevealed(true);
+  };
 
   return (
-    <div className="min-h-[60vh] md:min-h-[80vh] flex flex-col items-center justify-center px-6">
-      {/* Header */}
-      <div className="text-center mb-6">
-        <div className="flex items-center justify-center gap-2 mb-3">
-          <svg viewBox="0 0 20 20" width={18} height={18} fill="none">
-            <path
-              d="M10 2C5.58 2 2 5.58 2 10s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm0 14.4A6.4 6.4 0 1110 3.6a6.4 6.4 0 010 12.8z"
-              fill="rgba(212,160,74,0.3)"
-            />
-            <path
-              d="M9 7h2v2H9V7zm0 4h2v4H9v-4z"
-              fill="#D4A04A"
-            />
-          </svg>
+    <div className="min-h-[70vh] flex flex-col items-center justify-center px-4 py-10">
+      {/* Solid backdrop so the content reads over the dark library art. */}
+      <div
+        className="w-full max-w-xl rounded-2xl border"
+        style={{
+          backgroundColor: 'rgba(10,10,20,0.9)',
+          borderColor: COZY_BORDER,
+          boxShadow: '0 24px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,213,128,0.08)',
+          padding: 28,
+        }}
+      >
+        {/* Header */}
+        <div className="flex items-center gap-2 mb-1.5">
+          <span aria-hidden style={{ fontSize: 16 }}>🧠</span>
           <span
-            className="font-pixel-mono text-[10px] uppercase tracking-[2px] font-bold"
+            className="font-pixel-mono text-[12px] uppercase tracking-[2.5px] font-bold"
             style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
           >
             Quick Recall
           </span>
         </div>
-        <p className="text-[13px] font-pixel" style={{ color: T.textSecondary }}>
-          Before we continue, let&apos;s revisit something from{' '}
-          <span style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}>{lessonTitle}</span>
+        <p className="text-[13px] font-pixel-mono mb-6" style={{ color: T.textMutedStrong }}>
+          A quick refresher from <span style={{ color: AMBER }}>{lessonTitle}</span> — not graded.
         </p>
-      </div>
 
-      {/* Question card */}
-      <div className="w-full max-w-lg">
-        <CozyCard style={{ padding: 20 }}>
-          {/* Prompt */}
+        {/* Prompt — larger, high-contrast */}
+        <p
+          className="font-pixel leading-[26px] mb-5"
+          style={{ color: T.textPrimary, fontSize: 19, textShadow: '0 1px 2px rgba(0,0,0,0.7)' }}
+        >
+          {question.prompt}
+        </p>
+
+        {/* MCQ options */}
+        {isMcq && question.options && (
+          <div className="flex flex-col gap-3">
+            {question.options.map((opt) => {
+              const optText = typeof opt === 'string' ? opt : opt.text;
+              const optId = typeof opt === 'string' ? opt : opt.id;
+              const isSelected = selectedOption === optId;
+              const optCorrect = isOptionCorrect(optId, optText);
+
+              let borderColor = isSelected ? AMBER : COZY_BORDER;
+              let bgColor = isSelected ? 'rgba(255,213,128,0.12)' : 'rgba(20,20,36,0.7)';
+              let mark = '';
+              if (revealed) {
+                if (optCorrect) {
+                  borderColor = GREEN;
+                  bgColor = 'rgba(62,230,138,0.14)';
+                  mark = '✓';
+                } else if (isSelected) {
+                  borderColor = CRIMSON;
+                  bgColor = 'rgba(255,68,102,0.14)';
+                  mark = '✕';
+                }
+              }
+
+              return (
+                <button
+                  key={optId}
+                  onClick={() => pickMcq(optId)}
+                  disabled={revealed}
+                  aria-label={optText}
+                  className="w-full text-left px-4 py-3.5 rounded-xl border font-pixel transition-colors flex items-center justify-between gap-3"
+                  style={{
+                    borderColor,
+                    backgroundColor: bgColor,
+                    color: T.textPrimary,
+                    fontSize: 15,
+                    cursor: revealed ? 'default' : 'pointer',
+                  }}
+                >
+                  <span>{optText}</span>
+                  {mark && (
+                    <span style={{ color: mark === '✓' ? GREEN : CRIMSON, fontSize: 16, fontWeight: 700 }}>
+                      {mark}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Short text */}
+        {!isMcq && (
+          <textarea
+            value={textAnswer}
+            onChange={(e) => setTextAnswer(e.target.value)}
+            placeholder="Type your answer…"
+            rows={3}
+            className="w-full px-4 py-3 rounded-xl border font-pixel-mono outline-none resize-none"
+            style={{
+              backgroundColor: 'rgba(0,0,0,0.35)',
+              borderColor: textAnswer.trim().length > 0 ? AMBER : COZY_BORDER,
+              color: T.textPrimary,
+              fontSize: 14,
+            }}
+          />
+        )}
+
+        {/* Feedback line (only when we have the key) */}
+        {revealed && hasKey && (
           <p
-            className="text-[15px] font-semibold font-pixel leading-[22px] mb-4"
-            style={{ color: T.textPrimary }}
+            className="mt-4 font-pixel-mono text-[13px]"
+            style={{ color: answeredCorrectly ? GREEN : CRIMSON }}
           >
-            {question.prompt}
+            {answeredCorrectly ? '✓ Correct — nice recall.' : `✕ Not quite. The answer is: ${correct}`}
           </p>
+        )}
 
-          {/* MCQ Options */}
-          {isMcq && question.options && (
-            <div className="flex flex-col gap-2.5">
-              {question.options.map((opt) => {
-                const optText = typeof opt === 'string' ? opt : opt.text;
-                const optId = typeof opt === 'string' ? opt : opt.id;
-                const isSelected = selectedOption === optId;
-                const borderColor = isSelected ? AMBER : COZY_BORDER;
-                const bgColor = isSelected
-                  ? 'rgba(255,213,128,0.10)'
-                  : 'rgba(14,14,28,0.30)';
-                const glow = isSelected ? `0 0 10px ${AMBER}55` : 'none';
-
-                return (
-                  <button
-                    key={optId}
-                    onClick={() => setSelectedOption(optId)}
-                    aria-label={optText}
-                    className="w-full text-left px-4 py-3 rounded-lg border text-[13px] font-pixel transition-colors cursor-pointer"
-                    style={{
-                      borderColor,
-                      backgroundColor: bgColor,
-                      boxShadow: glow,
-                      color: T.textPrimary,
-                    }}
-                  >
-                    {optText}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Short text input */}
-          {!isMcq && (
-            <textarea
-              value={textAnswer}
-              onChange={(e) => setTextAnswer(e.target.value)}
-              placeholder="Type your answer..."
-              rows={3}
-              className="w-full px-4 py-3 rounded-lg border text-[13px] font-pixel-mono outline-none resize-none"
-              style={{
-                backgroundColor: 'rgba(0,0,0,0.30)',
-                borderColor: textAnswer.trim().length > 0 ? AMBER : COZY_BORDER,
-                color: T.textPrimary,
-              }}
-            />
-          )}
-        </CozyCard>
-
-        {/* Action button — always Continue. Disabled until an answer is
-            selected. Recall isn't graded, so there's no Check step. */}
-        <div className="mt-4">
-          <CozyPrimary onClick={onComplete} disabled={!hasSelection}>
-            Continue to Lesson
-          </CozyPrimary>
-        </div>
-
-        <p className="text-center text-[10px] mt-2 font-pixel-mono" style={{ color: T.textMuted }}>
-          Recall questions help strengthen your memory — they don&apos;t affect your score.
-        </p>
+        {/* Continue */}
+        <button
+          type="button"
+          onClick={onComplete}
+          disabled={!hasSelection}
+          className="mt-6 w-full py-3.5 rounded-xl text-center font-bold uppercase tracking-[1.5px] font-pixel text-[13px] transition-colors"
+          style={{
+            border: `1px solid ${hasSelection ? AMBER : COZY_BORDER}`,
+            background: hasSelection ? 'rgba(255,213,128,0.14)' : 'transparent',
+            color: hasSelection ? AMBER : T.textMuted,
+            boxShadow: hasSelection ? `0 0 14px ${AMBER}55` : 'none',
+            opacity: hasSelection ? 1 : 0.45,
+            cursor: hasSelection ? 'pointer' : 'not-allowed',
+          }}
+        >
+          Continue to Lesson
+        </button>
       </div>
     </div>
   );
