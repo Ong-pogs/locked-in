@@ -7,6 +7,7 @@ import { Flame, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useFlameStore } from '@/stores/flameStore';
 import { getUserEnrollments, getUserXp } from '@/services/api/progress/progressApi';
+import { fetchWithAuth } from '@/services/api';
 import { useCourseStore, useUserStore } from '@/stores';
 import type { Course, CourseCategory, CourseDifficulty } from '@/types';
 import {
@@ -371,7 +372,9 @@ export default function CoursesPage() {
       const token = await waitForToken();
       if (!token) return;
       try {
-        const data = await getUserEnrollments(token);
+        // fetchWithAuth refreshes an expired access token on 401.
+        const data = await fetchWithAuth((t) => getUserEnrollments(t));
+        if (!data) return;
         useCourseStore.getState().restoreFromBackend(data);
         const bestStreak = Math.max(
           ...data.enrollments.map((e) => e.runtime?.currentStreak ?? 0),

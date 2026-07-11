@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { webStorageAdapter } from './storage';
-import { getCourseRuntime, hasRemoteLessonApi } from '@/services/api';
+import { getCourseRuntime, hasRemoteLessonApi, fetchWithAuth } from '@/services/api';
 import type { CourseRuntimeSnapshot, UserEnrollmentsResponse } from '@/services/api/types';
 import { batchCheckLockAccounts } from '@/services/solana';
 import type { LockAccountSnapshot } from '@/services/solana';
@@ -511,8 +511,11 @@ export const useCourseStore = create<CourseStore>()(
           return;
         }
 
-        const snapshot = await getCourseRuntime(courseId, token);
-        get().syncCourseRuntime(courseId, snapshot);
+        // fetchWithAuth refreshes an expired access token on 401 (a raw-token
+        // call throws "Invalid or expired token" once the 15-min token lapses,
+        // which spammed the dashboard with unrecovered 401s).
+        const snapshot = await fetchWithAuth((t) => getCourseRuntime(courseId, t));
+        if (snapshot) get().syncCourseRuntime(courseId, snapshot);
       },
 
       resetLessonProgressForCourse: (courseId) => {

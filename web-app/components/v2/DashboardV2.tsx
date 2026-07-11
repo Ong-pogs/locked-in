@@ -8,6 +8,7 @@ import { HubButton } from '@/components/HubButton';
 import { LiveApyChip } from '@/components/LiveApyChip';
 import { useCourseStore, useUserStore } from '@/stores';
 import { getLockPosition, getUserXp } from '@/services/api/progress/progressApi';
+import { fetchWithAuth } from '@/services/api';
 import { retryPendingEnrolls } from '@/services/enroll/pendingEnroll';
 import { hasVaultV2Config } from '@/services/solana/vaultV2';
 import { PositionCard, type PositionCardData } from './PositionCard';
@@ -61,14 +62,17 @@ export function DashboardV2() {
   // XP for the hero bar (carried over from the legacy dashboard).
   useEffect(() => {
     if (!authToken) return;
-    getUserXp(authToken)
-      .then((d) =>
+    // fetchWithAuth auto-refreshes an expired 15-min access token (getUserXp with
+    // a raw token would just 401 when it lapses).
+    fetchWithAuth((t) => getUserXp(t))
+      .then((d) => {
+        if (!d) return;
         setXp({
           xpTotal: d.xpTotal ?? 0,
           xpLevel: d.xpLevel ?? 1,
           thresholds: d.levelThresholds ?? [0, 500, 1500, 3500, 7000, 12000, 20000],
-        }),
-      )
+        });
+      })
       .catch(() => {});
   }, [authToken]);
 
@@ -94,8 +98,14 @@ export function DashboardV2() {
       await Promise.all(
         enrolledCourseIds.map(async (courseId) => {
           try {
-            const position = await getLockPosition(courseId, authToken);
+            // fetchWithAuth refreshes the token on 401 (a raw-token call would
+            // fail with "couldn't load position" once the access token expires).
+            const position = await fetchWithAuth((t) => getLockPosition(courseId, t));
             if (cancelled) return;
+            if (!position) {
+              setPositionErrors((prev) => ({ ...prev, [courseId]: true }));
+              return;
+            }
             setPositions((prev) => ({ ...prev, [courseId]: position }));
             setPositionErrors((prev) => ({ ...prev, [courseId]: false }));
           } catch {
