@@ -109,6 +109,19 @@ export default function VillageScene() {
         across the village. Both modes share the same inner DOM — only the
         sizing differs (handled in styled-jsx below).
       */}
+      {/* Full-bleed blurred copy of the village so wide desktops read as a soft
+          continuation of the scene instead of flat pillarbox bars. Sits BEHIND
+          the sharp 16:9 inner (which keeps the hotspots pixel-aligned). */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/images/village/village-painted.png"
+        alt=""
+        aria-hidden
+        draggable={false}
+        className="village-scene-bleed absolute inset-0 w-full h-full pointer-events-none select-none"
+        style={{ objectFit: 'cover', filter: 'blur(28px) brightness(0.5)', transform: 'scale(1.12)' }}
+      />
+
       <div className="village-scene-inner relative">
         {/* 1. Painted village background */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -275,6 +288,10 @@ export default function VillageScene() {
             scrollbar-width: none;
           }
           .village-scene-outer::-webkit-scrollbar {
+            display: none;
+          }
+          /* Mobile fills the viewport height, so no pillarbox to soften. */
+          .village-scene-bleed {
             display: none;
           }
           .village-scene-inner {

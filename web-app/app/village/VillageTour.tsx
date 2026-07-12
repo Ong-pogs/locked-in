@@ -20,37 +20,23 @@ type Step =
   | { kind: 'topbar'; title: string; body: string }
   | { kind: 'done' };
 
+// Only the three real, clickable buildings (Academy, Tavern, Notice board) are
+// tour stops — the old Brewery / Market / Inventory hotspots were removed in the
+// v2 legacy deletion, so pointing the tour at them highlighted decorative art
+// with mismatched labels. The flame + claim loop is folded into the Academy step.
 const STEPS: Step[] = [
   { kind: 'welcome' },
   {
     kind: 'building',
     target: 'academy',
     title: 'Academy',
-    body: 'Start a course here. Pick one and lock USDC to commit — that\'s how the streak begins.',
-  },
-  {
-    kind: 'building',
-    target: 'forge',
-    title: 'Flame',
-    body: 'Your locked USDC earns yield while your flame burns. Complete a lesson every day to keep it lit — go dark and you start forfeiting yield.',
-  },
-  {
-    kind: 'building',
-    target: 'cottage',
-    title: 'Claim',
-    body: 'Finish a course and claim your stake back here — your USDC principal plus all the yield it earned.',
+    body: 'Lock USDC on a course to begin. Complete a lesson each day to keep your flame lit — your stake earns real yield while it burns. Finish the course and claim your principal plus all the yield back.',
   },
   {
     kind: 'building',
     target: 'tavern',
     title: 'Community Pot',
-    body: 'When learners lapse, their forfeited yield flows into the Community Pot. Learners with an active lock share it, weighted by stake and streak.',
-  },
-  {
-    kind: 'building',
-    target: 'inventory',
-    title: 'Inventory',
-    body: 'Your achievements and earned trinkets live here.',
+    body: 'Go dark after your shields are spent and you forfeit yield to the Community Pot. Learners with an active lock share it, weighted by stake and streak.',
   },
   {
     kind: 'building',
