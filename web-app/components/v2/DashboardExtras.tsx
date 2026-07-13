@@ -178,7 +178,17 @@ export function ActivityHeatmap({ yearActivity, longestStreak }: { yearActivity:
     const dayOffset = firstWeekday + i;
     grid[dayOffset % 7][Math.floor(dayOffset / 7)] = yearActivity[i];
   }
-  const monthLabelCols = MONTHS.map((_, i) => Math.round((i * cols) / 12));
+  // Label each column with its REAL month, not a fixed Jan→Dec spread. The grid
+  // is a rolling 365-day window ending today, so column 0 is ~this-month-last-year.
+  // Derive the month of each column's first day; label a column when its month
+  // differs from the previous column (the standard GitHub-contributions rule).
+  const dayMs = 86_400_000;
+  const midnightToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const startTime = midnightToday - (totalDays - 1) * dayMs; // date of yearActivity[0]
+  const columnMonth = Array.from({ length: cols }, (_, c) => {
+    const dayIdx = Math.max(0, c * 7 - firstWeekday); // first real day in this column
+    return new Date(startTime + dayIdx * dayMs).getMonth();
+  });
 
   return (
     <CozyCard data-testid="v2-heatmap" className="mb-5" style={{ padding: 18 }}>
@@ -194,11 +204,11 @@ export function ActivityHeatmap({ yearActivity, longestStreak }: { yearActivity:
         <div className="inline-block" style={{ minWidth: cols * 13 + 32 }}>
           <div className="flex items-end mb-1 ml-8" style={{ height: 12 }}>
             {Array.from({ length: cols }).map((_, c) => {
-              const monthIdx = monthLabelCols.indexOf(c);
-              if (monthIdx === -1) return <div key={c} style={{ width: 12, marginRight: 2 }} />;
+              const showLabel = c > 0 && columnMonth[c] !== columnMonth[c - 1];
+              if (!showLabel) return <div key={c} style={{ width: 12, marginRight: 2 }} />;
               return (
                 <div key={c} className="font-pixel-mono text-[9px] uppercase" style={{ width: 12, marginRight: 2, color: T.textMutedStrong, whiteSpace: 'nowrap' }}>
-                  {MONTHS[monthIdx]}
+                  {MONTHS[columnMonth[c]]}
                 </div>
               );
             })}
