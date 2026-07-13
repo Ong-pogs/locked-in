@@ -301,20 +301,37 @@ export function ActivityHeatmap({
                 <div key={c} className="flex flex-col" style={{ gap: 2 }}>
                   {grid.map((row, r) => {
                     const v = row[c];
-                    const empty = v === null || v < 0; // padding or future day
+                    // null = week padding outside the year (invisible); v<0 = upcoming
+                    // day this year (faint box); v>=0 = real day, level 0-4.
+                    const isFuture = v !== null && v < 0;
+                    const isDay = v !== null && v >= 0;
                     const i = c * 7 + r - firstWeekday;
                     const isToday = todayIdx >= 0 && i === todayIdx;
                     return (
                       <div
                         key={`${r}-${c}`}
-                        title={empty ? '' : `Level ${v}`}
+                        title={isDay ? `Level ${v}` : ''}
                         style={{
                           width: 12,
                           height: 12,
                           borderRadius: 2,
-                          backgroundColor: empty ? 'transparent' : HEATMAP_LEVEL_BG[v as number],
-                          border: isToday ? `1px solid ${AMBER}` : !empty ? '1px solid rgba(0,0,0,0.20)' : '1px solid transparent',
-                          boxShadow: isToday ? `0 0 6px ${AMBER}99` : !empty && (v as number) >= 3 ? `0 0 4px rgba(255,213,128,${0.3 + (v as number) * 0.05})` : undefined,
+                          backgroundColor: isDay
+                            ? HEATMAP_LEVEL_BG[v as number]
+                            : isFuture
+                              ? 'rgba(255,255,255,0.025)'
+                              : 'transparent',
+                          border: isToday
+                            ? `1px solid ${AMBER}`
+                            : isDay
+                              ? '1px solid rgba(0,0,0,0.20)'
+                              : isFuture
+                                ? '1px solid rgba(255,255,255,0.05)'
+                                : '1px solid transparent',
+                          boxShadow: isToday
+                            ? `0 0 6px ${AMBER}99`
+                            : isDay && (v as number) >= 3
+                              ? `0 0 4px rgba(255,213,128,${0.3 + (v as number) * 0.05})`
+                              : undefined,
                         }}
                       />
                     );
