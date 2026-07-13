@@ -17,7 +17,6 @@ import {
   JourneyStats,
   XpHero,
   LEVEL_NAMES,
-  buildYearActivity,
 } from './DashboardExtras';
 import type { LockPositionResponse } from '@/services/api/types';
 
@@ -166,14 +165,27 @@ export function DashboardV2() {
 
   // Journey + heatmap derivations.
   const activeToday = cards.some((c) => c.completedToday);
-  const yearActivity = useMemo(
-    () =>
-      buildYearActivity(
-        Object.values(lessonProgress).filter((p) => p.completed).map((p) => p.completedAt),
-        activeToday,
-      ),
-    [lessonProgress, activeToday],
+  const completedAtList = useMemo(
+    () => Object.values(lessonProgress).filter((p) => p.completed).map((p) => p.completedAt),
+    [lessonProgress],
   );
+  // Years the selector offers: contiguous from the earliest signal (account
+  // creation or first completion) up to the current year, newest first —
+  // GitHub-style. Always includes the current year even with zero activity.
+  const availableYears = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    let earliest = currentYear;
+    const createdYear = createdAt ? new Date(createdAt).getFullYear() : NaN;
+    if (Number.isFinite(createdYear)) earliest = Math.min(earliest, createdYear);
+    for (const iso of completedAtList) {
+      if (!iso) continue;
+      const t = Date.parse(iso);
+      if (!Number.isNaN(t)) earliest = Math.min(earliest, new Date(t).getFullYear());
+    }
+    const out: number[] = [];
+    for (let y = currentYear; y >= earliest; y -= 1) out.push(y);
+    return out;
+  }, [completedAtList, createdAt]);
   const lessonsCompleted = useMemo(
     () => Object.values(lessonProgress).filter((p) => p.completed).length,
     [lessonProgress],
@@ -283,7 +295,12 @@ export function DashboardV2() {
           coursesEnrolled={coursesEnrolled}
           memberSince={memberSince}
         />
-        <ActivityHeatmap yearActivity={yearActivity} longestStreak={longestStreak} />
+        <ActivityHeatmap
+          completedAtList={completedAtList}
+          activeToday={activeToday}
+          availableYears={availableYears}
+          longestStreak={longestStreak}
+        />
       </div>
     </div>
   );
