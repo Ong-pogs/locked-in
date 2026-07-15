@@ -25,7 +25,7 @@ type Building = {
   label: string;
 };
 
-// Interactable village hotspots. Masks not listed here (clock, storage) are
+// Interactable village hotspots. Masks not listed here (storage) are
 // decorative — they don't hover-glow or click. The dashboard is reachable
 // from any page via the top-bar profile button + Lvl segment.
 const BUILDINGS: Building[] = [
@@ -36,6 +36,9 @@ const BUILDINGS: Building[] = [
   // Wishing well — decorative (history folded into dashboard activity log)
   // Right-center building            → Tavern (community pot)
   { id: 'tavern', outline: '/images/village/outlines/outline-tavern.png', route: '/community-pot', label: 'Tavern' },
+  // Spired chapel (the "clock" mask) → Practice Hall: replay any lesson
+  // you've already passed. Practice attempts never touch streak/flame/yield.
+  { id: 'clock', outline: '/images/village/outlines/outline-clock.png', route: '/practice', label: 'Practice Hall' },
   // Shop (cottage), Inventory (awning stall), and Brewery (forge) hotspots
   // were removed in the v2 legacy-deletion phase 2 — their pages are now
   // redirect stubs to /dashboard and the buildings are decorative.

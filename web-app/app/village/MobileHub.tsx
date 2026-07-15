@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useLogin } from '@privy-io/react-auth';
-import { BookOpen, Coins, Trophy, LayoutDashboard, ChevronRight, Wallet } from 'lucide-react';
+import { BookOpen, Coins, Trophy, LayoutDashboard, ChevronRight, Wallet, Swords } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { CozyCard, COZY_TEXT, COZY_TEXT_SHADOW } from '@/components/cozy';
 import { T } from '@/components/theme';
@@ -25,6 +25,7 @@ const DESTS: Dest[] = [
   { id: 'academy', route: '/courses', label: 'Courses', desc: 'Lock USDC on a course and start learning', icon: BookOpen, color: '#3EE68A', gated: false },
   { id: 'dashboard', route: '/dashboard', label: 'Dashboard', desc: 'Your positions, yield, streak and XP', icon: LayoutDashboard, color: '#FFD580', gated: true },
   { id: 'tavern', route: '/community-pot', label: 'Community Pot', desc: 'Forfeited yield shared among active learners', icon: Coins, color: '#9945FF', gated: true },
+  { id: 'practice', route: '/practice', label: 'Practice Hall', desc: 'Replay passed lessons — streak and yield untouched', icon: Swords, color: '#F0A878', gated: true },
   { id: 'notice', route: '/leaderboard', label: 'Leaderboard', desc: 'Top learners by streak and XP', icon: Trophy, color: '#2AE8D4', gated: true },
 ];
 
