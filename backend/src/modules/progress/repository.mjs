@@ -1206,7 +1206,13 @@ export function buildQuestionResults(attempts) {
   }));
 }
 
-async function gradeAnswers(questions, submittedAnswers, startedAt = null, completedAt = null) {
+async function gradeAnswers(
+  questions,
+  submittedAnswers,
+  startedAt = null,
+  completedAt = null,
+  { deterministic = false } = {},
+) {
   const questionIds = new Set(questions.map((question) => question.id));
   for (const questionId of submittedAnswers.keys()) {
     if (!questionIds.has(questionId)) {
@@ -1235,7 +1241,11 @@ async function gradeAnswers(questions, submittedAnswers, startedAt = null, compl
       // short-text lessons still grade + still gate funds when the LLM is
       // off/unavailable, instead of a hard "grader unavailable" that blocks
       // completion entirely.
+      // `deterministic` forces the rubric grader — used by the devnet
+      // force-complete route, where per-question LLM round-trips (seconds
+      // each × every remaining lesson) blow the client's request timeout.
       const llmConfigured =
+        !deterministic &&
         appConfig.answerValidatorHybridEnabled && Boolean(appConfig.openaiApiKey);
       validatorResult = llmConfigured
         ? await gradeSubjectiveAnswerWithLlm({ question, answerText, startedAt, completedAt })
@@ -4363,7 +4373,13 @@ export async function devCompleteCourse(walletAddress, courseId, { log = null } 
         questionId: q.id,
         answerText: String(q.correctAnswer ?? ''),
       }));
-      const r = await submitLessonAttempt(walletAddress, lessonId, randomUUID(), answers, { log });
+      // deterministicGrading: exact answer-key text through the rubric grader —
+      // skipping per-question LLM calls keeps the whole run inside the client's
+      // request timeout.
+      const r = await submitLessonAttempt(walletAddress, lessonId, randomUUID(), answers, {
+        log,
+        deterministicGrading: true,
+      });
       if (r.accepted) accepted += 1;
       results.push({ lessonId, score: r.score, accepted: r.accepted });
     } catch (e) {
@@ -4376,12 +4392,143 @@ export async function devCompleteCourse(walletAddress, courseId, { log = null } 
   return { courseId, lessonsCompleted: accepted, totalLessons: lessonsRes.rows.length, results };
 }
 
+/**
+ * Instant-feedback check for ONE question inside an open attempt. Advisory —
+ * authoritative grading stays at submit. The FIRST check LOCKS the answer for
+ * that (attempt, question):
+ *   - a repeat check returns the ORIGINAL verdict regardless of the new
+ *     answerText, so the endpoint is not an option-probing oracle;
+ *   - submitLessonAttempt overrides any submitted answer for a checked
+ *     question with the locked text, so check-then-swap can't lift the score.
+ * The correct answer is only revealed once the answer is locked. Short-text
+ * checks use the deterministic rubric grader — never the LLM — so the call
+ * stays fast; the submit-time grade remains authoritative.
+ */
+export async function checkQuestionAnswer(
+  walletAddress,
+  lessonId,
+  attemptId,
+  questionId,
+  answerText,
+) {
+  const normalizedAttemptId = assertAttemptId(attemptId);
+  if (!questionId || typeof questionId !== 'string') {
+    throw badRequest('questionId is required', 'MISSING_QUESTION_ID');
+  }
+  if (typeof answerText !== 'string' || answerText.trim().length === 0) {
+    throw badRequest('answerText is required', 'MISSING_ANSWER_TEXT');
+  }
+  if (!hasDatabase()) {
+    throw new HttpError(503, 'Checking is unavailable', 'DATABASE_UNAVAILABLE');
+  }
+  const timestamp = new Date().toISOString();
+
+  return withTransactionAsWallet(walletAddress, async (client) => {
+    const lessonVersion = await getPublishedLessonVersion(client, lessonId);
+    // Same tolerance as submit: a check without a prior /start anchors the
+    // attempt to server time.
+    const attempt = await ensureAttempt(
+      client,
+      walletAddress,
+      lessonId,
+      normalizedAttemptId,
+      lessonVersion.lessonVersionId,
+      timestamp,
+    );
+    if (attempt.submittedAt) {
+      throw new HttpError(409, 'Attempt was already submitted', 'ATTEMPT_ALREADY_SUBMITTED');
+    }
+    const questions = await listLessonQuestions(client, attempt.lessonVersionId);
+    const question = questions.find((q) => q.id === questionId);
+    if (!question) {
+      throw badRequest(
+        `Unknown question for this lesson: ${questionId}`,
+        'UNKNOWN_QUESTION_ID',
+      );
+    }
+
+    const readLocked = async () => {
+      const existing = await client.query(
+        `select answer_text as "answerText",
+                is_correct as "isCorrect",
+                question_score as "questionScore"
+           from lesson.user_question_checks
+          where lesson_attempt_id = $1::uuid and question_id = $2`,
+        [normalizedAttemptId, questionId],
+      );
+      return existing.rows[0] ?? null;
+    };
+
+    const locked = await readLocked();
+    if (locked) {
+      return {
+        questionId,
+        locked: true,
+        lockedAnswerText: locked.answerText,
+        isCorrect: locked.isCorrect,
+        questionScore: locked.questionScore,
+        correctAnswer: question.correctAnswer ?? null,
+      };
+    }
+
+    let isCorrect = false;
+    let questionScore = 0;
+    if (question.questionType === 'mcq') {
+      const normalizedAnswer = normalizeAnswerText(answerText);
+      const normalizedCorrectAnswer = normalizeAnswerText(question.correctAnswer);
+      isCorrect =
+        normalizedAnswer.length > 0 && normalizedAnswer === normalizedCorrectAnswer;
+      questionScore = isCorrect ? 100 : 0;
+    } else {
+      const verdict = await evaluateSubjectiveAnswer(
+        question,
+        answerText,
+        attempt.startedAt,
+        timestamp,
+      );
+      isCorrect = Boolean(verdict.accepted);
+      questionScore = Math.max(0, Math.min(100, Number(verdict.score) || 0));
+    }
+
+    const inserted = await client.query(
+      `insert into lesson.user_question_checks
+         (lesson_attempt_id, question_id, answer_text, is_correct, question_score)
+       values ($1::uuid, $2, $3, $4, $5)
+       on conflict (lesson_attempt_id, question_id) do nothing`,
+      [normalizedAttemptId, questionId, answerText, isCorrect, questionScore],
+    );
+    if (inserted.rowCount === 0) {
+      // Lost a concurrent first-check race — the winner's verdict stands.
+      const winner = await readLocked();
+      if (winner) {
+        return {
+          questionId,
+          locked: true,
+          lockedAnswerText: winner.answerText,
+          isCorrect: winner.isCorrect,
+          questionScore: winner.questionScore,
+          correctAnswer: question.correctAnswer ?? null,
+        };
+      }
+    }
+
+    return {
+      questionId,
+      locked: false,
+      lockedAnswerText: answerText,
+      isCorrect,
+      questionScore,
+      correctAnswer: question.correctAnswer ?? null,
+    };
+  });
+}
+
 export async function submitLessonAttempt(
   walletAddress,
   lessonId,
   attemptId,
   answers,
-  { log = null } = {},
+  { log = null, deterministicGrading = false } = {},
 ) {
   const normalizedAttemptId = assertAttemptId(attemptId);
   const submittedAnswers = assertAnswers(answers);
@@ -4453,11 +4600,26 @@ export async function submitLessonAttempt(
     }
 
     const questions = await listLessonQuestions(client, attempt.lessonVersionId);
+
+    // Check-ledger contract: an instant-checked answer is LOCKED — whatever
+    // the client submits for that question is overridden by the locked text,
+    // so revealing the correct answer at check time can't lift the grade.
+    const lockedChecks = await client.query(
+      `select question_id as "questionId", answer_text as "answerText"
+         from lesson.user_question_checks
+        where lesson_attempt_id = $1::uuid`,
+      [normalizedAttemptId],
+    );
+    for (const row of lockedChecks.rows) {
+      submittedAnswers.set(row.questionId, row.answerText);
+    }
+
     const grading = await gradeAnswers(
       questions,
       submittedAnswers,
       attempt.startedAt,
       timestamp,
+      { deterministic: deterministicGrading },
     );
 
     await persistQuestionAttempts(client, normalizedAttemptId, grading.attempts);

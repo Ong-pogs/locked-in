@@ -44,7 +44,32 @@ export function devCompleteCourse(
 ): Promise<{ courseId: string; lessonsCompleted: number }> {
   return httpRequest<{ courseId: string; lessonsCompleted: number }>(
     '/v1/progress/dev/complete-course',
-    { method: 'POST', body: { courseId }, token },
+    // 8 lessons of grading in one request — give it well past the 15s default.
+    { method: 'POST', body: { courseId }, token, timeoutMs: 120_000 },
+  );
+}
+
+export interface QuestionCheckResponse {
+  questionId: string;
+  /** True when a prior check already locked this question (verdict is the original one). */
+  locked: boolean;
+  lockedAnswerText: string;
+  isCorrect: boolean;
+  questionScore: number;
+  correctAnswer: string | null;
+}
+
+// Instant per-question feedback. The FIRST check locks the answer server-side
+// for this attempt — the submit will grade the locked answer regardless of
+// what is sent later, so the reveal can't be gamed.
+export function checkLessonQuestion(
+  lessonId: string,
+  payload: { attemptId: string; questionId: string; answerText: string },
+  token: string,
+): Promise<QuestionCheckResponse> {
+  return httpRequest<QuestionCheckResponse>(
+    `/v1/progress/lessons/${lessonId}/check`,
+    { method: 'POST', body: payload, token },
   );
 }
 

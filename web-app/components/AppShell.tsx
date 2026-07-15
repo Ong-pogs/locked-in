@@ -155,6 +155,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Enforce flow (only after stores rehydrate — see useFlowGuard)
   useFlowGuard(hydrated);
 
+  // App-level content sync: refresh the published lesson catalog once per app
+  // load, on ANY route. Previously only /courses triggered this, so a user who
+  // went dashboard → lesson kept serving a stale persisted catalog (e.g. the
+  // pre-cleanup Fuel/Ichor quiz questions) indefinitely on that device.
+  useEffect(() => {
+    if (!hydrated) return;
+    void useCourseStore.getState().initializeContent();
+  }, [hydrated]);
+
   // Background sync: restore enrollments + progress from backend on reconnect
   // (handles case where user returns with persisted JWT but localStorage was cleared)
   useEffect(() => {

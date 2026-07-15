@@ -32,6 +32,7 @@ import {
   recordHarvestResult,
   startLessonAttempt,
   submitLessonAttempt,
+  checkQuestionAnswer,
   devCompleteCourse,
 } from './repository.mjs';
 import { isDevnetOnly } from '../../lib/faucet.mjs';
@@ -77,6 +78,34 @@ export async function progressRoutes(app) {
       const attemptId = assertBodyField(request.body?.attemptId, 'attemptId');
 
       return startLessonAttempt(request.auth.walletAddress, lessonId, attemptId);
+    },
+  );
+
+  // Instant per-question feedback. First check LOCKS the answer for the
+  // attempt (repeat checks return the original verdict; submit overrides a
+  // checked question's answer with the locked one). Rate-limited: it grades
+  // one question per call.
+  app.post(
+    '/v1/progress/lessons/:lessonId/check',
+    {
+      preHandler: requireAccessAuth,
+      config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
+    },
+    async (request) => {
+      const lessonId = assertPathParam(request.params?.lessonId, 'lessonId');
+      const attemptId = assertBodyField(request.body?.attemptId, 'attemptId');
+      const questionId = assertBodyField(request.body?.questionId, 'questionId');
+      const answerText = request.body?.answerText;
+      if (typeof answerText !== 'string' || answerText.trim().length === 0) {
+        throw badRequest('answerText is required', 'MISSING_ANSWER_TEXT');
+      }
+      return checkQuestionAnswer(
+        request.auth.walletAddress,
+        lessonId,
+        attemptId,
+        questionId,
+        answerText,
+      );
     },
   );
 

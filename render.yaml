@@ -35,3 +35,21 @@ services:
         sync: false
       - key: POT_CYCLE_BASE_URL
         sync: false
+
+  # Daily shield/lapse sweep (sweep ruling R16). The sweep is the ONLY miss
+  # judge (legacy engine retired, R19) — without this cron an idle user's
+  # flame/shield/lapse state freezes until their next lesson submit. Runs at
+  # 00:30 UTC judging the fully-elapsed previous UTC day; idempotent
+  # (day-keyed receipts), so a retry or a duplicate run is a no-op.
+  - type: cron
+    name: locked-in-lapse-sweep
+    runtime: node
+    rootDir: backend
+    schedule: "30 0 * * *"
+    buildCommand: npm ci
+    startCommand: npm run cron:lapse-sweep
+    envVars:
+      - key: SCHEDULER_SECRET
+        sync: false
+      - key: LAPSE_SWEEP_BASE_URL
+        sync: false

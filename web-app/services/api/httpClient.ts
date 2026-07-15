@@ -20,6 +20,8 @@ interface RequestOptions {
   body?: unknown;
   token?: string;
   signal?: AbortSignal;
+  /** Override the default 15s abort timeout (long-running dev/admin calls). */
+  timeoutMs?: number;
 }
 
 interface ErrorPayload {
@@ -46,7 +48,8 @@ export async function httpRequest<T>(
   const isAbsolutePath = path.startsWith('http://') || path.startsWith('https://');
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), LESSON_API_TIMEOUT_MS);
+  const timeoutMs = options.timeoutMs ?? LESSON_API_TIMEOUT_MS;
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   const headers: Record<string, string> = {
     Accept: 'application/json',
@@ -155,7 +158,7 @@ export async function httpRequest<T>(
         if (error instanceof Error && error.name === 'AbortError') {
           if (process.env.NODE_ENV === 'development') {
             console.warn(
-              `[lesson-api] !! ${method} ${url} -> timeout after ${LESSON_API_TIMEOUT_MS}ms`,
+              `[lesson-api] !! ${method} ${url} -> timeout after ${timeoutMs}ms`,
             );
           }
           throw new ApiError('Request timed out', 408, 'REQUEST_TIMEOUT');

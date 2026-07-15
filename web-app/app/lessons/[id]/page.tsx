@@ -3,7 +3,13 @@
 import { useCallback, useEffect, useMemo, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCourseStore, useUserStore, useFlameStore } from '@/stores';
-import { hasRemoteLessonApi, startLesson, submitLesson, fetchWithAuth } from '@/services/api';
+import {
+  hasRemoteLessonApi,
+  startLesson,
+  submitLesson,
+  checkLessonQuestion,
+  fetchWithAuth,
+} from '@/services/api';
 import { buildLessonResultParams } from '@/services/lessons/resultParams';
 import type { Question, Lesson } from '@/types';
 import { T } from '@/components/theme';
@@ -242,6 +248,19 @@ export default function LessonPage(props: {
   const [error, setError] = useState<string | null>(null);
   const [inputFocused, setInputFocused] = useState(false);
 
+  // Instant per-question feedback (remote lessons — the answer key never
+  // ships in the payload). Picking an answer calls the check endpoint, which
+  // LOCKS it server-side and returns the verdict + correct answer. If the
+  // check call fails we fall back to the plain scored-on-submit flow so the
+  // quiz can never dead-end on a network blip.
+  const [serverVerdict, setServerVerdict] = useState<{
+    isCorrect: boolean;
+    correctAnswer: string | null;
+    lockedAnswerText: string;
+  } | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [checkFailed, setCheckFailed] = useState(false);
+
   // Retake-only-wrong: after a failed attempt, a prior quizReview is stored with
   // per-question results + the answers given. On retake (lesson still not
   // completed) we re-serve ONLY the questions that were wrong, and re-submit the
@@ -279,6 +298,22 @@ export default function LessonPage(props: {
   );
   const currentQuestion: Question | undefined = questions[currentQuestionIndex];
   const totalQuestions = questions.length;
+  // Clamp a restored index that's out of range for the CURRENT question set.
+  // Happens when a full-set attempt (index 3 of 4) is restored into a
+  // wrong-only retake (1 question) — without this the page renders
+  // "Question 4 of 1" with no card and a dead button.
+  useEffect(() => {
+    if (totalQuestions > 0 && currentQuestionIndex >= totalQuestions) {
+      setCurrentQuestionIndex(0);
+      setSelectedOption(null);
+      setTextAnswer('');
+      setHasChecked(false);
+      setIsCorrect(false);
+      setServerVerdict(null);
+      setChecking(false);
+      setCheckFailed(false);
+    }
+  }, [currentQuestionIndex, totalQuestions]);
   const isLastQuestion = currentQuestionIndex === totalQuestions - 1;
   const courseId = lesson?.courseId ?? '';
 
@@ -288,10 +323,43 @@ export default function LessonPage(props: {
     !!walletAddress;
 
   const supportsLocalChecking = Boolean(currentQuestion?.correctAnswer);
+  // Server-side instant check applies when the payload has no answer key.
+  const instantCheck = usesRemoteVerification && !supportsLocalChecking && !checkFailed;
 
   const canContinue =
     (currentQuestion?.type === 'mcq' && Boolean(selectedOption)) ||
     (currentQuestion?.type === 'short_text' && textAnswer.trim().length > 0);
+
+  const runServerCheck = useCallback(
+    async (answerText: string) => {
+      if (!currentQuestion || !attemptId || checking || serverVerdict) return;
+      setChecking(true);
+      try {
+        const res = await fetchWithAuth((t) =>
+          checkLessonQuestion(
+            lessonId,
+            { attemptId, questionId: currentQuestion.id, answerText },
+            t,
+          ),
+        );
+        if (!res) throw new Error('Backend session expired.');
+        setServerVerdict({
+          isCorrect: res.isCorrect,
+          correctAnswer: res.correctAnswer,
+          lockedAnswerText: res.lockedAnswerText,
+        });
+        // The server may return a previously-locked answer (double-click,
+        // reload) — mirror it so the submitted answer matches the lock.
+        if (currentQuestion.type === 'mcq') setSelectedOption(res.lockedAnswerText);
+        else setTextAnswer(res.lockedAnswerText);
+      } catch {
+        setCheckFailed(true);
+      } finally {
+        setChecking(false);
+      }
+    },
+    [attemptId, checking, currentQuestion, lessonId, serverVerdict],
+  );
 
   // Get sorted lesson blocks
   const sortedBlocks = lesson?.blocks?.sort((a, b) => a.order - b.order) ?? [];
@@ -451,6 +519,16 @@ export default function LessonPage(props: {
         setSubmitting(true);
         try {
           const result = await submitRemoteLesson(answerMap);
+          // The attempt is consumed by the submit whether it passed or not —
+          // drop the sessionStorage cache NOW. Leaving it after a FAILED
+          // attempt made "Retake Lesson" restore currentQuestionIndex from
+          // the full set into the wrong-only retake ("Question 4 of 1") and
+          // re-use an already-submitted attemptId.
+          try {
+            window.sessionStorage.removeItem(`lesson-attempt::${lessonId}`);
+          } catch {
+            /* ignore */
+          }
           if (result.courseRuntime) {
             useCourseStore.getState().syncCourseRuntime(courseId, result.courseRuntime);
           }
@@ -545,6 +623,10 @@ export default function LessonPage(props: {
     setTextAnswer('');
     setHasChecked(false);
     setIsCorrect(false);
+    // Instant-check state is per-question.
+    setServerVerdict(null);
+    setChecking(false);
+    setCheckFailed(false);
   }, [buildAnswerMapWithCurrent, currentQuestion, finalizeLesson, isLastQuestion]);
 
   const handleStartQuestions = useCallback(() => {
@@ -714,13 +796,14 @@ export default function LessonPage(props: {
   const progressPercent =
     ((currentQuestionIndex + 1) / Math.max(totalQuestions, 1)) * 100;
 
-  const isActionEnabled =
-    supportsLocalChecking && !hasChecked
-      ? canContinue
-      : canContinue || (supportsLocalChecking && hasChecked);
-
-  const isAdvanceDisabled =
-    submitting || (!supportsLocalChecking && !canContinue);
+  // Advance is allowed once the question is resolved for its mode:
+  // local key → after Check; instant server check → after the verdict;
+  // plain remote fallback → any answer chosen.
+  const advanceGate = supportsLocalChecking
+    ? hasChecked || canContinue
+    : instantCheck
+      ? serverVerdict != null
+      : canContinue;
 
   return (
     <CozyLessonShell>
@@ -793,15 +876,21 @@ export default function LessonPage(props: {
                 let bgColor = 'rgba(14,14,28,0.55)';
                 let glow = 'none';
 
-                if (supportsLocalChecking && hasChecked && currentQuestion.correctAnswer) {
-                  if (optionText === currentQuestion.correctAnswer) {
+                // Reveal source: local answer key (mock lessons) OR the
+                // server verdict returned by the instant check.
+                const revealAnswer =
+                  supportsLocalChecking && hasChecked
+                    ? currentQuestion.correctAnswer ?? null
+                    : serverVerdict?.correctAnswer ?? null;
+                const locked =
+                  (supportsLocalChecking && hasChecked) || serverVerdict != null || checking;
+
+                if (revealAnswer != null) {
+                  if (optionText === revealAnswer) {
                     borderColor = T.green;
                     bgColor = 'rgba(62,230,138,0.10)';
                     glow = `0 0 12px ${T.green}40`;
-                  } else if (
-                    optionText === selectedOption &&
-                    optionText !== currentQuestion.correctAnswer
-                  ) {
+                  } else if (optionText === selectedOption && optionText !== revealAnswer) {
                     borderColor = T.crimson;
                     bgColor = 'rgba(255,68,102,0.10)';
                     glow = `0 0 12px ${T.crimson}40`;
@@ -817,11 +906,12 @@ export default function LessonPage(props: {
                     key={optionId}
                     type="button"
                     onClick={() => {
-                      if (!hasChecked || !supportsLocalChecking) {
-                        setSelectedOption(optionText);
-                      }
+                      if (locked) return;
+                      setSelectedOption(optionText);
+                      // Instant mode: picking IS committing — lock + verdict.
+                      if (instantCheck) void runServerCheck(optionText);
                     }}
-                    disabled={supportsLocalChecking && hasChecked}
+                    disabled={locked}
                     className="w-full text-left p-4 rounded-[10px] border transition-all duration-150 cursor-pointer hover:brightness-110"
                     style={{
                       borderColor,
@@ -852,13 +942,12 @@ export default function LessonPage(props: {
                 placeholder="Type your answer..."
                 value={textAnswer}
                 onChange={(e) => {
-                  if (!hasChecked || !supportsLocalChecking) {
-                    setTextAnswer(e.target.value);
-                  }
+                  if ((supportsLocalChecking && hasChecked) || serverVerdict || checking) return;
+                  setTextAnswer(e.target.value);
                 }}
                 onFocus={() => setInputFocused(true)}
                 onBlur={() => setInputFocused(false)}
-                readOnly={supportsLocalChecking && hasChecked}
+                readOnly={(supportsLocalChecking && hasChecked) || serverVerdict != null || checking}
                 className="w-full p-4 rounded-[10px] border text-[14px] outline-none transition-all duration-150"
                 style={{
                   backgroundColor: 'rgba(0,0,0,0.30)',
@@ -867,37 +956,48 @@ export default function LessonPage(props: {
                       ? isCorrect
                         ? T.green
                         : T.crimson
-                      : inputFocused
-                        ? AMBER
-                        : COZY_BORDER,
+                      : serverVerdict
+                        ? serverVerdict.isCorrect
+                          ? T.green
+                          : T.crimson
+                        : inputFocused
+                          ? AMBER
+                          : COZY_BORDER,
                   color: T.textPrimary,
                   fontFamily: 'var(--font-pixel-mono), monospace',
                   boxShadow: inputFocused ? `0 0 14px ${AMBER}33` : 'none',
                 }}
               />
-              {supportsLocalChecking && hasChecked && !isCorrect && currentQuestion.correctAnswer && (
+              {((supportsLocalChecking && hasChecked && !isCorrect && currentQuestion.correctAnswer) ||
+                (serverVerdict && !serverVerdict.isCorrect && serverVerdict.correctAnswer)) && (
                 <p className="mt-2 text-[12px] font-pixel" style={{ color: T.textSecondary }}>
                   Correct answer:{' '}
                   <span className="font-bold" style={{ color: T.green }}>
-                    {currentQuestion.correctAnswer}
+                    {supportsLocalChecking && hasChecked
+                      ? currentQuestion.correctAnswer
+                      : serverVerdict?.correctAnswer}
                   </span>
                 </p>
               )}
             </div>
           )}
 
-          {/* Local check feedback */}
-          {supportsLocalChecking && hasChecked && (
+          {/* Check feedback — local key or server verdict */}
+          {(supportsLocalChecking && hasChecked) || serverVerdict ? (
             <p
               className="mt-4 text-[14px] font-bold font-pixel"
               style={{
-                color: isCorrect ? T.green : T.crimson,
+                color: (supportsLocalChecking && hasChecked ? isCorrect : serverVerdict?.isCorrect)
+                  ? T.green
+                  : T.crimson,
                 textShadow: COZY_TEXT_SHADOW,
               }}
             >
-              {isCorrect ? 'Correct!' : 'Incorrect'}
+              {(supportsLocalChecking && hasChecked ? isCorrect : serverVerdict?.isCorrect)
+                ? 'Correct!'
+                : 'Incorrect'}
             </p>
-          )}
+          ) : null}
 
           {/* Remote verification info */}
           {usesRemoteVerification && (
@@ -905,7 +1005,9 @@ export default function LessonPage(props: {
               className="mt-4 text-[11px] font-pixel-mono"
               style={{ color: T.textMuted }}
             >
-              Answers are verified by the lesson API after you finish the lesson.
+              {instantCheck
+                ? 'Answers lock when you pick — the final score is confirmed on submit.'
+                : 'Answers are verified by the lesson API after you finish the lesson.'}
             </p>
           )}
         </CozyCard>
@@ -927,16 +1029,25 @@ export default function LessonPage(props: {
           <CozyPrimary onClick={handleCheck} disabled={!canContinue}>
             {currentQuestion?.type === 'mcq' ? 'Check Answer' : 'Submit'}
           </CozyPrimary>
+        ) : instantCheck && currentQuestion?.type === 'short_text' && !serverVerdict ? (
+          <CozyPrimary
+            onClick={() => void runServerCheck(textAnswer.trim())}
+            disabled={!canContinue || checking}
+          >
+            {checking ? 'Checking…' : 'Check Answer'}
+          </CozyPrimary>
         ) : (
           <CozyPrimary
             onClick={() => void handleAdvance()}
-            disabled={isAdvanceDisabled || !isActionEnabled}
+            disabled={submitting || checking || !advanceGate}
           >
             {submitting
               ? 'Submitting...'
-              : isLastQuestion
-                ? 'See Results'
-                : 'Next Question'}
+              : checking
+                ? 'Checking…'
+                : isLastQuestion
+                  ? 'See Results'
+                  : 'Next Question'}
           </CozyPrimary>
         )}
       </div>
