@@ -211,6 +211,15 @@ pub struct InitializePot<'info> {
     pub protocol_config: Account<'info, PotConfig>,
     #[account(mut)]
     pub authority: Signer<'info>,
+    // Front-run gate (mirrors InitializeVaultV2): only the program's upgrade
+    // authority may initialize this singleton config. Without it, the first
+    // caller after deploy — before the ops init tx lands — becomes PotConfig
+    // .authority permanently and can record a fake redirect total then
+    // distribute the entire forfeited-yield pot vault to themselves.
+    #[account(constraint = program.programdata_address()? == Some(program_data.key()) @ CommunityPotError::NotUpgradeAuthority)]
+    pub program: Program<'info, crate::program::LockedIn>,
+    #[account(constraint = program_data.upgrade_authority_address == Some(authority.key()) @ CommunityPotError::NotUpgradeAuthority)]
+    pub program_data: Account<'info, ProgramData>,
     pub system_program: Program<'info, System>,
 }
 
@@ -580,6 +589,8 @@ pub enum CommunityPotError {
     InsufficientPotBalance,
     #[msg("Numerical overflow.")]
     NumericalOverflow,
+    #[msg("Only the program upgrade authority may initialize the pot config.")]
+    NotUpgradeAuthority,
 }
 
 fn transfer_checked_from_protocol<'info>(

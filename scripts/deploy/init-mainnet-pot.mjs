@@ -42,13 +42,23 @@ async function main() {
     return;
   }
 
-  // initialize_pot(stable_mint): [protocol_config(w,pda), authority(signer,w), system_program]
+  // Front-run gate: initialize_pot now requires the program + its ProgramData
+  // account, and constrains program_data.upgrade_authority == authority. So the
+  // POT_AUTHORITY_KEYPAIR must be the program's UPGRADE AUTHORITY at init time.
+  const BPF_UPGRADEABLE_LOADER = new PublicKey('BPFLoaderUpgradeab1e11111111111111111111111');
+  const [programData] = PublicKey.findProgramAddressSync([PROGRAM_ID.toBuffer()], BPF_UPGRADEABLE_LOADER);
+  console.log('program_data   :', programData.toBase58(), '(authority must be its upgrade_authority)');
+
+  // initialize_pot(stable_mint):
+  //   [protocol_config(w,pda), authority(signer,w), program, program_data, system_program]
   const data = Buffer.concat([disc('initialize_pot'), USDC.toBuffer()]);
   const ix = new TransactionInstruction({
     programId: PROGRAM_ID,
     keys: [
       { pubkey: protocolConfig, isSigner: false, isWritable: true },
       { pubkey: authority.publicKey, isSigner: true, isWritable: true },
+      { pubkey: PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: programData, isSigner: false, isWritable: false },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     ],
     data,
