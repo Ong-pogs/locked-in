@@ -250,7 +250,20 @@ export async function issueCourseCompletionVoucher(walletAddress, courseId) {
   if (moduleRows.length === 0) {
     throw notFound(`Unknown course: ${courseId}`, 'COURSE_NOT_FOUND');
   }
-  if (!isCourseComplete(moduleRows)) {
+  // Completion is PERMANENT (invariant 6 / practice ruling): once a course is
+  // frozen, every later submit is a practice attempt that writes NOTHING to
+  // user_lesson_progress. So a live isCourseComplete() recompute would flip
+  // back to "incomplete" the moment the catalog grows (a new lesson the frozen
+  // user can never be credited for), stranding their principal + signed
+  // voucher forever. The stored freeze is sufficient proof of completion.
+  const frozenRow = await query(
+    `SELECT course_completed_at as "courseCompletedAt"
+       FROM lesson.user_course_runtime_state
+      WHERE wallet_address = $1 AND course_id = $2 LIMIT 1`,
+    [walletAddress, courseId],
+  );
+  const isFrozenComplete = frozenRow.rows[0]?.courseCompletedAt != null;
+  if (!isFrozenComplete && !isCourseComplete(moduleRows)) {
     throw new HttpError(403, 'Course not yet complete', 'COURSE_NOT_COMPLETE');
   }
 
@@ -1124,7 +1137,13 @@ function buildValidatorDecisionHash(questionId, answerText, validatorResult) {
     .digest('hex');
 }
 
-export async function evaluateSubjectiveAnswer(question, answerText, startedAt, completedAt) {
+export async function evaluateSubjectiveAnswer(
+  question,
+  answerText,
+  startedAt,
+  completedAt,
+  { skipFeedbackEnhancement = false } = {},
+) {
   const rubric = extractRubricConfig(question);
   const integrityFlags = buildIntegrityFlags(answerText, startedAt, completedAt);
   const criteriaBreakdown = rubric.criteria.map((criterion) =>
@@ -1160,15 +1179,21 @@ export async function evaluateSubjectiveAnswer(question, answerText, startedAt, 
     rubricSnapshot: rubric,
     integrityFlags,
   };
-  // Feedback can be upgraded by the model, but acceptance must stay rubric-deterministic.
-  const enhancedFeedback = await enhanceValidatorFeedback({
-    prompt: question.prompt,
-    learnerAnswer: answerText,
-    criteriaBreakdown,
-    integrityFlags,
-    accepted,
-    rubricMode: rubric.mode,
-  });
+  // Feedback can be upgraded by the model, but acceptance must stay
+  // rubric-deterministic. `skipFeedbackEnhancement` suppresses the OpenAI call
+  // entirely — used by the instant-check endpoint and the deterministic dev
+  // grade so those paths make ZERO network calls inside the DB transaction
+  // (they must stay fast + can't hang on an upstream blip).
+  const enhancedFeedback = skipFeedbackEnhancement
+    ? null
+    : await enhanceValidatorFeedback({
+        prompt: question.prompt,
+        learnerAnswer: answerText,
+        criteriaBreakdown,
+        integrityFlags,
+        accepted,
+        rubricMode: rubric.mode,
+      });
   const validatorResult = enhancedFeedback
     ? {
         ...baseResult,
@@ -1249,7 +1274,11 @@ async function gradeAnswers(
         appConfig.answerValidatorHybridEnabled && Boolean(appConfig.openaiApiKey);
       validatorResult = llmConfigured
         ? await gradeSubjectiveAnswerWithLlm({ question, answerText, startedAt, completedAt })
-        : await evaluateSubjectiveAnswer(question, answerText, startedAt, completedAt);
+        : await evaluateSubjectiveAnswer(question, answerText, startedAt, completedAt, {
+            // Deterministic grade (dev complete-course) must make no OpenAI
+            // call — that's the whole point of the fast path.
+            skipFeedbackEnhancement: deterministic,
+          });
       isCorrect = validatorResult.accepted;
       // Partial credit: use the grader's 0-100 quality score, NOT a binary
       // pass/fail. A short-text answer that covers most of the key concepts
@@ -4485,6 +4514,8 @@ export async function checkQuestionAnswer(
         answerText,
         attempt.startedAt,
         timestamp,
+        // Instant check must stay fast + side-effect-free: rubric only.
+        { skipFeedbackEnhancement: true },
       );
       isCorrect = Boolean(verdict.accepted);
       questionScore = Math.max(0, Math.min(100, Number(verdict.score) || 0));

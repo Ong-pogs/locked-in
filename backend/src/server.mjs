@@ -45,6 +45,11 @@ export function buildServer() {
     logger: buildLoggerConfig(),
     // We emit our own concise request lifecycle logs below.
     disableRequestLogging: true,
+    // Behind Render's load balancer, honor X-Forwarded-For so `request.ip` is
+    // the real client — otherwise every request keys on the proxy address and
+    // the per-route @fastify/rate-limit buckets collapse into one global bucket
+    // (a single abuser rate-limits everyone; audit L).
+    trustProxy: true,
   });
 
   // Treat an empty JSON body as {} instead of erroring. Several endpoints are
@@ -164,6 +169,29 @@ async function start() {
       const pool = getPool();
       await pool.query('select 1');
       app.log.info('Database connection verified');
+
+      // Fail closed if code is deployed ahead of its migrations. Every
+      // first-time lesson submit hard-depends on tables added by migrations
+      // (e.g. 0053 user_question_checks); serving traffic against a DB missing
+      // them 500s every submit AND — because a blocked submit becomes a
+      // sweep-judged miss-day — silently burns shields / opens lapses. A
+      // dry-run needs no write privileges and never mutates anything.
+      const { runMigrations } = await import('../scripts/migrate.mjs');
+      const status = await runMigrations({
+        dryRun: true,
+        log: { info: () => {}, warn: (m) => app.log.warn(m), error: (m) => app.log.error(m) },
+      });
+      if (status.pending.length > 0) {
+        throw new Error(
+          `Refusing to boot: ${status.pending.length} unapplied migration(s): ` +
+            `${status.pending.join(', ')}. Run \`npm run migrate\` before serving traffic.`,
+        );
+      }
+      if (status.drifted?.length > 0) {
+        app.log.warn(
+          `Migration checksum drift on: ${status.drifted.join(', ')} (booting anyway)`,
+        );
+      }
     } else {
       app.log.warn('DATABASE_URL not set. Running in no-db mode for starter wiring.');
     }

@@ -238,13 +238,30 @@ export async function fetchWithAuth<T>(
     ) {
       const currentRefreshToken = useUserStore.getState().refreshToken;
       if (!currentRefreshToken) throw new AuthExpiredError();
+      // Only a REFRESH failure means the session is truly dead.
+      let session: { accessToken: string; refreshToken: string };
       try {
-        const session = await doRefresh(currentRefreshToken);
+        session = await doRefresh(currentRefreshToken);
         setAuthSession(session.accessToken, session.refreshToken);
-        return await requestFn(session.accessToken);
       } catch {
         setAuthSession(null, null);
         throw new AuthExpiredError();
+      }
+      // Retry with the fresh token. A NON-auth failure here (e.g. 409
+      // ENROLL_RETRY on a post-deposit enroll, a 500, a network blip) must
+      // NOT destroy the now-valid session — bubble it up so the caller's own
+      // retry/error handling runs. Only a second 401 kills the session.
+      try {
+        return await requestFn(session.accessToken);
+      } catch (retryErr) {
+        if (
+          retryErr instanceof ApiError &&
+          (retryErr.status === 401 || retryErr.code === 'TOKEN_EXPIRED')
+        ) {
+          setAuthSession(null, null);
+          throw new AuthExpiredError();
+        }
+        throw retryErr;
       }
     }
     throw err;

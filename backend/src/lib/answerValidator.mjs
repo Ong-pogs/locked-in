@@ -57,7 +57,11 @@ function buildIntegrityFlags(answerText, startedAt, completedAt) {
     const started = new Date(startedAt).getTime();
     const completed = new Date(completedAt).getTime();
     const durationMs = completed - started;
-    if (Number.isFinite(durationMs) && durationMs >= 0 && durationMs < 2000 && trimmed.length > 40) {
+    // durationMs === 0 means the attempt was CREATED at submit time (its
+    // /start never landed, so startedAt was stamped equal to completedAt) —
+    // the duration is unmeasurable, not "impossibly fast". Guard with `> 0`
+    // so a legitimate no-prior-start submit of a long answer isn't auto-failed.
+    if (Number.isFinite(durationMs) && durationMs > 0 && durationMs < 2000 && trimmed.length > 40) {
       flags.push({
         code: 'IMPOSSIBLE_SPEED',
         severity: 'block',

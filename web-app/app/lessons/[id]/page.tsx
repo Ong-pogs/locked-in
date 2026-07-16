@@ -543,14 +543,21 @@ export default function LessonPage(props: {
           // Store question review data for result page (lesson-specific, persists across revisits)
           try {
             localStorage.setItem(`quizReview::${lessonId}`, JSON.stringify({
-              questions: questions.map(q => ({
+              // Full set (not the wrong-only retake subset) so the result page
+              // and the NEXT retake's wrong-id computation see every question.
+              questions: allLessonQuestions.map(q => ({
                 id: q.id,
                 prompt: q.prompt,
                 type: q.type,
                 options: q.options,
                 correctAnswer: q.correctAnswer,
               })),
-              userAnswers: answerMap,
+              // Merge the previously-correct answers underneath this attempt's
+              // answers. On a wrong-only retake, answerMap holds ONLY the
+              // re-shown questions; without the merge the prior-correct answers
+              // are dropped and the next retake resubmits blanks — a guaranteed
+              // re-fail the user can never escape.
+              userAnswers: { ...(retakeWrong?.priorAnswers ?? {}), ...answerMap },
               questionResults: result.questionResults ?? [],
             }));
           } catch { /* localStorage may be unavailable */ }
@@ -574,25 +581,26 @@ export default function LessonPage(props: {
       // Store question review data for result page (lesson-specific, persists across revisits)
       try {
         localStorage.setItem(`quizReview::${lessonId}`, JSON.stringify({
-          questions: questions.map(q => ({
+          questions: allLessonQuestions.map(q => ({
             id: q.id,
             prompt: q.prompt,
             type: q.type,
             options: q.options,
             correctAnswer: q.correctAnswer,
           })),
-          userAnswers: answerMap,
+          userAnswers: { ...(retakeWrong?.priorAnswers ?? {}), ...answerMap },
           questionResults: [],
         }));
       } catch { /* localStorage may be unavailable */ }
       router.push(`/lessons/${lessonId}/result?${params.toString()}`);
     },
     [
+      allLessonQuestions,
       applyLessonCompletion,
       correctCount,
       courseId,
       lessonId,
-      questions,
+      retakeWrong,
       router,
       submitRemoteLesson,
       totalQuestions,

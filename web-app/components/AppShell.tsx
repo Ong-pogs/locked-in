@@ -12,6 +12,7 @@ import { useFlameStore } from '@/stores/flameStore';
 import { useYieldStore } from '@/stores/yieldStore';
 import { useResurfaceStore } from '@/stores/resurfaceStore';
 import { getUserEnrollments } from '@/services/api/progress/progressApi';
+import { fetchWithAuth } from '@/services/api';
 import { T } from './theme';
 
 // Routes that don't require authentication
@@ -168,10 +169,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   // (handles case where user returns with persisted JWT but localStorage was cleared)
   useEffect(() => {
     if (!hydrated || !isAuthenticated) return;
-    const token = useUserStore.getState().authToken;
-    if (!token) return;
-    getUserEnrollments(token)
+    // fetchWithAuth auto-refreshes an expired 15-min access token. A raw-token
+    // call here silently 401'd for virtually every returning user (>15 min
+    // since last refresh), leaving persisted shields/streak/lapse stale on
+    // app open and skipping the onboarding-phase promotion.
+    fetchWithAuth((t) => getUserEnrollments(t))
       .then((data) => {
+        if (!data) return;
         useCourseStore.getState().restoreFromBackend(data);
         const bestStreak = Math.max(
           ...data.enrollments.map((e) => e.runtime?.currentStreak ?? 0),

@@ -9,6 +9,7 @@ import { HubButton } from '@/components/HubButton';
 import { PenaltyBanner } from '@/components/v2/PenaltyBanner';
 import { useCourseStore, useUserStore } from '@/stores';
 import { getCompletionVoucher, getLockPosition } from '@/services/api/progress/progressApi';
+import { fetchWithAuth } from '@/services/api';
 import { hasVaultV2Config } from '@/services/solana/vaultV2';
 import { ApiError } from '@/services/api/errors';
 import type { CompletionVoucherResponse } from '@/services/api/types';
@@ -118,8 +119,9 @@ export default function ClaimPage() {
     let cancelled = false;
 
     const fetchVoucher = () => {
-      getCompletionVoucher(courseId, authToken)
+      fetchWithAuth((t) => getCompletionVoucher(courseId, t))
         .then((v) => {
+          if (!v) throw new ApiError('Session expired', 401, 'TOKEN_EXPIRED');
           if (cancelled) return;
           if (v.expiry * 1000 <= Date.now()) {
             setPhase('expired');
@@ -150,21 +152,29 @@ export default function ClaimPage() {
     if (courseState?.lockAccountAddress) {
       fetchVoucher();
     } else {
-      getLockPosition(courseId, authToken)
+      fetchWithAuth((t) => getLockPosition(courseId, t))
         .then((pos) => {
           if (cancelled) return;
+          if (!pos) throw new ApiError('Session expired', 401, 'TOKEN_EXPIRED');
           // ACTIVE → the lock exists on-chain; proceed. executeClaim derives the
           // lock PDA from (owner, courseId) itself, so the missing store field is
-          // not needed for the claim to succeed.
+          // not needed for the claim to succeed. Only a SUCCESSFUL read of
+          // NONE/CLOSED is genuinely "already claimed".
           if (pos.status === 'ACTIVE') {
             fetchVoucher();
           } else {
             setPhase('already-claimed');
           }
         })
-        .catch(() => {
-          // Cannot verify (RPC/API down) — do not fabricate a claim path.
-          if (!cancelled) setPhase('already-claimed');
+        .catch((error) => {
+          if (cancelled) return;
+          // Could NOT verify (expired token, RPC/API down) — must never be
+          // presented as "already claimed", which would tell a user their real
+          // principal is gone. Surface a retryable error instead (audit H1).
+          setErrorMessage(
+            error instanceof Error ? error.message : 'Could not verify your position',
+          );
+          setPhase('error');
         });
     }
     return () => {
@@ -372,8 +382,9 @@ export default function ClaimPage() {
             setErrorMessage(null);
             // Voucher fetch is idempotent — re-run the mount flow.
             if (authToken) {
-              getCompletionVoucher(courseId, authToken)
+              fetchWithAuth((t) => getCompletionVoucher(courseId, t))
                 .then((v) => {
+                  if (!v) throw new Error('Session expired');
                   setVoucher(v);
                   setPhase(v.expiry * 1000 <= Date.now() ? 'expired' : 'review');
                 })

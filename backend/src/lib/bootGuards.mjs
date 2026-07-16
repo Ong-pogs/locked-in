@@ -81,8 +81,15 @@ export function collectBootGuardViolations(config) {
     }
   }
 
+  // "mainnet or stricter": anything we cannot positively classify as devnet
+  // or local is treated as mainnet (the module's stated contract). A real
+  // mainnet reached via a branded RPC — Triton *.rpcpool.com, Helius, a custom
+  // domain, a self-hosted validator — classifies as 'unknown', and the money
+  // guards below MUST still fire for it (audit H: fail-closed).
+  const mainnetOrStricter = cluster !== 'devnet' && cluster !== 'local';
+
   // (b) mainnet vault_v2 must not pair with a mock/devnet yield adapter.
-  if (cluster === 'mainnet' && config.vaultV2ProgramId && config.yieldStrategyEnabled) {
+  if (mainnetOrStricter && config.vaultV2ProgramId && config.yieldStrategyEnabled) {
     const kind = config.yieldStrategyKind ?? '';
     const profile = config.yieldStrategyProfile ?? '';
     if (kind !== REAL_YIELD_KIND) {
@@ -110,7 +117,7 @@ export function collectBootGuardViolations(config) {
   // (d) the program upgrade authority (DEPLOYER_PRIVATE_KEY) must NEVER live on
   // an internet-facing mainnet fund-signing host — a breach would let an
   // attacker replace the program AND drain the treasury in one step (audit H2).
-  if (cluster === 'mainnet' && config.deployerKeyPresent) {
+  if (mainnetOrStricter && config.deployerKeyPresent) {
     violations.push(
       `DEPLOYER_PRIVATE_KEY is set on a mainnet host. The upgrade authority must ` +
         `never sit on the backend — deploy from a separate machine and set only ` +
@@ -121,9 +128,13 @@ export function collectBootGuardViolations(config) {
   // (e) the real-Kamino profile behind a devnet-classified RPC almost always
   // means SOLANA_RPC_URL was left unset (the devnet default) — which would turn
   // OFF every mainnet money guard. Fail closed (audit M13).
+  // Fires only on a POSITIVELY dev/local RPC — the "SOLANA_RPC_URL left at the
+  // devnet default" footgun. An 'unknown' cluster (branded mainnet RPC) is NOT
+  // flagged here, else a legit Triton/Helius mainnet with the real profile
+  // would be blocked from booting; guards (b)/(d)/(f) already cover it.
   if (
     (config.yieldStrategyProfile ?? '') === REAL_YIELD_PROFILE &&
-    cluster !== 'mainnet'
+    (cluster === 'devnet' || cluster === 'local')
   ) {
     violations.push(
       `YIELD_STRATEGY_PROFILE=kamino_usdc_mainnet but the RPC classifies as ` +
@@ -135,7 +146,7 @@ export function collectBootGuardViolations(config) {
   // (f) on mainnet the vault must be bound to the canonical USDC mint — an
   // env carried over from devnet would lock users into a worthless mint
   // (audit L11).
-  if (cluster === 'mainnet' && config.lockVaultUsdcMint && config.lockVaultUsdcMint !== MAINNET_USDC_MINT) {
+  if (mainnetOrStricter && config.lockVaultUsdcMint && config.lockVaultUsdcMint !== MAINNET_USDC_MINT) {
     violations.push(
       `LOCK_VAULT_USDC_MINT is '${config.lockVaultUsdcMint}' on mainnet; expected ` +
         `the canonical USDC mint ${MAINNET_USDC_MINT}.`,
