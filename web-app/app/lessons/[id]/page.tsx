@@ -717,7 +717,9 @@ export default function LessonPage(props: {
         {/* Single section content */}
         <div className="mt-4">
           <CozyCard>
-            <div className="space-y-5 min-h-[40vh]">
+            {/* break-words: unbreakable tokens in prose (e.g. a 44-char
+                Solana address) wrap instead of forcing horizontal scroll. */}
+            <div className="space-y-5 min-h-[40vh] break-words">
               {hasBlocks && currentBlock ? (
                 <LessonBlockRenderer block={currentBlock} />
               ) : (
@@ -864,7 +866,7 @@ export default function LessonPage(props: {
 
       {/* Question card */}
       <div className="mt-5">
-        <CozyCard>
+        <CozyCard className="break-words">
           {/* Prompt */}
           <h2
             className="text-[18px] md:text-xl font-bold leading-[26px] font-pixel"
@@ -915,9 +917,10 @@ export default function LessonPage(props: {
                     type="button"
                     onClick={() => {
                       if (locked) return;
+                      // Picking only selects — the answer locks when the user
+                      // presses "Check Answer" (they can change their mind
+                      // freely until then).
                       setSelectedOption(optionText);
-                      // Instant mode: picking IS committing — lock + verdict.
-                      if (instantCheck) void runServerCheck(optionText);
                     }}
                     disabled={locked}
                     className="w-full text-left p-4 rounded-[10px] border transition-all duration-150 cursor-pointer hover:brightness-110"
@@ -1014,7 +1017,7 @@ export default function LessonPage(props: {
               style={{ color: T.textMuted }}
             >
               {instantCheck
-                ? 'Answers lock when you pick — the final score is confirmed on submit.'
+                ? 'Answers lock when you check — the final score is confirmed on submit.'
                 : 'Answers are verified by the lesson API after you finish the lesson.'}
             </p>
           )}
@@ -1037,9 +1040,13 @@ export default function LessonPage(props: {
           <CozyPrimary onClick={handleCheck} disabled={!canContinue}>
             {currentQuestion?.type === 'mcq' ? 'Check Answer' : 'Submit'}
           </CozyPrimary>
-        ) : instantCheck && currentQuestion?.type === 'short_text' && !serverVerdict ? (
+        ) : instantCheck && !serverVerdict ? (
           <CozyPrimary
-            onClick={() => void runServerCheck(textAnswer.trim())}
+            onClick={() =>
+              void runServerCheck(
+                currentQuestion?.type === 'mcq' ? (selectedOption ?? '') : textAnswer.trim(),
+              )
+            }
             disabled={!canContinue || checking}
           >
             {checking ? 'Checking…' : 'Check Answer'}

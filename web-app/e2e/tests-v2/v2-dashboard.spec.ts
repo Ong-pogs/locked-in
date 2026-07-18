@@ -12,6 +12,8 @@ test.describe('v2 dashboard — gate sanity', () => {
       'v2-dashboard testid missing — dev server lacks NEXT_PUBLIC_VAULT_V2_PROGRAM_ID (use the v2 config webServer)',
     ).toBeVisible({ timeout: 20_000 });
     await expect(page.locator('h1')).toHaveText('Dashboard');
+    // Footer disconnect (sign-out affordance shipped with the v2 dashboard).
+    await expect(page.getByTestId('v2-disconnect')).toBeVisible();
   });
 
   // Carried-over sections (XP hero, journey stats, activity heatmap).
@@ -21,8 +23,14 @@ test.describe('v2 dashboard — gate sanity', () => {
     await expect(page.getByTestId('v2-xp-bar')).toBeVisible();
     await expect(page.getByTestId('v2-journey')).toBeVisible();
     await expect(page.getByTestId('v2-journey')).toContainText('Lessons Completed');
+    // Calendar-year heatmap (year selector + stats line replaced the old
+    // "Past Year of Activity" rolling view).
     await expect(page.getByTestId('v2-heatmap')).toBeVisible();
-    await expect(page.getByTestId('v2-heatmap')).toContainText('Past Year of Activity');
+    await expect(page.getByTestId('v2-heatmap')).toContainText('Activity');
+    await expect(page.getByTestId('v2-heatmap')).toContainText('active days');
+    await expect(
+      page.getByTestId('v2-heatmap').getByRole('button', { name: '2026', exact: true }),
+    ).toBeVisible();
   });
 });
 

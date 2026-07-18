@@ -30,6 +30,10 @@ body {
  * imported in app/layout.tsx. Use on cozified pages. */
 .font-pixel {
   font-family: var(--font-pixel), Georgia, serif;
+  /* Pixelify Sans ships a broken "fi" ligature glyph — "finance" renders as
+   * "Anance". Kill ligatures for this face only. */
+  font-feature-settings: 'liga' 0, 'dlig' 0;
+  font-variant-ligatures: none;
 }
 .font-pixel-mono {
   font-family: var(--font-pixel-mono), ui-monospace, monospace;

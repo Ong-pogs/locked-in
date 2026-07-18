@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Swords, ChevronRight, BookOpen } from 'lucide-react';
+import { Swords, ChevronRight, BookOpen, Lock } from 'lucide-react';
 import { useCourseStore } from '@/stores';
 import { CozyCard, CozySectionLabel, COZY_TEXT, COZY_TEXT_SHADOW } from '@/components/cozy';
 import { HubButton } from '@/components/HubButton';
@@ -25,8 +25,11 @@ export default function PracticePage() {
   const lessonProgress = useCourseStore((s) => s.lessonProgress);
   const enrolledCourseIds = useCourseStore((s) => s.enrolledCourseIds);
 
-  // Enrolled courses first, then any other course with completed lessons
-  // (e.g. finished + claimed courses that were since un-enrolled).
+  // Practice unlocks per COURSE: only a fully-completed course opens its
+  // lessons for replay. Courses still in progress show as locked rows so the
+  // player knows practice exists and what earns it. Enrolled courses first,
+  // then any other course with progress (e.g. finished + claimed courses that
+  // were since un-enrolled).
   const groups = useMemo(() => {
     const courseIds = [
       ...enrolledCourseIds,
@@ -35,12 +38,24 @@ export default function PracticePage() {
     return courseIds
       .map((courseId) => {
         const course = courses.find((c) => c.id === courseId);
-        const completed = (lessons[courseId] ?? [])
-          .filter((l) => lessonProgress[l.id]?.completed)
-          .sort((a, b) => a.order - b.order);
-        return { courseId, title: course?.title ?? courseId, completed };
+        const courseLessons = [...(lessons[courseId] ?? [])].sort((a, b) => a.order - b.order);
+        const completed = courseLessons.filter((l) => lessonProgress[l.id]?.completed);
+        // Prefer the loaded lesson list; fall back to the catalog counts when
+        // the course's lessons aren't hydrated locally.
+        const totalCount = courseLessons.length > 0 ? courseLessons.length : course?.totalLessons ?? 0;
+        const completedCount =
+          courseLessons.length > 0 ? completed.length : course?.completedLessons ?? 0;
+        const unlocked = totalCount > 0 && completedCount >= totalCount;
+        return {
+          courseId,
+          title: course?.title ?? courseId,
+          completed,
+          completedCount,
+          totalCount,
+          unlocked,
+        };
       })
-      .filter((g) => g.completed.length > 0);
+      .filter((g) => g.completedCount > 0);
   }, [courses, lessons, lessonProgress, enrolledCourseIds]);
 
   return (
@@ -83,7 +98,7 @@ export default function PracticePage() {
               Practice Hall
             </h1>
             <p className="font-pixel-mono text-[11px] mt-0.5" style={{ color: T.textMutedStrong }}>
-              Replay lessons you&apos;ve passed. Streak, flame and yield stay untouched.
+              Finish a course to unlock its practice. Streak, flame and yield stay untouched.
             </p>
           </div>
         </div>
@@ -96,7 +111,7 @@ export default function PracticePage() {
                 Nothing to practice yet
               </p>
               <p className="font-pixel-mono text-[12px] max-w-[380px]" style={{ color: T.textMutedStrong }}>
-                Pass a lesson in a course and it appears here for stakes-free review.
+                Finish a course and its lessons appear here for stakes-free review.
               </p>
               <button
                 onClick={() => router.push('/courses')}
@@ -115,6 +130,24 @@ export default function PracticePage() {
           groups.map((g) => (
             <div key={g.courseId} className="mt-7">
               <CozySectionLabel>{g.title}</CozySectionLabel>
+              {!g.unlocked ? (
+                <CozyCard className="w-full" style={{ padding: 14, opacity: 0.75 }}>
+                  <div className="flex items-center gap-3">
+                    <Lock size={16} color={T.textMuted} className="shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p
+                        className="font-pixel text-[13px]"
+                        style={{ color: T.textMutedStrong, textShadow: COZY_TEXT_SHADOW }}
+                      >
+                        Finish the course to unlock practice
+                      </p>
+                      <p className="font-pixel-mono text-[10px] mt-0.5" style={{ color: T.textMuted }}>
+                        {g.completedCount}/{g.totalCount} lessons done
+                      </p>
+                    </div>
+                  </div>
+                </CozyCard>
+              ) : (
               <div className="flex flex-col gap-2.5">
                 {g.completed.map((l) => {
                   const score = lessonProgress[l.id]?.score;
@@ -159,6 +192,7 @@ export default function PracticePage() {
                   );
                 })}
               </div>
+              )}
             </div>
           ))
         )}

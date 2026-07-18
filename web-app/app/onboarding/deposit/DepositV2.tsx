@@ -164,8 +164,16 @@ function DepositV2Content() {
         );
       }
 
-      const { executeDeposit } = await import('@/services/solana/v2Actions');
-      const wallet = solanaWallets[0] ?? null;
+      const { executeDeposit, isTxStubActive } = await import('@/services/solana/v2Actions');
+      const { pickSignerWallet, missingSignerMessage } = await import(
+        '@/services/solana/pickSignerWallet'
+      );
+      // Sign with the wallet the tx is built for, never wallets[0] — with both
+      // an embedded and an external wallet connected, index 0 can be the wrong
+      // one and the wallet rejects with the 4100 "not been authorized" error.
+      // The e2e tx stub never signs, so its runs skip the signer pre-check.
+      const wallet = pickSignerWallet(solanaWallets, walletAddress);
+      if (!wallet && !isTxStubActive()) throw new Error(missingSignerMessage(walletAddress));
       const result = await executeDeposit(
         walletAddress,
         courseId,

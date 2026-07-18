@@ -4,10 +4,12 @@ import { defineConfig, devices } from '@playwright/test';
 // v2 world switch + e2e tx stub + sentinel RPC. The default config/specs stay
 // untouched (they cover the legacy world).
 
-const PORT = 3200;
-const BASE_URL = process.env.E2E_BASE_URL ?? `http://localhost:${PORT}`;
+// Exported so content.config.ts boots an IDENTICAL server (same port + env):
+// with reuseExistingServer, back-to-back v2/content runs share one build.
+export const PORT = 3200;
+export const BASE_URL = process.env.E2E_BASE_URL ?? `http://localhost:${PORT}`;
 
-const V2_ENV = {
+export const V2_ENV = {
   NEXT_PUBLIC_API_URL: 'http://localhost:3001',
   NEXT_PUBLIC_VAULT_V2_PROGRAM_ID: 'EUABEbHUjiUn9NijapRJT2MVqQ5nSdqH3gSzTxyGucsN',
   NEXT_PUBLIC_LOCK_VAULT_USDC_MINT: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',

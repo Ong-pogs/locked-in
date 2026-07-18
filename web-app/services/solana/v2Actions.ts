@@ -56,6 +56,15 @@ function getTxStub(): TxStub | null {
   return stub ?? null;
 }
 
+/**
+ * True when the e2e tx stub will handle the next execute call. Callers use
+ * this to relax pre-flight signer checks (the stub never signs anything);
+ * in prod builds the env flag is absent so this is always false.
+ */
+export function isTxStubActive(): boolean {
+  return getTxStub() != null;
+}
+
 // Confirm via HTTP polling (no WebSockets — e2e mocks HTTP only, and the WS
 // confirm path hangs for 30-60s against unreachable endpoints).
 async function confirmByPolling(signature: string, timeoutMs = 30_000): Promise<void> {

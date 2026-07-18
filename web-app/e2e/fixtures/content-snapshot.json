@@ -1,0 +1,3743 @@
+{
+  "source": "https://locked-in-backend-oetf.onrender.com",
+  "generatedAt": "2026-07-18T11:29:39.485Z",
+  "releaseId": "3a12a9c6-71d2-4f5b-9d42-a4dc4bf9a03f",
+  "publishedAt": "2026-07-10T11:42:06.735Z",
+  "courses": [
+    {
+      "id": "anchor-dev",
+      "slug": "anchor-dev",
+      "title": "Anchor Development",
+      "description": "Build Solana programs using the Anchor framework.",
+      "difficulty": "intermediate",
+      "category": "solana",
+      "imageUrl": null,
+      "totalModules": 0,
+      "totalLessons": 0,
+      "lockPolicy": {
+        "maxLockDurationDays": 90,
+        "minLockDurationDays": 30,
+        "maxPrincipalAmountUi": "250.00",
+        "minPrincipalAmountUi": "25.00",
+        "demoPrincipalAmountUi": "1.00"
+      },
+      "publishedAt": "2026-07-10T11:42:06.735Z"
+    },
+    {
+      "id": "blockchain-wallets",
+      "slug": "blockchain-and-wallets",
+      "title": "Blockchain & Wallets",
+      "description": "How Your Money Actually Works — From trust and middlemen to self-custody, understand the technology behind your locked USDC.",
+      "difficulty": "beginner",
+      "category": "solana",
+      "imageUrl": null,
+      "totalModules": 1,
+      "totalLessons": 8,
+      "lockPolicy": {
+        "maxLockDurationDays": 30,
+        "minLockDurationDays": 10,
+        "maxPrincipalAmountUi": "100.00",
+        "minPrincipalAmountUi": "5.00",
+        "demoPrincipalAmountUi": "1.00"
+      },
+      "publishedAt": "2026-07-10T11:42:06.735Z"
+    },
+    {
+      "id": "defi-how-money-earns",
+      "slug": "defi-how-your-money-earns-money",
+      "title": "DeFi — How Your Money Earns Money",
+      "description": "Pull back the curtain on DeFi — understand how your locked USDC earns yield through lending protocols, what the risks are, and how the entire ecosystem works.",
+      "difficulty": "beginner",
+      "category": "solana",
+      "imageUrl": null,
+      "totalModules": 1,
+      "totalLessons": 8,
+      "lockPolicy": {
+        "maxLockDurationDays": 30,
+        "minLockDurationDays": 10,
+        "maxPrincipalAmountUi": "100.00",
+        "minPrincipalAmountUi": "5.00",
+        "demoPrincipalAmountUi": "1.00"
+      },
+      "publishedAt": "2026-07-10T11:42:06.735Z"
+    },
+    {
+      "id": "defi-protocols",
+      "slug": "defi-protocols",
+      "title": "DeFi Protocols",
+      "description": "Understand AMMs, lending, and yield on Solana.",
+      "difficulty": "intermediate",
+      "category": "defi",
+      "imageUrl": null,
+      "totalModules": 0,
+      "totalLessons": 0,
+      "lockPolicy": {
+        "maxLockDurationDays": 90,
+        "minLockDurationDays": 30,
+        "maxPrincipalAmountUi": "250.00",
+        "minPrincipalAmountUi": "25.00",
+        "demoPrincipalAmountUi": "1.00"
+      },
+      "publishedAt": "2026-07-10T11:42:06.735Z"
+    },
+    {
+      "id": "keys-and-seed-phrases",
+      "slug": "keys-and-seed-phrases",
+      "title": "Keys & Seed Phrases — Own Your Crypto",
+      "description": "Self-custody made simple — what private keys and seed phrases really are, how to store them safely, and how to spot the scams that try to take them.",
+      "difficulty": "beginner",
+      "category": "solana",
+      "imageUrl": null,
+      "totalModules": 1,
+      "totalLessons": 6,
+      "lockPolicy": {
+        "maxLockDurationDays": 30,
+        "minLockDurationDays": 10,
+        "maxPrincipalAmountUi": "100.00",
+        "minPrincipalAmountUi": "5.00",
+        "demoPrincipalAmountUi": "1.00"
+      },
+      "publishedAt": "2026-07-10T11:42:06.735Z"
+    },
+    {
+      "id": "reading-solana",
+      "slug": "reading-solana",
+      "title": "Reading Solana — Explorers & Transactions",
+      "description": "Learn to read the chain for yourself — what a transaction really is, what fees cost in lamports, how finality works, and how to check any account or transaction on a block explorer.",
+      "difficulty": "beginner",
+      "category": "solana",
+      "imageUrl": null,
+      "totalModules": 1,
+      "totalLessons": 6,
+      "lockPolicy": {
+        "maxLockDurationDays": 30,
+        "minLockDurationDays": 10,
+        "maxPrincipalAmountUi": "100.00",
+        "minPrincipalAmountUi": "5.00",
+        "demoPrincipalAmountUi": "1.00"
+      },
+      "publishedAt": "2026-07-10T11:42:06.735Z"
+    },
+    {
+      "id": "rust-solana",
+      "slug": "rust-solana",
+      "title": "Rust for Solana",
+      "description": "Learn the Rust fundamentals needed for Solana development.",
+      "difficulty": "beginner",
+      "category": "rust",
+      "imageUrl": null,
+      "totalModules": 0,
+      "totalLessons": 0,
+      "lockPolicy": {
+        "maxLockDurationDays": 30,
+        "minLockDurationDays": 10,
+        "maxPrincipalAmountUi": "100.00",
+        "minPrincipalAmountUi": "5.00",
+        "demoPrincipalAmountUi": "1.00"
+      },
+      "publishedAt": "2026-07-10T11:42:06.735Z"
+    },
+    {
+      "id": "solana-fundamentals",
+      "slug": "solana-fundamentals",
+      "title": "Solana Fundamentals",
+      "description": "Learn the core concepts of the Solana blockchain.",
+      "difficulty": "beginner",
+      "category": "solana",
+      "imageUrl": null,
+      "totalModules": 0,
+      "totalLessons": 0,
+      "lockPolicy": {
+        "maxLockDurationDays": 30,
+        "minLockDurationDays": 10,
+        "maxPrincipalAmountUi": "100.00",
+        "minPrincipalAmountUi": "5.00",
+        "demoPrincipalAmountUi": "1.00"
+      },
+      "publishedAt": "2026-07-10T11:42:06.735Z"
+    },
+    {
+      "id": "test-kitchen",
+      "slug": "test-kitchen",
+      "title": "Test Kitchen",
+      "description": "A quick course to test all LockedIn features — locking, lessons, variants, questions, streaks, and more.",
+      "difficulty": "beginner",
+      "category": "solana",
+      "imageUrl": null,
+      "totalModules": 1,
+      "totalLessons": 3,
+      "lockPolicy": {
+        "maxLockDurationDays": 30,
+        "minLockDurationDays": 10,
+        "maxPrincipalAmountUi": "10.00",
+        "minPrincipalAmountUi": "1.00",
+        "demoPrincipalAmountUi": "1.00"
+      },
+      "publishedAt": "2026-07-10T11:42:06.735Z"
+    },
+    {
+      "id": "tokens-nfts-staking",
+      "slug": "tokens-nfts-and-staking",
+      "title": "Tokens, NFTs & Staking",
+      "description": "From SOL to SPL — how tokens and token accounts work, what an NFT actually is on Solana, and how staking and liquid staking put your SOL to work.",
+      "difficulty": "beginner",
+      "category": "solana",
+      "imageUrl": null,
+      "totalModules": 1,
+      "totalLessons": 6,
+      "lockPolicy": {
+        "maxLockDurationDays": 30,
+        "minLockDurationDays": 10,
+        "maxPrincipalAmountUi": "100.00",
+        "minPrincipalAmountUi": "5.00",
+        "demoPrincipalAmountUi": "1.00"
+      },
+      "publishedAt": "2026-07-10T11:42:06.735Z"
+    }
+  ],
+  "modulesByCourse": {
+    "anchor-dev": [],
+    "blockchain-wallets": [
+      {
+        "id": "blockchain-wallets-module-core",
+        "courseId": "blockchain-wallets",
+        "slug": "blockchain-wallets-core",
+        "title": "Blockchain & Wallets Core",
+        "description": "Core module for Course 1: Blockchain & Wallets — How Your Money Actually Works.",
+        "order": 1,
+        "difficulty": "beginner",
+        "totalLessons": 8,
+        "estimatedMinutes": 60
+      }
+    ],
+    "defi-how-money-earns": [
+      {
+        "id": "defi-module-core",
+        "courseId": "defi-how-money-earns",
+        "slug": "defi-core",
+        "title": "DeFi Core",
+        "description": "Core module for Course 2: DeFi — How Your Money Earns Money.",
+        "order": 1,
+        "difficulty": "beginner",
+        "totalLessons": 8,
+        "estimatedMinutes": 60
+      }
+    ],
+    "defi-protocols": [],
+    "keys-and-seed-phrases": [
+      {
+        "id": "keys-seed-phrases-module-core",
+        "courseId": "keys-and-seed-phrases",
+        "slug": "keys-seed-phrases-core",
+        "title": "Keys & Seed Phrases Core",
+        "description": "Core module for Course 3: Keys & Seed Phrases — Own Your Crypto.",
+        "order": 1,
+        "difficulty": "beginner",
+        "totalLessons": 6,
+        "estimatedMinutes": 45
+      }
+    ],
+    "reading-solana": [
+      {
+        "id": "reading-solana-module-core",
+        "courseId": "reading-solana",
+        "slug": "reading-solana-core",
+        "title": "Reading Solana Core",
+        "description": "Core module for Course 4: Reading Solana — Explorers & Transactions.",
+        "order": 1,
+        "difficulty": "beginner",
+        "totalLessons": 6,
+        "estimatedMinutes": 45
+      }
+    ],
+    "rust-solana": [],
+    "solana-fundamentals": [],
+    "test-kitchen": [
+      {
+        "id": "test-kitchen-module",
+        "courseId": "test-kitchen",
+        "slug": "test-kitchen-core",
+        "title": "Test Kitchen Core",
+        "description": "Core module for the Test Kitchen course — testing all LockedIn features.",
+        "order": 1,
+        "difficulty": "beginner",
+        "totalLessons": 3,
+        "estimatedMinutes": 10
+      }
+    ],
+    "tokens-nfts-staking": [
+      {
+        "id": "tokens-nfts-staking-module-core",
+        "courseId": "tokens-nfts-staking",
+        "slug": "tokens-nfts-staking-core",
+        "title": "Tokens, NFTs & Staking Core",
+        "description": "Core module for Course 5: Tokens, NFTs & Staking.",
+        "order": 1,
+        "difficulty": "beginner",
+        "totalLessons": 6,
+        "estimatedMinutes": 45
+      }
+    ]
+  },
+  "lessonsByModule": {
+    "blockchain-wallets-module-core": [
+      {
+        "id": "bw-1",
+        "order": 1,
+        "title": "The Problem That Started Everything",
+        "blocks": [
+          {
+            "id": "bw-1-block-1",
+            "text": "Before We Talk Tech, Let's Talk Trust\n\nEvery time you swipe your card, send money through an app, or check your bank balance, you're trusting someone. You trust your bank to hold your money honestly. You trust Visa to move it correctly. You trust PayPal not to freeze your account for no reason.\n\nMost of the time, this works fine. But \"most of the time\" isn't the same as \"always.\"\n\nMiddlemen can say no. Banks can freeze accounts, reject transactions, or close your account entirely — sometimes with no explanation.\n\nThey make mistakes. Money gets lost in transfers. Transactions fail. Disputes take weeks.\n\nThey can fail. When banks collapse, your savings can vanish. In 2008, millions of people watched their \"safe\" money disappear.\n\nThey charge fees. Every swipe, every transfer, every conversion — someone takes a cut. Those cuts add up to hundreds of billions of dollars a year.\n\nThey know everything. Every purchase, every transfer, every balance — your entire financial life is visible to your bank and the companies it shares data with.\n\nIn 2008, someone asked: what if we didn't need middlemen?",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "bw-1-block-2",
+            "text": "Imagine a small village where everyone trades goods. Instead of trusting one person to keep the record book, every villager keeps an identical copy. When someone makes a payment, everyone writes it down at the same time. If one person tries to cheat, everyone else's copy still has the original record.",
+            "type": "callout",
+            "order": 2,
+            "title": "The Village Notebook",
+            "variant": "analogy",
+            "calloutTone": "info"
+          },
+          {
+            "id": "bw-1-block-3",
+            "text": "That's a blockchain. Here's how the analogy maps:",
+            "type": "paragraph",
+            "items": [
+              {
+                "desc": "A record of every transaction ever made",
+                "icon": "📖",
+                "name": "The notebook = the blockchain"
+              },
+              {
+                "desc": "Transactions grouped together into batches",
+                "icon": "📄",
+                "name": "Each page = a block"
+              },
+              {
+                "desc": "Each new page references the previous one, creating an unbreakable sequence",
+                "icon": "🔗",
+                "name": "The chain = linked pages"
+              },
+              {
+                "desc": "Computers that maintain copies and verify transactions",
+                "icon": "🖥",
+                "name": "The villagers = validators"
+              }
+            ],
+            "order": 3,
+            "variant": "concepts"
+          },
+          {
+            "id": "bw-1-block-4",
+            "text": "Your locked USDC is on a blockchain right now. It went onto the Solana blockchain — into a smart contract that thousands of computers around the world are verifying. Nobody at LockedIn can touch your money. That's not a marketing promise — that's how the technology works.",
+            "type": "callout",
+            "order": 4,
+            "variant": "takeaway",
+            "calloutTone": "tip"
+          }
+        ],
+        "version": 1,
+        "courseId": "blockchain-wallets",
+        "moduleId": "blockchain-wallets-module-core",
+        "questions": [
+          {
+            "id": "bw-1-q1",
+            "type": "mcq",
+            "prompt": "What is a blockchain?",
+            "options": [
+              {
+                "id": "bw-1-q1-opt-1",
+                "text": "A company that stores your money online"
+              },
+              {
+                "id": "bw-1-q1-opt-2",
+                "text": "A shared record book maintained by thousands of computers, owned by nobody"
+              },
+              {
+                "id": "bw-1-q1-opt-3",
+                "text": "A type of bank account with better interest rates"
+              }
+            ]
+          },
+          {
+            "id": "bw-1-q2",
+            "type": "mcq",
+            "prompt": "What is the main problem with traditional middlemen in finance?",
+            "options": [
+              {
+                "id": "bw-1-q2-opt-1",
+                "text": "They're too fast at processing transactions"
+              },
+              {
+                "id": "bw-1-q2-opt-2",
+                "text": "They can fail, charge fees, and control your money"
+              },
+              {
+                "id": "bw-1-q2-opt-3",
+                "text": "They don't exist anymore"
+              }
+            ]
+          },
+          {
+            "id": "bw-1-q3",
+            "type": "mcq",
+            "prompt": "In the village notebook analogy, what are the villagers?",
+            "options": [
+              {
+                "id": "bw-1-q3-opt-1",
+                "text": "Banks that process payments"
+              },
+              {
+                "id": "bw-1-q3-opt-2",
+                "text": "Validators — computers that maintain copies and verify transactions"
+              },
+              {
+                "id": "bw-1-q3-opt-3",
+                "text": "Government officials who regulate trade"
+              }
+            ]
+          },
+          {
+            "id": "bw-1-q4",
+            "type": "short_text",
+            "prompt": "In your own words, explain why a blockchain doesn't need a middleman."
+          }
+        ],
+        "releaseId": "247aa94a-83d3-45ab-a474-237822b056a0",
+        "contentHash": "dd8b038bbd37066adfb1b7b1a2992f34d347c95a0580d258e975f822f7e6081d"
+      },
+      {
+        "id": "bw-2",
+        "order": 2,
+        "title": "Solana — The Blockchain Your Money Lives On",
+        "blocks": [
+          {
+            "id": "bw-2-block-1",
+            "text": "",
+            "type": "paragraph",
+            "order": 1,
+            "chains": [
+              {
+                "desc": "First, most well-known, extremely secure. But slow and expensive. Great for storing value, not great for everyday use.",
+                "name": "Bitcoin",
+                "stats": [
+                  "~10 min",
+                  "$1–$20/tx"
+                ],
+                "theme": "btc",
+                "tagline": "The Freight Train"
+              },
+              {
+                "desc": "Flexible and powerful — smart contracts were popularized here. But congested and expensive during peak times. Where most of DeFi was born.",
+                "name": "Ethereum",
+                "stats": [
+                  "~12 sec",
+                  "$5–$50/tx"
+                ],
+                "theme": "eth",
+                "tagline": "The Busy Highway"
+              },
+              {
+                "desc": "Fast, incredibly cheap, and built for high throughput. **This is where LockedIn lives, and where your USDC is locked.**",
+                "name": "Solana",
+                "stats": [
+                  "~0.4 sec",
+                  "~$0.00025/tx"
+                ],
+                "theme": "sol",
+                "tagline": "The Bullet Train"
+              }
+            ],
+            "variant": "chain-cards"
+          },
+          {
+            "id": "bw-2-block-2",
+            "text": "Every action you take on LockedIn — locking USDC, completing lessons, claiming your yield — is a transaction. On Ethereum, that might cost $5-20 each. On Solana, it costs less than a tenth of a cent. **You don't even notice.**",
+            "type": "callout",
+            "order": 2,
+            "variant": "takeaway",
+            "calloutTone": "tip"
+          },
+          {
+            "id": "bw-2-block-3",
+            "text": "Who Runs Solana?\n\nNobody — and everybody. Solana is maintained by thousands of validators around the world. No company, government, or individual controls it. Think of it like Wikipedia: lots of people contribute, there are rules for how content is verified, but no single person owns it.\n\nValidators are computers that process transactions, maintain copies of the blockchain, and vote on which transactions are valid. They earn SOL tokens for their work — that's their incentive to keep the network running honestly.",
+            "type": "paragraph",
+            "order": 3
+          },
+          {
+            "id": "bw-2-block-4",
+            "text": "Everything on Solana is organized into accounts. Think of the blockchain as a giant filing cabinet:",
+            "type": "paragraph",
+            "items": [
+              {
+                "desc": "Every wallet, every token balance, every program has an account. Accounts store data and are identified by unique addresses.",
+                "icon": "📁",
+                "name": "Accounts"
+              },
+              {
+                "desc": "Digital assets like **USDC** and **SOL**. Each follows a standard (SPL) so every wallet and app can handle them.",
+                "icon": "🪙",
+                "name": "Tokens"
+              },
+              {
+                "desc": "Code deployed to the blockchain that processes transactions. **LockedIn's smart contract is a Solana program.**",
+                "icon": "⚙",
+                "name": "Programs"
+              },
+              {
+                "desc": "Instructions sent to programs. Every action — locking USDC, completing a lesson, claiming your yield — is recorded **permanently**.",
+                "icon": "📝",
+                "name": "Transactions"
+              }
+            ],
+            "order": 4,
+            "variant": "concepts"
+          },
+          {
+            "id": "bw-2-block-5",
+            "type": "paragraph",
+            "items": [
+              {
+                "desc": "Pays transaction fees. Price fluctuates.",
+                "color": "amber",
+                "label": "SOL",
+                "value": "Gas token"
+              },
+              {
+                "desc": "Always $1. Your locked commitment.",
+                "color": "green",
+                "label": "USDC",
+                "value": "Digital Dollar"
+              }
+            ],
+            "order": 5,
+            "variant": "kv-grid"
+          }
+        ],
+        "version": 1,
+        "courseId": "blockchain-wallets",
+        "moduleId": "blockchain-wallets-module-core",
+        "questions": [
+          {
+            "id": "bw-2-q1",
+            "type": "mcq",
+            "prompt": "Why is LockedIn built on Solana instead of Ethereum?",
+            "options": [
+              {
+                "id": "bw-2-q1-opt-1",
+                "text": "Solana is more popular than Ethereum"
+              },
+              {
+                "id": "bw-2-q1-opt-2",
+                "text": "Solana transactions cost fractions of a cent and settle in under a second"
+              },
+              {
+                "id": "bw-2-q1-opt-3",
+                "text": "Ethereum doesn't support USDC"
+              }
+            ]
+          },
+          {
+            "id": "bw-2-q2",
+            "type": "mcq",
+            "prompt": "How much does a typical Solana transaction cost?",
+            "options": [
+              {
+                "id": "bw-2-q2-opt-1",
+                "text": "$5 – $20 depending on network traffic"
+              },
+              {
+                "id": "bw-2-q2-opt-2",
+                "text": "About $0.00025 — a fraction of a cent"
+              },
+              {
+                "id": "bw-2-q2-opt-3",
+                "text": "$1 – $2 per transaction"
+              }
+            ]
+          },
+          {
+            "id": "bw-2-q3",
+            "type": "mcq",
+            "prompt": "What is SOL used for?",
+            "options": [
+              {
+                "id": "bw-2-q3-opt-1",
+                "text": "Storing value like USDC"
+              },
+              {
+                "id": "bw-2-q3-opt-2",
+                "text": "Paying transaction fees to validators on the Solana network"
+              },
+              {
+                "id": "bw-2-q3-opt-3",
+                "text": "Buying NFTs only"
+              }
+            ]
+          },
+          {
+            "id": "bw-2-q4",
+            "type": "short_text",
+            "prompt": "Explain the difference between SOL and USDC in one or two sentences."
+          }
+        ],
+        "releaseId": "247aa94a-83d3-45ab-a474-237822b056a0",
+        "contentHash": "9639ed3b15251d6a6358f3d4213c24a118a7ec04dbbc8c79166b062cfc7bc406"
+      },
+      {
+        "id": "bw-3",
+        "order": 3,
+        "title": "Wallets — The Key You Didn't Know You Had",
+        "blocks": [
+          {
+            "id": "bw-3-block-1",
+            "text": "The Big Reveal\n\nYou've been using LockedIn for a few days now. Locked USDC. Kept your flame lit. Earned some yield. Here's something you might not have thought about: **you have a crypto wallet.**\n\nWhen you signed in with Google, a Solana wallet was created for you automatically. It's been working behind the scenes — holding your USDC, signing transactions, interacting with the blockchain.\n\nBut here's the important thing: a crypto wallet is **not** like the leather wallet in your pocket. It doesn't hold your money. Your money lives on the blockchain. Your wallet is just the **key** that proves you own it.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "bw-3-block-2",
+            "text": "Imagine a warehouse with millions of see-through lockers. Everyone can walk through and see what's in each locker. But only the person with the right key can open theirs.\n\nThe warehouse = the Solana blockchain. Your locker = your account. What's inside = your USDC, SOL, lock and streak records. Your key = your wallet.",
+            "type": "callout",
+            "order": 2,
+            "title": "The Locker Analogy",
+            "variant": "analogy",
+            "calloutTone": "info"
+          },
+          {
+            "id": "bw-3-block-3",
+            "type": "paragraph",
+            "items": [
+              {
+                "desc": "Safe to share — like an email address",
+                "color": "default",
+                "label": "Public Key (Address)",
+                "value": "7xKX...q3Fp"
+              },
+              {
+                "desc": "NEVER share — proves you own your wallet",
+                "color": "red",
+                "label": "Private Key",
+                "value": "••••••••••••"
+              }
+            ],
+            "order": 3,
+            "variant": "kv-grid"
+          },
+          {
+            "id": "bw-3-block-4",
+            "text": "When you lock USDC, here's what happens:",
+            "type": "paragraph",
+            "order": 4,
+            "steps": [
+              {
+                "desc": "\"Move 50 USDC from your address to the smart contract\"",
+                "title": "LockedIn builds the instruction"
+              },
+              {
+                "desc": "Proves it's really you — like signing a cheque",
+                "title": "Your private key signs it"
+              },
+              {
+                "desc": "Valid signature? ✓ Has 50 USDC? ✓",
+                "title": "Solana network validates"
+              },
+              {
+                "desc": "Transaction processed. Permanently recorded.",
+                "icon": "✓",
+                "color": "green",
+                "title": "Done in ~0.4 seconds"
+              }
+            ],
+            "variant": "flow"
+          }
+        ],
+        "version": 1,
+        "courseId": "blockchain-wallets",
+        "moduleId": "blockchain-wallets-module-core",
+        "questions": [
+          {
+            "id": "bw-3-q1",
+            "type": "mcq",
+            "prompt": "What does your wallet actually store?",
+            "options": [
+              {
+                "id": "bw-3-q1-opt-1",
+                "text": "Your USDC and other cryptocurrency"
+              },
+              {
+                "id": "bw-3-q1-opt-2",
+                "text": "Your private key that proves you own your account on the blockchain"
+              },
+              {
+                "id": "bw-3-q1-opt-3",
+                "text": "Your course progress and lesson history"
+              }
+            ]
+          },
+          {
+            "id": "bw-3-q2",
+            "type": "mcq",
+            "prompt": "What is your public key used for?",
+            "options": [
+              {
+                "id": "bw-3-q2-opt-1",
+                "text": "Signing transactions to move your funds"
+              },
+              {
+                "id": "bw-3-q2-opt-2",
+                "text": "Identifying your account on the blockchain — like an email address"
+              },
+              {
+                "id": "bw-3-q2-opt-3",
+                "text": "Encrypting your private data"
+              }
+            ]
+          },
+          {
+            "id": "bw-3-q3",
+            "type": "mcq",
+            "prompt": "If LockedIn disappeared tomorrow, what happens to your wallet?",
+            "options": [
+              {
+                "id": "bw-3-q3-opt-1",
+                "text": "It's deleted along with your account"
+              },
+              {
+                "id": "bw-3-q3-opt-2",
+                "text": "It still exists on the blockchain — you can access it through another app"
+              },
+              {
+                "id": "bw-3-q3-opt-3",
+                "text": "The LockedIn team returns your funds manually"
+              }
+            ]
+          },
+          {
+            "id": "bw-3-q4",
+            "type": "short_text",
+            "prompt": "Why is a crypto wallet more like a key than a vault?"
+          }
+        ],
+        "releaseId": "247aa94a-83d3-45ab-a474-237822b056a0",
+        "contentHash": "e82478e2a5590d809b0395014d8dfe3973dc07b04e081d6c38a6b05592f22cad"
+      },
+      {
+        "id": "bw-4",
+        "order": 4,
+        "title": "Transactions — What Happens When You Tap a Button",
+        "blocks": [
+          {
+            "id": "bw-4-block-1",
+            "text": "Every tap writes history. Here's what happened when you locked your USDC:",
+            "type": "paragraph",
+            "order": 1,
+            "steps": [
+              {
+                "desc": "LockedIn built the instruction: lock X USDC for 30 days",
+                "title": "You tapped 'Lock'"
+              },
+              {
+                "desc": "Your private key authorized the transfer",
+                "title": "Transaction signed"
+              },
+              {
+                "desc": "1,000+ computers verified and recorded the transaction",
+                "title": "Validators confirmed"
+              },
+              {
+                "desc": "Your USDC is now in the smart contract until the unlock date",
+                "icon": "🔒",
+                "title": "Lock account created"
+              }
+            ],
+            "variant": "flow"
+          },
+          {
+            "id": "bw-4-block-2",
+            "rows": [
+              [
+                "What is it?",
+                "Activity counter",
+                "Reward counter"
+              ],
+              [
+                "Earned by",
+                "Completing lessons",
+                "Earning yield"
+              ],
+              [
+                "Worth money?",
+                "No — like XP points",
+                "Yes — redeemable for USDC"
+              ],
+              [
+                "Analogy",
+                "XP in a game",
+                "Loyalty points you can cash out"
+              ]
+            ],
+            "type": "code",
+            "order": 2,
+            "headers": [
+              "",
+              "Principal",
+              "Yield"
+            ],
+            "variant": "comparison"
+          },
+          {
+            "id": "bw-4-block-3",
+            "text": "Sending a letter costs a stamp — the stamp pays the postal system to deliver your mail. Gas works the same way. Every transaction needs a tiny fee (in SOL) to pay the validators who process it.\n\nOn Solana, gas is absurdly cheap: ~$0.00025 per transaction. Your entire month of activity probably costs less than $0.01. And right now, **LockedIn is paying your gas** so you can focus on learning.",
+            "type": "callout",
+            "order": 3,
+            "title": "Gas Fees = Postage Stamps",
+            "variant": "analogy",
+            "calloutTone": "info"
+          },
+          {
+            "id": "bw-4-block-4",
+            "text": "Transactions are irreversible. That sounds scary, but it's actually a feature: once your USDC is locked, **nobody can unlock it early** — not us, not anyone. Once you complete your course, **nobody can block your claim** — your principal and earned yield return to your wallet. Every record is permanent and verifiable forever.",
+            "type": "callout",
+            "order": 4,
+            "variant": "takeaway",
+            "calloutTone": "tip"
+          }
+        ],
+        "version": 1,
+        "courseId": "blockchain-wallets",
+        "moduleId": "blockchain-wallets-module-core",
+        "questions": [
+          {
+            "id": "bw-4-q1",
+            "type": "mcq",
+            "prompt": "In your lock, what is the difference between your principal and your yield?",
+            "options": [
+              {
+                "id": "bw-4-q1-opt-1",
+                "text": "Yield is worth more money than your principal"
+              },
+              {
+                "id": "bw-4-q1-opt-2",
+                "text": "They're the same thing with different names"
+              },
+              {
+                "id": "bw-4-q1-opt-3",
+                "text": "Principal is your locked USDC, always returned; yield is the interest it earns, forfeited only if you lapse"
+              }
+            ]
+          },
+          {
+            "id": "bw-4-q2",
+            "type": "mcq",
+            "prompt": "What is a transaction hash?",
+            "options": [
+              {
+                "id": "bw-4-q2-opt-1",
+                "text": "Your wallet address"
+              },
+              {
+                "id": "bw-4-q2-opt-2",
+                "text": "A unique ID for a specific transaction — like a receipt number"
+              },
+              {
+                "id": "bw-4-q2-opt-3",
+                "text": "A password for your account"
+              }
+            ]
+          },
+          {
+            "id": "bw-4-q3",
+            "type": "mcq",
+            "prompt": "Why are blockchain transactions irreversible?",
+            "options": [
+              {
+                "id": "bw-4-q3-opt-1",
+                "text": "It's a bug that hasn't been fixed yet"
+              },
+              {
+                "id": "bw-4-q3-opt-2",
+                "text": "So nobody can freeze your account, take back your money, or alter records"
+              },
+              {
+                "id": "bw-4-q3-opt-3",
+                "text": "To make things more complicated for users"
+              }
+            ]
+          },
+          {
+            "id": "bw-4-q4",
+            "type": "short_text",
+            "prompt": "Explain what 'gas fees' are and why they exist on Solana."
+          }
+        ],
+        "releaseId": "247aa94a-83d3-45ab-a474-237822b056a0",
+        "contentHash": "3a3951737b3242c675eed1f7dad5118a82137a58d446ce5d4d3b3e2c6458fecf"
+      },
+      {
+        "id": "bw-5",
+        "order": 5,
+        "title": "Smart Contracts — The Code That Guards Your Money",
+        "blocks": [
+          {
+            "id": "bw-5-block-1",
+            "text": "A vending machine is simple: you put in money, press a button, the machine checks if you paid enough, and dispenses the item. No negotiation. No human involved.\n\n**A smart contract works exactly the same way** — but it lives on the blockchain. Rules written in code, executed automatically, no human can override it.",
+            "type": "callout",
+            "order": 1,
+            "title": "Think: Vending Machine",
+            "variant": "analogy",
+            "calloutTone": "info"
+          },
+          {
+            "id": "bw-5-block-2",
+            "text": "The LockedIn Smart Contract\n\nHere's what the rules look like (simplified):\n\n- **Lock:** Accept USDC, record who locked it, for how long. Cannot be withdrawn early.\n- **Yield:** Deposit the locked USDC into Kamino, where it earns real yield while the user learns.\n- **Flame:** When a user completes their daily lesson, keep the flame lit. Yield accrues while the flame is lit.\n- **Streak:** Track daily completion. If the user lapses after shields are spent: earned yield is forfeited to the community pot — principal is always returned.\n- **Unlock:** When end date reached — return USDC to user's wallet.\n\nThese rules are **immutable** — once deployed, nobody can change them.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "bw-5-block-3",
+            "text": "Smart contracts power almost everything in crypto:",
+            "type": "paragraph",
+            "items": [
+              {
+                "desc": "Automatically swaps one token for another at market price",
+                "icon": "🔄",
+                "name": "Decentralized Exchange (Jupiter)"
+              },
+              {
+                "desc": "Lends your tokens, earns interest, manages collateral automatically",
+                "icon": "🏦",
+                "name": "Lending (Kamino, Marginfi)"
+              },
+              {
+                "desc": "Holds NFTs in escrow, executes sales when buyer pays",
+                "icon": "🎨",
+                "name": "NFT Marketplace (Magic Eden)"
+              },
+              {
+                "desc": "Locks USDC, deposits it into Kamino for real yield, enforces streaks and lapse penalties",
+                "icon": "🔒",
+                "name": "LockedIn"
+              }
+            ],
+            "order": 3,
+            "variant": "concepts"
+          },
+          {
+            "id": "bw-5-block-4",
+            "text": "If LockedIn as a company disappeared tomorrow, the smart contract **keeps running**. Your USDC is still locked. Your yield is still accruing. When the unlock date arrives, you can claim your funds through another app. The smart contract doesn't need us.",
+            "type": "callout",
+            "order": 4,
+            "variant": "takeaway",
+            "calloutTone": "tip"
+          }
+        ],
+        "version": 1,
+        "courseId": "blockchain-wallets",
+        "moduleId": "blockchain-wallets-module-core",
+        "questions": [
+          {
+            "id": "bw-5-q1",
+            "type": "mcq",
+            "prompt": "If LockedIn's website went offline tomorrow, what happens to your locked USDC?",
+            "options": [
+              {
+                "id": "bw-5-q1-opt-1",
+                "text": "It's lost forever — you'd need to start over"
+              },
+              {
+                "id": "bw-5-q1-opt-2",
+                "text": "The LockedIn team would return your funds manually"
+              },
+              {
+                "id": "bw-5-q1-opt-3",
+                "text": "It stays in the smart contract on the blockchain — safe and accessible"
+              }
+            ]
+          },
+          {
+            "id": "bw-5-q2",
+            "type": "mcq",
+            "prompt": "What is a smart contract most similar to?",
+            "options": [
+              {
+                "id": "bw-5-q2-opt-1",
+                "text": "A bank teller who follows strict rules"
+              },
+              {
+                "id": "bw-5-q2-opt-2",
+                "text": "A vending machine — automated rules that execute without human intervention"
+              },
+              {
+                "id": "bw-5-q2-opt-3",
+                "text": "A legal document that outlines terms"
+              }
+            ]
+          },
+          {
+            "id": "bw-5-q3",
+            "type": "mcq",
+            "prompt": "Can the LockedIn team change the smart contract rules after deployment?",
+            "options": [
+              {
+                "id": "bw-5-q3-opt-1",
+                "text": "Yes, anytime they want"
+              },
+              {
+                "id": "bw-5-q3-opt-2",
+                "text": "Only with user permission via a vote"
+              },
+              {
+                "id": "bw-5-q3-opt-3",
+                "text": "No — once deployed, the rules are immutable"
+              }
+            ]
+          },
+          {
+            "id": "bw-5-q4",
+            "type": "short_text",
+            "prompt": "Explain in your own words why smart contracts don't need trust."
+          }
+        ],
+        "releaseId": "247aa94a-83d3-45ab-a474-237822b056a0",
+        "contentHash": "2f82974bf5020e65291cb3dc6c26bbd6b3d851e7d93b2c222a296d7d3a83f97d"
+      },
+      {
+        "id": "bw-6",
+        "order": 6,
+        "title": "Tokens — Not All Digital Money Is the Same",
+        "blocks": [
+          {
+            "id": "bw-6-block-1",
+            "text": "You've encountered several \"things\" in LockedIn. Some are tokens, some aren't. Let's sort them out:",
+            "type": "paragraph",
+            "items": [
+              {
+                "desc": "Solana's native currency. Pays transaction fees. Price fluctuates like a stock. LockedIn covers your SOL costs.",
+                "icon": "⚡",
+                "name": "SOL — Pays Network Fees"
+              },
+              {
+                "desc": "A stablecoin pegged to $1. Backed by real USD reserves held by Circle. This is what you locked.",
+                "icon": "💵",
+                "name": "USDC — Digital Dollar"
+              },
+              {
+                "desc": "A counter in the smart contract. Kept lit by completing a lesson each day. **No cash value** — but yield only accrues while it burns.",
+                "icon": "🔥",
+                "name": "Flame — Progress Tracker"
+              },
+              {
+                "desc": "Real interest your locked USDC earns in Kamino while your flame stays lit. **Paid in USDC** when you claim on course completion.",
+                "icon": "⚗",
+                "name": "Yield — Your Reward"
+              }
+            ],
+            "order": 1,
+            "variant": "concepts"
+          },
+          {
+            "id": "bw-6-block-2",
+            "rows": [
+              [
+                "Type",
+                "SPL Token",
+                "SPL Token",
+                "Counter",
+                "Counter"
+              ],
+              [
+                "In your wallet?",
+                "Yes",
+                "Yes",
+                "No — in contract",
+                "No — in contract"
+              ],
+              [
+                "Transferable?",
+                "Yes",
+                "Yes",
+                "No",
+                "No"
+              ],
+              [
+                "Worth money?",
+                "Yes (fluctuates)",
+                "Yes ($1 always)",
+                "No",
+                "Yes (redeemable)"
+              ]
+            ],
+            "type": "code",
+            "order": 2,
+            "headers": [
+              "",
+              "SOL",
+              "USDC",
+              "Streak",
+              "Yield"
+            ],
+            "variant": "comparison"
+          },
+          {
+            "id": "bw-6-block-3",
+            "text": "Your daily effort keeps your flame lit — and your locked USDC earning real money:",
+            "type": "paragraph",
+            "order": 3,
+            "steps": [
+              {
+                "desc": "Your daily effort",
+                "icon": "📚",
+                "title": "Complete lessons"
+              },
+              {
+                "desc": "Activity counter — tracked in the smart contract",
+                "icon": "⚡",
+                "color": "amber",
+                "title": "Keep flame lit"
+              },
+              {
+                "desc": "Your locked USDC earns real yield via Kamino",
+                "icon": "⚗",
+                "color": "#9945FF",
+                "title": "Earn yield"
+              },
+              {
+                "desc": "Smart contract returns your principal and yield to your wallet",
+                "icon": "💰",
+                "color": "green",
+                "title": "Redeem for USDC"
+              }
+            ],
+            "variant": "flow"
+          },
+          {
+            "id": "bw-6-block-4",
+            "text": "The entire pipeline — from lessons to dollars — is automated by the smart contract. No human in the loop. **Show up, learn, earn.**",
+            "type": "callout",
+            "order": 4,
+            "variant": "takeaway",
+            "calloutTone": "tip"
+          }
+        ],
+        "version": 1,
+        "courseId": "blockchain-wallets",
+        "moduleId": "blockchain-wallets-module-core",
+        "questions": [
+          {
+            "id": "bw-6-q1",
+            "type": "mcq",
+            "prompt": "What happens when you claim after finishing a course?",
+            "options": [
+              {
+                "id": "bw-6-q1-opt-1",
+                "text": "Tokens are sent to you from LockedIn's own funds"
+              },
+              {
+                "id": "bw-6-q1-opt-2",
+                "text": "The smart contract returns your principal plus the yield it earned to your wallet"
+              },
+              {
+                "id": "bw-6-q1-opt-3",
+                "text": "Your yield is converted to SOL and then to USDC"
+              }
+            ]
+          },
+          {
+            "id": "bw-6-q2",
+            "type": "mcq",
+            "prompt": "Why is USDC used for locking instead of SOL?",
+            "options": [
+              {
+                "id": "bw-6-q2-opt-1",
+                "text": "SOL is too expensive to buy"
+              },
+              {
+                "id": "bw-6-q2-opt-2",
+                "text": "Because USDC is stable ($1 always) — SOL's price fluctuates"
+              },
+              {
+                "id": "bw-6-q2-opt-3",
+                "text": "SOL can't be locked in smart contracts"
+              }
+            ]
+          },
+          {
+            "id": "bw-6-q3",
+            "type": "mcq",
+            "prompt": "What is an SPL token?",
+            "options": [
+              {
+                "id": "bw-6-q3-opt-1",
+                "text": "A special type of private key"
+              },
+              {
+                "id": "bw-6-q3-opt-2",
+                "text": "A token on Solana that follows a standard format so all wallets and apps can handle it"
+              },
+              {
+                "id": "bw-6-q3-opt-3",
+                "text": "A type of smart contract for trading"
+              }
+            ]
+          },
+          {
+            "id": "bw-6-q4",
+            "type": "short_text",
+            "prompt": "Explain the difference between a token (like USDC) and a counter (like your streak)."
+          }
+        ],
+        "releaseId": "247aa94a-83d3-45ab-a474-237822b056a0",
+        "contentHash": "05e8c09e56aa81116ce921d0c60d5fb89f8178128ad0bd1f0b24018da19a78b8"
+      },
+      {
+        "id": "bw-7",
+        "order": 7,
+        "title": "Security — The Lesson That Could Save You Thousands",
+        "blocks": [
+          {
+            "id": "bw-7-block-1",
+            "text": "Why Scammers Love Crypto\n\nIn traditional finance, if someone steals your credit card, you call the bank. They reverse the charge. In crypto, **transactions can't be reversed.** If you send money to a scammer or sign a malicious transaction, nobody can undo it.\n\nThat sounds scary. But almost every crypto scam follows the same playbook. Learn the playbook, and you're safe.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "bw-7-block-2",
+            "rule": "No legitimate person, company, or app will **ever** ask for your seed phrase or private key. Not LockedIn. Not Phantom. Not anyone. Ever.",
+            "type": "callout",
+            "order": 2,
+            "title": "Give Me Your Seed Phrase",
+            "number": 1,
+            "example": "Hi, I'm from LockedIn support. We need your seed phrase to fix an issue with your account. Please enter it at lockedin-verify.com",
+            "variant": "scam",
+            "calloutTone": "warning",
+            "exampleSender": "LockedIn_Support_Official"
+          },
+          {
+            "id": "bw-7-block-3",
+            "rule": "Bookmark trusted sites. Check URLs character by character. When in doubt, type the URL manually.",
+            "type": "callout",
+            "order": 3,
+            "title": "Phishing & Fake Websites",
+            "number": 2,
+            "example": "You search for \"Phantom wallet\" and click the first result — phantomm.app (two m's). The site looks identical. You enter your seed phrase. They now own your wallet.",
+            "variant": "scam",
+            "calloutTone": "warning",
+            "exampleSender": "Google Ad"
+          },
+          {
+            "id": "bw-7-block-4",
+            "type": "paragraph",
+            "items": [
+              "**Never share your private key or seed phrase.** This is rule zero. If nobody has your key, nobody can take your money.",
+              "**Verify, don't trust.** Check URLs carefully. If \"support\" contacts you, go to the real site yourself.",
+              "**Start small.** First time using a new app? Send $1 first. Verify it works. Then send the rest.",
+              "**If it sounds too good to be true, it is.** 100% returns? Free money? Scam. Every time.",
+              "**Read before you sign.** Your wallet shows every transaction before it executes. Read it. If anything looks off, reject."
+            ],
+            "order": 4,
+            "variant": "checklist"
+          },
+          {
+            "id": "bw-7-block-5",
+            "text": "Your **Google account security = your wallet security** right now. Use a strong password. Enable 2-factor authentication. If someone gets into your Google, they get into everything tied to it — including your LockedIn wallet.",
+            "type": "callout",
+            "order": 5,
+            "variant": "takeaway",
+            "calloutTone": "tip"
+          }
+        ],
+        "version": 1,
+        "courseId": "blockchain-wallets",
+        "moduleId": "blockchain-wallets-module-core",
+        "questions": [
+          {
+            "id": "bw-7-q1",
+            "type": "mcq",
+            "prompt": "A LockedIn team member DMs you asking for your private key. What do you do?",
+            "options": [
+              {
+                "id": "bw-7-q1-opt-1",
+                "text": "Share it — they're from the official team"
+              },
+              {
+                "id": "bw-7-q1-opt-2",
+                "text": "Share only part of it for verification"
+              },
+              {
+                "id": "bw-7-q1-opt-3",
+                "text": "Ignore and report — no legitimate team member would ever ask for this"
+              }
+            ]
+          },
+          {
+            "id": "bw-7-q2",
+            "type": "mcq",
+            "prompt": "What should you do if random tokens appear in your wallet?",
+            "options": [
+              {
+                "id": "bw-7-q2-opt-1",
+                "text": "Sell them quickly before the price drops"
+              },
+              {
+                "id": "bw-7-q2-opt-2",
+                "text": "Don't touch them — some are programmed to drain your wallet when you interact"
+              },
+              {
+                "id": "bw-7-q2-opt-3",
+                "text": "Send them to a friend for safekeeping"
+              }
+            ]
+          },
+          {
+            "id": "bw-7-q3",
+            "type": "mcq",
+            "prompt": "What is phishing in the crypto context?",
+            "options": [
+              {
+                "id": "bw-7-q3-opt-1",
+                "text": "A type of token used for fishing games"
+              },
+              {
+                "id": "bw-7-q3-opt-2",
+                "text": "Fake websites that look identical to real ones, designed to steal your credentials"
+              },
+              {
+                "id": "bw-7-q3-opt-3",
+                "text": "A direct attack on the blockchain network"
+              }
+            ]
+          },
+          {
+            "id": "bw-7-q4",
+            "type": "short_text",
+            "prompt": "Name three things you should NEVER do with your private key or seed phrase."
+          }
+        ],
+        "releaseId": "247aa94a-83d3-45ab-a474-237822b056a0",
+        "contentHash": "f28a7feb8f53c100246ddb8024c9f9823be6abf1c004c1bcfd40b2275df15c45"
+      },
+      {
+        "id": "bw-8",
+        "order": 8,
+        "title": "Taking the Keys — Self-Custody and What Comes Next",
+        "blocks": [
+          {
+            "id": "bw-8-block-1",
+            "text": "The Training Wheels Come Off\n\nOver the past 7 lessons, you went from \"what's a blockchain?\" to understanding how your money works on-chain. You didn't just learn theory — your USDC is locked and earning real yield, your streak is growing, your transactions are on-chain.\n\nNow comes the optional final step: **taking full control of your wallet.** This means holding your own private key, signing your own transactions, and having no middleman between you and the blockchain.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "bw-8-block-2",
+            "type": "paragraph",
+            "items": [
+              {
+                "desc": "Convenient. Key managed by Privy. Recovery via Google.",
+                "color": "default",
+                "label": "Privy (Current)",
+                "value": "Google Login"
+              },
+              {
+                "desc": "Full control. You hold the private key. Recovery via seed phrase only.",
+                "color": "amber",
+                "label": "Self-Custody",
+                "value": "Your Keys"
+              }
+            ],
+            "order": 2,
+            "variant": "kv-grid"
+          },
+          {
+            "id": "bw-8-block-3",
+            "text": "How to graduate to self-custody:",
+            "type": "paragraph",
+            "order": 3,
+            "steps": [
+              {
+                "desc": "Settings → Wallet → Export → Authenticate with Google",
+                "title": "Export your key from Privy"
+              },
+              {
+                "desc": "Browser extension from phantom.app or mobile app",
+                "title": "Download Phantom wallet"
+              },
+              {
+                "desc": "Choose \"Import existing wallet\" → enter your exported key",
+                "title": "Import your wallet"
+              },
+              {
+                "desc": "Write it on physical paper. Store safely. NEVER screenshot it.",
+                "title": "Back up your seed phrase"
+              },
+              {
+                "desc": "Buy in Phantom or transfer from an exchange. 0.05 SOL is enough for months.",
+                "title": "Get a little SOL"
+              },
+              {
+                "desc": "\"Connect Wallet\" → Phantom popup → Approve. Everything works the same.",
+                "icon": "✓",
+                "color": "green",
+                "title": "Connect to LockedIn"
+              }
+            ],
+            "variant": "flow"
+          },
+          {
+            "id": "bw-8-block-4",
+            "text": "You started with a Google login and a vague understanding that \"crypto is a thing.\" Now you know blockchains, wallets, transactions, smart contracts, tokens, and security. **Your USDC is locked. Your flame is lit. Your yield is flowing. And now you know exactly what all of that means.**",
+            "type": "callout",
+            "order": 4,
+            "variant": "takeaway",
+            "calloutTone": "tip"
+          }
+        ],
+        "version": 1,
+        "courseId": "blockchain-wallets",
+        "moduleId": "blockchain-wallets-module-core",
+        "questions": [
+          {
+            "id": "bw-8-q1",
+            "type": "mcq",
+            "prompt": "What is a seed phrase?",
+            "options": [
+              {
+                "id": "bw-8-q1-opt-1",
+                "text": "A password for your wallet app"
+              },
+              {
+                "id": "bw-8-q1-opt-2",
+                "text": "12 or 24 words that can regenerate your entire wallet"
+              },
+              {
+                "id": "bw-8-q1-opt-3",
+                "text": "Your wallet's public key written in word form"
+              }
+            ]
+          },
+          {
+            "id": "bw-8-q2",
+            "type": "mcq",
+            "prompt": "What is the safest way to store a seed phrase?",
+            "options": [
+              {
+                "id": "bw-8-q2-opt-1",
+                "text": "Screenshot on your phone"
+              },
+              {
+                "id": "bw-8-q2-opt-2",
+                "text": "Written on physical paper, stored in a safe private location"
+              },
+              {
+                "id": "bw-8-q2-opt-3",
+                "text": "Saved in your email drafts"
+              }
+            ]
+          },
+          {
+            "id": "bw-8-q3",
+            "type": "mcq",
+            "prompt": "What changes when you switch from Privy to self-custody?",
+            "options": [
+              {
+                "id": "bw-8-q3-opt-1",
+                "text": "Your USDC gets moved to a different blockchain"
+              },
+              {
+                "id": "bw-8-q3-opt-2",
+                "text": "You approve transactions yourself and recovery depends on your seed phrase, not Google"
+              },
+              {
+                "id": "bw-8-q3-opt-3",
+                "text": "Nothing changes — it's just a different app"
+              }
+            ]
+          },
+          {
+            "id": "bw-8-q4",
+            "type": "short_text",
+            "prompt": "Why might someone choose to stay with Privy instead of switching to self-custody?"
+          }
+        ],
+        "releaseId": "247aa94a-83d3-45ab-a474-237822b056a0",
+        "contentHash": "589fdac10e06a872936011fda11e2f7b8d9043c260de60ef8a85a26de0eca792"
+      }
+    ],
+    "defi-module-core": [
+      {
+        "id": "df-1",
+        "order": 1,
+        "title": "Your Money Hasn't Been Sitting Still",
+        "blocks": [
+          {
+            "id": "df-1-block-1",
+            "text": "A Question\n\nYou locked your USDC a while ago. You've been completing lessons, keeping your flame lit, building your streak. But have you wondered — where does the yield you're earning come from?\n\nIt's not from LockedIn's pocket. We're not paying you out of some company treasury. That yield comes from something your locked USDC has been doing this whole time — something you didn't know about.\n\nYour money has been working while you've been learning.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "df-1-block-2",
+            "text": "The Reveal\n\nWhen you locked your USDC into the LockedIn smart contract, it didn't just sit there in a digital vault collecting dust. The smart contract took your USDC and deposited it into DeFi protocols — automated financial tools on the Solana blockchain that put your money to work and generate yield (interest).\n\nThat yield is what you've been earning — and what you'll claim, on top of your principal, when you finish the course.\n\nYour locked USDC → LockedIn smart contract deposits it into DeFi protocols → DeFi protocols lend it out / provide liquidity → Yield (interest) flows back → Yield accrues while your flame stays lit → Finish the course and claim your principal plus the yield it earned.\n\nYour money made money while you were studying. And the mechanism behind it is called DeFi.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "df-1-block-3",
+            "text": "What Is DeFi?\n\nDeFi stands for Decentralized Finance. Let's break that down:\n\nFinance = the stuff banks do — lending, borrowing, earning interest, exchanging currencies.\nDecentralized = no bank. No company in the middle. Just smart contracts on the blockchain doing the same things automatically.\n\nAnalogy: The ATM vs. The Bank Teller — Imagine if every service your bank offers — savings accounts, loans, currency exchange — was available through a machine. No teller. No branch. No \"come back during business hours.\" Just machines that follow their programmed rules, 24/7, for anyone. That's DeFi. Banks' services, rebuilt as smart contracts on the blockchain.\n\nTraditional Finance (TradFi) vs. Decentralized Finance (DeFi):\n\nWho runs it — Banks and institutions vs. Smart contracts (code).\nWho can use it — Whoever the bank approves vs. Anyone with a wallet.\nBusiness hours — Mon-Fri, 9-5ish vs. 24/7/365.\nMiddleman — Banks, brokers, clearinghouses vs. None — code does it all.\nTransparency — \"Trust us\" vs. Verify it yourself on-chain.\nRequirements — ID, credit check, minimum balance, residency vs. A wallet. That's it.\n\nThat last row is a big deal. Billions of people worldwide are unbanked — they can't access traditional financial services because of where they live, how much they earn, or what documents they have. DeFi doesn't care about any of that. If you have a wallet, you're in.",
+            "type": "paragraph",
+            "order": 3
+          },
+          {
+            "id": "df-1-block-4",
+            "text": "Why Should You Care?\n\nThree reasons:\n\n1. Your money is already in DeFi. Your locked USDC is currently deposited in DeFi protocols earning yield. This isn't hypothetical — it's happening right now with YOUR money.\n\n2. Understanding DeFi = understanding your rewards. The yield you earn isn't magic. It's real yield generated by real DeFi protocols. Knowing how it works means knowing what your rewards are actually worth.\n\n3. It's the future of finance. Whether or not you go deeper into crypto after LockedIn, DeFi concepts — automated lending, transparent protocols, programmable money — are reshaping how the world thinks about finance.",
+            "type": "paragraph",
+            "order": 4
+          },
+          {
+            "id": "df-1-block-5",
+            "text": "Quick Recap: Your locked USDC isn't sitting idle — it's been deposited into DeFi protocols earning yield. DeFi = traditional finance services (lending, borrowing, interest) rebuilt as smart contracts. No banks, no middlemen, no business hours, no gatekeeping — just code. The yield your USDC earns is yours to claim — keep your flame lit, finish the course, and walk away with your principal plus that yield.",
+            "type": "callout",
+            "order": 5,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "defi-how-money-earns",
+        "moduleId": "defi-module-core",
+        "questions": [
+          {
+            "id": "df-1-q1",
+            "type": "mcq",
+            "prompt": "Where does the yield you earn on LockedIn come from?",
+            "options": [
+              {
+                "id": "df-1-q1-opt-1",
+                "text": "LockedIn pays it out of company funds"
+              },
+              {
+                "id": "df-1-q1-opt-2",
+                "text": "Yield generated by your locked USDC in DeFi protocols"
+              },
+              {
+                "id": "df-1-q1-opt-3",
+                "text": "Other users' locked USDC"
+              }
+            ]
+          }
+        ],
+        "releaseId": "d15dc0dd-1c8f-40a6-931e-81b172ef350e",
+        "contentHash": "19e92302831a6cc5f4e08e191c068f9a7bf1d3d6669bd78d4f6f4a71d710af52"
+      },
+      {
+        "id": "df-2",
+        "order": 2,
+        "title": "Lending & Borrowing — The Engine of DeFi",
+        "blocks": [
+          {
+            "id": "df-2-block-1",
+            "text": "The Oldest Financial Service in the World\n\nPeople have been lending money since ancient civilization. The concept is dead simple:\n\n1. You have money you're not using right now\n2. Someone else needs money right now\n3. You lend it to them\n4. They pay you back later, with a little extra (interest)\n\nBanks have been the middleman in this process for centuries. You deposit money → the bank lends it out → the bank earns interest → the bank gives you a tiny slice of that interest (your \"savings rate\").\n\nDeFi does the same thing — but cuts out the bank.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "df-2-block-2",
+            "text": "How DeFi Lending Works — The Lending Pool\n\nImagine a community swimming pool, but for money:\n\nLenders deposit funds: Alice deposits 1,000 USDC. Bob deposits 500 USDC. You (via LockedIn) deposit your USDC. All goes into the lending pool — managed by a smart contract.\n\nBorrowers draw from the pool: Charlie borrows 200 USDC (pays 5% interest). Diana borrows 300 USDC (pays 5% interest).\n\nThe interest borrowers pay flows back into the pool. Lenders earn a share based on how much they deposited. No bank taking a cut. No loan officer. No paperwork. The smart contract handles everything.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "df-2-block-3",
+            "text": "\"Wait — Who Would Borrow From a Smart Contract?\"\n\nGood question. Since DeFi loans require collateral (you have to deposit more than you borrow), most DeFi borrowers are:\n\n1. Traders who want leverage (borrow USDC to buy more SOL, betting SOL will go up)\n2. Users who need cash but don't want to sell (own $10,000 of SOL, need $5,000 USDC now — borrow against it instead of selling)\n3. Protocols and projects that need liquidity for their operations\n\nThe key takeaway: there's demand to borrow USDC, and that demand creates yield for lenders — including you, through LockedIn.",
+            "type": "paragraph",
+            "order": 3
+          },
+          {
+            "id": "df-2-block-4",
+            "text": "Collateral: The Safety Net\n\nIn DeFi, borrowers put up collateral — they deposit assets worth MORE than what they borrow. Analogy: The Pawn Shop — Want to borrow $50? Leave your $80 watch as collateral. If you pay back the $50 + interest, you get your watch back. If you don't? The pawn shop keeps the watch.\n\nDeFi works the same way: Charlie deposits 1,500 USDC worth of SOL to borrow 1,000 USDC. If SOL's price drops too much, the smart contract automatically sells his collateral to protect the lenders (liquidation). Lenders are protected by math, not by trust.",
+            "type": "paragraph",
+            "order": 4
+          },
+          {
+            "id": "df-2-block-5",
+            "text": "How This Connects to Your USDC\n\nYour locked USDC is deposited into lending protocols like Kamino and Marginfi on Solana. You lock USDC in LockedIn → LockedIn deposits into Kamino/Marginfi → Borrowers pay interest → Yield flows back (typically 3-8% annually) → That yield accrues to you while your flame stays lit → Finish the course and claim it along with your principal.\n\nYou're a lender. You've been a lender this whole time. You just didn't know it.",
+            "type": "paragraph",
+            "order": 5
+          },
+          {
+            "id": "df-2-block-6",
+            "text": "Quick Recap: DeFi lending = lenders deposit funds into a pool, borrowers pay interest to use them. No bank in the middle — smart contracts manage everything automatically. Borrowers must provide collateral (deposit more than they borrow) so lenders are protected. Your locked USDC is deposited into lending protocols (Kamino/Marginfi) earning yield. That yield is what backs your yield — you've been a lender this whole time.",
+            "type": "callout",
+            "order": 6,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "defi-how-money-earns",
+        "moduleId": "defi-module-core",
+        "questions": [
+          {
+            "id": "df-2-q1",
+            "type": "mcq",
+            "prompt": "How does DeFi lending protect lenders from borrowers who don't pay back?",
+            "options": [
+              {
+                "id": "df-2-q1-opt-1",
+                "text": "Credit checks and debt collectors"
+              },
+              {
+                "id": "df-2-q1-opt-2",
+                "text": "Borrowers must deposit collateral worth more than they borrow"
+              },
+              {
+                "id": "df-2-q1-opt-3",
+                "text": "A central authority guarantees all loans"
+              }
+            ]
+          }
+        ],
+        "releaseId": "d15dc0dd-1c8f-40a6-931e-81b172ef350e",
+        "contentHash": "6a7745f2d8c017a422a74a7ae80c52dfba327635c942e6520f362d69482703fc"
+      },
+      {
+        "id": "df-3",
+        "order": 3,
+        "title": "Yield — Where the Money Actually Comes From",
+        "blocks": [
+          {
+            "id": "df-3-block-1",
+            "text": "\"So... Where Does the Interest Come From?\"\n\nThis is the question everyone should ask — and most people don't. Whenever someone promises you yield, interest, or returns, the first question should always be: who's paying for this, and why?\n\nIf you can't answer that question, you don't understand the product. And if you don't understand the product, you could be the product.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "df-3-block-2",
+            "text": "Yield in DeFi\n\nDeFi removes the middleman. You deposit 1,000 USDC into a lending protocol → Protocol lends to borrowers at 5-10% → Smart contract takes a small protocol fee (0.1-1%) → The rest goes directly to lenders: 3-8%.\n\nThat's why DeFi yields are typically higher than bank savings rates. You're cutting out the middleman and keeping more of the interest.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "df-3-block-3",
+            "text": "The Different Types of Yield\n\n1. Lending Yield (What Your USDC Is Doing) — source: borrowers paying interest. Risk: Low-moderate. Typical: 3-8% APY.\n2. Liquidity Provision — source: traders paying fees. Risk: Moderate. Typical: 5-20% APY.\n3. Staking — source: network inflation. Risk: Low. Typical: 6-8% APY.\n4. Incentive / Emission Rewards — source: protocol's token treasury. Risk: High. Often unsustainable.\n\nLockedIn uses type 1 (lending yield) — sustainable because borrowers pay real interest.",
+            "type": "paragraph",
+            "order": 3
+          },
+          {
+            "id": "df-3-block-4",
+            "text": "APY vs. APR: APR = simple interest (5% on $1,000 = $50/year). APY = compound interest (5% on $1,000 = ~$51.27/year, interest on interest). Most DeFi protocols quote APY.\n\nHow LockedIn's Yield Works: All users' locked USDC → combined pool → DeFi lending → 3-8% APY → yield accrues while your flame stays lit → LockedIn takes 10-20% fee → Rest is claimable with your principal when you finish the course.",
+            "type": "paragraph",
+            "order": 4
+          },
+          {
+            "id": "df-3-block-5",
+            "text": "Quick Recap: Always ask \"where does the yield come from?\" DeFi yields are higher because there's no middleman. LockedIn uses lending yield — sustainable and real. APY = compound interest rate. LockedIn takes 10-20% of yield as revenue. The rest is yield you claim, along with your principal, when you finish the course.",
+            "type": "callout",
+            "order": 5,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "defi-how-money-earns",
+        "moduleId": "defi-module-core",
+        "questions": [
+          {
+            "id": "df-3-q1",
+            "type": "mcq",
+            "prompt": "Why are DeFi lending yields typically higher than bank savings rates?",
+            "options": [
+              {
+                "id": "df-3-q1-opt-1",
+                "text": "DeFi is riskier, so it pays more to compensate"
+              },
+              {
+                "id": "df-3-q1-opt-2",
+                "text": "There's no bank in the middle taking most of the interest"
+              },
+              {
+                "id": "df-3-q1-opt-3",
+                "text": "DeFi uses fake money so it can offer more"
+              }
+            ]
+          }
+        ],
+        "releaseId": "d15dc0dd-1c8f-40a6-931e-81b172ef350e",
+        "contentHash": "ca3db8071bab4c7aa9715bb4f86d3deea920e0483c235fcaaf35215f6dfda5d5"
+      },
+      {
+        "id": "df-4",
+        "order": 4,
+        "title": "The DeFi Protocols Your Money Uses",
+        "blocks": [
+          {
+            "id": "df-4-block-1",
+            "text": "Meet Kamino and Marginfi\n\nYour locked USDC is currently deposited in real DeFi protocols on Solana. Kamino is a lending and liquidity platform — one of Solana's largest lending protocols. Battle-tested, audited, transparent.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "df-4-block-2",
+            "text": "Marginfi is another lending protocol on Solana. Why two? Diversification — don't put all your eggs in one basket. LockedIn reduces risk, optimizes rates, and avoids concentration.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "df-4-block-3",
+            "text": "Jupiter is a decentralized exchange aggregator — finds the best swap rates across all Solana trading pools. It's the highway your money uses when tokens need to move.",
+            "type": "paragraph",
+            "order": 3
+          },
+          {
+            "id": "df-4-block-4",
+            "text": "How It All Fits Together:\n\n                    YOUR LOCKED USDC\n                          │\n                LockedIn Smart Contract\n                     │         │\n                ┌────┘         └────┐\n                ▼                   ▼\n           ┌─────────┐       ┌───────────┐\n           │  KAMINO  │       │ MARGINFI  │\n           │ Lending  │       │ Lending   │\n           │  Pool    │       │  Pool     │\n           └────┬─────┘       └────┬──────┘\n                │                   │\n                └──────┐   ┌───────┘\n                       ▼   ▼\n                 Yield flows back\n                       │\n                LockedIn Smart Contract\n                │              │\n          LockedIn fee    the Community Pot\n          (10-20%)             │\n                          Your Yield\n                               │\n                       Jupiter (swap layer)\n                               │\n                          USDC payout",
+            "type": "code",
+            "order": 4
+          },
+          {
+            "id": "df-4-block-5",
+            "text": "Quick Recap: Kamino and Marginfi are lending protocols — your USDC earns yield there. Two protocols = diversification. Jupiter handles swaps. All smart contracts — automated, transparent, verifiable on-chain.",
+            "type": "callout",
+            "order": 5,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "defi-how-money-earns",
+        "moduleId": "defi-module-core",
+        "questions": [
+          {
+            "id": "df-4-q1",
+            "type": "mcq",
+            "prompt": "Why does LockedIn split your USDC across multiple DeFi protocols instead of using just one?",
+            "options": [
+              {
+                "id": "df-4-q1-opt-1",
+                "text": "It's cheaper"
+              },
+              {
+                "id": "df-4-q1-opt-2",
+                "text": "To diversify risk and optimize for the best rates"
+              },
+              {
+                "id": "df-4-q1-opt-3",
+                "text": "Because each protocol holds a different type of USDC"
+              }
+            ]
+          }
+        ],
+        "releaseId": "d15dc0dd-1c8f-40a6-931e-81b172ef350e",
+        "contentHash": "7855bdbff7578bd881b785115c06a2a9fe0bf0710ffb7a90219dad6622879f32"
+      },
+      {
+        "id": "df-5",
+        "order": 5,
+        "title": "Risk — The Honest Conversation",
+        "blocks": [
+          {
+            "id": "df-5-block-1",
+            "text": "Nothing Is Risk-Free\n\nDeFi is not a savings account. The five risks: 1) Smart contract risk (bugs/exploits — most significant, mitigated by audits and diversification). 2) Interest rate risk (rates fluctuate — normal, not dangerous).",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "df-5-block-2",
+            "text": "3) Stablecoin risk (USDC depeg — very unlikely, backed by audited reserves). 4) Solana network risk (temporary outages — inconvenience, not fund loss). 5) Regulatory risk (evolving regulations — long-term, not sudden).",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "df-5-block-3",
+            "text": "The honest summary: The most meaningful risk is smart contract risk. Everything else is either unlikely, temporary, or doesn't affect your principal. LockedIn mitigates this by using established, audited protocols and diversifying.",
+            "type": "paragraph",
+            "order": 3
+          },
+          {
+            "id": "df-5-block-4",
+            "text": "Neither TradFi nor DeFi is risk-free — they have different risk profiles. The Golden Rule: Never put in more than you can afford to lose.",
+            "type": "paragraph",
+            "order": 4
+          },
+          {
+            "id": "df-5-block-5",
+            "text": "Quick Recap: DeFi is NOT risk-free. Most significant risk: smart contract exploits. LockedIn mitigates with audited protocols and diversification. Interest rates fluctuate normally. USDC very likely stays at $1. Never invest more than you can afford to lose.",
+            "type": "callout",
+            "order": 5,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "defi-how-money-earns",
+        "moduleId": "defi-module-core",
+        "questions": [
+          {
+            "id": "df-5-q1",
+            "type": "mcq",
+            "prompt": "What is the most significant risk in DeFi?",
+            "options": [
+              {
+                "id": "df-5-q1-opt-1",
+                "text": "Solana going offline"
+              },
+              {
+                "id": "df-5-q1-opt-2",
+                "text": "A bug in a smart contract that could be exploited"
+              },
+              {
+                "id": "df-5-q1-opt-3",
+                "text": "Interest rates changing"
+              }
+            ]
+          }
+        ],
+        "releaseId": "d15dc0dd-1c8f-40a6-931e-81b172ef350e",
+        "contentHash": "082ae11526f562e2e243f63ae749e604317dfae196d51cda45271b52453336b4"
+      },
+      {
+        "id": "df-6",
+        "order": 6,
+        "title": "The DeFi Ecosystem — What Else Is Out There",
+        "blocks": [
+          {
+            "id": "df-6-block-1",
+            "text": "Beyond Lending — DeFi categories: 1) Lending & Borrowing (what you know). 2) DEXs — swap tokens via liquidity pools (Jupiter, Raydium, Orca).",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "df-6-block-2",
+            "text": "3) Liquid Staking — stake SOL, get a receipt token to use elsewhere (Marinade, Jito). 4) Yield Aggregators — auto-optimize across protocols. 5) Stablecoins & Payments.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "df-6-block-3",
+            "text": "Composability = DeFi protocols plug into each other like LEGO blocks. Stake SOL → deposit into lending → borrow USDC → provide liquidity → earn multiple yields simultaneously.",
+            "type": "paragraph",
+            "order": 3
+          },
+          {
+            "id": "df-6-block-4",
+            "text": "DeFi on Solana handles billions in TVL, millions of daily transactions. You don't need to use everything — just knowing the landscape is enough.",
+            "type": "paragraph",
+            "order": 4
+          },
+          {
+            "id": "df-6-block-5",
+            "text": "Quick Recap: DeFi has many categories beyond lending. Composability = LEGO blocks. You're already using lending through LockedIn. The ecosystem handles billions. A self-custody wallet opens the door to all of it.",
+            "type": "callout",
+            "order": 5,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "defi-how-money-earns",
+        "moduleId": "defi-module-core",
+        "questions": [
+          {
+            "id": "df-6-q1",
+            "type": "mcq",
+            "prompt": "What does \"composability\" mean in DeFi?",
+            "options": [
+              {
+                "id": "df-6-q1-opt-1",
+                "text": "Smart contracts can be broken down into smaller pieces"
+              },
+              {
+                "id": "df-6-q1-opt-2",
+                "text": "DeFi protocols can plug into each other like LEGO blocks"
+              },
+              {
+                "id": "df-6-q1-opt-3",
+                "text": "You need to use all protocols together for them to work"
+              }
+            ]
+          }
+        ],
+        "releaseId": "d15dc0dd-1c8f-40a6-931e-81b172ef350e",
+        "contentHash": "e83ccb06c8a9bf26b82858b7d10b91c17ec6e96c8ee33634eff6e545267e684a"
+      },
+      {
+        "id": "df-7",
+        "order": 7,
+        "title": "DeFi vs. TradFi — The Bigger Picture",
+        "blocks": [
+          {
+            "id": "df-7-block-1",
+            "text": "Two financial systems side by side. DeFi wins on access, speed, cost, transparency, and yields.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "df-7-block-2",
+            "text": "TradFi wins on safety nets, regulation, and consumer protection. Neither is perfect.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "df-7-block-3",
+            "text": "Use TradFi for emergency funds and everyday spending. Use DeFi for yield on lockable savings and international transfers. LockedIn bridges both worlds.",
+            "type": "paragraph",
+            "order": 3
+          },
+          {
+            "id": "df-7-block-4",
+            "text": "The future is convergence — banks adopting blockchain rails, DeFi adding compliance. You're already living in this converged world.",
+            "type": "paragraph",
+            "order": 4
+          },
+          {
+            "id": "df-7-block-5",
+            "text": "Quick Recap: DeFi wins on access, speed, cost, transparency, yields. TradFi wins on safety, regulation, protection. The future is convergence. LockedIn bridges both worlds — DeFi infrastructure, TradFi-like experience.",
+            "type": "callout",
+            "order": 5,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "defi-how-money-earns",
+        "moduleId": "defi-module-core",
+        "questions": [
+          {
+            "id": "df-7-q1",
+            "type": "mcq",
+            "prompt": "What is DeFi's biggest advantage over traditional finance?",
+            "options": [
+              {
+                "id": "df-7-q1-opt-1",
+                "text": "It's completely risk-free"
+              },
+              {
+                "id": "df-7-q1-opt-2",
+                "text": "It removes middlemen, giving users more access, transparency, and better rates"
+              },
+              {
+                "id": "df-7-q1-opt-3",
+                "text": "It's regulated by governments"
+              }
+            ]
+          }
+        ],
+        "releaseId": "d15dc0dd-1c8f-40a6-931e-81b172ef350e",
+        "contentHash": "9cff976d0b3cca664e74c8ddfd9622138058aca01cbcbd64ecb36e7379d5b93d"
+      },
+      {
+        "id": "df-8",
+        "order": 8,
+        "title": "Your DeFi Roadmap — What You Can Do Next",
+        "blocks": [
+          {
+            "id": "df-8-block-1",
+            "text": "What You Now Know — Over two courses you've learned blockchain, wallets, transactions, smart contracts, tokens, security, self-custody, DeFi, lending, yield, protocols, risks, and the ecosystem. You understand more about DeFi than most daily users.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "df-8-block-2",
+            "text": "Three Paths: 1) Stay the Course — keep using LockedIn as-is. 2) Explore with Training Wheels — self-custody wallet, small DeFi experiments. 3) Go Deep — serious DeFi portfolio management.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "df-8-block-3",
+            "text": "Principles: Always ask where yield comes from. Start small. Diversify. Stay updated. Only risk what you can afford to lose.",
+            "type": "paragraph",
+            "order": 3
+          },
+          {
+            "id": "df-8-block-4",
+            "text": "Your USDC is locked. Your yield is flowing and accruing. And now you know exactly what every piece of that sentence means.",
+            "type": "paragraph",
+            "order": 4
+          },
+          {
+            "id": "df-8-block-5",
+            "text": "DeFi Fundamentals — Completed. You've earned real financial knowledge: how DeFi works, where yield comes from, what the risks are, and how the entire ecosystem fits together. That's financial literacy for the next era.",
+            "type": "callout",
+            "order": 5,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "defi-how-money-earns",
+        "moduleId": "defi-module-core",
+        "questions": [],
+        "releaseId": "d15dc0dd-1c8f-40a6-931e-81b172ef350e",
+        "contentHash": "b6e5ba7a19a5b8f11cf647c0f2ab966cdf888949cb7a3d2593fe7df3dc5a9ab2"
+      }
+    ],
+    "keys-seed-phrases-module-core": [
+      {
+        "id": "ks-1",
+        "order": 1,
+        "title": "Your Keys or Their Keys — Where Crypto Really Lives",
+        "blocks": [
+          {
+            "id": "ks-1-block-1",
+            "text": "Two Ways to Hold Crypto\n\nThere are exactly two ways to hold crypto, and the difference matters more than anything else you'll learn in this course.\n\nWay one: an exchange account. You sign up on an app like Coinbase or Binance, buy some crypto, and see a balance on your screen. Feels like yours, right? Here's the catch — the exchange holds the keys. What you actually have is an entry in their database. An IOU. A promise that they'll give you your crypto when you ask.\n\nWay two: your own wallet. You hold the private keys yourself. No company sits between you and your money. The blockchain answers to your keys, and only your keys.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "ks-1-block-2",
+            "text": "What Can Go Wrong With \"Way One\"\n\nExchanges are convenient — but that convenience has a price:\n\nThey can freeze withdrawals. When markets panic, exchanges have paused withdrawals exactly when people wanted their money most.\n\nThey can get hacked. Exchanges are giant honeypots. Billions of dollars have been stolen from exchange wallets over the years.\n\nThey can collapse. In 2022, FTX — one of the biggest exchanges in the world — went bankrupt almost overnight. Millions of customers discovered their \"balances\" were IOUs from a company that had quietly spent their deposits. Many never got their money back.\n\nThey make the rules. Account reviews, region bans, identity re-checks — your access depends on their policies, not on you.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "ks-1-block-3",
+            "text": "The Saying That Sums It Up: \"Not your keys, not your coins.\" If someone else holds the private keys, they hold the crypto — whatever your app balance says. This one sentence has saved more people from losing money than any security tool ever built.",
+            "type": "callout",
+            "order": 3,
+            "calloutTone": "info"
+          },
+          {
+            "id": "ks-1-block-4",
+            "text": "The Trade — Control for Responsibility\n\nSelf-custody flips the deal. You get full control: nobody can freeze, seize, or \"review\" your funds. But you also take full responsibility: there is no \"forgot password\" button, no support line that can restore a lost key.\n\nThat responsibility sounds scary, but it's smaller than it seems. It boils down to protecting one thing — your keys. The rest of this course teaches you exactly how: what the keys are, how the seed phrase backs them up, and how to keep both away from thieves.",
+            "type": "paragraph",
+            "order": 4
+          }
+        ],
+        "version": 1,
+        "courseId": "keys-and-seed-phrases",
+        "moduleId": "keys-seed-phrases-module-core",
+        "questions": [
+          {
+            "id": "ks-1-q1",
+            "type": "mcq",
+            "prompt": "When your crypto sits on an exchange, who holds the private keys?",
+            "options": [
+              {
+                "id": "ks-1-q1-opt-1",
+                "text": "You — the exchange app just displays it"
+              },
+              {
+                "id": "ks-1-q1-opt-2",
+                "text": "The exchange — your balance is an IOU in their database"
+              },
+              {
+                "id": "ks-1-q1-opt-3",
+                "text": "Nobody — exchange crypto has no keys"
+              }
+            ]
+          },
+          {
+            "id": "ks-1-q2",
+            "type": "mcq",
+            "prompt": "What is self-custody?",
+            "options": [
+              {
+                "id": "ks-1-q2-opt-1",
+                "text": "Keeping your crypto on a trusted exchange"
+              },
+              {
+                "id": "ks-1-q2-opt-2",
+                "text": "Holding your own private keys so only you control your funds"
+              },
+              {
+                "id": "ks-1-q2-opt-3",
+                "text": "Storing your crypto in a bank vault"
+              }
+            ]
+          },
+          {
+            "id": "ks-1-q3",
+            "type": "short_text",
+            "prompt": "Finish the famous crypto saying: \"Not your keys, not your ___.\" (one word)"
+          }
+        ],
+        "releaseId": "80c7036e-b649-4af0-a249-b2cce1e1212b",
+        "contentHash": "eb770db5a16d5b03d40e2f39fde606a454d2ededd2ee39d981367620cd51da55"
+      },
+      {
+        "id": "ks-2",
+        "order": 2,
+        "title": "Public & Private Keys — The Lock and the Key",
+        "blocks": [
+          {
+            "id": "ks-2-block-1",
+            "text": "Every Wallet Is a Pair of Keys\n\nA crypto wallet isn't a bag of coins — it's a pair of mathematically linked keys.\n\nYour public key is your address. Think of it like the slot on a mailbox: anyone can drop mail in if they know where it is. You can share it freely — post it, print it, text it. People need it to send you crypto. On Solana it looks like a long string of letters and numbers, something like 7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU.\n\nYour private key is the key that opens the box. It's a secret number that proves you own everything at that address. Whoever knows it controls the funds. Full stop.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "ks-2-block-2",
+            "text": "What \"Signing\" Actually Means\n\nWhen you send crypto, your wallet doesn't upload your private key anywhere. Instead, it uses the private key to create a digital signature — a piece of math that proves \"the owner of this address approved this exact transaction.\"\n\nAnyone on the network can check the signature against your public key and confirm it's genuine — without ever seeing the private key itself. That's the magic trick that makes the whole system work: you can prove you approved something without revealing your secret.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "ks-2-block-3",
+            "text": "The Hard Truth: To the blockchain, your private key IS you. There's no ID check, no face scan, no second chance. If a thief gets your private key, the network will obey them exactly as it obeys you — and no one can reverse what they do. That's why every security rule in crypto is really one rule: keep the private key secret.",
+            "type": "callout",
+            "order": 3,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "keys-and-seed-phrases",
+        "moduleId": "keys-seed-phrases-module-core",
+        "questions": [
+          {
+            "id": "ks-2-q1",
+            "type": "mcq",
+            "prompt": "Which key is safe to share so people can send you crypto?",
+            "options": [
+              {
+                "id": "ks-2-q1-opt-1",
+                "text": "Your private key — sharing it builds trust"
+              },
+              {
+                "id": "ks-2-q1-opt-2",
+                "text": "Your public key — it works like your address"
+              },
+              {
+                "id": "ks-2-q1-opt-3",
+                "text": "Your seed phrase — but only the first six words"
+              }
+            ]
+          },
+          {
+            "id": "ks-2-q2",
+            "type": "mcq",
+            "prompt": "What does your private key actually do?",
+            "options": [
+              {
+                "id": "ks-2-q2-opt-1",
+                "text": "It hides your balance from strangers"
+              },
+              {
+                "id": "ks-2-q2-opt-2",
+                "text": "It signs transactions to prove you approved them"
+              },
+              {
+                "id": "ks-2-q2-opt-3",
+                "text": "It makes your transactions confirm faster"
+              }
+            ]
+          },
+          {
+            "id": "ks-2-q3",
+            "type": "short_text",
+            "prompt": "Which key must stay secret? Answer with one word: public or private."
+          }
+        ],
+        "releaseId": "80c7036e-b649-4af0-a249-b2cce1e1212b",
+        "contentHash": "3b4628bbd551bb3707d02be08d7f4bbba65ff78086b5633e0880a4fc5b5e3f2c"
+      },
+      {
+        "id": "ks-3",
+        "order": 3,
+        "title": "The 12-Word Seed Phrase — Your Master Backup",
+        "blocks": [
+          {
+            "id": "ks-3-block-1",
+            "text": "Twelve Ordinary Words\n\nA private key is a huge, unreadable number — hopeless to write down without mistakes. So wallets give you something friendlier: a seed phrase (also called a recovery phrase) — usually 12 simple words, sometimes 24, in a specific order. Something like: canyon robot velvet lunch...\n\nThose words ARE your private key, encoded in a form humans can copy correctly. Your wallet app generates the phrase once, when you first set it up, and every account and key in your wallet can be rebuilt from it.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "ks-3-block-2",
+            "text": "Why It's Called a Master Backup\n\nLose your phone? Delete the app? Spill coffee on your laptop? None of it matters. Install any compatible wallet on any device, type in your 12 words, and everything comes back — your address, your balance, your history. The funds were on the blockchain all along; the seed phrase just rebuilds the key that controls them.\n\nThe flip side is just as absolute: anyone who reads your seed phrase can rebuild your wallet on THEIR device and empty it in minutes. The phrase doesn't ask who's typing.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "ks-3-block-3",
+            "text": "Storage Rules (Non-Negotiable)\n\nWrite it on paper, by hand. The moment a seed phrase touches anything digital, it can be stolen by malware — so no screenshots, no photos, no cloud notes, no password managers' free-text fields, no email drafts.\n\nKeep it somewhere safe and private. A drawer only you use, a home safe, a safety deposit box.\n\nConsider two copies in two places. One fire or flood shouldn't be able to destroy your only backup.\n\nCopy it exactly. The word ORDER matters — word 3 swapped with word 7 is a different wallet entirely. Double-check every word when you write it down.",
+            "type": "paragraph",
+            "order": 3
+          },
+          {
+            "id": "ks-3-block-4",
+            "text": "Good to Know: Seed phrases use a standard list of 2,048 English words shared across the industry. That's why a phrase written today can restore your wallet in a different app, years from now. The standard is the backup — not the app that generated it.",
+            "type": "callout",
+            "order": 4,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "keys-and-seed-phrases",
+        "moduleId": "keys-seed-phrases-module-core",
+        "questions": [
+          {
+            "id": "ks-3-q1",
+            "type": "mcq",
+            "prompt": "What is a seed phrase?",
+            "options": [
+              {
+                "id": "ks-3-q1-opt-1",
+                "text": "Your wallet app's login password"
+              },
+              {
+                "id": "ks-3-q1-opt-2",
+                "text": "A list of 12 or 24 words that can rebuild your whole wallet"
+              },
+              {
+                "id": "ks-3-q1-opt-3",
+                "text": "A code the exchange emails you for support"
+              }
+            ]
+          },
+          {
+            "id": "ks-3-q2",
+            "type": "mcq",
+            "prompt": "Which of these is a safe place for your seed phrase?",
+            "options": [
+              {
+                "id": "ks-3-q2-opt-1",
+                "text": "A screenshot in your photos app"
+              },
+              {
+                "id": "ks-3-q2-opt-2",
+                "text": "Written on paper, stored somewhere safe and private"
+              },
+              {
+                "id": "ks-3-q2-opt-3",
+                "text": "A note in your email drafts"
+              }
+            ]
+          },
+          {
+            "id": "ks-3-q3",
+            "type": "short_text",
+            "prompt": "How many words are in the most common seed phrase? (answer with just the number)"
+          }
+        ],
+        "releaseId": "80c7036e-b649-4af0-a249-b2cce1e1212b",
+        "contentHash": "4c529bb6e4ee276479350ea719cdde53631883c6e0a5ce434a7de5654cb0b3ee"
+      },
+      {
+        "id": "ks-4",
+        "order": 4,
+        "title": "Hardware Wallets — Cold Storage for Serious Savings",
+        "blocks": [
+          {
+            "id": "ks-4-block-1",
+            "text": "Hot vs. Cold\n\nWallets come in two temperatures:\n\nA hot wallet keeps your private key on a device that's connected to the internet — a phone app or a browser extension like Phantom. Convenient for daily use, but the key lives next to your browser tabs, downloads, and whatever malware sneaks in with them.\n\nA cold wallet keeps the private key on a device that never touches the internet. The most popular kind is a hardware wallet — a small gadget, about the size of a USB stick, made by companies like Ledger and Trezor.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "ks-4-block-2",
+            "text": "How a Hardware Wallet Works\n\nThe private key is generated inside the device and never leaves it. Ever.\n\nWhen you want to send a transaction, your computer passes the unsigned transaction to the device. The device shows you the details on its own little screen, you press a physical button to approve, and only the finished signature comes back out.\n\nEven if your computer is riddled with viruses, the malware sees the signature — never the key. That's the whole trick, and it's why hardware wallets are the standard for storing serious amounts.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "ks-4-block-3",
+            "text": "\"But What If I Lose the Gadget?\"\n\nNothing happens to your crypto. Your funds live on the blockchain, not inside the device. When you set up a hardware wallet, it gives you — you guessed it — a seed phrase. Lose the device, buy a new one (or use any compatible wallet), restore from the seed phrase, and you're back.\n\nA thief who finds your device still needs its PIN code, and most devices wipe themselves after a few wrong guesses. Your seed phrase, stored safely at home on paper, remains the real backup.",
+            "type": "paragraph",
+            "order": 3
+          },
+          {
+            "id": "ks-4-block-4",
+            "text": "A Sensible Setup: Think of a hot wallet like the cash in your pocket and a hardware wallet like the safe at home. Keep small, everyday amounts hot — and move savings you'd hate to lose into cold storage. You don't need one on day one, but know they exist for the day your balance starts to matter.",
+            "type": "callout",
+            "order": 4,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "keys-and-seed-phrases",
+        "moduleId": "keys-seed-phrases-module-core",
+        "questions": [
+          {
+            "id": "ks-4-q1",
+            "type": "mcq",
+            "prompt": "Why is a hardware wallet safer than a wallet app on your phone?",
+            "options": [
+              {
+                "id": "ks-4-q1-opt-1",
+                "text": "It stores your crypto inside the device itself"
+              },
+              {
+                "id": "ks-4-q1-opt-2",
+                "text": "The private key never leaves the device — it signs transactions offline"
+              },
+              {
+                "id": "ks-4-q1-opt-3",
+                "text": "It has a longer password than a phone app"
+              }
+            ]
+          },
+          {
+            "id": "ks-4-q2",
+            "type": "mcq",
+            "prompt": "Your hardware wallet breaks. What happens to your crypto?",
+            "options": [
+              {
+                "id": "ks-4-q2-opt-1",
+                "text": "It's gone — the crypto was inside the device"
+              },
+              {
+                "id": "ks-4-q2-opt-2",
+                "text": "Nothing — you restore it from your seed phrase on a new device"
+              },
+              {
+                "id": "ks-4-q2-opt-3",
+                "text": "The manufacturer refunds your balance"
+              }
+            ]
+          },
+          {
+            "id": "ks-4-q3",
+            "type": "short_text",
+            "prompt": "What do you use to restore your wallet if your hardware wallet is lost or broken? (two words)"
+          }
+        ],
+        "releaseId": "80c7036e-b649-4af0-a249-b2cce1e1212b",
+        "contentHash": "9d434c0d295a304ae621e558b4c45b389140af507e6984f7e368b96a8cecbdd3"
+      },
+      {
+        "id": "ks-5",
+        "order": 5,
+        "title": "Scams & Phishing — Know the Tricks",
+        "blocks": [
+          {
+            "id": "ks-5-block-1",
+            "text": "Why Scammers Target People, Not Blockchains\n\nBreaking the cryptography behind your keys is practically impossible. So thieves don't attack the math — they attack you. Every major crypto theft from an individual comes down to one thing: the victim was tricked into handing over their keys or approving something they shouldn't have.\n\nAnd because blockchain transactions can't be reversed, there's no fraud department to call afterwards. Prevention is the whole game.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "ks-5-block-2",
+            "text": "The Four Classic Tricks\n\n1. Fake support. Someone DMs you first — on Discord, Telegram, X — claiming to be \"support\" and offering to fix a problem if you \"verify\" or \"validate\" your seed phrase. Real support never DMs first, and no legitimate service ever needs your seed phrase.\n\n2. Phishing sites. A lookalike website with a nearly identical URL — phanton.app instead of phantom.app — asks you to \"import your wallet\" by typing your seed phrase. The page then sends your words straight to the thief.\n\n3. Giveaway scams. \"Send 1 SOL, get 2 back!\" — often dressed up with a celebrity's face or a hacked verified account. Nobody is doubling your money. Nobody.\n\n4. Malicious approvals. A shady site asks your wallet to sign something vague. That signature can hand a drainer contract permission to empty your tokens. If you don't understand what you're signing, don't sign it.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "ks-5-block-3",
+            "text": "Red Flags You Can Spot in Seconds\n\nUrgency — \"act now or lose your funds.\" Panic is the scammer's best tool.\n\nThey contacted you first. Real teams announce; scammers DM.\n\nToo good to be true. Guaranteed returns, free money, secret airdrops.\n\nAny request for your seed phrase — anywhere, ever, for any reason.\n\nSlightly-off URLs. Bookmark the real sites you use and only enter through your bookmarks.",
+            "type": "paragraph",
+            "order": 3
+          },
+          {
+            "id": "ks-5-block-4",
+            "text": "One Rule Beats All: Legitimate apps, wallets, and support teams NEVER need your seed phrase — not to verify, not to sync, not to fix a bug, not to send you a refund. The only people on Earth who ask for it are trying to rob you. Memorize that, and 90% of crypto scams simply stop working on you.",
+            "type": "callout",
+            "order": 4,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "keys-and-seed-phrases",
+        "moduleId": "keys-seed-phrases-module-core",
+        "questions": [
+          {
+            "id": "ks-5-q1",
+            "type": "mcq",
+            "prompt": "\"Support\" DMs you first, offering to fix your wallet if you \"verify\" your seed phrase. What is this?",
+            "options": [
+              {
+                "id": "ks-5-q1-opt-1",
+                "text": "A standard security procedure — cooperate quickly"
+              },
+              {
+                "id": "ks-5-q1-opt-2",
+                "text": "Safe, as long as their profile picture looks official"
+              },
+              {
+                "id": "ks-5-q1-opt-3",
+                "text": "A scam — real support never DMs first or asks for your seed phrase"
+              }
+            ]
+          },
+          {
+            "id": "ks-5-q2",
+            "type": "mcq",
+            "prompt": "A site promises to double any SOL you send it. What should you do?",
+            "options": [
+              {
+                "id": "ks-5-q2-opt-1",
+                "text": "Send a small test amount first to check it works"
+              },
+              {
+                "id": "ks-5-q2-opt-2",
+                "text": "Nothing — \"double your crypto\" giveaways are always scams"
+              },
+              {
+                "id": "ks-5-q2-opt-3",
+                "text": "Send quickly before the offer expires"
+              }
+            ]
+          },
+          {
+            "id": "ks-5-q3",
+            "type": "short_text",
+            "prompt": "A fake website that imitates a real one to steal your keys or passwords is called a ___ site. (one word)"
+          }
+        ],
+        "releaseId": "80c7036e-b649-4af0-a249-b2cce1e1212b",
+        "contentHash": "cdef08879ca50daa8e47981d418ae319b677d59dbcb08dfaa569f67628b2ad34"
+      },
+      {
+        "id": "ks-6",
+        "order": 6,
+        "title": "The Golden Rules — Protect Yourself Forever",
+        "blocks": [
+          {
+            "id": "ks-6-block-1",
+            "text": "Five Habits, Lifetime of Safety\n\nEverything in this course compresses into five habits:\n\n1. Never share your seed phrase. Not with support, not with friends, not with anyone. Never type it into a website.\n\n2. Keep the phrase on paper, offline. No photos, no cloud, no notes app.\n\n3. Bookmark the real sites. Enter Phantom, LockedIn, or any dApp through your own bookmarks — never through DM links or search ads.\n\n4. Read before you sign. Every wallet pop-up is a decision. If you can't tell what it does, close it.\n\n5. Start small. Trying a new app or sending to a new address? Test with a tiny amount first.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "ks-6-block-2",
+            "text": "If Your Seed Phrase Ever Leaks\n\nMaybe you typed it into a site that felt wrong, or found a photo of it in your cloud storage. Treat the wallet as burned — even if nothing has been stolen yet.\n\nCreate a brand-new wallet with a brand-new seed phrase, and move your funds to it immediately. Then stop using the old one forever. There is no way to \"change the password\" on a compromised seed phrase — the only fix is a new wallet.\n\nSpeed matters: drainer bots watch leaked phrases and can empty a wallet within minutes.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "ks-6-block-3",
+            "text": "You're Ready: Self-custody isn't about paranoia — it's about a few boring habits done consistently. Protect the seed phrase, verify what you sign, and the most powerful property of crypto — money nobody can take from you — is yours for good.",
+            "type": "callout",
+            "order": 3,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "keys-and-seed-phrases",
+        "moduleId": "keys-seed-phrases-module-core",
+        "questions": [
+          {
+            "id": "ks-6-q1",
+            "type": "mcq",
+            "prompt": "Who should you share your seed phrase with?",
+            "options": [
+              {
+                "id": "ks-6-q1-opt-1",
+                "text": "Only official support staff"
+              },
+              {
+                "id": "ks-6-q1-opt-2",
+                "text": "A trusted family member, by email"
+              },
+              {
+                "id": "ks-6-q1-opt-3",
+                "text": "Nobody — not support, not friends, not anyone"
+              }
+            ]
+          },
+          {
+            "id": "ks-6-q2",
+            "type": "mcq",
+            "prompt": "You accidentally typed your seed phrase into a website. What now?",
+            "options": [
+              {
+                "id": "ks-6-q2-opt-1",
+                "text": "Change the website's password and move on"
+              },
+              {
+                "id": "ks-6-q2-opt-2",
+                "text": "Create a brand-new wallet and move your funds to it immediately"
+              },
+              {
+                "id": "ks-6-q2-opt-3",
+                "text": "Wait and see if anything bad happens"
+              }
+            ]
+          },
+          {
+            "id": "ks-6-q3",
+            "type": "short_text",
+            "prompt": "Fill in the golden rule: \"___ share your seed phrase.\" (one word)"
+          }
+        ],
+        "releaseId": "80c7036e-b649-4af0-a249-b2cce1e1212b",
+        "contentHash": "72c5859cfe47f31363207a199fec2fd2685b81231be07cd67b6a6f619e25d29a"
+      }
+    ],
+    "reading-solana-module-core": [
+      {
+        "id": "rd-1",
+        "order": 1,
+        "title": "What Is a Transaction, Really?",
+        "blocks": [
+          {
+            "id": "rd-1-block-1",
+            "text": "Not a Coin Flying Through the Internet\n\nWhen you \"send SOL,\" no coin travels anywhere. What actually happens: you fill out a request and the network updates its records.\n\nA transaction is that request — a signed message asking the network to do something. Inside it are one or more instructions. Each instruction names three things: which program should run (for example, the token program), what it should do (transfer 5 USDC), and which accounts it touches (from yours, to theirs).\n\nThink of it like a filled-out bank form — except instead of a clerk, thousands of validators process it, and instead of a filing cabinet, the result lands on a public ledger everyone can read.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "rd-1-block-2",
+            "text": "Several Instructions, One Fate\n\nOne transaction can carry several instructions. A common example: \"create a token account for this new token\" and \"transfer the token into it\" — two instructions, one transaction.\n\nHere's the important rule: instructions in a transaction succeed or fail together. If instruction 2 of 3 fails, the whole transaction fails and NONE of the changes happen. The ledger is never left half-updated — you can't lose your USDC without the other side receiving it.\n\nThis all-or-nothing property is called being atomic, and it's one of the most reassuring things about how blockchains work.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "rd-1-block-3",
+            "text": "Mental Model: You never \"send coins\" — you send a signed instruction telling a program to update balances on the ledger. Once you see transactions as requests-to-update-records, everything else in this course (signatures, fees, explorers) falls into place.",
+            "type": "callout",
+            "order": 3,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "reading-solana",
+        "moduleId": "reading-solana-module-core",
+        "questions": [
+          {
+            "id": "rd-1-q1",
+            "type": "mcq",
+            "prompt": "What is a Solana transaction?",
+            "options": [
+              {
+                "id": "rd-1-q1-opt-1",
+                "text": "A coin file that travels across the internet"
+              },
+              {
+                "id": "rd-1-q1-opt-2",
+                "text": "A signed set of instructions telling programs what to do"
+              },
+              {
+                "id": "rd-1-q1-opt-3",
+                "text": "A message you send to Solana customer support"
+              }
+            ]
+          },
+          {
+            "id": "rd-1-q2",
+            "type": "mcq",
+            "prompt": "A transaction has 3 instructions and one of them fails. What happens?",
+            "options": [
+              {
+                "id": "rd-1-q2-opt-1",
+                "text": "The other two instructions still go through"
+              },
+              {
+                "id": "rd-1-q2-opt-2",
+                "text": "The whole transaction fails — none of the changes happen"
+              },
+              {
+                "id": "rd-1-q2-opt-3",
+                "text": "The network automatically repairs the broken instruction"
+              }
+            ]
+          },
+          {
+            "id": "rd-1-q3",
+            "type": "short_text",
+            "prompt": "Transactions are all-or-nothing: they fully succeed or fully fail. Fill in the term: transactions are ___. (one word)"
+          }
+        ],
+        "releaseId": "69636b12-73e1-4ae2-9090-e288709175e7",
+        "contentHash": "43d31fb10654a5a43a4e88b30812d2b0ca379eb377c79c8939c580b73daae77d"
+      },
+      {
+        "id": "rd-2",
+        "order": 2,
+        "title": "Signatures — Proof You Said So",
+        "blocks": [
+          {
+            "id": "rd-2-block-1",
+            "text": "No Signature, No Transaction\n\nThe network won't touch your money on someone's word — every transaction must be signed with the sender's private key before validators will even look at it.\n\nA signature is a piece of cryptographic math with a remarkable property: it proves that the holder of the private key approved this exact transaction. Change even one character of the transaction — the amount, the destination, anything — and the signature no longer matches. Forging one without the private key is practically impossible.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "rd-2-block-2",
+            "text": "The Signature IS the Receipt\n\nOn Solana, the transaction's first signature doubles as its ID. That long string you see after sending — something like 5UfDu3qz...xk2P — is the signature, and it's what you paste into a block explorer to look the transaction up.\n\nA few more useful facts:\n\nFees are charged per signature — most everyday transactions have exactly one.\n\nSome transactions need several signers — for example, when two parties must both approve.\n\nYour wallet handles all of the math. Your job is just to read what you're signing before you tap Approve.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "rd-2-block-3",
+            "text": "The Pop-Up Is the Moment: Every time your wallet shows an \"Approve transaction?\" pop-up, that's the signing moment — your last line of defense. After you approve, the signature exists and the network will act on it. Read first, sign second.",
+            "type": "callout",
+            "order": 3,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "reading-solana",
+        "moduleId": "reading-solana-module-core",
+        "questions": [
+          {
+            "id": "rd-2-q1",
+            "type": "mcq",
+            "prompt": "What does a transaction signature prove?",
+            "options": [
+              {
+                "id": "rd-2-q1-opt-1",
+                "text": "The transaction is guaranteed to succeed"
+              },
+              {
+                "id": "rd-2-q1-opt-2",
+                "text": "The holder of the private key approved this exact transaction"
+              },
+              {
+                "id": "rd-2-q1-opt-3",
+                "text": "The sender passed an identity check"
+              }
+            ]
+          },
+          {
+            "id": "rd-2-q2",
+            "type": "mcq",
+            "prompt": "What is used as a transaction's ID on Solana?",
+            "options": [
+              {
+                "id": "rd-2-q2-opt-1",
+                "text": "The sender's wallet address"
+              },
+              {
+                "id": "rd-2-q2-opt-2",
+                "text": "Its first signature"
+              },
+              {
+                "id": "rd-2-q2-opt-3",
+                "text": "A random number chosen by the validator"
+              }
+            ]
+          },
+          {
+            "id": "rd-2-q3",
+            "type": "short_text",
+            "prompt": "Which key creates the signature on a transaction? (two words)"
+          }
+        ],
+        "releaseId": "69636b12-73e1-4ae2-9090-e288709175e7",
+        "contentHash": "720be21c8992f0f8ad90f438442e04388a4981cd32e07d5e872bb4d018fdd7d9"
+      },
+      {
+        "id": "rd-3",
+        "order": 3,
+        "title": "Fees & Lamports — What a Transaction Costs",
+        "blocks": [
+          {
+            "id": "rd-3-block-1",
+            "text": "Meet the Lamport\n\nJust like a dollar breaks into 100 cents, SOL breaks into smaller units called lamports — except the split is much finer: 1 SOL = 1,000,000,000 lamports (one billion). The unit is named after Leslie Lamport, a computer scientist whose work underpins distributed systems like Solana.\n\nWhy so small? Because Solana fees are tiny, and you need tiny units to price them.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "rd-3-block-2",
+            "text": "Solana Fee Cheat Sheet:\n┌───────────────────────────┬────────────────────────────────┐\n│  1 SOL                    │  1,000,000,000 lamports        │\n│  Base fee                 │  5,000 lamports per signature  │\n│  That's in SOL            │  0.000005 SOL                  │\n│  Typical everyday tx      │  well under one cent           │\n│  Priority fee (optional)  │  small tip to jump the queue   │\n└───────────────────────────┴────────────────────────────────┘",
+            "type": "code",
+            "order": 2
+          },
+          {
+            "id": "rd-3-block-3",
+            "text": "Why Fees Exist at All\n\nFees do two jobs. First, they pay the validators who spend real electricity and hardware processing your transaction. Second, they protect the network: if sending a transaction were completely free, anyone could flood Solana with billions of junk transactions and grind it to a halt. A tiny fee makes spam expensive while staying almost invisible to real users.\n\nDuring busy moments you can also add a priority fee — a small tip that asks validators to process your transaction sooner. Wallets usually handle this for you automatically.",
+            "type": "paragraph",
+            "order": 3
+          },
+          {
+            "id": "rd-3-block-4",
+            "text": "Practical Tip: Keep a little SOL in your wallet even if you only care about USDC — every transaction needs a few thousand lamports for the fee. No SOL, no transactions, even to move your own money.",
+            "type": "callout",
+            "order": 4,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "reading-solana",
+        "moduleId": "reading-solana-module-core",
+        "questions": [
+          {
+            "id": "rd-3-q1",
+            "type": "mcq",
+            "prompt": "What is a lamport?",
+            "options": [
+              {
+                "id": "rd-3-q1-opt-1",
+                "text": "A separate token you must buy to pay fees"
+              },
+              {
+                "id": "rd-3-q1-opt-2",
+                "text": "The smallest unit of SOL — one billionth of 1 SOL"
+              },
+              {
+                "id": "rd-3-q1-opt-3",
+                "text": "A nickname for a Solana validator"
+              }
+            ]
+          },
+          {
+            "id": "rd-3-q2",
+            "type": "mcq",
+            "prompt": "Why do transaction fees exist?",
+            "options": [
+              {
+                "id": "rd-3-q2-opt-1",
+                "text": "They fund the Solana marketing budget"
+              },
+              {
+                "id": "rd-3-q2-opt-2",
+                "text": "They pay validators and make spamming the network expensive"
+              },
+              {
+                "id": "rd-3-q2-opt-3",
+                "text": "They are a tax collected by exchanges"
+              }
+            ]
+          },
+          {
+            "id": "rd-3-q3",
+            "type": "short_text",
+            "prompt": "What is the base fee per signature, in lamports? (answer with just the number)"
+          }
+        ],
+        "releaseId": "69636b12-73e1-4ae2-9090-e288709175e7",
+        "contentHash": "8292ecdf94d322fb941ff92d53d4172696875886ee8bfe8d50159b8e9acc7e29"
+      },
+      {
+        "id": "rd-4",
+        "order": 4,
+        "title": "Confirmations & Finality — When Is It Done?",
+        "blocks": [
+          {
+            "id": "rd-4-block-1",
+            "text": "The Chain Never Stops\n\nSolana produces a new block roughly every 400 milliseconds — more than two per second. Your transaction gets picked up by the current block producer, lands in a block, and then the network votes on that block.\n\nBut \"it's in a block\" isn't the whole story. How SURE can you be that it's permanent? Solana gives you three levels of certainty, called commitment levels.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "rd-4-block-2",
+            "text": "Processed, Confirmed, Finalized\n\nProcessed — your transaction is in a block. Fast, but that block could in rare cases still be abandoned.\n\nConfirmed — a supermajority of validators has voted on the block. This takes about a second, and in practice a confirmed transaction is safe; wallets and apps typically show success at this point.\n\nFinalized — enough blocks (31+) have been built on top that the block is mathematically locked in. This takes several seconds. A finalized transaction can NEVER be rolled back — not by validators, not by anyone.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "rd-4-block-3",
+            "text": "Compare With Your Bank Card: A card payment can be disputed and clawed back months later. On Solana, a finalized transaction is done forever — usually within seconds of you tapping send. That permanence is exactly what makes the chain trustworthy... and exactly why you double-check the address before sending.",
+            "type": "callout",
+            "order": 3,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "reading-solana",
+        "moduleId": "reading-solana-module-core",
+        "questions": [
+          {
+            "id": "rd-4-q1",
+            "type": "mcq",
+            "prompt": "What does 'finalized' mean for a transaction?",
+            "options": [
+              {
+                "id": "rd-4-q1-opt-1",
+                "text": "One validator has seen the transaction"
+              },
+              {
+                "id": "rd-4-q1-opt-2",
+                "text": "It is permanent and can never be rolled back"
+              },
+              {
+                "id": "rd-4-q1-opt-3",
+                "text": "It is waiting for a bank to approve it"
+              }
+            ]
+          },
+          {
+            "id": "rd-4-q2",
+            "type": "mcq",
+            "prompt": "Roughly how often does Solana produce a new block?",
+            "options": [
+              {
+                "id": "rd-4-q2-opt-1",
+                "text": "Every 10 minutes"
+              },
+              {
+                "id": "rd-4-q2-opt-2",
+                "text": "About every 400 milliseconds"
+              },
+              {
+                "id": "rd-4-q2-opt-3",
+                "text": "Once per hour"
+              }
+            ]
+          },
+          {
+            "id": "rd-4-q3",
+            "type": "short_text",
+            "prompt": "Name the commitment level that means a transaction is permanent. (one word)"
+          }
+        ],
+        "releaseId": "69636b12-73e1-4ae2-9090-e288709175e7",
+        "contentHash": "626e0964619d6d994bdb3b3386ca3a89b7994f51d730dd66a90df7575e62d326"
+      },
+      {
+        "id": "rd-5",
+        "order": 5,
+        "title": "Block Explorers — X-Ray Vision for the Chain",
+        "blocks": [
+          {
+            "id": "rd-5-block-1",
+            "text": "See Everything, Trust Nothing\n\nThe blockchain is public — a block explorer is the website that lets you read it. Popular Solana explorers include Solscan, Solana Explorer, and SolanaFM. They're free, need no login, and all show the same underlying data.\n\nTwo searches cover almost everything:\n\nPaste a wallet address → see its SOL balance, every token it holds, and its full transaction history.\n\nPaste a transaction signature → see exactly what that transaction did, when, and what it cost.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "rd-5-block-2",
+            "text": "Anatomy of a Transaction Page:\n┌──────────────────────────────────────────────────────────┐\n│  Signature      5UfDu3qz…xk2P   (the transaction's ID)   │\n│  Status         Success ✓  (or Fail ✗)                   │\n│  Timestamp      When it landed on chain                  │\n│  Fee            0.000005 SOL                             │\n│  Signer         The wallet that authorized it            │\n│  Instructions   Which programs ran, and what they did    │\n│  Balances       Every account's change, before → after   │\n└──────────────────────────────────────────────────────────┘",
+            "type": "code",
+            "order": 2
+          },
+          {
+            "id": "rd-5-block-3",
+            "text": "Reading Status Like a Pro\n\nSuccess means the transaction ran and every instruction completed — the balance changes you see really happened.\n\nFail means the transaction was included but a program rejected it (wrong amount, missing account, slippage too tight...). Its changes were rolled back — only the small fee was spent. Your funds didn't vanish; the action just didn't happen.\n\nIf you can read an address page and a transaction page, nobody can lie to you about what happened on chain. \"Payment sent!\" — check it. \"Transaction failed!\" — check why. The explorer is the referee.",
+            "type": "paragraph",
+            "order": 3
+          },
+          {
+            "id": "rd-5-block-4",
+            "text": "Try It Now: Copy your own wallet address, paste it into an explorer like Solscan, and scroll your history. That slightly eerie feeling of seeing your activity in public? That's the transparency the whole system is built on — and now you know how to use it.",
+            "type": "callout",
+            "order": 4,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "reading-solana",
+        "moduleId": "reading-solana-module-core",
+        "questions": [
+          {
+            "id": "rd-5-q1",
+            "type": "mcq",
+            "prompt": "What is a block explorer?",
+            "options": [
+              {
+                "id": "rd-5-q1-opt-1",
+                "text": "A wallet app for advanced traders"
+              },
+              {
+                "id": "rd-5-q1-opt-2",
+                "text": "A website for looking up any account or transaction on the chain"
+              },
+              {
+                "id": "rd-5-q1-opt-3",
+                "text": "A tool that can reverse mistaken transactions"
+              }
+            ]
+          },
+          {
+            "id": "rd-5-q2",
+            "type": "mcq",
+            "prompt": "What do you paste into an explorer to find one specific transaction?",
+            "options": [
+              {
+                "id": "rd-5-q2-opt-1",
+                "text": "The transaction's signature"
+              },
+              {
+                "id": "rd-5-q2-opt-2",
+                "text": "Your seed phrase"
+              },
+              {
+                "id": "rd-5-q2-opt-3",
+                "text": "Your private key"
+              }
+            ]
+          },
+          {
+            "id": "rd-5-q3",
+            "type": "mcq",
+            "prompt": "A transaction shows status 'Fail' on an explorer. What does that mean?",
+            "options": [
+              {
+                "id": "rd-5-q3-opt-1",
+                "text": "Your wallet is now broken and needs reinstalling"
+              },
+              {
+                "id": "rd-5-q3-opt-2",
+                "text": "The explorer is showing outdated information"
+              },
+              {
+                "id": "rd-5-q3-opt-3",
+                "text": "A program rejected it — its changes were rolled back and only the fee was spent"
+              }
+            ]
+          }
+        ],
+        "releaseId": "69636b12-73e1-4ae2-9090-e288709175e7",
+        "contentHash": "51c88a30cf0744e1450a98bbad7670d24d624125987fb58c43b44679217af856"
+      },
+      {
+        "id": "rd-6",
+        "order": 6,
+        "title": "Devnet vs Mainnet — Two Worlds, Same Tools",
+        "blocks": [
+          {
+            "id": "rd-6-block-1",
+            "text": "Solana Runs More Than One Network\n\nThe same Solana software runs several separate networks, called clusters:\n\nMainnet (mainnet-beta) — the real one. Real SOL, real USDC, real value. Everything you own lives here.\n\nDevnet — the practice world. Identical software, separate ledger, and the SOL there is free — you can \"airdrop\" yourself devnet SOL from a faucet with one click. It's worth exactly nothing, which makes it the perfect sandbox.\n\nTestnet — a third cluster used mainly by validators and engineers to stress-test new releases. You'll rarely need it.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "rd-6-block-2",
+            "text": "Why Devnet Is a Gift to Learners\n\nEverything you've learned in this course — sending transactions, reading signatures, watching confirmations, browsing explorers — can be practiced on devnet with zero risk. Airdrop yourself some fake SOL, send it between two of your own addresses, then find the transaction on an explorer. Same tools, same mechanics, no stakes.\n\nDevelopers build and test entire apps on devnet before touching real money. You can learn the same way.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "rd-6-block-3",
+            "text": "The Classic Gotcha: Explorers have a cluster switch (usually a dropdown in the corner). If a real payment \"isn't showing up,\" first check the explorer is set to mainnet — you may be staring at devnet. And remember: devnet tokens never become real. Anyone \"proving\" a payment with a devnet transaction link is showing you play money.",
+            "type": "callout",
+            "order": 3,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "reading-solana",
+        "moduleId": "reading-solana-module-core",
+        "questions": [
+          {
+            "id": "rd-6-q1",
+            "type": "mcq",
+            "prompt": "What is devnet for?",
+            "options": [
+              {
+                "id": "rd-6-q1-opt-1",
+                "text": "Practicing with free test SOL that has no real-world value"
+              },
+              {
+                "id": "rd-6-q1-opt-2",
+                "text": "Earning extra yield on your USDC"
+              },
+              {
+                "id": "rd-6-q1-opt-3",
+                "text": "A faster version of mainnet reserved for VIPs"
+              }
+            ]
+          },
+          {
+            "id": "rd-6-q2",
+            "type": "mcq",
+            "prompt": "A stranger \"proves\" they paid you by sending a devnet transaction link. What's wrong?",
+            "options": [
+              {
+                "id": "rd-6-q2-opt-1",
+                "text": "Nothing — devnet and mainnet share the same balances"
+              },
+              {
+                "id": "rd-6-q2-opt-2",
+                "text": "Devnet tokens aren't real money — nothing arrived on mainnet"
+              },
+              {
+                "id": "rd-6-q2-opt-3",
+                "text": "The link just needs a few hours to sync over"
+              }
+            ]
+          },
+          {
+            "id": "rd-6-q3",
+            "type": "short_text",
+            "prompt": "Which cluster is the real one, where tokens have actual value? (one word)"
+          }
+        ],
+        "releaseId": "69636b12-73e1-4ae2-9090-e288709175e7",
+        "contentHash": "5fcd60101caa314a2d09b5e97a16469763337be5c6df63696b8325ad83de74cc"
+      }
+    ],
+    "test-kitchen-module": [
+      {
+        "id": "tk-1",
+        "order": 1,
+        "title": "Testing Visual Blocks",
+        "blocks": [
+          {
+            "id": "tk-1-block-1",
+            "text": "Welcome to the Test Kitchen\n\nThis course exists to test every feature of LockedIn. Each section below uses a different visual component. If you can see them all rendered correctly, the system works.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "tk-1-block-2",
+            "text": "This is an analogy box. It should have a lightbulb icon and an amber border. Used for analogies like 'The Village Notebook' or 'The Vending Machine'.",
+            "type": "callout",
+            "order": 2,
+            "title": "Test Analogy Box",
+            "variant": "analogy",
+            "calloutTone": "info"
+          },
+          {
+            "id": "tk-1-block-3",
+            "text": "",
+            "type": "paragraph",
+            "order": 3,
+            "chains": [
+              {
+                "desc": "Orange card with stat badges",
+                "name": "Bitcoin",
+                "stats": [
+                  "~10 min",
+                  "$1-$20/tx"
+                ],
+                "theme": "btc",
+                "tagline": "The Original"
+              },
+              {
+                "desc": "Blue card with stat badges",
+                "name": "Ethereum",
+                "stats": [
+                  "~12 sec",
+                  "$5-$50/tx"
+                ],
+                "theme": "eth",
+                "tagline": "The Platform"
+              },
+              {
+                "desc": "Purple card with stat badges",
+                "name": "Solana",
+                "stats": [
+                  "~0.4 sec",
+                  "$0.00025/tx"
+                ],
+                "theme": "sol",
+                "tagline": "The Fast One"
+              }
+            ],
+            "variant": "chain-cards"
+          },
+          {
+            "id": "tk-1-block-4",
+            "text": "Testing the flow steps component:",
+            "type": "paragraph",
+            "order": 4,
+            "steps": [
+              {
+                "desc": "This is the first step",
+                "title": "Step One"
+              },
+              {
+                "desc": "This is the second step",
+                "title": "Step Two"
+              },
+              {
+                "desc": "This is the third step",
+                "title": "Step Three"
+              },
+              {
+                "desc": "The flow is done",
+                "icon": "✓",
+                "color": "green",
+                "title": "Complete"
+              }
+            ],
+            "variant": "flow"
+          },
+          {
+            "id": "tk-1-block-5",
+            "text": "Testing concept list:",
+            "type": "paragraph",
+            "items": [
+              {
+                "desc": "Icon with name and description",
+                "icon": "📁",
+                "name": "Concept A"
+              },
+              {
+                "desc": "Another concept item",
+                "icon": "🪙",
+                "name": "Concept B"
+              },
+              {
+                "desc": "Third concept with icon",
+                "icon": "⚙",
+                "name": "Concept C"
+              }
+            ],
+            "order": 5,
+            "variant": "concepts"
+          },
+          {
+            "id": "tk-1-block-6",
+            "text": "This is a takeaway box. It should have a green left border and a 'Key Takeaway' label. **Bold text works here too.**",
+            "type": "callout",
+            "order": 6,
+            "variant": "takeaway",
+            "calloutTone": "tip"
+          }
+        ],
+        "version": 1,
+        "courseId": "test-kitchen",
+        "moduleId": "test-kitchen-module",
+        "questions": [
+          {
+            "id": "tk-1-q1",
+            "type": "mcq",
+            "prompt": "Which block type shows colored cards for different blockchains?",
+            "options": [
+              {
+                "id": "tk-1-q1-opt-1",
+                "text": "chain-cards"
+              },
+              {
+                "id": "tk-1-q1-opt-2",
+                "text": "paragraph"
+              },
+              {
+                "id": "tk-1-q1-opt-3",
+                "text": "callout"
+              }
+            ]
+          },
+          {
+            "id": "tk-1-q2",
+            "type": "mcq",
+            "prompt": "What color is the takeaway box border?",
+            "options": [
+              {
+                "id": "tk-1-q2-opt-1",
+                "text": "Green"
+              },
+              {
+                "id": "tk-1-q2-opt-2",
+                "text": "Amber"
+              },
+              {
+                "id": "tk-1-q2-opt-3",
+                "text": "Red"
+              }
+            ]
+          }
+        ],
+        "releaseId": "3b4c1cd9-8192-4810-ae42-8e9860034f45",
+        "contentHash": "4b74ef5868bdf871c8099e7b004271b7e6bb33275a5c9b5fea493265affa53c1"
+      },
+      {
+        "id": "tk-2",
+        "order": 2,
+        "title": "Testing More Variants",
+        "blocks": [
+          {
+            "id": "tk-2-block-1",
+            "rows": [
+              [
+                "Speed",
+                "Fast",
+                "Slow"
+              ],
+              [
+                "Cost",
+                "Cheap",
+                "Expensive"
+              ],
+              [
+                "Ease",
+                "Simple",
+                "Complex"
+              ]
+            ],
+            "type": "code",
+            "order": 1,
+            "headers": [
+              "Feature",
+              "Option A",
+              "Option B"
+            ],
+            "variant": "comparison"
+          },
+          {
+            "id": "tk-2-block-2",
+            "type": "paragraph",
+            "items": [
+              {
+                "desc": "Description here",
+                "color": "amber",
+                "label": "Label One",
+                "value": "Value 1"
+              },
+              {
+                "desc": "Another description",
+                "color": "green",
+                "label": "Label Two",
+                "value": "Value 2"
+              }
+            ],
+            "order": 2,
+            "variant": "kv-grid"
+          },
+          {
+            "id": "tk-2-block-3",
+            "rule": "This is where the safety rule goes. **Bold rules work too.**",
+            "type": "callout",
+            "order": 3,
+            "title": "Test Scam Card",
+            "number": 1,
+            "example": "This is a fake scam message for testing. Do not panic — this is just a test.",
+            "variant": "scam",
+            "calloutTone": "warning",
+            "exampleSender": "Fake_Scammer_123"
+          },
+          {
+            "id": "tk-2-block-4",
+            "type": "paragraph",
+            "items": [
+              "**First item** — checklist items should have green checkboxes",
+              "**Second item** — bold text should be emphasized",
+              "**Third item** — all items should have bottom borders"
+            ],
+            "order": 4,
+            "variant": "checklist"
+          },
+          {
+            "id": "tk-2-block-5",
+            "text": "Warning Callout: This tests the default callout styling with a warning tone. Should have a red left border.",
+            "type": "callout",
+            "order": 5,
+            "calloutTone": "warning"
+          }
+        ],
+        "version": 1,
+        "courseId": "test-kitchen",
+        "moduleId": "test-kitchen-module",
+        "questions": [
+          {
+            "id": "tk-2-q1",
+            "type": "mcq",
+            "prompt": "What does the scam card display?",
+            "options": [
+              {
+                "id": "tk-2-q1-opt-1",
+                "text": "A chart"
+              },
+              {
+                "id": "tk-2-q1-opt-2",
+                "text": "A fake DM preview with a safety rule"
+              },
+              {
+                "id": "tk-2-q1-opt-3",
+                "text": "A code block"
+              }
+            ]
+          },
+          {
+            "id": "tk-2-q2",
+            "type": "short_text",
+            "prompt": "Name two block variants you saw in this lesson."
+          }
+        ],
+        "releaseId": "3b4c1cd9-8192-4810-ae42-8e9860034f45",
+        "contentHash": "51d7f8a8bc8ff05c54d4eefbd964569891ccc8e44053e182787d392a9832ebe7"
+      },
+      {
+        "id": "tk-3",
+        "order": 3,
+        "title": "Testing Recall & Completion",
+        "blocks": [
+          {
+            "id": "tk-3-block-1",
+            "text": "Final Stretch\n\nIf you're seeing this, Lessons 1 and 2 worked. Before this lesson loaded, you should have seen a **recall question** from a previous lesson.\n\nComplete the questions below to finish the test course. After this, you can test the withdrawal flow.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "tk-3-block-2",
+            "text": "Course complete! All visual block variants render correctly. All question types work. The recall system triggers. You can now test locking, streaks, and withdrawal.",
+            "type": "callout",
+            "order": 2,
+            "variant": "takeaway",
+            "calloutTone": "tip"
+          }
+        ],
+        "version": 1,
+        "courseId": "test-kitchen",
+        "moduleId": "test-kitchen-module",
+        "questions": [
+          {
+            "id": "tk-3-q1",
+            "type": "mcq",
+            "prompt": "Did you see a recall question before this lesson?",
+            "options": [
+              {
+                "id": "tk-3-q1-opt-1",
+                "text": "Yes"
+              },
+              {
+                "id": "tk-3-q1-opt-2",
+                "text": "No"
+              },
+              {
+                "id": "tk-3-q1-opt-3",
+                "text": "What's a recall question?"
+              }
+            ]
+          },
+          {
+            "id": "tk-3-q2",
+            "type": "mcq",
+            "prompt": "How many block variants does LockedIn support?",
+            "options": [
+              {
+                "id": "tk-3-q2-opt-1",
+                "text": "3"
+              },
+              {
+                "id": "tk-3-q2-opt-2",
+                "text": "7"
+              },
+              {
+                "id": "tk-3-q2-opt-3",
+                "text": "10"
+              }
+            ]
+          }
+        ],
+        "releaseId": "3b4c1cd9-8192-4810-ae42-8e9860034f45",
+        "contentHash": "98e67f293449daf3594903aa0ca821d222403aeeea99a26afdbdcc2a85aab4ac"
+      }
+    ],
+    "tokens-nfts-staking-module-core": [
+      {
+        "id": "tn-1",
+        "order": 1,
+        "title": "SOL vs SPL — Two Kinds of Tokens",
+        "blocks": [
+          {
+            "id": "tn-1-block-1",
+            "text": "The Native Coin and Everything Else\n\nSolana has exactly one native coin: SOL. It's built into the network itself — it pays transaction fees, it gets staked to secure the chain, and every wallet can hold it from the moment it's created.\n\nEverything else — USDC, BONK, JitoSOL, the thousands of tokens you'll see on explorers — is an SPL token. SPL stands for Solana Program Library, and the SPL token program is the shared standard that defines how tokens on Solana are created, held, and transferred. One standard means every wallet, exchange, and app knows how to handle every token — no special integrations needed.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "tn-1-block-2",
+            "text": "Every Token Has a Mint\n\nEach SPL token is defined by a mint — a small account on the chain that acts as the token's ID card. The mint records the token's total supply, how many decimal places it uses, and who (if anyone) is allowed to create more of it.\n\nUSDC has one official mint address. BONK has another. When your wallet shows \"USDC,\" what it really means is \"tokens from this exact mint.\"\n\nHere's the catch: creating a token costs pennies, and ANYONE can do it — with any name. A scammer can mint a token called \"USDC\" in thirty seconds. The name is just a label; the mint address is the truth.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "tn-1-block-3",
+            "text": "The Ticker Isn't the Token: Two tokens can both display \"USDC\" — only the mint address tells them apart. Explorers and good wallets mark well-known mints with a verified badge. If a \"famous\" token arrives from an unknown mint, it's a fake. Check the mint, not the name.",
+            "type": "callout",
+            "order": 3,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "tokens-nfts-staking",
+        "moduleId": "tokens-nfts-staking-module-core",
+        "questions": [
+          {
+            "id": "tn-1-q1",
+            "type": "mcq",
+            "prompt": "What is an SPL token?",
+            "options": [
+              {
+                "id": "tn-1-q1-opt-1",
+                "text": "A token issued personally by the Solana Foundation"
+              },
+              {
+                "id": "tn-1-q1-opt-2",
+                "text": "Any token on Solana built on the shared SPL token standard"
+              },
+              {
+                "id": "tn-1-q1-opt-3",
+                "text": "A special kind of NFT"
+              }
+            ]
+          },
+          {
+            "id": "tn-1-q2",
+            "type": "mcq",
+            "prompt": "How is SOL different from SPL tokens like USDC?",
+            "options": [
+              {
+                "id": "tn-1-q2-opt-1",
+                "text": "SOL is the native coin that pays fees and gets staked; SPL tokens are assets built on top"
+              },
+              {
+                "id": "tn-1-q2-opt-2",
+                "text": "SOL is slower to send than SPL tokens"
+              },
+              {
+                "id": "tn-1-q2-opt-3",
+                "text": "There is no difference — SOL is just another SPL token"
+              }
+            ]
+          },
+          {
+            "id": "tn-1-q3",
+            "type": "short_text",
+            "prompt": "A token arrives in your wallet named \"USDC\". What should you check to know if it's the real thing?"
+          }
+        ],
+        "releaseId": "3a12a9c6-71d2-4f5b-9d42-a4dc4bf9a03f",
+        "contentHash": "6fd2c5dbd5d7ecd6623f8c847ccc99b73ecd63e68f431928f0554a74ce160550"
+      },
+      {
+        "id": "tn-2",
+        "order": 2,
+        "title": "Token Accounts & ATAs — Where Tokens Actually Sit",
+        "blocks": [
+          {
+            "id": "tn-2-block-1",
+            "text": "Your Wallet Address Only Holds SOL\n\nHere's something that surprises everyone: your main wallet address holds only SOL. It cannot hold USDC, BONK, or any other SPL token directly.\n\nInstead, every SPL token you own sits in its own separate token account — one per token type. Think of your wallet as a filing cabinet: the cabinet itself (your address) holds SOL, and each drawer inside is a token account holding your balance of one specific token. USDC drawer, BONK drawer, JitoSOL drawer — one drawer per token.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "tn-2-block-2",
+            "text": "The ATA — A Predictable Drawer\n\nIn the early days, a wallet could have several token accounts for the same token, which confused everyone. The fix is the Associated Token Account, or ATA: a standard formula that computes ONE canonical token account address from two ingredients — your wallet address plus the token's mint.\n\nBecause it's a formula, anyone can compute your USDC ATA without asking you. That's how someone can send you a token you've never held: their wallet derives your ATA, creates it on chain, and deposits the tokens — all in one transaction.\n\nCreating that account reserves a tiny amount of SOL on chain (about 0.002 SOL, called rent-exemption). That's why receiving a brand-new token type involves a tiny one-time cost, usually paid by the sender.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "tn-2-block-3",
+            "text": "In One Sentence: An ATA holds your balance of one specific SPL token, for one wallet — your USDC ATA holds your USDC, your BONK ATA holds your BONK, and your wallet address itself holds only SOL. When an explorer shows \"Token Accounts\" under your address, you now know exactly what you're looking at.",
+            "type": "callout",
+            "order": 3,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "tokens-nfts-staking",
+        "moduleId": "tokens-nfts-staking-module-core",
+        "questions": [
+          {
+            "id": "tn-2-q1",
+            "type": "mcq",
+            "prompt": "Why can't your main wallet address hold USDC directly?",
+            "options": [
+              {
+                "id": "tn-2-q1-opt-1",
+                "text": "USDC is not allowed on Solana"
+              },
+              {
+                "id": "tn-2-q1-opt-2",
+                "text": "The wallet address holds only SOL; every SPL token needs its own token account"
+              },
+              {
+                "id": "tn-2-q1-opt-3",
+                "text": "Because USDC is an NFT"
+              }
+            ]
+          },
+          {
+            "id": "tn-2-q2",
+            "type": "mcq",
+            "prompt": "You hold USDC, BONK, and JitoSOL. How many token accounts is that?",
+            "options": [
+              {
+                "id": "tn-2-q2-opt-1",
+                "text": "One — all tokens share a single account"
+              },
+              {
+                "id": "tn-2-q2-opt-2",
+                "text": "Three — one per token mint"
+              },
+              {
+                "id": "tn-2-q2-opt-3",
+                "text": "Zero — tokens live at the exchange"
+              }
+            ]
+          },
+          {
+            "id": "tn-2-q3",
+            "type": "short_text",
+            "prompt": "What does an ATA hold?"
+          }
+        ],
+        "releaseId": "3a12a9c6-71d2-4f5b-9d42-a4dc4bf9a03f",
+        "contentHash": "66fe602d27154c769b79998d42e40c33973d44a7980811e99de6733576f705d7"
+      },
+      {
+        "id": "tn-3",
+        "order": 3,
+        "title": "NFTs on Solana — One of a Kind",
+        "blocks": [
+          {
+            "id": "tn-3-block-1",
+            "text": "Fungible vs. Non-Fungible\n\nMoney is fungible: any 1 USDC is exactly as good as any other 1 USDC — swap them and nothing changes. Most tokens work this way.\n\nAn NFT (non-fungible token) is the opposite: it's one of a kind. Like the original of a painting or a signed jersey, no other token is interchangeable with it. On the chain, that uniqueness is enforced by the token itself: an NFT on Solana is an SPL token whose mint has a supply of exactly 1 and zero decimals — there is one whole unit, ever, and whoever holds it owns THE thing.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "tn-3-block-2",
+            "text": "What Makes It More Than a Number\n\nAttached to that 1-of-1 mint is metadata — the NFT's name, its image or media link, and its attributes (like \"background: gold\" for a collectible). The image itself usually lives off-chain in permanent storage; the chain holds the record that points to it and, crucially, the record of who owns it.\n\nWhat are NFTs used for? Art and collectibles are the famous ones, but the same one-of-a-kind mechanism powers game items, event tickets, membership passes, and .sol domain names. Anything that needs a provable, transferable \"there is only one of this\" lives naturally as an NFT.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "tn-3-block-3",
+            "text": "Owning an NFT, Precisely: \"Owning an NFT\" means your token account holds that mint's single token. Sell it, and the token moves to the buyer's token account — the chain's ownership record updates for the whole world to see. You're not buying the JPEG; you're buying the publicly verifiable record of ownership.",
+            "type": "callout",
+            "order": 3,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "tokens-nfts-staking",
+        "moduleId": "tokens-nfts-staking-module-core",
+        "questions": [
+          {
+            "id": "tn-3-q1",
+            "type": "mcq",
+            "prompt": "What makes an NFT non-fungible?",
+            "options": [
+              {
+                "id": "tn-3-q1-opt-1",
+                "text": "It's more expensive than other tokens"
+              },
+              {
+                "id": "tn-3-q1-opt-2",
+                "text": "It's unique — no other token is interchangeable with it"
+              },
+              {
+                "id": "tn-3-q1-opt-3",
+                "text": "It can't be sent to other wallets"
+              }
+            ]
+          },
+          {
+            "id": "tn-3-q2",
+            "type": "mcq",
+            "prompt": "Technically, what is an NFT on Solana?",
+            "options": [
+              {
+                "id": "tn-3-q2-opt-1",
+                "text": "An SPL token with a supply of 1, zero decimals, and metadata attached"
+              },
+              {
+                "id": "tn-3-q2-opt-2",
+                "text": "A JPEG stored entirely on the blockchain"
+              },
+              {
+                "id": "tn-3-q2-opt-3",
+                "text": "A special account type created by validators"
+              }
+            ]
+          },
+          {
+            "id": "tn-3-q3",
+            "type": "short_text",
+            "prompt": "What is the total supply of a true 1-of-1 NFT's mint? (answer with just the number)"
+          }
+        ],
+        "releaseId": "3a12a9c6-71d2-4f5b-9d42-a4dc4bf9a03f",
+        "contentHash": "5246ef8b815e1358559d398104fb84f7c8c154335406695ced3ef125f5534303"
+      },
+      {
+        "id": "tn-4",
+        "order": 4,
+        "title": "Staking SOL — Put Your Coins to Work",
+        "blocks": [
+          {
+            "id": "tn-4-block-1",
+            "text": "Why the Network Pays You\n\nSolana is run by validators — computers that process transactions and vote on which blocks are correct. The network trusts a validator in proportion to how much SOL backs it. That backing comes from people like you.\n\nStaking means delegating your SOL to a validator. Your stake adds to that validator's weight, helping secure the network — and in return, the network pays rewards, historically somewhere around 5-8% per year, paid in SOL. The rewards come from the network itself (new SOL issuance plus a share of transaction fees), not from the validator's pocket.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "tn-4-block-2",
+            "text": "\"Delegating\" Is Not \"Handing Over\"\n\nThis is the part beginners worry about, so let's be precise. When you stake, your SOL moves into a stake account that YOU own. The validator never touches it, never holds it, and cannot spend it. You delegate only the stake's weight — its vote of confidence.\n\nYou can undelegate whenever you want. Your SOL then deactivates and returns to your control (the switch takes effect at the next epoch boundary — more on epochs in the next lesson). The validator can't stop you, delay you, or take a cut of your principal.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "tn-4-block-3",
+            "text": "The Mental Model: Staking is like voting with your money while keeping your money. Your SOL says \"I vouch for this validator\" — and the network pays you for helping it decide who to trust. It is not a loan, not a deposit, and not a transfer.",
+            "type": "callout",
+            "order": 3,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "tokens-nfts-staking",
+        "moduleId": "tokens-nfts-staking-module-core",
+        "questions": [
+          {
+            "id": "tn-4-q1",
+            "type": "mcq",
+            "prompt": "What are you doing when you stake SOL?",
+            "options": [
+              {
+                "id": "tn-4-q1-opt-1",
+                "text": "Delegating it to a validator to help secure the network and earn rewards"
+              },
+              {
+                "id": "tn-4-q1-opt-2",
+                "text": "Lending it to the validator to trade with"
+              },
+              {
+                "id": "tn-4-q1-opt-3",
+                "text": "Donating it to the Solana Foundation"
+              }
+            ]
+          },
+          {
+            "id": "tn-4-q2",
+            "type": "mcq",
+            "prompt": "Can a validator spend the SOL you delegated to it?",
+            "options": [
+              {
+                "id": "tn-4-q2-opt-1",
+                "text": "Yes — that's what staking means"
+              },
+              {
+                "id": "tn-4-q2-opt-2",
+                "text": "No — it stays in your own stake account; you delegate only its weight"
+              },
+              {
+                "id": "tn-4-q2-opt-3",
+                "text": "Only if it asks for an admin password"
+              }
+            ]
+          },
+          {
+            "id": "tn-4-q3",
+            "type": "short_text",
+            "prompt": "Who do you delegate your SOL to when you stake? (one word)"
+          }
+        ],
+        "releaseId": "3a12a9c6-71d2-4f5b-9d42-a4dc4bf9a03f",
+        "contentHash": "4e7ab0626ec473e04b4c1ae10688d116f21c46e7a5afe19a0f44eaf002bdf23e"
+      },
+      {
+        "id": "tn-5",
+        "order": 5,
+        "title": "Epochs, Commission & Picking a Validator",
+        "blocks": [
+          {
+            "id": "tn-5-block-1",
+            "text": "The Network's Heartbeat: Epochs\n\nSolana time is divided into epochs — periods of roughly 2 to 3 days. Staking runs on this clock:\n\nNew stake activates at the next epoch boundary — delegate today, start earning when the epoch turns.\n\nUnstaking works the same way — deactivate today, withdraw after the epoch turns.\n\nRewards land once per epoch, added straight to your stake so they compound automatically.\n\nThe wait is a feature, not a bug: it stops huge amounts of stake from stampeding in and out instantly, which keeps the network's voting power stable.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "tn-5-block-2",
+            "text": "Choosing a Validator\n\nThere are thousands of validators. Three things to check before delegating:\n\nCommission — the percentage of your staking REWARDS the validator keeps as its fee. 5% commission means you keep 95% of the rewards your stake earns. (It never touches your principal.)\n\nPerformance — a validator that's often offline earns fewer rewards for everyone staked to it. Uptime and vote quality matter.\n\nDecentralization — the biggest validators don't need your help. Delegating to smaller, reliable validators keeps the network healthier.\n\nSites like validators.app or stakewiz.com grade validators on all three.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "tn-5-block-3",
+            "text": "Watch Out for 100%: A handful of validators run 100% commission — they keep ALL the staking rewards, and delegators earn nothing. Nothing is stolen from your principal, but your yield is zero. Always glance at the commission before you delegate.",
+            "type": "callout",
+            "order": 3,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "tokens-nfts-staking",
+        "moduleId": "tokens-nfts-staking-module-core",
+        "questions": [
+          {
+            "id": "tn-5-q1",
+            "type": "mcq",
+            "prompt": "When does newly delegated stake start earning rewards?",
+            "options": [
+              {
+                "id": "tn-5-q1-opt-1",
+                "text": "Instantly, the second you delegate"
+              },
+              {
+                "id": "tn-5-q1-opt-2",
+                "text": "At the next epoch boundary — epochs last roughly 2-3 days"
+              },
+              {
+                "id": "tn-5-q1-opt-3",
+                "text": "After exactly 30 days"
+              }
+            ]
+          },
+          {
+            "id": "tn-5-q2",
+            "type": "mcq",
+            "prompt": "A validator charges 5% commission. What does that mean?",
+            "options": [
+              {
+                "id": "tn-5-q2-opt-1",
+                "text": "It takes 5% of your staked SOL every year"
+              },
+              {
+                "id": "tn-5-q2-opt-2",
+                "text": "It keeps 5% of your staking rewards — your principal is untouched"
+              },
+              {
+                "id": "tn-5-q2-opt-3",
+                "text": "You must pay 5% upfront to delegate"
+              }
+            ]
+          },
+          {
+            "id": "tn-5-q3",
+            "type": "short_text",
+            "prompt": "What is the validator's cut of your staking rewards called? (one word)"
+          }
+        ],
+        "releaseId": "3a12a9c6-71d2-4f5b-9d42-a4dc4bf9a03f",
+        "contentHash": "09e0974af40a8e3ae67d774feb4e5564d580ed510993096a3adafb12f50905df"
+      },
+      {
+        "id": "tn-6",
+        "order": 6,
+        "title": "Liquid Staking — Stake and Stay Flexible",
+        "blocks": [
+          {
+            "id": "tn-6-block-1",
+            "text": "The Trade-Off Liquid Staking Solves\n\nNative staking has one annoyance: while your SOL is staked, it's busy. You can't spend it, and unstaking means waiting for an epoch boundary.\n\nLiquid staking fixes that. You deposit SOL into a stake pool — a program that spreads the stake across many validators — and the pool hands you a liquid staking token (LST) in return: mSOL from Marinade, JitoSOL from Jito, and others. That token IS your claim on the staked SOL, and unlike a stake account, it's an ordinary SPL token: you can hold it, swap it on a DEX, or use it in DeFi — all while the SOL behind it keeps earning staking rewards.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "tn-6-block-2",
+            "text": "Why 1 JitoSOL Is Worth More Than 1 SOL\n\nLiquid staking tokens usually don't pay rewards into your wallet. Instead, the token's exchange rate rises: as the pool's stake earns rewards each epoch, every LST becomes a claim on slightly more SOL. Deposit when 1 LST = 1.00 SOL, come back a year later, and 1 LST might redeem for roughly 1.07 SOL. The \"yield\" is baked into the price.\n\nExiting is flexible too: swap your LST back to SOL instantly on a DEX, or redeem through the pool (which follows the normal epoch delay).",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "tn-6-block-3",
+            "text": "The Honest Fine Print: A stake pool is a smart contract, so liquid staking adds contract risk on top of ordinary staking — and an LST's market price can wobble slightly from its redemption value in stressed markets. The flexibility is real, and so is the extra layer. Beginners: start small, stick to the large, battle-tested pools.",
+            "type": "callout",
+            "order": 3,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "tokens-nfts-staking",
+        "moduleId": "tokens-nfts-staking-module-core",
+        "questions": [
+          {
+            "id": "tn-6-q1",
+            "type": "mcq",
+            "prompt": "What do you receive when you deposit SOL into a liquid staking pool?",
+            "options": [
+              {
+                "id": "tn-6-q1-opt-1",
+                "text": "A liquid staking token (like mSOL or JitoSOL) representing your staked SOL"
+              },
+              {
+                "id": "tn-6-q1-opt-2",
+                "text": "A paper certificate from the validator"
+              },
+              {
+                "id": "tn-6-q1-opt-3",
+                "text": "Nothing — the pool holds it as a favor"
+              }
+            ]
+          },
+          {
+            "id": "tn-6-q2",
+            "type": "mcq",
+            "prompt": "Why does a liquid staking token slowly become worth more SOL over time?",
+            "options": [
+              {
+                "id": "tn-6-q2-opt-1",
+                "text": "The pool prints extra SOL for holders"
+              },
+              {
+                "id": "tn-6-q2-opt-2",
+                "text": "Staking rewards accrue to the pool, so each token redeems for slightly more SOL"
+              },
+              {
+                "id": "tn-6-q2-opt-3",
+                "text": "Validators tip their favorite delegators"
+              }
+            ]
+          },
+          {
+            "id": "tn-6-q3",
+            "type": "short_text",
+            "prompt": "What's the big advantage of liquid staking over native staking?"
+          }
+        ],
+        "releaseId": "3a12a9c6-71d2-4f5b-9d42-a4dc4bf9a03f",
+        "contentHash": "8fa275ab01a41d0b668c837ddb46a0268a49f0d89f6c4a8dc7481d042217df8f"
+      }
+    ]
+  }
+}

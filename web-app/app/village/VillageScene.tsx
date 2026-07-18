@@ -36,9 +36,10 @@ const BUILDINGS: Building[] = [
   // Wishing well — decorative (history folded into dashboard activity log)
   // Right-center building            → Tavern (community pot)
   { id: 'tavern', outline: '/images/village/outlines/outline-tavern.png', route: '/community-pot', label: 'Tavern' },
-  // Spired chapel (the "clock" mask) → Practice Hall: replay any lesson
-  // you've already passed. Practice attempts never touch streak/flame/yield.
-  { id: 'clock', outline: '/images/village/outlines/outline-clock.png', route: '/practice', label: 'Practice Hall' },
+  // Blue-lit chapel beside the tavern (the "forge" mask) → Practice Hall:
+  // replay any lesson you've already passed. Practice attempts never touch
+  // streak/flame/yield. (The clocktower is decorative again.)
+  { id: 'forge', outline: '/images/village/outlines/outline-forge.png', route: '/practice', label: 'Practice Hall' },
   // Shop (cottage), Inventory (awning stall), and Brewery (forge) hotspots
   // were removed in the v2 legacy-deletion phase 2 — their pages are now
   // redirect stubs to /dashboard and the buildings are decorative.

@@ -12,7 +12,7 @@ import { getCompletionVoucher, getLockPosition } from '@/services/api/progress/p
 import { fetchWithAuth } from '@/services/api';
 import { hasVaultV2Config } from '@/services/solana/vaultV2';
 import { ApiError } from '@/services/api/errors';
-import type { CompletionVoucherResponse } from '@/services/api/types';
+import type { CompletionVoucherResponse, LockPositionResponse } from '@/services/api/types';
 import type { V2ActionPhase } from '@/services/solana/v2Actions';
 
 // CLAIM flow (spec §5): dedicated auth-gated route. Mount fetches ONLY the
@@ -94,12 +94,24 @@ export default function ClaimPage() {
 
   const [phase, setPhase] = useState<ClaimPhase>('loading');
   const [voucher, setVoucher] = useState<CompletionVoucherResponse | null>(null);
+  const [position, setPosition] = useState<LockPositionResponse | null>(null);
   const [actionPhase, setActionPhase] = useState<V2ActionPhase | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successRecord, setSuccessRecord] = useState<ClaimSuccessRecord | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const principalUi = courseState?.lockAmount ? String(courseState.lockAmount) : null;
+  // Server truth first: the on-chain principal from the position endpoint.
+  // The local store's lockAmount is only a fallback — it can go stale (e.g.
+  // records the first deposit while the on-chain lock holds more).
+  const principalUi =
+    position?.principalUi ?? (courseState?.lockAmount ? String(courseState.lockAmount) : null);
+
+  // Live $ figures for the breakdown (display-only, best-effort): total
+  // accrued yield and how it splits under the voucher's bps.
+  const totalYieldNum =
+    position?.liveValueUi != null && position?.principalUi != null
+      ? Math.max(0, Number(position.liveValueUi) - Number(position.principalUi))
+      : null;
 
   // Mount: success recovery first (refresh/back safety), then config gate,
   // then the voucher fetch. NO solana imports execute here.
@@ -151,11 +163,20 @@ export default function ClaimPage() {
     // ACTIVE proceeds (and heals the store) (audit H1).
     if (courseState?.lockAccountAddress) {
       fetchVoucher();
+      // Display-only: the live position feeds the $ breakdown (server
+      // principal + accrued yield). Best-effort — the claim itself never
+      // depends on it.
+      fetchWithAuth((t) => getLockPosition(courseId, t))
+        .then((pos) => {
+          if (!cancelled && pos) setPosition(pos);
+        })
+        .catch(() => {});
     } else {
       fetchWithAuth((t) => getLockPosition(courseId, t))
         .then((pos) => {
           if (cancelled) return;
           if (!pos) throw new ApiError('Session expired', 401, 'TOKEN_EXPIRED');
+          setPosition(pos);
           // ACTIVE → the lock exists on-chain; proceed. executeClaim derives the
           // lock PDA from (owner, courseId) itself, so the missing store field is
           // not needed for the claim to succeed. Only a SUCCESSFUL read of
@@ -209,8 +230,16 @@ export default function ClaimPage() {
     setErrorMessage(null);
     try {
       // Chain code loads HERE, not at mount — keeps the route mockable.
-      const { executeClaim } = await import('@/services/solana/v2Actions');
-      const wallet = solanaWallets[0] ?? null;
+      const { executeClaim, isTxStubActive } = await import('@/services/solana/v2Actions');
+      const { pickSignerWallet, missingSignerMessage } = await import(
+        '@/services/solana/pickSignerWallet'
+      );
+      // Sign with the wallet that OWNS the lock, never wallets[0] — with both
+      // an embedded and an external wallet connected, index 0 can be the wrong
+      // one and the wallet rejects with the 4100 "not been authorized" error.
+      // The e2e tx stub never signs, so its runs skip the signer pre-check.
+      const wallet = pickSignerWallet(solanaWallets, walletAddress);
+      if (!wallet && !isTxStubActive()) throw new Error(missingSignerMessage(walletAddress));
       const result = await executeClaim(
         walletAddress,
         courseId,
@@ -225,7 +254,10 @@ export default function ClaimPage() {
       );
       const record: ClaimSuccessRecord = {
         signature: result.signature,
-        principalUi,
+        // Permanent record: server-truth principal only. If the position fetch
+        // hasn't landed yet, store null (renders "In full") rather than
+        // freezing the possibly-stale local lockAmount into sessionStorage.
+        principalUi: position?.principalUi ?? null,
         receivedUi: result.receivedUi,
         bps: voucher.bps,
         lapseCount: voucher.lapseCount,
@@ -447,13 +479,36 @@ export default function ClaimPage() {
 
       <div className="flex flex-col gap-2 mb-3">
         <BreakdownRow label="Principal returned" value={principalUi ? `$${principalUi}` : 'In full'} />
-        <BreakdownRow label="Yield you keep" value={`${keptPct}%`} highlight={keptPct === 100} />
-        <BreakdownRow label="To community pot" value={`${forfeitPct}%`} />
+        <BreakdownRow
+          label="Yield you keep"
+          value={
+            totalYieldNum != null
+              ? `${keptPct}% · ≈$${((totalYieldNum * keptPct) / 100).toFixed(4)}`
+              : `${keptPct}%`
+          }
+          highlight={keptPct === 100}
+        />
+        <BreakdownRow
+          label="To community pot"
+          value={
+            totalYieldNum != null
+              ? `${forfeitPct}% · ≈$${((totalYieldNum * forfeitPct) / 100).toFixed(4)}`
+              : `${forfeitPct}%`
+          }
+        />
         <DustFootnote />
       </div>
 
       {voucher && voucher.lapseCount > 0 && (
-        <PenaltyBanner lapseCount={voucher.lapseCount} className="mb-3" />
+        <PenaltyBanner
+          lapseCount={voucher.lapseCount}
+          forfeitUi={
+            totalYieldNum != null && forfeitPct > 0
+              ? ((totalYieldNum * forfeitPct) / 100).toFixed(4)
+              : null
+          }
+          className="mb-3"
+        />
       )}
 
       {expiryDate && (

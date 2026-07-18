@@ -610,7 +610,19 @@ function assertAnswers(answers) {
   return answerMap;
 }
 
+// Published-version lookup cache. The instant-check endpoint runs 5+
+// sequential queries over a cross-region DB link (~2s total measured on
+// prod); this shaves the two content reads that never vary per-user.
+// lessonId -> published version can change on (re)publish, so it gets a
+// short TTL; misses are never cached.
+const PUBLISHED_VERSION_TTL_MS = 60_000;
+const publishedVersionCache = new Map(); // lessonId -> { at, row }
+
 async function getPublishedLessonVersion(client, lessonId) {
+  const hit = publishedVersionCache.get(lessonId);
+  if (hit && Date.now() - hit.at < PUBLISHED_VERSION_TTL_MS) {
+    return hit.row;
+  }
   const result = await client.query(
     `
       select id::text as "lessonVersionId"
@@ -627,6 +639,7 @@ async function getPublishedLessonVersion(client, lessonId) {
     throw notFound('Lesson not found', 'LESSON_NOT_FOUND');
   }
 
+  publishedVersionCache.set(lessonId, { at: Date.now(), row: result.rows[0] });
   return result.rows[0];
 }
 
@@ -697,7 +710,21 @@ async function ensureAttempt(
   return attempt;
 }
 
+// Questions are keyed by lesson VERSION id — but this repo's content-hotfix
+// workflow DOES mutate questions in place for an existing version (0051/0052
+// ran `update lesson.questions/question_options` directly on prod, no
+// restart). A long TTL would grade /check against a stale correct_answer and
+// permanently lock the wrong verdict, so keep the window short: 60s bounds
+// the blast radius of an in-place hotfix while still absorbing the repeated
+// per-question reads within one quiz run.
+const QUESTIONS_TTL_MS = 60_000;
+const lessonQuestionsCache = new Map(); // lessonVersionId -> { at, rows }
+
 async function listLessonQuestions(client, lessonVersionId) {
+  const hit = lessonQuestionsCache.get(lessonVersionId);
+  if (hit && Date.now() - hit.at < QUESTIONS_TTL_MS) {
+    return hit.rows;
+  }
   const result = await client.query(
     `
       select
@@ -725,6 +752,7 @@ async function listLessonQuestions(client, lessonVersionId) {
     [lessonVersionId],
   );
 
+  lessonQuestionsCache.set(lessonVersionId, { at: Date.now(), rows: result.rows });
   return result.rows;
 }
 

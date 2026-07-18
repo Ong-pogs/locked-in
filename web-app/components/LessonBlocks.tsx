@@ -406,11 +406,13 @@ function ComparisonTable({ block }: { block: LessonBlock }) {
   const highlightRow = block.highlightRow ?? null;
 
   return (
+    // Wide tables (4-5 columns) scroll inside their own box on narrow
+    // viewports instead of stretching the whole page horizontally.
+    <div style={{ overflowX: 'auto', margin: '20px 0' }}>
     <table
       style={{
         width: '100%',
         borderCollapse: 'collapse',
-        margin: '20px 0',
         fontSize: 14,
       }}
     >
@@ -461,6 +463,7 @@ function ComparisonTable({ block }: { block: LessonBlock }) {
         })}
       </tbody>
     </table>
+    </div>
   );
 }
 

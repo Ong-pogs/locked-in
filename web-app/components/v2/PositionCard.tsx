@@ -7,7 +7,7 @@ import { T } from '@/components/theme';
 import { FlameGauge } from './FlameGauge';
 import { ShieldPips } from './ShieldPips';
 import { PenaltyBanner } from './PenaltyBanner';
-import { deriveFlameState } from '@/services/flame/deriveFlameState';
+import { deriveFlameState, yieldKeptBps } from '@/services/flame/deriveFlameState';
 import { CLUSTER } from '@/services/solana/connection';
 import { useUserStore } from '@/stores';
 import { devCompleteCourse } from '@/services/api/progress/progressApi';
@@ -60,7 +60,10 @@ function useTickingYield(position: LockPositionResponse | null): string | null {
       return;
     }
     const baseYield = Math.max(0, live - principal);
-    const asOfMs = Date.parse(position.asOf);
+    // Guard asOf like the amounts — a malformed timestamp would make compute()
+    // return "NaN" and leak into the yield line + penalty forfeit amount.
+    const parsedAsOf = Date.parse(position.asOf);
+    const asOfMs = Number.isFinite(parsedAsOf) ? parsedAsOf : Date.now();
     // ~5% APY drift between 60s polls — cosmetic accrual, resynced every poll.
     const perMs = (live * 0.05) / (365 * 24 * 3600 * 1000);
 
@@ -222,8 +225,20 @@ export function PositionCard({ data, position, positionError, onRetryPosition, c
         </p>
       )}
 
-      {/* Penalty banner (lapsed only) */}
-      <PenaltyBanner lapseCount={data.lapseCount} className="mt-2" />
+      {/* Penalty banner (lapsed only) — with the concrete USDC amount the
+          lapse costs, derived from the live yield line. */}
+      <PenaltyBanner
+        lapseCount={data.lapseCount}
+        forfeitUi={
+          lapsed && tickingYield != null
+            ? (
+                (Number(tickingYield) * (10_000 - yieldKeptBps(data.lapseCount))) /
+                10_000
+              ).toFixed(4)
+            : null
+        }
+        className="mt-2"
+      />
 
       {/* Stats row: shields + streak */}
       <div className="flex items-center justify-between mt-3">

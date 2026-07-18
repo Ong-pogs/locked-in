@@ -7,6 +7,7 @@ import { T } from '@/components/theme';
 import { HubButton } from '@/components/HubButton';
 import { LiveApyChip } from '@/components/LiveApyChip';
 import { useCourseStore, useUserStore } from '@/stores';
+import { useAuth } from '@/hooks/useAuth';
 import { getLockPosition, getUserXp } from '@/services/api/progress/progressApi';
 import { fetchWithAuth } from '@/services/api';
 import { retryPendingEnrolls } from '@/services/enroll/pendingEnroll';
@@ -29,6 +30,7 @@ const POSITION_POLL_MS = 60_000;
 
 export function DashboardV2() {
   const router = useRouter();
+  const { disconnect } = useAuth();
   const authToken = useUserStore((s) => s.authToken);
   const walletAddress = useUserStore((s) => s.walletAddress);
   const displayName = useUserStore((s) => s.displayName);
@@ -196,6 +198,15 @@ export function DashboardV2() {
     ? new Date(createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
     : '—';
 
+  // Disconnect (mirrors the legacy dashboard's DisconnectFooter): confirm,
+  // then useAuth.disconnect → privyLogout + full client-state wipe + reload.
+  const handleDisconnect = () => {
+    if (typeof window === 'undefined') return;
+    if (window.confirm('Disconnect your wallet and sign out?')) {
+      void disconnect();
+    }
+  };
+
   return (
     <div data-testid="v2-dashboard" className="min-h-screen relative" style={{ backgroundColor: T.bg }}>
       {/* Cottage interior backdrop, same treatment as the rest of the app. */}
@@ -301,6 +312,33 @@ export function DashboardV2() {
           availableYears={availableYears}
           longestStreak={longestStreak}
         />
+
+        {/* Footer disconnect — subtle muted-red bordered button so users can
+            actually find logout (was previously only on the legacy dashboard). */}
+        <div className="pt-6">
+          <button
+            type="button"
+            data-testid="v2-disconnect"
+            onClick={handleDisconnect}
+            className="w-full min-h-[44px] px-6 py-3 rounded-lg border font-pixel text-sm uppercase tracking-[2px] font-bold transition-colors cursor-pointer"
+            style={{
+              backgroundColor: 'rgba(255,68,102,0.08)',
+              borderColor: 'rgba(255,68,102,0.35)',
+              color: 'rgba(255,68,102,0.80)',
+              textShadow: '0 1px 2px rgba(0,0,0,0.7)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = T.crimson;
+              e.currentTarget.style.borderColor = 'rgba(255,68,102,0.6)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = 'rgba(255,68,102,0.80)';
+              e.currentTarget.style.borderColor = 'rgba(255,68,102,0.35)';
+            }}
+          >
+            Disconnect Wallet
+          </button>
+        </div>
       </div>
     </div>
   );
