@@ -14,6 +14,11 @@ const PUBLIC_ROUTES = [
   '/community-pot',
   '/inventory',
   '/leaderboard',
+  // Legal surface must be reachable without auth — the deposit consent links to
+  // it, and a user must be able to read what they agreed to after logging out.
+  '/terms',
+  '/privacy',
+  '/risk',
 ];
 
 // Auth guard — redirects unauthenticated users to landing page

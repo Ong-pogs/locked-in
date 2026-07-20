@@ -159,6 +159,64 @@ but set the cluster var explicitly, always.
 cd backend && DATABASE_URL=<prod> npm run migrate
 ```
 
+## 11b. `[⚠][RUN]` Cutover reset — purge devnet user state
+
+**Mainnet reuses the SAME Postgres as devnet-prod.** There is no fresh
+database. That is a deliberate decision, and it is only safe because of this
+step. Run it after migrations and **before the first real deposit**.
+
+**Why you must not skip this.** Completion vouchers are derived purely from DB
+rows: `issueCourseCompletionVoucher` reads `user_course_runtime_state.
+course_completed_at` and `.lapse_count` and never asks the chain which cluster
+that progress was earned on. So every devnet row is silently treated as
+mainnet truth. Concretely: any wallet that finished a course on devnet is
+permanently `COURSE_COMPLETED` and can **never deposit on that course again**
+— and only 3 courses have real content, so that is most of the product; devnet
+`lapse_count` is embedded in the signed voucher and **cuts a real user's real
+payout** with no way to appeal; `sol_drips.wallet_address` is `UNIQUE` with no
+round column, so a devnet-dripped wallet can never receive the mainnet drip and
+lands with 0 SOL and no way to pay fees; and devnet XP/streaks become the
+mainnet leaderboard. None of this surfaces as an error — it looks like the
+product working correctly, on a user who has lost money.
+
+Dry run first (default; writes nothing, prints exact per-table counts):
+
+```bash
+cd backend && DATABASE_URL=<prod> node scripts/mainnet-cutover-reset.mjs
+```
+
+Then execute. Both confirmations are required and are checked against the
+database you are actually connected to:
+
+```bash
+DATABASE_URL=<prod> node scripts/mainnet-cutover-reset.mjs --execute \
+  --confirm-target <host>/<database> \
+  --confirm "PURGE DEVNET USER STATE"
+```
+
+It purges per-user/per-cluster state (progress, attempts, runtime state,
+vouchers, enrollments, XP, receipts, faucet + SOL drips, leaderboard snapshots,
+pot accounting, devnet chain cursors, auth sessions) in ONE transaction, and
+preserves **all** content — courses, modules, lessons, questions,
+`published_*`, `publish_releases`. Content rows are counted before and after
+inside that transaction and any drift aborts the whole thing, so a bad edit to
+the table list cannot quietly eat the catalog.
+
+Notes:
+- It is deliberately **not** a migration. `npm run migrate` runs unattended on
+  every deploy; this deletes user data and may only run under a human.
+- Run it as a role that can **bypass RLS** (table owner with `BYPASSRLS`, or
+  superuser). The `user_*` tables use `FORCE ROW LEVEL SECURITY` keyed on a JWT
+  wallet claim, so an ordinary app role's `DELETE` matches **zero rows and
+  reports success** — verified: `DELETE 0` while the rows are still there. The
+  script sets `row_security = off` so this fails loudly instead of leaving you
+  believing the cutover ran.
+- `lesson.user_consents` is **not** purged — it is the record that a wallet
+  accepted a terms version, and deleting it destroys that audit trail. The
+  script prints it every run so the call stays explicit. If mainnet ships a new
+  `terms_version`, the old rows do not satisfy it and no purge is needed.
+- If you ever re-point at devnet and back, run it again — it is idempotent.
+
 ## 12. Smoke test `[RUN]`
 
 - `/v1/courses` returns courses; `/v1/yield/current-apy` returns the live

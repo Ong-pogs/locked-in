@@ -1,12 +1,42 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useSyncExternalStore } from 'react';
+import Link from 'next/link';
 import { CozyCard, CozySectionLabel, COZY_TEXT, COZY_TEXT_SHADOW } from '@/components/cozy';
 import { T } from '@/components/theme';
+import { fetchWithAuth } from '@/services/api';
+import { httpRequest } from '@/services/api/httpClient';
 import type { V2ActionPhase } from '@/services/solana/v2Actions';
 
 // v2 deposit (spec §5): $10–50, NO duration picker — the lock releases on
 // course completion, not on a timer. Capacity meter shows the beta TVL cap.
+
+/** Bump when /terms, /privacy or /risk change materially — a stored acceptance
+ *  of an older version stops counting and the user is asked again. */
+export const TERMS_VERSION = '2026-07-20';
+export const CONSENT_STORAGE_KEY = 'locked-in-terms-accepted';
+
+// localStorage IS the consent state — subscribing to it rather than mirroring it
+// into useState keeps the server snapshot honestly `false`, so the checkbox
+// hydrates unchecked and never renders accepted on a device that never accepted.
+const consentListeners = new Set<() => void>();
+
+function subscribeToConsent(onChange: () => void): () => void {
+  consentListeners.add(onChange);
+  return () => {
+    consentListeners.delete(onChange);
+  };
+}
+
+function readConsent(): boolean {
+  return localStorage.getItem(CONSENT_STORAGE_KEY) === TERMS_VERSION;
+}
+
+function writeConsent(accepted: boolean): void {
+  if (accepted) localStorage.setItem(CONSENT_STORAGE_KEY, TERMS_VERSION);
+  else localStorage.removeItem(CONSENT_STORAGE_KEY);
+  consentListeners.forEach((listener) => listener());
+}
 
 const MIN_UI = 10;
 const MAX_UI = 50;
@@ -40,7 +70,26 @@ export function DepositFormV2({
   onSubmit,
 }: Props) {
   const [amount, setAmount] = useState('25');
+  const accepted = useSyncExternalStore(subscribeToConsent, readConsent, () => false);
   const busy = phase !== 'idle' && phase !== 'error' && phase !== 'success';
+
+  const handleAccept = (next: boolean) => {
+    writeConsent(next);
+    if (!next) return;
+    // Fire-and-forget: the local record is what gates the button, so a failed
+    // report must never stand between the user and their own deposit.
+    try {
+      void fetchWithAuth((token) =>
+        httpRequest('/v1/locks/consent', {
+          method: 'POST',
+          body: { termsVersion: TERMS_VERSION, acceptedAt: new Date().toISOString() },
+          token,
+        }),
+      ).catch(() => {});
+    } catch {
+      // Synchronous throw (e.g. no session yet) — same treatment.
+    }
+  };
 
   const numericAmount = Number(amount);
   const validationError = useMemo(() => {
@@ -66,14 +115,23 @@ export function DepositFormV2({
         className="font-pixel-mono text-[12px] mb-2"
         style={{ color: T.textMutedStrong, textShadow: '0 1px 2px rgba(0,0,0,0.7)' }}
       >
-        Lock USDC on <span style={{ color: COZY_TEXT }}>{courseTitle}</span>. It earns yield while
-        you learn and returns — principal plus your yield — when you finish the course.
+        Lock USDC on <span style={{ color: COZY_TEXT }}>{courseTitle}</span>. It earns yield in
+        Kamino while you learn, and unlocks when you finish the course.
       </p>
       {/* Penalty disclosure BEFORE the user commits funds — the claim/dashboard
-          surfaces show it too, but consent belongs at the deposit. */}
-      <p className="font-pixel-mono text-[11px] mb-4" style={{ color: '#F0A878' }}>
-        Your principal is always returned. But go dark after your shields are spent and you forfeit
-        yield: 50% on the first lapse, 100% on the second (it goes to the community pot).
+          surfaces show it too, but consent belongs at the deposit. The old copy
+          here read "your principal is always returned", which settle.rs does not
+          implement: on a Kamino socialized loss the owner absorbs the shortfall. */}
+      <p
+        data-testid="v2-deposit-risk"
+        className="font-pixel-mono text-[11px] mb-4"
+        style={{ color: '#F0A878' }}
+      >
+        Lapses cost yield, never principal. Go dark after your shields are spent and you forfeit 50%
+        of your yield on the first lapse, 100% on the second — it goes to the community pot. Your
+        principal is never taken as a penalty, but it is not guaranteed: it sits in Kamino, a
+        third-party protocol, so a Kamino loss, a USDC depeg or a Solana failure can return you less
+        than you put in. This is unaudited beta software.
       </p>
 
       {/* Amount input + presets. No duration control: completion releases the lock. */}
@@ -177,20 +235,54 @@ export function DepositFormV2({
         </p>
       )}
 
+      {/* Consent capture. Acceptance is recorded locally (gates this button) and
+          reported to the backend so there is a server-side record of it. */}
+      <label
+        className="flex gap-2.5 mb-3 cursor-pointer"
+        style={{ alignItems: 'flex-start' }}
+      >
+        <input
+          data-testid="v2-consent-checkbox"
+          type="checkbox"
+          checked={accepted}
+          disabled={busy}
+          onChange={(e) => handleAccept(e.target.checked)}
+          className="mt-0.5 w-[18px] h-[18px] shrink-0"
+          style={{ accentColor: '#FFD580' }}
+        />
+        <span
+          className="font-pixel-mono text-[11px] leading-[1.5]"
+          style={{ color: T.textMutedStrong, textShadow: '0 1px 2px rgba(0,0,0,0.7)' }}
+        >
+          I have read the{' '}
+          <Link href="/terms" target="_blank" style={{ color: '#FFD580', textDecoration: 'underline' }}>
+            Terms
+          </Link>{' '}
+          and the{' '}
+          <Link href="/risk" target="_blank" style={{ color: '#FFD580', textDecoration: 'underline' }}>
+            Risk Disclosure
+          </Link>
+          , and I accept that I can lose money.
+        </span>
+      </label>
+
       <button
         data-testid="v2-deposit-submit"
-        disabled={busy || Boolean(validationError)}
+        disabled={busy || Boolean(validationError) || !accepted}
         onClick={() => onSubmit(amount)}
         // font-pixel-mono (not the decorative font-pixel): the dollar amount is
         // ambiguous in the pixel display font ("$25" reads as "$2S", "LOCK" as
         // "LOOK"). Mono renders numbers + the word clearly.
         className="w-full py-3.5 rounded-lg border font-pixel-mono text-sm uppercase tracking-[1.5px] font-bold min-h-[44px]"
         style={{
-          backgroundColor: busy || validationError ? 'rgba(255,213,128,0.06)' : 'rgba(255,213,128,0.16)',
+          backgroundColor:
+            busy || validationError || !accepted
+              ? 'rgba(255,213,128,0.06)'
+              : 'rgba(255,213,128,0.16)',
           borderColor: 'rgba(255,213,128,0.5)',
           color: COZY_TEXT,
           textShadow: COZY_TEXT_SHADOW,
-          opacity: busy || validationError ? 0.5 : 1,
+          opacity: busy || validationError || !accepted ? 0.5 : 1,
         }}
       >
         {busy ? 'Locking…' : `Lock $${amount || '—'} USDC`}

@@ -28,6 +28,11 @@ const PUBLIC_ROUTES = [
   '/community-pot',
   '/inventory',
   '/leaderboard',
+  // Legal surface — see proxy.ts. Both lists must agree or the flow guard
+  // redirects a logged-out reader away from a page the proxy just allowed.
+  '/terms',
+  '/privacy',
+  '/risk',
 ];
 
 // Routes allowed during onboarding (before active lock)

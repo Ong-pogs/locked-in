@@ -29,6 +29,127 @@ interface ErrorPayload {
   code?: string;
 }
 
+/**
+ * Transient-failure retry policy.
+ *
+ * WHY this exists: the daily lapse sweep is the sole judge of a miss. A lesson
+ * submit lost to a Render cold start or a restart mid-POST is not a UI
+ * annoyance — it becomes a judged miss the next morning, burning a shield or
+ * triggering a lapse that forfeits 50-100% of that user's yield. Real money,
+ * lost to an infra blip. A few hundred ms of backoff is the cheap side of that
+ * trade.
+ *
+ * WHY only these statuses: 502/503/504 come from the edge (Render/Cloudflare)
+ * when no healthy instance answered — strong evidence the request never
+ * reached application code, so replaying it cannot double-apply. A 500 is the
+ * opposite: the app ran and threw, so the write may well have landed; retrying
+ * it would be a guess with someone's stake. 429 is retried because the server
+ * is explicitly telling us when to come back.
+ */
+const RETRYABLE_STATUSES = new Set([429, 502, 503, 504]);
+const MAX_RETRY_ATTEMPTS = 3;
+const RETRY_BASE_DELAY_MS = 400;
+const RETRY_MAX_DELAY_MS = 4_000;
+/** Cap on an honoured Retry-After — a hostile/absurd value must not hang the UI. */
+const RETRY_AFTER_CAP_MS = 10_000;
+
+/**
+ * POST paths that are safe to replay, and only these.
+ *
+ * A retry is safe when the server keys the write on a CLIENT-supplied id, so a
+ * replay collapses onto the same row instead of creating a second one:
+ *   - lessons/:id/start   — keyed by the client's attemptId
+ *   - lessons/:id/check   — keyed by (attemptId, questionId); the first check
+ *                           locks the answer and repeats return that same
+ *                           verdict, so a replay cannot change a grade
+ *   - lessons/:id/submit  — keyed by attemptId; a second submit is rejected
+ *                           409 ATTEMPT_ALREADY_SUBMITTED, never double-graded
+ *   - lessons/:id/recall-check — stateless verdict, writes nothing
+ *   - courses/:id/voucher — signs a voucher from current progress; issuance is
+ *                           not consumption (the chain enforces single use)
+ *
+ * Deliberately ABSENT, each for its own reason:
+ *   - /v1/auth/refresh   — refresh tokens are strictly one-time-use. A replay
+ *                          of a request the server actually processed burns
+ *                          the token and signs the user out.
+ *   - /v1/auth/verify, /privy-session, /challenge — session mints; a duplicate
+ *                          is at best wasted, at worst confusing state.
+ *   - /v1/faucet/claim   — drips tokens with no client-side idempotency key.
+ *   - brewery feed/claim, shop/buy-saver — balance mutations with no key; a
+ *                          replay can burn fuel twice or double-spend.
+ *   - /v1/locks/:id/enroll — already has its own ladder (enrollLockWithRetry,
+ *                          honouring 409 ENROLL_RETRY's retryAfterMs). Nesting
+ *                          two backoffs would multiply the wait, not the
+ *                          reliability.
+ */
+const RETRY_SAFE_POST_PATHS: readonly RegExp[] = [
+  /^\/v1\/progress\/lessons\/[^/]+\/start$/,
+  /^\/v1\/progress\/lessons\/[^/]+\/check$/,
+  /^\/v1\/progress\/lessons\/[^/]+\/recall-check$/,
+  /^\/v1\/progress\/lessons\/[^/]+\/submit$/,
+  /^\/v1\/progress\/courses\/[^/]+\/voucher$/,
+];
+
+/**
+ * Retry-After, carried out-of-band. ApiError's shape is shared with callers and
+ * a transport-level hint has no business in it, so park it beside the error.
+ */
+const retryAfterMsByError = new WeakMap<ApiError, number>();
+
+function parseRetryAfterMs(headerValue: string | null): number | null {
+  if (!headerValue) return null;
+  const seconds = Number(headerValue);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.min(seconds * 1_000, RETRY_AFTER_CAP_MS);
+  }
+  const date = Date.parse(headerValue);
+  if (Number.isNaN(date)) return null;
+  return Math.min(Math.max(date - Date.now(), 0), RETRY_AFTER_CAP_MS);
+}
+
+function isRetrySafeRequest(
+  method: 'GET' | 'POST',
+  path: string,
+  isAbsolutePath: boolean,
+): boolean {
+  // GETs mutate nothing, wherever they point.
+  if (method === 'GET') return true;
+  // An absolute URL bypasses our route table — we cannot reason about whether
+  // replaying it is safe, so we don't.
+  if (isAbsolutePath) return false;
+  const pathname = path.split('?')[0] ?? path;
+  return RETRY_SAFE_POST_PATHS.some((pattern) => pattern.test(pathname));
+}
+
+/**
+ * Backoff for this failure, or null when the error is not one we retry.
+ * Exponential with equal jitter — the fixed half keeps a floor under the wait,
+ * the random half stops every client in a cold-start thundering herd from
+ * returning in lockstep.
+ */
+function retryDelayMs(error: unknown, attempt: number): number | null {
+  if (!(error instanceof ApiError)) return null;
+
+  // Timeouts are NOT retried: an abort means the server most likely IS still
+  // working on the request, so a replay races the original rather than
+  // replacing it. Only a hard transport failure (status 0) proves nothing
+  // landed.
+  const isRetryable =
+    RETRYABLE_STATUSES.has(error.status) ||
+    (error.status === 0 && error.code === 'NETWORK_ERROR');
+  if (!isRetryable) return null;
+
+  const serverHint = retryAfterMsByError.get(error);
+  if (serverHint !== undefined) return serverHint;
+
+  const ceiling = Math.min(RETRY_BASE_DELAY_MS * 2 ** attempt, RETRY_MAX_DELAY_MS);
+  return ceiling / 2 + Math.random() * (ceiling / 2);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function joinPath(path: string, baseUrl: string): string {
   if (path.startsWith('http://') || path.startsWith('https://')) {
     return path;
@@ -44,8 +165,40 @@ export async function httpRequest<T>(
   options: RequestOptions = {},
 ): Promise<T> {
   const method = options.method ?? 'GET';
-  const startedAt = Date.now();
   const isAbsolutePath = path.startsWith('http://') || path.startsWith('https://');
+  const retrySafe = isRetrySafeRequest(method, path, isAbsolutePath);
+
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await sendOnce<T>(path, options, method, isAbsolutePath);
+    } catch (error) {
+      if (!retrySafe || attempt >= MAX_RETRY_ATTEMPTS) throw error;
+      // A caller-initiated abort is a decision, not a failure to paper over.
+      if (options.signal?.aborted) throw error;
+      const delay = retryDelayMs(error, attempt);
+      if (delay === null) throw error;
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(
+          `[lesson-api] retry ${attempt + 1}/${MAX_RETRY_ATTEMPTS} in ${Math.round(delay)}ms: ${method} ${path}`,
+        );
+      }
+      await sleep(delay);
+    }
+  }
+}
+
+/**
+ * One full attempt: walks the candidate hosts and either resolves or throws.
+ * Each attempt gets its own abort timer so a retry is judged on its own
+ * timeoutMs rather than inheriting a budget the first try already spent.
+ */
+async function sendOnce<T>(
+  path: string,
+  options: RequestOptions,
+  method: 'GET' | 'POST',
+  isAbsolutePath: boolean,
+): Promise<T> {
+  const startedAt = Date.now();
 
   const controller = new AbortController();
   const timeoutMs = options.timeoutMs ?? LESSON_API_TIMEOUT_MS;
@@ -106,7 +259,7 @@ export async function httpRequest<T>(
 
         if (!response.ok) {
           const errorPayload = (data ?? {}) as ErrorPayload;
-          throw new ApiError(
+          const apiError = new ApiError(
             errorPayload.message ??
               (typeof data === 'string' && data.trim().length > 0
                 ? data
@@ -117,6 +270,9 @@ export async function httpRequest<T>(
             // fields ({ retryable, retryAfterMs }) beyond message/code.
             data,
           );
+          const retryAfter = parseRetryAfterMs(response.headers?.get('Retry-After') ?? null);
+          if (retryAfter !== null) retryAfterMsByError.set(apiError, retryAfter);
+          throw apiError;
         }
 
         if (!isAbsolutePath && baseUrl) {

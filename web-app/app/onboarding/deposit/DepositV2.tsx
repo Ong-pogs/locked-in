@@ -9,6 +9,8 @@ import { HubButton } from '@/components/HubButton';
 import { DepositFormV2 } from '@/components/v2/DepositFormV2';
 import { useCourseStore, useUserStore } from '@/stores';
 import { readWalletUsdcUi } from '@/services/solana/vaultV2';
+import { connection } from '@/services/solana/connection';
+import { PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { fetchWithAuth } from '@/services/api/httpClient';
 import { getLockEligibility } from '@/services/api/locks/locksApi';
 import {
@@ -48,6 +50,137 @@ const INELIGIBLE_COPY: Record<LockIneligibleCode, { title: string; body: string 
     body: "This course doesn't exist on the server. Nothing was deposited — head back and pick another.",
   },
 };
+
+// SOL gas gate.
+//
+// A deposit is TWO transactions and open_lock_v2 pays RENT, not just fees: the
+// LockV2 PDA (8 + 82 bytes → ~0.00152 SOL) and the lock's collateral ATA (165
+// bytes → ~0.00204 SOL), both `payer = owner`. That is ~0.0036 SOL of rent
+// before a single signature fee.
+//
+// This bites hardest on the likeliest mainnet path: Google login → Privy
+// embedded wallet → someone sends the user USDC and nothing else. The devnet
+// faucet that drips SOL is devnet-gated, so mainnet has no safety net — without
+// this gate the user signs, the chain rejects for lamports, and they read a raw
+// RPC string while wondering whether their USDC moved.
+const MIN_SOL_LAMPORTS = 0.005 * LAMPORTS_PER_SOL;
+const MIN_SOL_UI = '0.005';
+const ACCOUNT_RENT_SOL_UI = '~0.0036';
+
+// 'unknown' deliberately does NOT block. Unlike the eligibility gate — where a
+// missing answer could mean locking against a course that can never be
+// completed — a failed balance read is only a missing warning. Blocking a
+// funded user out of their deposit on an RPC blip is the worse failure, and the
+// on-chain rejection is now mapped to honest copy either way.
+type SolGateState =
+  | { status: 'checking' }
+  | { status: 'ok' }
+  | { status: 'insufficient'; lamports: number }
+  | { status: 'unknown' };
+
+function formatSol(lamports: number): string {
+  return (lamports / LAMPORTS_PER_SOL).toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+async function readSolGate(owner: string): Promise<SolGateState> {
+  try {
+    const lamports = await connection.getBalance(new PublicKey(owner));
+    return lamports >= MIN_SOL_LAMPORTS ? { status: 'ok' } : { status: 'insufficient', lamports };
+  } catch {
+    return { status: 'unknown' };
+  }
+}
+
+/**
+ * Turn a chain/SDK/wallet failure into copy a human can act on, without ever
+ * claiming money is lost when the truth is unknown.
+ *
+ * Two rules hold this together:
+ *   - Only say "nothing moved" where that is provably true (the wallet refused
+ *     to sign, the blockhash expired, we never got past a pre-flight gate).
+ *   - When a transaction is in flight and unconfirmed, say exactly that and
+ *     tell the user NOT to retry — a second deposit against the same lock is
+ *     how someone ends up double-funding.
+ * The raw message is never discarded; it is rendered as a details line and
+ * logged, so support can debug without the user reciting an RPC error.
+ */
+function describeDepositError(error: unknown): { message: string; detail: string | null } {
+  const raw = error instanceof Error ? error.message : String(error ?? '');
+  const lower = raw.toLowerCase();
+  const detail = raw.trim().length > 0 ? raw : null;
+
+  if (error instanceof Error && error.name === 'TransactionPendingError') {
+    return {
+      message:
+        'Your transaction was sent and is still confirming — it has NOT failed. ' +
+        'Do not deposit again. Reopen this course in a minute to see the result.',
+      detail,
+    };
+  }
+
+  if (lower.includes('user rejected') || lower.includes('user denied') || lower.includes('4001')) {
+    return {
+      message: 'You cancelled the signature. Nothing was deposited — your funds never left your wallet.',
+      detail: null,
+    };
+  }
+
+  if (
+    lower.includes('insufficient lamports') ||
+    lower.includes('insufficient funds for rent') ||
+    lower.includes('found no record of a prior credit')
+  ) {
+    return {
+      message:
+        `Not enough SOL to pay network fees. A deposit needs about ${MIN_SOL_UI} SOL for fees ` +
+        `plus ${ACCOUNT_RENT_SOL_UI} SOL of one-time account rent. Nothing was deposited — ` +
+        'top up SOL and try again.',
+      detail,
+    };
+  }
+
+  // Token program error 0x1 = insufficient funds on the token account.
+  if (lower.includes('custom program error: 0x1') || lower.includes('insufficient funds')) {
+    return {
+      message:
+        'Your wallet does not hold enough USDC for this amount. Nothing was deposited — ' +
+        'lower the amount or top up USDC.',
+      detail,
+    };
+  }
+
+  if (lower.includes('expired before it was confirmed') || lower.includes('blockhash not found')) {
+    return {
+      message:
+        'The network dropped the transaction before it was confirmed. Nothing moved — please try again.',
+      detail,
+    };
+  }
+
+  if (lower.includes('429') || lower.includes('rate limit') || lower.includes('too many requests')) {
+    return {
+      message:
+        'The Solana network connection is rate-limited right now. Nothing was deposited — wait a moment and try again.',
+      detail,
+    };
+  }
+
+  if (lower.includes('failed to fetch') || lower.includes('network') || lower.includes('fetch failed')) {
+    return {
+      message:
+        "Couldn't reach the Solana network. If you never approved a signature, nothing was deposited. " +
+        'Check your connection and try again.',
+      detail,
+    };
+  }
+
+  // Unmapped: keep the raw text as the headline rather than inventing a
+  // reassurance we cannot back up, but never assert the funds are gone.
+  return {
+    message: raw || 'Deposit failed. Reopen this course to check whether anything was locked.',
+    detail: null,
+  };
+}
 
 export function DepositV2() {
   return (
@@ -97,6 +230,9 @@ function DepositV2Content() {
   const [currentTvlUi, setCurrentTvlUi] = useState(0);
   const [eligibility, setEligibility] = useState<EligibilityState>({ status: 'checking' });
   const [eligibilityTick, setEligibilityTick] = useState(0);
+  const [solGate, setSolGate] = useState<SolGateState>({ status: 'checking' });
+  const [solGateTick, setSolGateTick] = useState(0);
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
 
   // R12 eligibility pre-gate, mount-time: paint the blocked state before the
   // user even types an amount. Fail closed — an error is a block, not a pass.
@@ -125,6 +261,20 @@ function DepositV2Content() {
     };
   }, [courseId, eligibilityTick]);
 
+  // SOL gas pre-gate, mount-time: paint the "you need SOL" state before the
+  // user types an amount, rather than after they approve a signature.
+  useEffect(() => {
+    if (!walletAddress) return;
+    let cancelled = false;
+    setSolGate({ status: 'checking' });
+    readSolGate(walletAddress).then((next) => {
+      if (!cancelled) setSolGate(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [walletAddress, solGateTick]);
+
   // Wallet balance + vault TVL — best-effort reads, graceful fallbacks.
   useEffect(() => {
     if (!walletAddress) return;
@@ -142,7 +292,18 @@ function DepositV2Content() {
     if (eligibility.status !== 'eligible') return;
     setPhase('building');
     setStatusMessage(null);
+    setErrorDetail(null);
     try {
+      // Binding SOL gate: re-read right before any transaction is built. The
+      // mount-time read can be minutes stale, and the whole point is to never
+      // let a user sign a transaction the chain will reject for lamports.
+      const gate = await readSolGate(walletAddress);
+      if (gate.status === 'insufficient') {
+        setSolGate(gate);
+        setPhase('idle');
+        return;
+      }
+
       // R12 binding gate: re-verify eligibility immediately before building
       // any transaction. Fail closed — no positive answer means no deposit
       // (network errors included). This is where spec item 21 protects money.
@@ -240,8 +401,13 @@ function DepositV2Content() {
       useUserStore.getState().setOnboardingPhase('main');
       router.push('/village');
     } catch (error) {
+      // Raw chain/SDK text is kept for support (details line + console) but is
+      // never the thing we hand a user who just tried to move money.
+      console.error('[deposit-v2] deposit failed', error);
+      const described = describeDepositError(error);
       setPhase('error');
-      setStatusMessage(error instanceof Error ? error.message : 'Deposit failed');
+      setStatusMessage(described.message);
+      setErrorDetail(described.detail);
     }
   };
 
@@ -342,15 +508,63 @@ function DepositV2Content() {
                 Retry
               </button>
             </CozyCard>
+          ) : solGate.status === 'insufficient' ? (
+            <CozyCard data-testid="v2-sol-gate-blocked" className="text-center" style={{ padding: 28 }}>
+              <p
+                className="font-pixel text-lg mb-2"
+                style={{ color: '#F0A878', textShadow: COZY_TEXT_SHADOW }}
+              >
+                You need a little SOL first
+              </p>
+              <p
+                className="font-pixel-mono text-[12px] mb-3"
+                style={{ color: T.textMutedStrong, textShadow: '0 1px 2px rgba(0,0,0,0.7)' }}
+              >
+                This wallet holds {formatSol(solGate.lamports)} SOL. Locking in needs at least{' '}
+                {MIN_SOL_UI} SOL — Solana charges fees in SOL, and your deposit creates two new
+                accounts (your lock and its balance account) that each cost a one-time refundable
+                rent of {ACCOUNT_RENT_SOL_UI} SOL in total.
+              </p>
+              <p
+                className="font-pixel-mono text-[12px] mb-5"
+                style={{ color: T.textMutedStrong, textShadow: '0 1px 2px rgba(0,0,0,0.7)' }}
+              >
+                Your USDC is untouched and nothing was deposited. Send at least {MIN_SOL_UI} SOL to
+                this wallet from an exchange or another wallet, then come back.
+              </p>
+              <button
+                onClick={() => setSolGateTick((t) => t + 1)}
+                className="px-6 py-3 rounded-lg border font-pixel text-sm uppercase tracking-[2px] font-bold min-h-[44px]"
+                style={{
+                  backgroundColor: 'rgba(255,213,128,0.12)',
+                  borderColor: 'rgba(255,213,128,0.4)',
+                  color: COZY_TEXT,
+                  textShadow: COZY_TEXT_SHADOW,
+                }}
+              >
+                Check again
+              </button>
+            </CozyCard>
           ) : (
-            <DepositFormV2
-              courseTitle={course?.title ?? courseId}
-              currentTvlUi={currentTvlUi}
-              walletBalanceUi={walletBalanceUi}
-              phase={phase}
-              statusMessage={statusMessage}
-              onSubmit={handleSubmit}
-            />
+            <>
+              <DepositFormV2
+                courseTitle={course?.title ?? courseId}
+                currentTvlUi={currentTvlUi}
+                walletBalanceUi={walletBalanceUi}
+                phase={phase}
+                statusMessage={statusMessage}
+                onSubmit={handleSubmit}
+              />
+              {phase === 'error' && errorDetail && (
+                <p
+                  data-testid="v2-deposit-error-detail"
+                  className="font-pixel-mono text-[10px] mt-3 break-words"
+                  style={{ color: T.textMuted ?? T.textSecondary }}
+                >
+                  Details for support: {errorDetail}
+                </p>
+              )}
+            </>
           )}
         </div>
       </div>

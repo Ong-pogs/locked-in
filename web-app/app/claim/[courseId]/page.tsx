@@ -11,6 +11,7 @@ import { useCourseStore, useUserStore } from '@/stores';
 import { getCompletionVoucher, getLockPosition } from '@/services/api/progress/progressApi';
 import { fetchWithAuth } from '@/services/api';
 import { hasVaultV2Config } from '@/services/solana/vaultV2';
+import { captureError } from '@/services/observability';
 import { ApiError } from '@/services/api/errors';
 import type { CompletionVoucherResponse, LockPositionResponse } from '@/services/api/types';
 import type { V2ActionPhase } from '@/services/solana/v2Actions';
@@ -47,6 +48,15 @@ const PHASE_COPY: Record<V2ActionPhase, string> = {
   success: 'Claimed!',
   error: 'Transaction failed',
 };
+
+// A claim that dies after the transaction was sent is the expensive case to
+// support: the user has a signature, we have nothing. v2Actions does not attach
+// the signature to the errors it throws yet, so read it defensively — this
+// starts reporting the moment it does.
+function signatureFromError(error: unknown): string | null {
+  const candidate = (error as { signature?: unknown } | null)?.signature;
+  return typeof candidate === 'string' && candidate.length > 0 ? candidate : null;
+}
 
 // Contrast-audit style for small money copy on CozyCard glass (10-13px):
 // brighter muted white + shadow so the painted backdrop can't wash it out.
@@ -180,6 +190,17 @@ export default function ClaimPage() {
           // Could NOT verify (expired token, RPC/API down) — must never be
           // presented as "already claimed", which would tell a user their real
           // principal is gone. Surface a retryable error instead (audit H1).
+          // Wallet read off the store, not the closure: adding it to this
+          // effect's deps would re-run the mount flow on hydration and could
+          // stomp a claim already in flight.
+          captureError(error, {
+            scope: 'claim.verify-position',
+            context: {
+              wallet: useUserStore.getState().walletAddress,
+              courseId,
+              phase: 'position-fetch',
+            },
+          });
           setErrorMessage(
             error instanceof Error ? error.message : 'Could not verify your position',
           );
@@ -216,6 +237,14 @@ export default function ClaimPage() {
     setIsSubmitting(true);
     setPhase('signing');
     setErrorMessage(null);
+    // The React state lags a throw by a render, so keep the phase the failure
+    // actually happened in — "died while sending" and "user rejected the
+    // signature" are different support tickets.
+    let reachedPhase: V2ActionPhase | null = null;
+    const trackPhase = (next: V2ActionPhase) => {
+      reachedPhase = next;
+      setActionPhase(next);
+    };
     try {
       // Chain code loads HERE, not at mount — keeps the route mockable.
       const { executeClaim, isTxStubActive } = await import('@/services/solana/v2Actions');
@@ -238,7 +267,7 @@ export default function ClaimPage() {
             privySignTransaction(args as Parameters<typeof privySignTransaction>[0]),
           wallet,
         },
-        setActionPhase,
+        trackPhase,
       );
       const record: ClaimSuccessRecord = {
         signature: result.signature,
@@ -261,12 +290,36 @@ export default function ClaimPage() {
       setSuccessRecord(record);
       setPhase('success');
     } catch (error) {
+      captureError(error, {
+        scope: 'claim.submit',
+        context: {
+          wallet: walletAddress,
+          courseId,
+          phase: reachedPhase,
+          signature: signatureFromError(error),
+          bps: voucher.bps,
+          lapseCount: voucher.lapseCount,
+          voucherExpiry: voucher.expiry,
+          lockAddress: position?.lockAddress ?? courseState?.lockAccountAddress ?? null,
+          principalUi: position?.principalUi ?? null,
+        },
+      });
       setErrorMessage(error instanceof Error ? error.message : 'Claim failed');
       setPhase('error');
     } finally {
       setIsSubmitting(false);
     }
-  }, [voucher, walletAddress, courseId, isSubmitting, position?.principalUi, privySignTransaction, solanaWallets]);
+  }, [
+    voucher,
+    walletAddress,
+    courseId,
+    isSubmitting,
+    position?.principalUi,
+    position?.lockAddress,
+    courseState?.lockAccountAddress,
+    privySignTransaction,
+    solanaWallets,
+  ]);
 
   const backToDashboard = (
     <button

@@ -32,6 +32,10 @@ test.describe('v2 deposit', () => {
 
     await amount.fill('25');
     await expect(page.getByTestId('v2-deposit-error')).toHaveCount(0);
+    // A valid amount alone no longer arms the button — locking real money now
+    // requires an explicit terms/risk acknowledgement.
+    await expect(page.getByTestId('v2-deposit-submit')).toBeDisabled();
+    await page.getByTestId('v2-consent-checkbox').check();
     await expect(page.getByTestId('v2-deposit-submit')).toBeEnabled();
   });
 
@@ -39,6 +43,7 @@ test.describe('v2 deposit', () => {
     await page.goto(`/onboarding/deposit?courseId=${COURSE_ID}`);
     await expect(page.getByTestId('v2-deposit-amount')).toBeVisible({ timeout: 20_000 });
     await page.getByTestId('v2-deposit-amount').fill('25');
+    await page.getByTestId('v2-consent-checkbox').check();
     await page.getByTestId('v2-deposit-submit').click();
     await page.waitForURL('**/village', { timeout: 15_000 });
   });

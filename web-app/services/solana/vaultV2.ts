@@ -77,6 +77,56 @@ export function buildRefreshReserveIx(config: VaultV2Config): TransactionInstruc
   });
 }
 
+// A v2 money tx is a Kamino CPI: expensive, and at 0 micro-lamports the first
+// thing a mainnet leader drops under congestion. Bid the recent-window rate for
+// the accounts we actually touch, clamped so an outlier slot can't drain a
+// user's SOL and a quiet network still buys us queue position. At the 400k CU
+// limit the band is ~4_000..400_000 lamports of priority fee.
+const COMPUTE_UNIT_LIMIT = 400_000;
+const PRIORITY_FEE_FLOOR = 10_000; // micro-lamports per CU
+const PRIORITY_FEE_CEILING = 1_000_000;
+
+/**
+ * setComputeUnitPrice for a tx over `writableAccounts`, priced at the 75th
+ * percentile of getRecentPrioritizationFees for those accounts — high enough to
+ * clear the bulk of the recent window without chasing the max() outlier.
+ * Degrades to the floor whenever the RPC is unavailable, unsupported, or quiet
+ * (which is the devnet case), so pricing can never block a money tx.
+ */
+export async function buildPriorityFeeIx(
+  writableAccounts: PublicKey[],
+): Promise<TransactionInstruction> {
+  let microLamports = PRIORITY_FEE_FLOOR;
+  try {
+    const recent = await connection.getRecentPrioritizationFees({
+      // The RPC caps this list at 128 addresses.
+      lockedWritableAccounts: writableAccounts.slice(0, 128),
+    });
+    const samples = (recent ?? [])
+      .map((f) => f.prioritizationFee)
+      .filter((fee) => Number.isFinite(fee) && fee > 0)
+      .sort((a, b) => a - b);
+    if (samples.length > 0) {
+      microLamports = samples[Math.min(samples.length - 1, Math.floor(samples.length * 0.75))];
+    }
+  } catch {
+    // Floor it.
+  }
+  return ComputeBudgetProgram.setComputeUnitPrice({
+    microLamports: Math.min(PRIORITY_FEE_CEILING, Math.max(PRIORITY_FEE_FLOOR, Math.ceil(microLamports))),
+  });
+}
+
+function writableKeysOf(...instructions: TransactionInstruction[]): PublicKey[] {
+  const seen = new Map<string, PublicKey>();
+  for (const ix of instructions) {
+    for (const key of ix.keys) {
+      if (key.isWritable) seen.set(key.pubkey.toBase58(), key.pubkey);
+    }
+  }
+  return [...seen.values()];
+}
+
 export interface VaultV2Config {
   configAddress: PublicKey;
   authority: PublicKey;
@@ -284,7 +334,8 @@ export async function buildOpenLockTransaction(
 /**
  * lock_funds_v2 — CPI-deposits `stableAmount` (atomic USDC) into the reserve,
  * banking the collateral in the lock's ATA. The lock + ATA must already exist
- * (open_lock_v2). Prefixed with a compute-unit bump for the CPI.
+ * (open_lock_v2). Prefixed with a compute-unit bump for the CPI and a priority
+ * fee bid.
  */
 export async function buildDepositTransaction(
   ownerAddress: string,
@@ -322,7 +373,8 @@ export async function buildDepositTransaction(
   });
   const tx = new Transaction();
   for (const pre of prepend) tx.add(pre);
-  tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }));
+  tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: COMPUTE_UNIT_LIMIT }));
+  tx.add(await buildPriorityFeeIx(writableKeysOf(ix)));
   const refresh = buildRefreshReserveIx(config); // null on devnet/mock
   if (refresh) tx.add(refresh);
   return tx.add(ix);
@@ -330,12 +382,13 @@ export async function buildDepositTransaction(
 
 /**
  * claim_v2 — redeems collateral and splits principal/yield per the completion
- * voucher's bps, closing the lock. The tx is [ed25519_verify(voucher),
- * compute_budget, claim]; the program scans instructions for the precompile.
- * `voucher` is the backend endpoint's response for this (owner, course).
+ * voucher's bps, closing the lock. The tx is [compute_budget,
+ * create_ata_idempotent, ed25519_verify(voucher), claim]; the program scans
+ * instructions for the precompile. `voucher` is the backend endpoint's
+ * response for this (owner, course).
  *
- * Against real Kamino the tx is [compute_budget, refresh_reserve,
- * ed25519_verify, claim]; buildRefreshReserveIx injects refresh_reserve when
+ * Against real Kamino refresh_reserve is inserted before ed25519_verify;
+ * buildRefreshReserveIx injects refresh_reserve when
  * config.kaminoProgram == klend (null on the devnet mock). Proven byte-for-byte
  * on a surfpool mainnet fork (backend/scripts/fork-proof-kamino-roundtrip.mjs).
  */
@@ -390,7 +443,8 @@ export async function buildClaimTransaction(
 
   const tx = new Transaction();
   for (const pre of prepend) tx.add(pre);
-  tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }));
+  tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: COMPUTE_UNIT_LIMIT }));
+  tx.add(await buildPriorityFeeIx(writableKeysOf(claimIx)));
   // The program declares owner_usdc as a plain `mut` ATA — it does NOT create
   // it. Wallets let users close token accounts, and a user who closed their
   // USDC ATA after depositing could otherwise never claim (the tx fails on the
@@ -406,8 +460,8 @@ export async function buildClaimTransaction(
   );
   const refresh = buildRefreshReserveIx(config); // null on devnet/mock
   if (refresh) tx.add(refresh);
-  // [compute_budget, create_ata_idempotent, refresh_reserve?, ed25519_verify,
-  // claim]. The program scans instructions for the precompile, so ed25519
+  // [cu_limit, cu_price, create_ata_idempotent, refresh_reserve?,
+  // ed25519_verify, claim]. The program scans instructions for the precompile, so ed25519
   // position is flexible; refresh must precede the redeem CPI. Proven on the
   // surfpool mainnet fork.
   return tx.add(edIx).add(claimIx);

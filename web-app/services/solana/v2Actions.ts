@@ -65,9 +65,40 @@ export function isTxStubActive(): boolean {
   return getTxStub() != null;
 }
 
+/**
+ * The tx was sent and may still land — we simply don't know yet. Distinct from
+ * a failure because the two demand opposite user actions: a failed claim should
+ * be retried, a pending one must NOT be (retrying signs a second claim against
+ * a lock the first tx may be about to close). Carries the signature so the UI
+ * can point at the explorer.
+ */
+export class TransactionPendingError extends Error {
+  readonly signature: string;
+  constructor(signature: string) {
+    super('Still confirming — your transaction was sent and has not failed. Do not retry.');
+    this.name = 'TransactionPendingError';
+    this.signature = signature;
+  }
+}
+
+export function isPendingConfirmation(error: unknown): error is TransactionPendingError {
+  return error instanceof TransactionPendingError;
+}
+
+// Mainnet leaders routinely take longer than the old 30s wall clock; a tx that
+// lands at t=35s used to surface as an outright failure.
+const CONFIRM_TIMEOUT_MS = 150_000;
+const CONFIRM_POLL_MS = 1_000;
+
 // Confirm via HTTP polling (no WebSockets — e2e mocks HTTP only, and the WS
-// confirm path hangs for 30-60s against unreachable endpoints).
-async function confirmByPolling(signature: string, timeoutMs = 30_000): Promise<void> {
+// confirm path hangs for 30-60s against unreachable endpoints). Three
+// outcomes: resolve (landed), throw (definitely did not land — expired or
+// on-chain error), or throw TransactionPendingError (unknown, still in flight).
+export async function confirmSignature(
+  signature: string,
+  lastValidBlockHeight?: number,
+  timeoutMs = CONFIRM_TIMEOUT_MS,
+): Promise<void> {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
     const { value } = await connection.getSignatureStatuses([signature]);
@@ -79,9 +110,22 @@ async function confirmByPolling(signature: string, timeoutMs = 30_000): Promise<
     ) {
       return;
     }
-    await new Promise((r) => setTimeout(r, 500));
+    // Past lastValidBlockHeight the blockhash can no longer be included, so an
+    // unknown signature definitively did not land and retrying is safe. This is
+    // the only "failed" verdict we are entitled to give a sent-but-unseen tx.
+    if (lastValidBlockHeight != null) {
+      try {
+        if ((await connection.getBlockHeight('confirmed')) > lastValidBlockHeight) {
+          throw new Error('Transaction expired before it was confirmed. Nothing moved — please try again.');
+        }
+      } catch (error) {
+        if (error instanceof Error && error.message.startsWith('Transaction expired')) throw error;
+        // Height unreadable → no expiry verdict; keep polling.
+      }
+    }
+    await new Promise((r) => setTimeout(r, CONFIRM_POLL_MS));
   }
-  throw new Error('Transaction confirmation timed out.');
+  throw new TransactionPendingError(signature);
 }
 
 // Balance reads use the env mint while the tx builders use the on-chain
@@ -119,7 +163,7 @@ async function signSendConfirm(
   signer: V2Signer,
   onPhase: (phase: V2ActionPhase) => void,
 ): Promise<string> {
-  const { blockhash } = await connection.getLatestBlockhash('confirmed');
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
   transaction.recentBlockhash = blockhash;
   transaction.feePayer = new PublicKey(owner);
 
@@ -137,7 +181,7 @@ async function signSendConfirm(
   });
 
   onPhase('confirming');
-  await confirmByPolling(signature);
+  await confirmSignature(signature, lastValidBlockHeight);
   return signature;
 }
 

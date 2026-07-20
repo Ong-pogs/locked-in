@@ -54,13 +54,27 @@ async function buildSession(walletAddress) {
   };
 }
 
+// Every auth route was unlimited: free brute-force against /verify and
+// /refresh, and free JWT-minting load on the rest. These ceilings are per IP
+// per minute and sit far above any human login flow (one login = one
+// challenge + one verify), so they only bite scripts. Kept generous rather
+// than tight — locking a real user out of their own money is the worse failure.
+const AUTH_RATE_LIMIT = { max: 30, timeWindow: '1 minute' };
+// Refresh is the one an ordinary session hits repeatedly (every access-token
+// expiry, across tabs), and a shared IP multiplies that.
+const REFRESH_RATE_LIMIT = { max: 60, timeWindow: '1 minute' };
+
 export async function authRoutes(app) {
-  app.post('/v1/auth/challenge', async (request) => {
+  app.post('/v1/auth/challenge', {
+    config: { rateLimit: AUTH_RATE_LIMIT },
+  }, async (request) => {
     const walletAddress = assertWalletAddress(request.body?.walletAddress);
     return createChallenge(walletAddress);
   });
 
-  app.post('/v1/auth/verify', async (request) => {
+  app.post('/v1/auth/verify', {
+    config: { rateLimit: AUTH_RATE_LIMIT },
+  }, async (request) => {
     const walletAddress = assertWalletAddress(request.body?.walletAddress);
     const challengeId = request.body?.challengeId;
     const signature = assertSignature(request.body?.signature);
@@ -98,7 +112,9 @@ export async function authRoutes(app) {
   // SDK and cross-check that the wallet is linked to that Privy user.
   // The user already signed the Privy SIWS prompt, so this avoids a
   // second redundant signature request.
-  app.post('/v1/auth/privy-session', async (request) => {
+  app.post('/v1/auth/privy-session', {
+    config: { rateLimit: AUTH_RATE_LIMIT },
+  }, async (request) => {
     if (!hasPrivyAuthConfig()) {
       throw unauthorized(
         'Privy session login is not configured on this backend.',
@@ -125,7 +141,9 @@ export async function authRoutes(app) {
     return buildSession(verified.walletAddress);
   });
 
-  app.post('/v1/auth/refresh', async (request) => {
+  app.post('/v1/auth/refresh', {
+    config: { rateLimit: REFRESH_RATE_LIMIT },
+  }, async (request) => {
     const refreshToken = request.body?.refreshToken;
     if (!refreshToken || typeof refreshToken !== 'string') {
       throw badRequest('refreshToken is required', 'MISSING_REFRESH_TOKEN');

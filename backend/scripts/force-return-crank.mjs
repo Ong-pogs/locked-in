@@ -10,9 +10,9 @@
 //     without moving funds; each lock is tried independently (per-lock catch).
 //   - owner's USDC ATA closed: an idempotent create-ATA (paid by the caller)
 //     is prepended, since ForceReturnV2 does NOT init_if_needed owner_usdc.
-//   - real Kamino: klend rejects settles against a stale reserve, and this
-//     crank does not yet prepend refresh_reserve — so it refuses to run when
-//     the config pins the real klend program (fail closed, mock/devnet only).
+//   - real Kamino: klend rejects settles against a stale reserve, so a klend
+//     refresh_reserve is prepended in the same tx whenever the config pins the
+//     real klend program (never on the devnet mock, which needs no refresh).
 //
 // The tx-building here is pure and unit-tested against the ForceReturnV2
 // accounts struct in programs/locked_in/src/vault_v2.rs; main() only wires RPC.
@@ -54,15 +54,20 @@ export const LOCK_STATUS_ACTIVE = 0;
 // 8 disc + 32 owner + 32 course_id_hash + 8 principal + 8 lock_start + 1 status + 1 bump.
 export const LOCKV2_ACCOUNT_SIZE = 90;
 
-// The deployed devnet program was built with config seed "vault-v2b" (every
-// devnet-proven client — lockPosition.mjs, the programs-tests scripts — uses
-// it); the checked-in source says "vault-v2". Default to what is actually on
-// chain, overridable for a rebuild that reverts the seed.
+// Config seed "vault-v2b" — matches vault_v2.rs CONFIG_SEED and every
+// devnet-proven client (lockPosition.mjs, the programs-tests scripts).
+// Overridable for a rebuild that changes the seed.
 export const CONFIG_SEED = process.env.VAULT_V2_CONFIG_SEED ?? 'vault-v2b';
 
 // kamino.rs KLEND_PROGRAM_ID — settling against the REAL klend requires a
-// refresh_reserve prepended in the same tx, which this crank does not build.
+// refresh_reserve prepended in the same tx (max oracle age 180s).
 export const KLEND_PROGRAM_ID = 'KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD';
+
+// Scope prices account for the pinned USDC reserve — a public account, not a
+// secret. Default = Kamino main-market USDC scope oracle; override per reserve.
+// Mirrors NEXT_PUBLIC_KAMINO_SCOPE_PRICES in web-app/services/solana/vaultV2.ts.
+export const KAMINO_SCOPE_PRICES =
+  process.env.KAMINO_SCOPE_PRICES ?? '3t4JZcueEzTbVP6kLxXrL3VpWx45jDer4eqysweBchNH';
 
 const sha8 = (preimage) =>
   createHash('sha256').update(preimage, 'utf8').digest().subarray(0, 8);
@@ -72,6 +77,9 @@ export const FORCE_RETURN_V2_DISCRIMINATOR = sha8('global:force_return_v2');
 
 // sha256("account:LockV2")[..8] — getProgramAccounts memcmp filter.
 export const LOCKV2_ACCOUNT_DISCRIMINATOR = sha8('account:LockV2');
+
+// sha256("global:refresh_reserve")[..8] = [2,218,138,235,79,201,25,102].
+export const REFRESH_RESERVE_DISCRIMINATOR = sha8('global:refresh_reserve');
 
 // ── pure decode / predicate / build ───────────────────────────────────────
 
@@ -152,15 +160,46 @@ export function buildForceReturnV2Instruction({ programId, configPda, lockPda, o
 }
 
 /**
+ * klend refresh_reserve, byte-for-byte as buildRefreshReserveIx in
+ * web-app/services/solana/vaultV2.ts builds it: accounts [reserve(w),
+ * lendingMarket, pyth, switchboardPrice, switchboardTwap, scopePrices], with
+ * the klend program id as the sentinel for the oracles USDC does not use.
+ * Returns null for the devnet mock reserve, which needs no refresh.
+ */
+export function buildRefreshReserveIx(config) {
+  if (config.kaminoProgram.toBase58() !== KLEND_PROGRAM_ID) return null;
+  if (!KAMINO_SCOPE_PRICES) throw new Error('Missing KAMINO_SCOPE_PRICES for real Kamino refresh_reserve.');
+  const klend = new PublicKey(KLEND_PROGRAM_ID);
+  const ro = (pubkey) => ({ pubkey, isWritable: false, isSigner: false });
+
+  return new TransactionInstruction({
+    programId: klend,
+    keys: [
+      { pubkey: config.kaminoReserve, isWritable: true, isSigner: false },
+      ro(config.kaminoMarket),
+      ro(klend), // pyth (unused → sentinel)
+      ro(klend), // switchboard price (unused → sentinel)
+      ro(klend), // switchboard twap (unused → sentinel)
+      ro(new PublicKey(KAMINO_SCOPE_PRICES)),
+    ],
+    data: Buffer.from(REFRESH_RESERVE_DISCRIMINATOR),
+  });
+}
+
+/**
  * Full per-lock instruction list: idempotent owner-USDC ATA create (the
  * program does not init it and a closed ATA would trap the return), a CU
- * bump for the redeem CPI, then force_return_v2 itself.
+ * bump for the redeem CPI, refresh_reserve on real klend, then
+ * force_return_v2 itself. Ordering matches buildClaimTransaction's real-Kamino
+ * shape — refresh_reserve immediately precedes the settling instruction.
  */
 export function buildForceReturnTransactionIxs({ programId, configPda, lockPda, owner, caller, config }) {
   const ownerUsdc = getAssociatedTokenAddressSync(config.usdcMint, owner, true);
+  const refresh = buildRefreshReserveIx(config); // null on devnet/mock
   return [
     createAssociatedTokenAccountIdempotentInstruction(caller, ownerUsdc, owner, config.usdcMint),
     ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }),
+    ...(refresh ? [refresh] : []),
     buildForceReturnV2Instruction({ programId, configPda, lockPda, owner, caller, config }),
   ];
 }
@@ -183,14 +222,10 @@ async function main() {
   if (!configInfo) throw new Error(`VaultV2Config not found at ${configPda.toBase58()} (seed '${CONFIG_SEED}')`);
   const config = decodeVaultV2Config(configInfo.data);
 
-  // Fail closed on the real klend: settlement needs refresh_reserve prepended
-  // in the same tx and this crank does not build that instruction yet.
-  if (config.kaminoProgram.toBase58() === KLEND_PROGRAM_ID) {
-    throw new Error(
-      'Config pins the real Kamino klend program; this crank does not prepend ' +
-        'refresh_reserve yet and would only burn fees on failed settles. Aborting.',
-    );
-  }
+  // Fail before the scan rather than per-lock: a bad/missing scope oracle would
+  // otherwise burn fees on every settle in the sweep.
+  const refresh = buildRefreshReserveIx(config);
+  console.log(refresh ? `real klend: prepending refresh_reserve (scope ${KAMINO_SCOPE_PRICES})` : 'mock reserve: no refresh_reserve needed');
 
   const accounts = await connection.getProgramAccounts(programId, {
     filters: [
