@@ -156,14 +156,18 @@ export async function progressRoutes(app) {
     },
   );
 
-  // DEV-ONLY (devnet gate): force-complete a course at 100% so the claim flow
-  // is testable without grinding every lesson. Returns 404 off devnet. REMOVE
-  // before mainnet.
+  // DEV-ONLY: force-complete a course at 100% so the claim flow is testable
+  // without grinding every lesson. This mints the precondition for a
+  // completion voucher — i.e. a claim — so it is DOUBLE-gated: the cluster
+  // must classify as devnet AND DEV_TOOLS_ENABLED must be explicitly set.
+  // Cluster detection alone was one config mistake away from shipping a
+  // "complete any course for free" endpoint to mainnet; the env flag has to be
+  // deliberately carried over, and the mainnet templates never set it.
   app.post(
     '/v1/progress/dev/complete-course',
     { preHandler: requireAccessAuth },
     async (request, reply) => {
-      if (!isDevnetOnly()) {
+      if (!isDevnetOnly() || !appConfig.devToolsEnabled) {
         reply.code(404);
         return { error: 'Not found' };
       }

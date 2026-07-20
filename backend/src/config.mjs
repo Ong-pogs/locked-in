@@ -192,6 +192,10 @@ export const appConfig = {
   unlockIndexerIntervalMs: optionalInt('UNLOCK_INDEXER_INTERVAL_MS', 15_000),
   unlockIndexerScanLimit: optionalInt('UNLOCK_INDEXER_SCAN_LIMIT', 25),
   runtimeSchedulerEnabled: optionalBool('RUNTIME_SCHEDULER_ENABLED', false),
+  // Second gate on the dev force-complete-course endpoint (the cluster check
+  // is the first). Defaults OFF so no mainnet config can inherit it by
+  // accident; the mainnet env templates deliberately never mention it.
+  devToolsEnabled: optionalBool('DEV_TOOLS_ENABLED', false),
   runtimeSchedulerIntervalMs: optionalInt('RUNTIME_SCHEDULER_INTERVAL_MS', 15_000),
   runtimeSchedulerBatchSize: optionalInt('RUNTIME_SCHEDULER_BATCH_SIZE', 5),
   // Legacy v1 miss engine kill-switch (lapse-sweep ruling R19): the daily

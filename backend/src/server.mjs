@@ -130,10 +130,35 @@ export function buildServer() {
       return;
     }
 
+    // Framework-generated client errors carry their own statusCode: the
+    // rate-limit plugin's 429, the body parser's 400 on malformed JSON. Masking
+    // them as 500 made clients retry instead of backing off (a user
+    // double-clicking Claim saw "Internal Server Error"), lied in `code`, and
+    // logged ordinary client mistakes at error level.
+    const status = Number(error.statusCode);
+    if (Number.isInteger(status) && status >= 400 && status < 500) {
+      const code = error.code ?? (status === 429 ? 'RATE_LIMITED' : 'BAD_REQUEST');
+      request.log.warn({ err: error, code }, 'Client error');
+      reply.status(status).send({
+        // error.message is framework-authored here (not an internal trace).
+        message: error.message ?? 'Request failed',
+        code,
+      });
+      return;
+    }
+
     request.log.error({ err: error }, 'Unhandled server error');
     reply.status(500).send({
       message: 'Internal Server Error',
       code: 'INTERNAL_ERROR',
+    });
+  });
+
+  // Fastify's default 404 body has no `code`, but clients branch on it.
+  app.setNotFoundHandler((request, reply) => {
+    reply.status(404).send({
+      message: `Route ${request.method}:${request.url} not found`,
+      code: 'ROUTE_NOT_FOUND',
     });
   });
 
