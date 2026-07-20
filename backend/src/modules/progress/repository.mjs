@@ -241,6 +241,38 @@ export function isCourseCompleteOrFrozen(moduleRows, courseCompletedAt) {
   return isCourseComplete(moduleRows);
 }
 
+/**
+ * Lessons require a staked course. Throws 403 COURSE_NOT_LOCKED otherwise.
+ *
+ * lesson.user_course_enrollments is written in exactly ONE place
+ * (enrollActiveLockServerSide) and only after a server-verified ACTIVE
+ * on-chain lock, so the presence of a row is proof this wallet staked this
+ * course. The row survives a claim — only the on-chain lock closes — which is
+ * what keeps post-claim practice replays working.
+ *
+ * Why this gate exists: completion is frozen permanently, and
+ * assertCourseLockable refuses to open a lock on a completed course (otherwise
+ * you could finish a course for free, THEN stake, then claim principal + full
+ * yield having done no daily work). Without this gate, free practice silently
+ * and irreversibly burned the user's ability to ever stake that course.
+ */
+export async function assertLessonStakeAccess(client, walletAddress, courseId) {
+  const enrolled = await client.query(
+    `select 1
+       from lesson.user_course_enrollments
+      where wallet_address = $1 and course_id = $2
+      limit 1`,
+    [walletAddress, courseId],
+  );
+  if (enrolled.rowCount === 0) {
+    throw new HttpError(
+      403,
+      'Lock a stake on this course before starting its lessons.',
+      'COURSE_NOT_LOCKED',
+    );
+  }
+}
+
 /** Read the completion freeze stamp for (wallet, course). Null when unfrozen. */
 async function readCourseCompletionFreeze(client, walletAddress, courseId) {
   const result = await client.query(
@@ -4425,6 +4457,12 @@ export async function startLessonAttempt(walletAddress, lessonId, attemptId) {
 
   return withTransactionAsWallet(walletAddress, async (client) => {
     const lessonVersion = await getPublishedLessonVersion(client, lessonId);
+    // Lessons require a staked course (see assertLessonStakeAccess).
+    await assertLessonStakeAccess(
+      client,
+      walletAddress,
+      await getCourseIdForPublishedLesson(client, lessonId, lessonVersion.lessonVersionId),
+    );
     const attempt = await ensureAttempt(
       client,
       walletAddress,
@@ -4533,6 +4571,12 @@ export async function checkQuestionAnswer(
 
   return withTransactionAsWallet(walletAddress, async (client) => {
     const lessonVersion = await getPublishedLessonVersion(client, lessonId);
+    // Lessons require a staked course (see assertLessonStakeAccess).
+    await assertLessonStakeAccess(
+      client,
+      walletAddress,
+      await getCourseIdForPublishedLesson(client, lessonId, lessonVersion.lessonVersionId),
+    );
     // Same tolerance as submit: a check without a prior /start anchors the
     // attempt to server time.
     const attempt = await ensureAttempt(
@@ -4725,6 +4769,12 @@ export async function submitLessonAttempt(
 
   const result = await withTransactionAsWallet(walletAddress, async (client) => {
     const lessonVersion = await getPublishedLessonVersion(client, lessonId);
+    // Lessons require a staked course (see assertLessonStakeAccess).
+    await assertLessonStakeAccess(
+      client,
+      walletAddress,
+      await getCourseIdForPublishedLesson(client, lessonId, lessonVersion.lessonVersionId),
+    );
     // A submit without a prior /start still anchors its attempt to server time.
     const attempt = await ensureAttempt(
       client,

@@ -18,7 +18,7 @@ import nacl from 'tweetnacl';
 import bs58Module from 'bs58';
 import { PublicKey } from '@solana/web3.js';
 import { createTestServer, closeTestServer } from '../../helpers/test-server.mjs';
-import { getTestAuthHeaders, generateTestWallet } from '../../helpers/test-auth.mjs';
+import { getTestAuthHeaders, generateTestWallet, enrollWalletForTest } from '../../helpers/test-auth.mjs';
 import { query } from '../../../src/lib/db.mjs';
 import { yieldBpsForLapses } from '../../../src/lib/claimVoucher.mjs';
 import {
@@ -140,11 +140,7 @@ async function seedCompletedCourse(wallet) {
 // with no enrollment row (real devnet RPC) — seed the row to keep tests
 // deterministic and offline.
 async function suppressEnrollHeal(wallet) {
-  await query(
-    `INSERT INTO lesson.user_course_enrollments (wallet_address, course_id)
-     VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-    [wallet, COURSE_ID],
-  );
+  await enrollWalletForTest(query, wallet, COURSE_ID);
 }
 
 async function voucherRows(wallet) {
@@ -204,6 +200,7 @@ describe('auto-issue on the completing submit (R4)', () => {
   it('(R11.2) fresh course completion stores the full 8-field voucher post-commit', async () => {
     const wallet = newTestWallet();
     const headers = await getTestAuthHeaders(wallet);
+    await enrollWalletForTest(query, wallet, COURSE_ID); // lessons require a staked course
     await seedAllButLast(wallet);
 
     const body = await submitLesson(headers, LESSON_3);
@@ -231,6 +228,7 @@ describe('auto-issue on the completing submit (R4)', () => {
   it('(R11.1/R11.7 submit leg) a voucher-storage failure never touches the completing submit', async () => {
     const wallet = newTestWallet();
     const headers = await getTestAuthHeaders(wallet);
+    await enrollWalletForTest(query, wallet, COURSE_ID); // lessons require a staked course
     await seedAllButLast(wallet);
 
     await hideVoucherTable();

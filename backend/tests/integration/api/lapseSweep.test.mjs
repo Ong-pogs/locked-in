@@ -13,7 +13,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { Keypair } from '@solana/web3.js';
 import { createTestServer, closeTestServer } from '../../helpers/test-server.mjs';
-import { getTestAuthHeaders, generateTestWallet } from '../../helpers/test-auth.mjs';
+import { getTestAuthHeaders, generateTestWallet, enrollWalletForTest } from '../../helpers/test-auth.mjs';
 import { query } from '../../../src/lib/db.mjs';
 import { deriveLockPdaServer } from '../../../src/lib/lockPosition.mjs';
 import { runLapseSweepBatch } from '../../../src/lib/lapseSweep.mjs';
@@ -45,11 +45,7 @@ function activeAccount(wallet, lockStartOffsetDays) {
 // Arm a (wallet, course) exactly the way enroll does: enrollment row + v2 PDA
 // custody + lock_start_at.
 async function armV2(wallet, lockStartOffsetDays, extra = {}) {
-  await query(
-    `INSERT INTO lesson.user_course_enrollments (wallet_address, course_id)
-     VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-    [wallet, COURSE_ID],
-  );
+  await enrollWalletForTest(query, wallet, COURSE_ID);
   await query(
     `INSERT INTO lesson.user_course_runtime_state
        (wallet_address, course_id, fuel_cap, lock_account_address, lock_start_at, principal_amount)
@@ -167,6 +163,9 @@ describe('runLapseSweepBatch — day-fold', () => {
   it('a lesson-day inside the window is skipped (no receipt, no transition)', async () => {
     const wallet = newTestWallet();
     const headers = await getTestAuthHeaders(wallet);
+    // The submit below precedes armV2, so establish the staked-course
+    // precondition the lesson routes require up front.
+    await enrollWalletForTest(query, wallet, COURSE_ID);
     // Real completion (creates the verified_completion_events row), backdated
     // into the middle of the dark window.
     const submit = await app.inject({

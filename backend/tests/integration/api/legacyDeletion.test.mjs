@@ -14,7 +14,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { createTestServer, closeTestServer } from '../../helpers/test-server.mjs';
-import { getTestAuthHeaders, generateTestWallet } from '../../helpers/test-auth.mjs';
+import { getTestAuthHeaders, generateTestWallet, enrollWalletForTest } from '../../helpers/test-auth.mjs';
 import { query, withTransactionAsWallet } from '../../../src/lib/db.mjs';
 import {
   applyMissConsequenceForSweep,
@@ -134,6 +134,7 @@ describe('completion stop-writes (T2)', () => {
   it('two same-UTC-day submits advance current_streak exactly once; legacy columns untouched', async () => {
     const wallet = newTestWallet();
     const headers = await getTestAuthHeaders(wallet);
+    await enrollWalletForTest(query, wallet, COURSE_ID); // lessons require a staked course
 
     const first = await submitLesson(headers, LESSON_1);
     expect(first.body.accepted).toBe(true);
@@ -183,6 +184,7 @@ describe('miss receipt constants + lapse advance (T3)', () => {
   it('R13 catch-up on an unshielded gap day: receipt zeros, redirect 0->5000, lapse_count advances', async () => {
     const wallet = newTestWallet();
     const headers = await getTestAuthHeaders(wallet);
+    await enrollWalletForTest(query, wallet, COURSE_ID); // lessons require a staked course
 
     await submitLesson(headers, LESSON_1);
     // One unjudged gap day (yesterday), shields exhausted so the miss lapses.
@@ -219,6 +221,7 @@ describe('miss receipt constants + lapse advance (T3)', () => {
   it('R13 catch-up on a shielded gap day: receipt zeros, redirect untouched, shield burns', async () => {
     const wallet = newTestWallet();
     const headers = await getTestAuthHeaders(wallet);
+    await enrollWalletForTest(query, wallet, COURSE_ID); // lessons require a staked course
 
     await submitLesson(headers, LESSON_1);
     await query(
@@ -253,6 +256,7 @@ describe('miss receipt constants + lapse advance (T3)', () => {
   it('the lapse-sweep writer (applyMissConsequenceForSweep) writes the same constants', async () => {
     const wallet = newTestWallet();
     const headers = await getTestAuthHeaders(wallet);
+    await enrollWalletForTest(query, wallet, COURSE_ID); // lessons require a staked course
 
     await submitLesson(headers, LESSON_1);
     await query(

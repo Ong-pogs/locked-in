@@ -12,7 +12,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { createTestServer, closeTestServer } from '../../helpers/test-server.mjs';
-import { getTestAuthHeaders, generateTestWallet } from '../../helpers/test-auth.mjs';
+import { getTestAuthHeaders, generateTestWallet, enrollWalletForTest } from '../../helpers/test-auth.mjs';
 import { query } from '../../../src/lib/db.mjs';
 import { consumeSaverOrApplyFullConsequence } from '../../../src/modules/progress/repository.mjs';
 
@@ -105,6 +105,7 @@ describe('practice mode (R23 a, g)', () => {
   it('(a) replay submit grades but writes NOTHING to progress/runtime/events/XP', async () => {
     const wallet = newTestWallet();
     const headers = await getTestAuthHeaders(wallet);
+    await enrollWalletForTest(query, wallet, COURSE_ID); // lessons require a staked course
 
     const first = await submitLesson(headers, LESSON_1);
     expect(first.body.accepted).toBe(true);
@@ -144,6 +145,7 @@ describe('practice mode (R23 a, g)', () => {
   it('(g) resubmitting a practice attempt id stays practice with completionEventId null', async () => {
     const wallet = newTestWallet();
     const headers = await getTestAuthHeaders(wallet);
+    await enrollWalletForTest(query, wallet, COURSE_ID); // lessons require a staked course
 
     await submitLesson(headers, LESSON_1);
     const practice = await submitLesson(headers, LESSON_1);
@@ -170,6 +172,7 @@ describe('course completion freeze (R23 b, c)', () => {
   it('(b) the completing submit stamps course_completed_at in the same transaction', async () => {
     const wallet = newTestWallet();
     const headers = await getTestAuthHeaders(wallet);
+    await enrollWalletForTest(query, wallet, COURSE_ID); // lessons require a staked course
     await seedAllButLast(wallet);
 
     const res = await submitLesson(headers, LESSON_3);
@@ -184,6 +187,7 @@ describe('course completion freeze (R23 b, c)', () => {
   it('(c) a miss on a completed course refuses with zero writes; voucher tier is frozen', async () => {
     const wallet = newTestWallet();
     const headers = await getTestAuthHeaders(wallet);
+    await enrollWalletForTest(query, wallet, COURSE_ID); // lessons require a staked course
     await seedAllButLast(wallet);
     await submitLesson(headers, LESSON_3);
 
@@ -221,6 +225,7 @@ describe('miss semantics (R23 d, e)', () => {
   it('(d) shielded miss is free: streak pauses then continues N -> N+1, redirect untouched', async () => {
     const wallet = newTestWallet();
     const headers = await getTestAuthHeaders(wallet);
+    await enrollWalletForTest(query, wallet, COURSE_ID); // lessons require a staked course
 
     // Real completion, then backdate it two days so yesterday is a gap.
     await submitLesson(headers, LESSON_1);
@@ -256,6 +261,7 @@ describe('miss semantics (R23 d, e)', () => {
   it('(d) unshielded miss: streak 0, redirect 5000 at lapse 1', async () => {
     const wallet = newTestWallet();
     const headers = await getTestAuthHeaders(wallet);
+    await enrollWalletForTest(query, wallet, COURSE_ID); // lessons require a staked course
     await submitLesson(headers, LESSON_1);
     await query(
       `UPDATE lesson.user_course_runtime_state
@@ -283,6 +289,7 @@ describe('miss semantics (R23 d, e)', () => {
   it('(e) the same missDay from two producers yields ONE receipt and ONE transition', async () => {
     const wallet = newTestWallet();
     const headers = await getTestAuthHeaders(wallet);
+    await enrollWalletForTest(query, wallet, COURSE_ID); // lessons require a staked course
     await submitLesson(headers, LESSON_1);
 
     const day = utcDay(-1);
@@ -314,6 +321,7 @@ describe('catch-up misses at submit (R23 f)', () => {
   it('(f) a 2-day unprocessed gap settles as two auto-miss receipts before the lesson-day', async () => {
     const wallet = newTestWallet();
     const headers = await getTestAuthHeaders(wallet);
+    await enrollWalletForTest(query, wallet, COURSE_ID); // lessons require a staked course
 
     await submitLesson(headers, LESSON_1);
     await query(
@@ -354,6 +362,7 @@ describe('XP idempotency (R23 i)', () => {
   it('(i) concurrent double submit of the same first-time lesson awards XP once', async () => {
     const wallet = newTestWallet();
     const headers = await getTestAuthHeaders(wallet);
+    await enrollWalletForTest(query, wallet, COURSE_ID); // lessons require a staked course
 
     const [a, b] = await Promise.all([
       app.inject({
@@ -412,6 +421,7 @@ describe('internal miss endpoint hardening (sweep R20)', () => {
   it('derives the miss_event_id server-side, ignoring caller-supplied ids', async () => {
     const wallet = newTestWallet();
     const headers = await getTestAuthHeaders(wallet);
+    await enrollWalletForTest(query, wallet, COURSE_ID); // lessons require a staked course
     await submitLesson(headers, LESSON_1);
 
     const day = utcDay(-1);

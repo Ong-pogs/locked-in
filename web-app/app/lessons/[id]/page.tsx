@@ -11,6 +11,7 @@ import {
   checkRecallQuestion,
   fetchWithAuth,
 } from '@/services/api';
+import { ApiError } from '@/services/api/errors';
 import { buildLessonResultParams } from '@/services/lessons/resultParams';
 import type { Question, Lesson } from '@/types';
 import { T } from '@/components/theme';
@@ -200,6 +201,8 @@ export default function LessonPage(props: {
   // Once an attempt is restored we've already called startLesson — record
   // that so we don't re-sync, which would 409 against the existing attempt.
   const [startSynced, setStartSynced] = useState<boolean>(restored !== null);
+  // Set when the backend refuses this lesson because the course isn't staked.
+  const [stakeRequired, setStakeRequired] = useState(false);
   const [attemptId, setAttemptId] = useState<string | null>(restored?.attemptId ?? null);
   const [attemptStartedAt, setAttemptStartedAt] = useState<string | null>(
     restored?.startedAt ?? null,
@@ -452,8 +455,13 @@ export default function LessonPage(props: {
       setStartSynced(true);
       fetchWithAuth((token) =>
         startLesson(lessonId, { attemptId: nextAttemptId, startedAt }, token),
-      ).catch(() => {
+      ).catch((err) => {
         setStartSynced(false);
+        // Lessons require a staked course. Surface it immediately instead of
+        // letting the user read + answer everything and only fail at submit.
+        if (err instanceof ApiError && err.code === 'COURSE_NOT_LOCKED') {
+          setStakeRequired(true);
+        }
       });
     },
     [lessonId, startSynced, usesRemoteVerification],
@@ -646,6 +654,43 @@ export default function LessonPage(props: {
     setPhase('questions');
     syncLessonStart(nextAttemptId, startedAt);
   }, [syncLessonStart]);
+
+  // Stake gate: this course has no lock, so its lessons are closed. Route to
+  // the deposit flow rather than dead-ending.
+  if (stakeRequired) {
+    return (
+      <CozyLessonShell>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <CozyCard style={{ padding: 26, maxWidth: 420, textAlign: 'center' }}>
+            <p
+              className="font-pixel text-lg mb-2"
+              style={{ color: AMBER, textShadow: COZY_TEXT_SHADOW }}
+            >
+              Lock a stake to start
+            </p>
+            <p
+              className="font-pixel-mono text-[12px] mb-5"
+              style={{ color: T.textMutedStrong, lineHeight: 1.6 }}
+            >
+              Lessons open once you&apos;ve locked USDC on this course. Your stake comes
+              back with its yield when you finish.
+            </p>
+            <CozyPrimary
+              onClick={() =>
+                router.push(
+                  courseId
+                    ? `/onboarding/deposit?courseId=${encodeURIComponent(courseId)}`
+                    : '/courses',
+                )
+              }
+            >
+              Lock &amp; start
+            </CozyPrimary>
+          </CozyCard>
+        </div>
+      </CozyLessonShell>
+    );
+  }
 
   // Not found
   if (!lesson) {
