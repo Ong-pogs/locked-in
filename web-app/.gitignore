@@ -50,3 +50,4 @@ test-results-visual/
 playwright-report/
 test-results-content/
 test-results-fullpass/
+test-results-live/

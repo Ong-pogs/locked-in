@@ -17,6 +17,10 @@ import { DEFAULT_COURSE_STATE } from '@/types/courseState';
 import type { CourseGameState, FuelEarnStatus } from '@/types/courseState';
 import { loadHydratedContentSnapshot } from '@/services/repositories';
 
+// Single frozen empty array shared by every "missing key" selector return, so
+// the snapshot identity stays stable across renders (see getLessonsForCourse).
+const EMPTY_LIST: readonly never[] = Object.freeze([]);
+
 interface CourseStore {
   // Existing
   courses: Course[];
@@ -357,9 +361,15 @@ export const useCourseStore = create<CourseStore>()(
 
       getLessonProgress: (lessonId) => get().lessonProgress[lessonId] ?? null,
 
-      getModulesForCourse: (courseId) => get().modules[courseId] ?? [],
+      // EMPTY_LIST, not a fresh `[]`: both getters are consumed as Zustand
+      // selectors, so allocating a new array for a missing key changes the
+      // snapshot identity on every render. useSyncExternalStore then never
+      // settles — /lessons/<unknown-id> crashed with React error #185
+      // (Maximum update depth exceeded) instead of rendering "Lesson not
+      // found". Any selector-facing not-found return must be stable.
+      getModulesForCourse: (courseId) => get().modules[courseId] ?? (EMPTY_LIST as unknown as CourseModule[]),
 
-      getLessonsForCourse: (courseId) => get().lessons[courseId] ?? [],
+      getLessonsForCourse: (courseId) => get().lessons[courseId] ?? (EMPTY_LIST as unknown as Lesson[]),
 
       getLesson: (lessonId) => {
         const state = get();

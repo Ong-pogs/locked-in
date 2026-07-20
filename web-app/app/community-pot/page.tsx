@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useCourseStore } from '@/stores';
 import { getCommunityPotHistory } from '@/services/api/progress/progressApi';
-import { fetchWithAuth } from '@/services/api/httpClient';
+import { AuthExpiredError, fetchWithAuth } from '@/services/api/httpClient';
 import type { CommunityPotHistoryWindow } from '@/services/api/types';
 import { T } from '@/components/theme';
 import { CozyCard, CozySectionLabel } from '@/components/cozy';
@@ -66,7 +66,15 @@ export default function CommunityPotPage() {
       setLoading(false);
     } catch (err) {
       if (!signal?.aborted) {
-        setError(err instanceof Error ? err.message : 'Failed to load.');
+        // fetchWithAuth THROWS for a never-signed-in visitor (no token and no
+        // refresh token), so the friendly copy above was unreachable and
+        // first-time visitors were told "Authentication expired". Mirror the
+        // leaderboard's handling.
+        if (err instanceof AuthExpiredError) {
+          setError('Connect wallet to view community pot.');
+        } else {
+          setError(err instanceof Error ? err.message : 'Failed to load.');
+        }
         setLoading(false);
       }
     }

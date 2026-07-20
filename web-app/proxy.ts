@@ -5,7 +5,8 @@ const PUBLIC_ROUTES = [
   '/',
   '/manifest.webmanifest',
   '/village',
-  '/menu',
+  // '/menu' is an internal design-QA index (it links every production page
+  // and documents internal routing) — deliberately NOT public.
   '/dashboard',
   '/courses',
   '/shop',
@@ -26,12 +27,20 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/village', request.url));
   }
 
-  // Allow public routes and static assets
+  // Allow public routes and static assets. The asset test matches a real file
+  // EXTENSION, not merely "contains a dot": `pathname.includes('.')` let any
+  // gated route be walked past the guard by appending one (/lessons/bw-1.x
+  // rendered instead of redirecting), which is also how an anonymous visitor
+  // could reach the lesson page's crash path.
+  const isStaticAsset = /\.(?:js|mjs|css|map|json|webmanifest|txt|xml|ico|png|jpe?g|gif|svg|webp|avif|woff2?|ttf|otf|eot|mp3|mp4|webm|wasm)$/i.test(
+    pathname,
+  );
   if (
     PUBLIC_ROUTES.includes(pathname) ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/icons') ||
-    pathname.includes('.')
+    pathname.startsWith('/.well-known') ||
+    isStaticAsset
   ) {
     return NextResponse.next();
   }

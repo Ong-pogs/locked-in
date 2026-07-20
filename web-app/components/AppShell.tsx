@@ -21,7 +21,7 @@ import { T } from './theme';
 const PUBLIC_ROUTES = [
   '/courses',
   '/village',
-  '/menu',
+  // '/menu' removed: internal design-QA index, gated behind auth.
   '/dashboard',
   '/shop',
   '/alchemy',

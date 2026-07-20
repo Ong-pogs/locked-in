@@ -8,7 +8,7 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: '/',
     display: 'standalone',
     background_color: '#0a0a0a',
-    theme_color: '#0ea5e9',
+    theme_color: '#06060C', // must match viewport.themeColor in layout.tsx
     icons: [
       {
         src: '/icons/icon-192.png',
