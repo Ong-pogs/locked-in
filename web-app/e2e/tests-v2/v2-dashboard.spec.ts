@@ -32,6 +32,22 @@ test.describe('v2 dashboard — gate sanity', () => {
       page.getByTestId('v2-heatmap').getByRole('button', { name: '2026', exact: true }),
     ).toBeVisible();
   });
+
+  // Prod smoke found the page 11px wider than a 390px viewport: the pixel-font
+  // title and the APY chip in the header row both refused to shrink. The
+  // heatmap is legitimately wider than the screen but must stay inside its own
+  // scroller — so assert on the DOCUMENT, which catches either regression.
+  test('page never scrolls horizontally', async ({ v2Page: page }) => {
+    await page.goto('/dashboard');
+    await expect(page.getByTestId('v2-dashboard')).toBeVisible({ timeout: 20_000 });
+    const { scrollW, clientW } = await page.evaluate(() => ({
+      scrollW: document.documentElement.scrollWidth,
+      clientW: document.documentElement.clientWidth,
+    }));
+    expect(scrollW, `document overflows viewport by ${scrollW - clientW}px`).toBeLessThanOrEqual(
+      clientW + 1,
+    );
+  });
 });
 
 test.describe('v2 dashboard — active (blazing)', () => {

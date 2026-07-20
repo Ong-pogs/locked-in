@@ -149,7 +149,10 @@ export const test = base.extend<V2Fixtures>({
       if (reqUrl.includes('/v1/progress/xp'))
         return route.fulfill(json({ xpTotal: 700, xpLevel: 2, levelThresholds: [0, 500, 1500] }));
       if (reqUrl.includes('/v1/yield/current-apy'))
-        return route.fulfill(json({ apyPct: 5.2, source: 'mock' }));
+        // Mirror what prod actually serves (source 'mock' rendered a shorter
+        // chip than the real 'Simulated APY · devnet' label, which is why the
+        // dashboard's header overflow only reproduced against prod).
+        return route.fulfill(json({ apyPct: 8, source: 'fixed_apy' }));
 
       // NO catch-all: record + 404 so a missing mock is loud, not silent.
       unmatchedRequests.push(`${method} ${reqUrl}`);

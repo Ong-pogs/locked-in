@@ -236,14 +236,19 @@ export function DashboardV2() {
       <div className="relative z-10 max-w-[720px] mx-auto px-[18px] pb-12">
         <div className="pt-20" />
 
-        <div className="flex items-center justify-between mb-5">
+        {/* Neither the pixel-font title nor the APY chip shrinks on its own —
+            at 390px they overflowed the viewport by ~11px. Smaller title on
+            mobile + a shrinkable chip wrapper keeps the row inside the page. */}
+        <div className="flex items-center justify-between gap-3 mb-5">
           <h1
-            className="text-3xl font-bold tracking-wide font-pixel"
+            className="text-2xl md:text-3xl font-bold tracking-wide font-pixel min-w-0"
             style={{ color: COZY_TEXT, textShadow: COZY_TEXT_SHADOW }}
           >
             Dashboard
           </h1>
-          <LiveApyChip />
+          <div className="min-w-0 shrink">
+            <LiveApyChip />
+          </div>
         </div>
 
         {/* XP hero (carried from the legacy dashboard). */}
