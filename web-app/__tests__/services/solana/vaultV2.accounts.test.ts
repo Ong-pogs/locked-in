@@ -94,7 +94,7 @@ describe('vaultV2 account-order pins', () => {
     ]);
   });
 
-  it('claim_v2: [compute_budget, ed25519, claim] with 19 keys in the proven order (devnet/mock: no refresh)', async () => {
+  it('claim_v2: [compute_budget, create_ata_idempotent, ed25519, claim] with 19 keys in the proven order (devnet/mock: no refresh)', async () => {
     const config = syntheticConfig(v2);
     const lock = await v2.deriveLockPda(OWNER.toBase58(), 'test-kitchen');
     const voucher = {
@@ -106,20 +106,26 @@ describe('vaultV2 account-order pins', () => {
       signature: Buffer.alloc(64).toString('base64'),
     };
     const tx = await v2.buildClaimTransaction(OWNER.toBase58(), 'test-kitchen', voucher, config);
-    expect(tx.instructions).toHaveLength(3);
-    // ix0 = compute budget, ix1 = ed25519 precompile, ix2 = claim (mock reserve
-    // → no refresh_reserve). verify_voucher scans all ixs, so ed25519 position
-    // is flexible; claim stays last.
+    expect(tx.instructions).toHaveLength(4);
+    // ix0 = compute budget, ix1 = create-ATA-idempotent for the owner's USDC
+    // account (the program declares owner_usdc `mut` and never creates it, so
+    // a user who closed it could otherwise never claim), ix2 = ed25519
+    // precompile, ix3 = claim (mock reserve → no refresh_reserve).
+    // verify_voucher scans all ixs, so ed25519 position is flexible; claim
+    // stays last.
     expect(tx.instructions[0].programId.toBase58()).toBe(
       'ComputeBudget111111111111111111111111111111',
     );
     expect(tx.instructions[1].programId.toBase58()).toBe(
+      'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL',
+    );
+    expect(tx.instructions[2].programId.toBase58()).toBe(
       'Ed25519SigVerify111111111111111111111111111',
     );
     const lockLiquidity = getAssociatedTokenAddressSync(config.usdcMint, lock, true);
     const lockCollateral = getAssociatedTokenAddressSync(config.collateralMint, lock, true);
     const userUsdc = getAssociatedTokenAddressSync(config.usdcMint, OWNER);
-    expect(meta(tx.instructions[2])).toEqual([
+    expect(meta(tx.instructions[3])).toEqual([
       [config.configAddress.toBase58(), true, false],
       [lock.toBase58(), true, false],
       [OWNER.toBase58(), true, true],
@@ -173,10 +179,15 @@ describe('vaultV2 account-order pins', () => {
       signature: Buffer.alloc(64).toString('base64'),
     };
     const claim = await v2.buildClaimTransaction(OWNER.toBase58(), 'test-kitchen', voucher, config);
-    // [compute_budget, refresh_reserve, ed25519, claim]
-    expect(claim.instructions).toHaveLength(4);
-    expect(claim.instructions[1].programId.toBase58()).toBe(KLEND);
-    expect(claim.instructions[2].programId.toBase58()).toBe('Ed25519SigVerify111111111111111111111111111');
+    // [compute_budget, create_ata_idempotent, refresh_reserve, ed25519, claim]
+    // — refresh_reserve still precedes the redeem CPI, which is the ordering
+    // the surfpool mainnet fork proved.
+    expect(claim.instructions).toHaveLength(5);
+    expect(claim.instructions[1].programId.toBase58()).toBe(
+      'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL',
+    );
+    expect(claim.instructions[2].programId.toBase58()).toBe(KLEND);
+    expect(claim.instructions[3].programId.toBase58()).toBe('Ed25519SigVerify111111111111111111111111111');
   });
 
   it('rejects a voucher whose lock does not match the derived PDA', async () => {

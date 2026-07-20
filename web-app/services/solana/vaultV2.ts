@@ -2,6 +2,7 @@ import { Buffer } from 'buffer';
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
+  createAssociatedTokenAccountIdempotentInstruction,
   getAssociatedTokenAddressSync,
 } from '@solana/spl-token';
 import {
@@ -390,11 +391,25 @@ export async function buildClaimTransaction(
   const tx = new Transaction();
   for (const pre of prepend) tx.add(pre);
   tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }));
+  // The program declares owner_usdc as a plain `mut` ATA — it does NOT create
+  // it. Wallets let users close token accounts, and a user who closed their
+  // USDC ATA after depositing could otherwise never claim (the tx fails on the
+  // missing destination with no in-app remedy). Idempotent: a no-op when the
+  // ATA already exists, which is the overwhelmingly common case.
+  tx.add(
+    createAssociatedTokenAccountIdempotentInstruction(
+      owner, // payer
+      userUsdc,
+      owner, // owner
+      config.usdcMint,
+    ),
+  );
   const refresh = buildRefreshReserveIx(config); // null on devnet/mock
   if (refresh) tx.add(refresh);
-  // [compute_budget, refresh_reserve?, ed25519_verify, claim]. The program
-  // scans instructions for the precompile, so ed25519 position is flexible;
-  // refresh must precede the redeem CPI. Proven on the surfpool mainnet fork.
+  // [compute_budget, create_ata_idempotent, refresh_reserve?, ed25519_verify,
+  // claim]. The program scans instructions for the precompile, so ed25519
+  // position is flexible; refresh must precede the redeem CPI. Proven on the
+  // surfpool mainnet fork.
   return tx.add(edIx).add(claimIx);
 }
 

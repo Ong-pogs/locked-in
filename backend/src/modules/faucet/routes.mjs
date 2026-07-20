@@ -47,29 +47,33 @@ export async function faucetRoutes(app) {
         });
       }
 
-      let solResult = { signature: null, error: null };
+      const solResult = { signature: null, error: null };
       let usdcResult = null;
       try {
-        // SOL transfer — best-effort. If it fails the user still gets
-        // USDC; we surface the error in the response.
-        try {
-          const sol = await transferSol(walletAddress, appConfig.faucetSolLamports);
-          solResult.signature = sol.signature;
-          request.log.info({ walletAddress, signature: sol.signature }, 'faucet.sol.ok');
-        } catch (err) {
-          solResult.error = err.message ?? 'SOL transfer failed';
-          request.log.warn({ walletAddress, err: err.message }, 'faucet.sol.failed');
-        }
-
-        // USDC transfer — must succeed.
+        // USDC FIRST — it is the leg that must succeed, and it is the only
+        // failure that releases the reservation. Paying SOL first meant a
+        // USDC failure deleted the sole per-wallet gate (releaseReservation
+        // is a hard DELETE) while SOL was already out the door, so every
+        // retry re-paid SOL — an unbounded drain on the ops key.
         usdcResult = await transferUsdc(walletAddress, appConfig.faucetUsdcAmountUi);
         request.log.info({ walletAddress, signature: usdcResult.signature }, 'faucet.usdc.ok');
       } catch (err) {
-        // USDC failed → release the reservation so the user can retry
-        // (otherwise they'd be locked out until FAUCET_ROUND bumps).
+        // Nothing has been paid at this point → releasing is safe.
         await releaseReservation(reservationId).catch(() => {});
         request.log.error({ walletAddress, err: err.message }, 'faucet.usdc.failed');
         throw err;
+      }
+
+      // SOL transfer — best-effort, and deliberately AFTER the reservation is
+      // committed: a SOL failure never releases, so it can never be retried
+      // into a repeat payout. We surface the error in the response instead.
+      try {
+        const sol = await transferSol(walletAddress, appConfig.faucetSolLamports);
+        solResult.signature = sol.signature;
+        request.log.info({ walletAddress, signature: sol.signature }, 'faucet.sol.ok');
+      } catch (err) {
+        solResult.error = err.message ?? 'SOL transfer failed';
+        request.log.warn({ walletAddress, err: err.message }, 'faucet.sol.failed');
       }
 
       // Both transfers (or at least USDC) succeeded — update the

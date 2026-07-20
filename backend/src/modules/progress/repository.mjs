@@ -223,6 +223,37 @@ export function isCourseComplete(moduleRows) {
 }
 
 /**
+ * THE definition of "this course is finished for this wallet". Every gate that
+ * asks the question must use this one.
+ *
+ * Completion is PERMANENT once frozen (invariant 6 / practice ruling): a frozen
+ * user can never be credited for a lesson published afterwards, so a live
+ * recompute would silently flip them back to "incomplete" the moment the
+ * catalog grows. That regression stranded locked principal (the dashboard's
+ * CLAIM CTA vanished) while simultaneously re-opening relock on a course that
+ * could be claimed again with no new work.
+ *
+ * `courseCompletedAt` is user_course_runtime_state.course_completed_at — the
+ * freeze stamp; null/undefined means never frozen.
+ */
+export function isCourseCompleteOrFrozen(moduleRows, courseCompletedAt) {
+  if (courseCompletedAt != null) return true;
+  return isCourseComplete(moduleRows);
+}
+
+/** Read the completion freeze stamp for (wallet, course). Null when unfrozen. */
+async function readCourseCompletionFreeze(client, walletAddress, courseId) {
+  const result = await client.query(
+    `select course_completed_at as "courseCompletedAt"
+       from lesson.user_course_runtime_state
+      where wallet_address = $1 and course_id = $2
+      limit 1`,
+    [walletAddress, courseId],
+  );
+  return result.rows[0]?.courseCompletedAt ?? null;
+}
+
+/**
  * Issue a signed completion voucher for a fully-completed course. The client
  * embeds the returned Ed25519 message+signature in a precompile instruction
  * placed before claim_v2 in the same transaction; the program verifies the
@@ -256,14 +287,8 @@ export async function issueCourseCompletionVoucher(walletAddress, courseId) {
   // back to "incomplete" the moment the catalog grows (a new lesson the frozen
   // user can never be credited for), stranding their principal + signed
   // voucher forever. The stored freeze is sufficient proof of completion.
-  const frozenRow = await query(
-    `SELECT course_completed_at as "courseCompletedAt"
-       FROM lesson.user_course_runtime_state
-      WHERE wallet_address = $1 AND course_id = $2 LIMIT 1`,
-    [walletAddress, courseId],
-  );
-  const isFrozenComplete = frozenRow.rows[0]?.courseCompletedAt != null;
-  if (!isFrozenComplete && !isCourseComplete(moduleRows)) {
+  const courseCompletedAt = await readCourseCompletionFreeze({ query }, walletAddress, courseId);
+  if (!isCourseCompleteOrFrozen(moduleRows, courseCompletedAt)) {
     throw new HttpError(403, 'Course not yet complete', 'COURSE_NOT_COMPLETE');
   }
 
@@ -1071,7 +1096,13 @@ function buildIntegrityFlags(answerText, startedAt, completedAt) {
     const started = new Date(startedAt).getTime();
     const completed = new Date(completedAt).getTime();
     const durationMs = completed - started;
-    if (Number.isFinite(durationMs) && durationMs >= 0 && durationMs < 2000 && trimmed.length > 40) {
+    // durationMs === 0 means the attempt was CREATED at submit/check time (its
+    // /start never landed, so startedAt was stamped equal to completedAt) — the
+    // duration is unmeasurable, not "impossibly fast". `> 0` matches
+    // answerValidator.mjs, where this was already fixed; the stale `>= 0` copy
+    // here auto-blocked legitimate no-prior-start answers and, via /check,
+    // locked that wrong verdict into user_question_checks permanently.
+    if (Number.isFinite(durationMs) && durationMs > 0 && durationMs < 2000 && trimmed.length > 40) {
       flags.push({
         code: 'IMPOSSIBLE_SPEED',
         severity: 'block',
@@ -1835,7 +1866,11 @@ export async function assertCourseLockable(walletAddress, courseId, { log = null
     );
   }
 
-  if (isCourseComplete(moduleRows)) {
+  // Freeze-aware: a live recompute would let a frozen-complete user relock the
+  // moment the catalog grows — and because their completion is frozen, claim
+  // again immediately with no new work (penalty-free yield farming).
+  const courseCompletedAt = await readCourseCompletionFreeze({ query }, walletAddress, courseId);
+  if (isCourseCompleteOrFrozen(moduleRows, courseCompletedAt)) {
     log?.warn?.({ walletAddress, courseId }, 'locks.enroll.relock_blocked');
     throw new HttpError(
       403,
@@ -2163,9 +2198,14 @@ export async function getCourseRuntimeSnapshot(walletAddress, courseId) {
     // configured — the exact conditions under which the voucher endpoint
     // returns 200. Fail-closed: an unarmed deploy never renders CLAIM.
     const moduleRows = await fetchModuleCompletion(client, walletAddress, courseId);
+    // Honor the completion FREEZE, not a live recompute: publishing a new
+    // lesson into a finished course must never un-arm CLAIM for a user whose
+    // principal is still locked (they can never be credited for that lesson).
+    const courseCompletedAt = await readCourseCompletionFreeze(client, walletAddress, courseId);
     return {
       ...snapshot,
-      voucherAvailable: isCourseComplete(moduleRows) && voucherSigningConfigured(),
+      voucherAvailable:
+        isCourseCompleteOrFrozen(moduleRows, courseCompletedAt) && voucherSigningConfigured(),
     };
   });
 }
@@ -3159,7 +3199,18 @@ async function seedDistributionSnapshotRows(windowId, entries) {
         payout_amount
       )
       values ${values.join(', ')}
-      on conflict (window_id, wallet_address, course_id) do nothing
+      -- Self-correcting, not first-write-wins. The seed commits BEFORE the
+      -- on-chain close (no shared transaction), so a close that fails after
+      -- seeding leaves these rows behind. The caller only reaches here for a
+      -- window that is still open (ALREADY_CLOSED returns earlier), so the
+      -- current run's computation is authoritative — 'do nothing' silently
+      -- kept the stale run's payout amounts and merged them with the new
+      -- run's totalWeight/recipient count sent on-chain.
+      on conflict (window_id, wallet_address, course_id) do update set
+        current_streak = excluded.current_streak,
+        principal_amount = excluded.principal_amount,
+        weight = excluded.weight,
+        payout_amount = excluded.payout_amount
     `,
     params,
   );

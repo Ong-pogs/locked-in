@@ -438,7 +438,13 @@ pub struct OpenLockV2<'info> {
     pub owner: Signer<'info>,
     #[account(address = config.kamino_collateral_mint)]
     pub reserve_collateral_mint: InterfaceAccount<'info, Mint>,
-    #[account(init, payer = owner, associated_token::mint = reserve_collateral_mint, associated_token::authority = lock)]
+    // init_if_needed, NOT init: the address is purely derived (lock PDA +
+    // public collateral mint) and the SPL ATA program lets anyone create an
+    // ATA for any wallet, so plain `init` let an attacker pre-create this
+    // account and permanently brick open_lock_v2 for that (owner, course).
+    // Safe here because the ATA's mint+authority are constrained, so a
+    // pre-created account can only be exactly the one we would have made.
+    #[account(init_if_needed, payer = owner, associated_token::mint = reserve_collateral_mint, associated_token::authority = lock)]
     pub lock_collateral: InterfaceAccount<'info, TokenAccount>,
     pub token_program: Interface<'info, TokenInterface>,
     pub associated_token_program: Program<'info, AssociatedToken>,

@@ -209,6 +209,44 @@ async function doRefresh(currentRefreshToken: string): Promise<{ accessToken: st
   return refreshPromise;
 }
 
+/**
+ * Is this refresh failure proof the SESSION is dead, or just proof the CALL
+ * failed? Only an auth-level rejection of the refresh token itself kills the
+ * session. A 500 / timeout / offline blip must never discard a still-valid
+ * 7-day refresh token — doing so forced a full re-login on every hiccup.
+ */
+function isSessionDead(err: unknown): boolean {
+  return err instanceof ApiError && (err.status === 401 || err.status === 403);
+}
+
+/**
+ * Refresh, tolerating the one-time-use rotation race.
+ *
+ * Refresh tokens are strictly one-time-use server-side, and each browsing
+ * context (PWA window, tabs) holds its own in-memory copy. When another
+ * context rotates R1→R2 first, ours gets 401 REFRESH_TOKEN_REUSED — but the
+ * store already holds the winner's R2. Retry with it instead of wiping, which
+ * would have signed this context out AND clobbered the valid token in shared
+ * storage.
+ *
+ * Throws on genuine failure; the caller decides whether to wipe via
+ * isSessionDead().
+ */
+async function refreshWithRotationRecovery(
+  attemptedToken: string,
+): Promise<{ accessToken: string; refreshToken: string }> {
+  try {
+    return await doRefresh(attemptedToken);
+  } catch (err) {
+    const latest = useUserStore.getState().refreshToken;
+    if (isSessionDead(err) && latest && latest !== attemptedToken) {
+      // Another context rotated while we were in flight — use the winner's.
+      return doRefresh(latest);
+    }
+    throw err;
+  }
+}
+
 export async function fetchWithAuth<T>(
   requestFn: (token: string) => Promise<T>,
 ): Promise<T> {
@@ -219,11 +257,12 @@ export async function fetchWithAuth<T>(
   if (!token) {
     if (!refreshToken) throw new AuthExpiredError();
     try {
-      const session = await doRefresh(refreshToken);
+      const session = await refreshWithRotationRecovery(refreshToken);
       setAuthSession(session.accessToken, session.refreshToken);
       token = session.accessToken;
-    } catch {
-      setAuthSession(null, null);
+    } catch (err) {
+      // Only a genuine auth rejection kills the session (see isSessionDead).
+      if (isSessionDead(err)) setAuthSession(null, null);
       throw new AuthExpiredError();
     }
   }
@@ -241,10 +280,11 @@ export async function fetchWithAuth<T>(
       // Only a REFRESH failure means the session is truly dead.
       let session: { accessToken: string; refreshToken: string };
       try {
-        session = await doRefresh(currentRefreshToken);
+        session = await refreshWithRotationRecovery(currentRefreshToken);
         setAuthSession(session.accessToken, session.refreshToken);
-      } catch {
-        setAuthSession(null, null);
+      } catch (err) {
+        // A transient refresh failure must not discard a valid session.
+        if (isSessionDead(err)) setAuthSession(null, null);
         throw new AuthExpiredError();
       }
       // Retry with the fresh token. A NON-auth failure here (e.g. 409

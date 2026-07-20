@@ -137,11 +137,15 @@ function ResultContent({ params }: { params: Promise<{ id: string }> }) {
   const xpTotal = Number(searchParams.get('xpTotal') ?? 0);
   const xpLevel = Number(searchParams.get('xpLevel') ?? 0);
 
-  const activeState = useCourseStore((s) => {
-    const courseId = s.activeCourseId;
-    return courseId ? s.courseStates[courseId] : null;
+  // Streak of the course whose lesson was just finished — NOT activeCourseId.
+  // The v2 dashboard's next-lesson CTA routes straight to /lessons/<id>
+  // without setting activeCourseId, so a user with two enrolled courses saw
+  // the other course's streak on this reward card. Fall back to the active
+  // course only when the lesson's course can't be resolved.
+  const streak = useCourseStore((s) => {
+    const courseId = s.getLesson(_lessonId)?.courseId ?? s.activeCourseId;
+    return (courseId ? s.courseStates[courseId]?.currentStreak : 0) ?? 0;
   });
-  const streak = activeState?.currentStreak ?? 0;
   const correctCount = Math.round((score / 100) * totalQuestions);
 
   // Find the next incomplete lesson in the same course so we can offer

@@ -9,6 +9,7 @@ import {
   verifyAuthChallenge,
   verifyPrivySession,
 } from '@/services/api/auth/authApi';
+import { ApiError } from '@/services/api/errors';
 
 // Cookie flag for proxy auth guard (server-side check).
 // Adds Secure in HTTPS contexts so the cookie never transmits over plain
@@ -162,11 +163,26 @@ export function useAuth() {
       } catch (err) {
         // PRIVY_NOT_CONFIGURED / INVALID_PRIVY_SESSION → fall through to
         // the legacy signMessage flow so the user can still log in.
+        //
+        // These arrive as ApiError.code — the backend serializes {message,
+        // code} separately, so the code token never appears in the message and
+        // regex-testing the message alone meant this fallback NEVER fired,
+        // stranding users at a failed login instead of the working path.
+        const code = err instanceof ApiError ? (err.code ?? '') : '';
+        const status = err instanceof ApiError ? err.status : 0;
         const message = err instanceof Error ? err.message : '';
-        if (!/PRIVY_NOT_CONFIGURED|INVALID_PRIVY_SESSION|404/.test(message)) {
+        const recoverable =
+          code === 'PRIVY_NOT_CONFIGURED' ||
+          code === 'INVALID_PRIVY_SESSION' ||
+          status === 404 ||
+          /PRIVY_NOT_CONFIGURED|INVALID_PRIVY_SESSION|404/.test(message);
+        if (!recoverable) {
           throw err;
         }
-        console.warn('[auth] Privy-session path unavailable, falling back to signMessage:', message);
+        console.warn(
+          '[auth] Privy-session path unavailable, falling back to signMessage:',
+          code || message,
+        );
       }
 
       // --- Path B: legacy challenge + signMessage ---

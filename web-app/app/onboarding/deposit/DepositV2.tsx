@@ -11,7 +11,11 @@ import { useCourseStore, useUserStore } from '@/stores';
 import { readWalletUsdcUi } from '@/services/solana/vaultV2';
 import { fetchWithAuth } from '@/services/api/httpClient';
 import { getLockEligibility } from '@/services/api/locks/locksApi';
-import { enrollLockWithRetry, writePendingEnroll } from '@/services/enroll/pendingEnroll';
+import {
+  clearPendingEnroll,
+  enrollLockWithRetry,
+  writePendingEnroll,
+} from '@/services/enroll/pendingEnroll';
 import type { LockIneligibleCode } from '@/services/api/types';
 import type { V2ActionPhase } from '@/services/solana/v2Actions';
 
@@ -174,6 +178,26 @@ function DepositV2Content() {
       // The e2e tx stub never signs, so its runs skip the signer pre-check.
       const wallet = pickSignerWallet(solanaWallets, walletAddress);
       if (!wallet && !isTxStubActive()) throw new Error(missingSignerMessage(walletAddress));
+
+      // Breadcrumb BEFORE any money moves. The lock PDA is pure derivation
+      // (owner + courseId), so we can record the intent without the chain.
+      // Without this, a tab close / dead battery between lock_funds_v2
+      // confirming and the enroll call landing left real locked USDC with no
+      // local or server record — invisible in the app. The dashboard's
+      // retryPendingEnrolls heals it on next mount; success clears it below.
+      try {
+        const { deriveLockPda } = await import('@/services/solana/vaultV2');
+        const pda = await deriveLockPda(walletAddress, courseId);
+        writePendingEnroll(courseId, {
+          lockAddress: pda.toBase58(),
+          walletAddress,
+          attemptedAt: new Date().toISOString(),
+        });
+      } catch {
+        // Derivation/storage failure must not block the deposit — the R14
+        // server-side lazy heal still covers this lock.
+      }
+
       const result = await executeDeposit(
         walletAddress,
         courseId,
@@ -195,11 +219,15 @@ function DepositV2Content() {
       if (result.lockAddress) {
         const enrollOutcome = await enrollLockWithRetry(courseId, result.lockAddress);
         if (enrollOutcome.status === 'pending') {
+          // Refresh the pre-tx breadcrumb with the chain-confirmed address.
           writePendingEnroll(courseId, {
             lockAddress: result.lockAddress,
             walletAddress,
             attemptedAt: new Date().toISOString(),
           });
+        } else {
+          // Enrolled server-side — the breadcrumb has done its job.
+          clearPendingEnroll(courseId);
         }
       }
 
