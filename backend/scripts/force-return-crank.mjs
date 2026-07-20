@@ -13,6 +13,9 @@
 //   - real Kamino: klend rejects settles against a stale reserve, so a klend
 //     refresh_reserve is prepended in the same tx whenever the config pins the
 //     real klend program (never on the devnet mock, which needs no refresh).
+//   - congestion: this is the emergency rescue path, so it bids a priority fee
+//     sampled from the recent window (buildPriorityFeeIx) instead of 0. Pricing
+//     failures fall back to the floor — never to a throw.
 //
 // The tx-building here is pure and unit-tested against the ForceReturnV2
 // accounts struct in programs/locked_in/src/vault_v2.rs; main() only wires RPC.
@@ -65,9 +68,31 @@ export const KLEND_PROGRAM_ID = 'KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD';
 
 // Scope prices account for the pinned USDC reserve — a public account, not a
 // secret. Default = Kamino main-market USDC scope oracle; override per reserve.
-// Mirrors NEXT_PUBLIC_KAMINO_SCOPE_PRICES in web-app/services/solana/vaultV2.ts.
+//
+// BOTH names are accepted on purpose. The frontend reads
+// NEXT_PUBLIC_KAMINO_SCOPE_PRICES (web-app/services/solana/vaultV2.ts) and that
+// is the name the env templates/runbook document, so an operator who sets only
+// that one — the likely case, since the two services share a .env in practice —
+// used to get a crank silently pointed at the DEFAULT scope oracle while the app
+// used the overridden one. Same reserve, two different oracles, and the rescue
+// path is the worst place to discover it. Own name wins; NEXT_PUBLIC_ is the
+// fallback; empty strings do not count as "set".
+const firstNonEmpty = (...values) =>
+  values.find((v) => typeof v === 'string' && v.trim() !== '')?.trim();
+
 export const KAMINO_SCOPE_PRICES =
-  process.env.KAMINO_SCOPE_PRICES ?? '3t4JZcueEzTbVP6kLxXrL3VpWx45jDer4eqysweBchNH';
+  firstNonEmpty(
+    process.env.KAMINO_SCOPE_PRICES,
+    process.env.NEXT_PUBLIC_KAMINO_SCOPE_PRICES,
+  ) ?? '3t4JZcueEzTbVP6kLxXrL3VpWx45jDer4eqysweBchNH';
+
+// Priority fee band, mirroring PRIORITY_FEE_FLOOR/CEILING in
+// web-app/services/solana/vaultV2.ts. A force_return_v2 is a Kamino CPI, and at
+// 0 micro-lamports it is the first thing a mainnet leader drops under
+// congestion — which is precisely when this rescue path gets used. At the 400k
+// CU limit the band is ~4_000..400_000 lamports of priority fee.
+export const PRIORITY_FEE_FLOOR = 10_000; // micro-lamports per CU
+export const PRIORITY_FEE_CEILING = 1_000_000;
 
 const sha8 = (preimage) =>
   createHash('sha256').update(preimage, 'utf8').digest().subarray(0, 8);
@@ -186,19 +211,82 @@ export function buildRefreshReserveIx(config) {
   });
 }
 
+/** Distinct writable accounts across a set of instructions (fee-sampling input). */
+export function writableKeysOf(instructions) {
+  const seen = new Map();
+  for (const ix of instructions) {
+    for (const key of ix.keys) {
+      if (key.isWritable) seen.set(key.pubkey.toBase58(), key.pubkey);
+    }
+  }
+  return [...seen.values()];
+}
+
+/**
+ * setComputeUnitPrice priced at the 75th percentile of
+ * getRecentPrioritizationFees for the accounts this sweep actually writes —
+ * high enough to clear the bulk of the recent window without chasing the max()
+ * outlier. Same policy as buildPriorityFeeIx in
+ * web-app/services/solana/vaultV2.ts, deliberately kept in step with it.
+ *
+ * Degrades to the FLOOR on any failure (RPC unsupported, timeout, garbage
+ * response, quiet network). Pricing must never be able to block the rescue: a
+ * crank that throws while trying to bid harder is strictly worse than one that
+ * bids the floor.
+ */
+export async function buildPriorityFeeIx(connection, writableAccounts) {
+  let microLamports = PRIORITY_FEE_FLOOR;
+  try {
+    const recent = await connection.getRecentPrioritizationFees({
+      // The RPC caps this list at 128 addresses.
+      lockedWritableAccounts: writableAccounts.slice(0, 128),
+    });
+    const samples = (recent ?? [])
+      .map((f) => f.prioritizationFee)
+      .filter((fee) => Number.isFinite(fee) && fee > 0)
+      .sort((a, b) => a - b);
+    if (samples.length > 0) {
+      microLamports = samples[Math.min(samples.length - 1, Math.floor(samples.length * 0.75))];
+    }
+  } catch {
+    // Floor it.
+  }
+  return ComputeBudgetProgram.setComputeUnitPrice({
+    microLamports: Math.min(
+      PRIORITY_FEE_CEILING,
+      Math.max(PRIORITY_FEE_FLOOR, Math.ceil(microLamports)),
+    ),
+  });
+}
+
 /**
  * Full per-lock instruction list: idempotent owner-USDC ATA create (the
  * program does not init it and a closed ATA would trap the return), a CU
- * bump for the redeem CPI, refresh_reserve on real klend, then
- * force_return_v2 itself. Ordering matches buildClaimTransaction's real-Kamino
- * shape — refresh_reserve immediately precedes the settling instruction.
+ * bump for the redeem CPI, the priority-fee bid, refresh_reserve on real klend,
+ * then force_return_v2 itself. Ordering matches buildClaimTransaction's
+ * real-Kamino shape — refresh_reserve immediately precedes the settling
+ * instruction.
+ *
+ * `priorityFeeIx` is injected rather than fetched here so this builder stays
+ * pure and unit-testable; main() prices it once per lock against the tx's own
+ * writable accounts. Omitting it yields the old un-prioritised shape, which is
+ * fine on devnet and in tests but should not be used on mainnet.
  */
-export function buildForceReturnTransactionIxs({ programId, configPda, lockPda, owner, caller, config }) {
+export function buildForceReturnTransactionIxs({
+  programId,
+  configPda,
+  lockPda,
+  owner,
+  caller,
+  config,
+  priorityFeeIx = null,
+}) {
   const ownerUsdc = getAssociatedTokenAddressSync(config.usdcMint, owner, true);
   const refresh = buildRefreshReserveIx(config); // null on devnet/mock
   return [
     createAssociatedTokenAccountIdempotentInstruction(caller, ownerUsdc, owner, config.usdcMint),
     ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }),
+    ...(priorityFeeIx ? [priorityFeeIx] : []),
     ...(refresh ? [refresh] : []),
     buildForceReturnV2Instruction({ programId, configPda, lockPda, owner, caller, config }),
   ];
@@ -248,14 +336,22 @@ async function main() {
       continue;
     }
     try {
-      const ixs = buildForceReturnTransactionIxs({
+      const args = {
         programId,
         configPda,
         lockPda: pubkey,
         owner: lock.owner,
         caller: worker.publicKey,
         config,
-      });
+      };
+      // Price against THIS tx's writable set (the lock PDA and its ATAs differ
+      // per lock), then rebuild with the bid in place. buildPriorityFeeIx
+      // never throws — worst case it returns the floor.
+      const priorityFeeIx = await buildPriorityFeeIx(
+        connection,
+        writableKeysOf(buildForceReturnTransactionIxs(args)),
+      );
+      const ixs = buildForceReturnTransactionIxs({ ...args, priorityFeeIx });
       const signature = await sendAndConfirmTransaction(
         connection,
         new Transaction().add(...ixs),

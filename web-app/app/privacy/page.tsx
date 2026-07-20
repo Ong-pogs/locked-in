@@ -65,6 +65,14 @@ export default function PrivacyPage() {
           DRAFT — PENDING LEGAL REVIEW. This document has not been reviewed or approved by a
           lawyer. It describes what the app actually collects today.
         </p>
+        <p style={draft}>
+          NO PUBLISHED ENTITY OR CONTACT CHANNEL. Locked In is run by the project team as an
+          unincorporated beta. No legal entity, data controller or contact address has been
+          published, so there is currently no working channel for you to request access to or
+          deletion of your data, and no named controller to complain to. Assume that anything you
+          give the app cannot be recalled on request. See &ldquo;Retention and your
+          choices&rdquo; below for what you can actually control today.
+        </p>
 
         <h2 style={h2}>What we collect</h2>
         <p style={body}>
@@ -128,10 +136,15 @@ export default function PrivacyPage() {
         <h2 style={h2}>Retention and your choices</h2>
         <p style={body}>
           We keep account and learning data while your account exists and while any lock is open.
-          You can ask us to delete your off-chain account data; on-chain records cannot be deleted
-          by anyone. Requests:{' '}
-          <span style={{ color: '#F0A878' }}>[CONTACT EMAIL — TBD]</span>. Operating entity:{' '}
-          <span style={{ color: '#F0A878' }}>[LEGAL ENTITY NAME — TBD]</span>.
+          On-chain records cannot be deleted by anyone, including us.
+        </p>
+        <p style={body}>
+          We have not yet published a contact address, so we cannot honestly offer you a deletion
+          or access request channel right now — do not assume one exists. What is genuinely in your
+          control today: the only personal data the app requires is the email and wallet address
+          held by Privy, which has its own privacy policy and its own account deletion process; and
+          clearing your browser&rsquo;s site data removes the copy stored on your device. Given
+          that, treat the beta as somewhere not to put data you would later need erased.
         </p>
 
         <p style={{ ...body, marginTop: 32 }}>

@@ -68,6 +68,13 @@ export default function TermsPage() {
           lawyer. It describes how the software actually behaves today so you can decide whether to
           use it. It is not legal advice and it is not a final agreement.
         </p>
+        <p style={draft}>
+          NO PUBLISHED ENTITY OR CONTACT CHANNEL. Locked In is run by the project team as an
+          unincorporated beta. We have not published a legal entity, a registered address or a
+          contact address. These terms therefore do not name a company you can hold to them, and
+          there is no published channel for questions, complaints or disputes. Do not lock money on
+          the assumption that a support desk or a legal counterparty exists.
+        </p>
 
         <h2 style={h2}>1. What Locked In does</h2>
         <p style={body}>
@@ -104,8 +111,11 @@ export default function TermsPage() {
         <p style={body}>
           The normal exit is completing the course and claiming. As a fallback, 180 days after a
           lock starts, the lock becomes force-returnable and anyone — including you — can trigger
-          the return of the position to you. This exists so a lock can never be stranded by us
-          failing to sign, going offline, or disappearing.
+          it. A force return pays back your principal only: 100% of the yield the deposit accrued
+          is forfeited to the community pot, no matter why the force return happened or how well
+          you kept your streak. It exists so a lock can never be stranded by us failing to sign,
+          going offline, or disappearing — but it is a rescue, not an equivalent exit, and taking
+          it costs you all of your yield.
         </p>
 
         <h2 style={h2}>6. No guarantee of yield, no guarantee of principal</h2>
@@ -132,12 +142,19 @@ export default function TermsPage() {
           old enough to enter a contract in your jurisdiction.
         </p>
 
-        <h2 style={h2}>9. Changes and contact</h2>
+        <h2 style={h2}>9. Changes to these terms</h2>
         <p style={body}>
           We may update these terms. Material changes bump the terms version, and you will be asked
-          to accept again before your next lock. Questions:{' '}
-          <span style={{ color: '#F0A878' }}>[CONTACT EMAIL — TBD]</span>. Operating entity:{' '}
-          <span style={{ color: '#F0A878' }}>[LEGAL ENTITY NAME — TBD]</span>.
+          to accept again before your next lock.
+        </p>
+
+        <h2 style={h2}>10. Who operates this, and how to reach us</h2>
+        <p style={body}>
+          Locked In is operated by the project team during an unincorporated beta. There is
+          currently no published legal entity, registered address or contact address, and therefore
+          no channel through which you can raise a question, a complaint or a dispute. We are not
+          naming a company or an email here that we cannot stand behind. Both will be published
+          before the beta caps are raised, and this section will be replaced with them.
         </p>
 
         <p style={{ ...body, marginTop: 32 }}>

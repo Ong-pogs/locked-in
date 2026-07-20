@@ -56,13 +56,21 @@ describe('vaultV2 account-order pins', () => {
     v2 = await import('@/services/solana/vaultV2');
   });
 
-  it('open_lock_v2: 8 keys in the proven order', async () => {
+  it('open_lock_v2: [cu_limit, cu_price, open_lock] with 8 keys in the proven order', async () => {
     const config = syntheticConfig(v2);
     const tx = await v2.buildOpenLockTransaction(OWNER.toBase58(), 'test-kitchen', config);
-    expect(tx.instructions).toHaveLength(1);
+    // The FIRST of the two deposit txs must be priced too — unpriced it is the
+    // one dropped under congestion, which aborts the whole deposit.
+    expect(tx.instructions).toHaveLength(3);
+    expect(tx.instructions[0].programId.toBase58()).toBe(
+      'ComputeBudget111111111111111111111111111111',
+    );
+    expect(tx.instructions[1].programId.toBase58()).toBe(
+      'ComputeBudget111111111111111111111111111111',
+    );
     const lock = await v2.deriveLockPda(OWNER.toBase58(), 'test-kitchen');
     const lockCollateral = getAssociatedTokenAddressSync(config.collateralMint, lock, true);
-    expect(meta(tx.instructions[0])).toEqual([
+    expect(meta(tx.instructions[2])).toEqual([
       [config.configAddress.toBase58(), false, false],
       [lock.toBase58(), true, false],
       [OWNER.toBase58(), true, true],

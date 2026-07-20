@@ -42,6 +42,44 @@ export function enrollLock(
 }
 
 /**
+ * Phases the claim audit trail accepts. Mirrors CLAIM_PHASES in
+ * backend/src/modules/locks/routes.mjs — an unknown value is a 400, so this
+ * union is the contract, not a hint.
+ */
+export type ClaimResultPhase = 'started' | 'signed' | 'submitted' | 'confirmed' | 'failed';
+
+/** POST /v1/locks/:courseId/claim-result 200 body. `recorded: false` means the
+ * server could not persist the attempt (DB outage) — never a client failure. */
+export interface ClaimResultResponse {
+  recorded: boolean;
+}
+
+/**
+ * Claim audit trail. executeClaim runs entirely in the browser, so without this
+ * the server never learns a user even TRIED to get their money out and "my
+ * claim failed" is unanswerable.
+ *
+ * TELEMETRY ONLY — callers MUST fire-and-forget it. It must never gate, delay
+ * or fail a claim: a rejected promise here means we lost a log line, not that
+ * anything happened to the user's funds.
+ */
+export function reportClaimResult(
+  courseId: string,
+  body: { phase: ClaimResultPhase; signature?: string | null; errorMessage?: string | null },
+  token: string,
+): Promise<ClaimResultResponse> {
+  return httpRequest<ClaimResultResponse>(`/v1/locks/${courseId}/claim-result`, {
+    method: 'POST',
+    body: {
+      phase: body.phase,
+      signature: body.signature ?? null,
+      errorMessage: body.errorMessage ?? null,
+    },
+    token,
+  });
+}
+
+/**
  * Extract the `{ retryable, retryAfterMs }` body of a 409 ENROLL_RETRY error
  * (ruling R6). Returns null for any other error. `retryAfterMs` is null when
  * the body did not carry a usable value — callers fall back to the R13

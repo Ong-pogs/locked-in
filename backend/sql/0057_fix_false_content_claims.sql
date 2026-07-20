@@ -35,11 +35,58 @@
 --       together — grading is a normalized text match, so an option that drifts
 --       from the key marks the right answer wrong (the 0054 bug).
 --   (d) The block ends with a loud verification: residual matches raise an
---       exception, a total no-op raises an exception, and the touched MCQs are
---       re-checked for key/option agreement. A silent no-op is impossible.
+--       exception, and the touched MCQs are re-checked for key/option
+--       agreement. A silent no-op is impossible — see FAILURE POLICY.
 --
 -- Corrective only: no rows are dropped, no ids or block/question structure
 -- change, so enrollments and in-flight attempts are unaffected.
+--
+-- FAILURE POLICY — why some checks WARN instead of RAISE (post-fix audit)
+--
+-- This file lives in backend/sql/, so scripts/migrate.mjs executes it
+-- unattended on every deploy. As first written, EVERY verification failure was
+-- `raise exception`, which aborts the migration and therefore the deploy. Two
+-- of those checks (required-pattern-never-matched, and total-no-op) assert
+-- something about UPSTREAM CONTENT, not about this migration: their patterns
+-- are calibrated against a database built by replaying 0001..0055. Any later
+-- content edit or reseed can legitimately reword that prose, at which point an
+-- unrelated deploy — a hotfix, say — dies on a stale string match. That is a
+-- landmine in the deploy path, and the failure it produces is not the failure
+-- anyone is shipping.
+--
+-- It was NOT moved to backend/sql/deferred/ (the repo's convention for
+-- must-not-auto-run migrations, see deferred/drop_legacy_columns.sql), for two
+-- reasons. First, it is already committed and may already be recorded in
+-- lesson.schema_migrations on prod; removing it from sql/ would then trip the
+-- runner's recorded-but-missing-from-disk check and hard-fail the very deploy
+-- this is meant to unblock. Second, the false claims it corrects are seeded by
+-- migrations 0024/0025/0051, so any database rebuilt by replaying the chain
+-- reintroduces them — a deferred file would leave every fresh/staging database
+-- serving false custody and risk copy until someone remembered to run it.
+--
+-- So the checks are split by what they actually prove, and NOTHING is silently
+-- weakened — every softened check still shouts and, critically, still leaves a
+-- durable, queryable record:
+--
+--   HARD FAIL (raise exception) — these can only be caused by a bug in THIS
+--   file, never by upstream drift, so blocking is correct:
+--     * a pattern that matched and whose text SURVIVED the replace;
+--     * a graded key with no matching row in lesson.question_options (the
+--       UPDATEs above set key and option together, by id, unconditionally —
+--       disagreement here means this migration is internally broken).
+--
+--   WARN + RECORD (raise warning + a row in lesson.content_fix_reports) —
+--   these are assertions about upstream content that may have legitimately
+--   drifted:
+--     * required patterns that matched nothing;
+--     * a total no-op against a populated catalog;
+--     * a graded key absent from the published payload text.
+--   These are NOT ignorable: `select * from lesson.content_fix_reports where
+--   unresolved_count > 0` is the operator check, and it is a documented step
+--   in docs/mainnet-deploy-runbook.md (§11a). A non-empty result means false
+--   content may still be live and the patterns need rewriting against the
+--   current stored jsonb — the same investigation the exception demanded,
+--   without holding a deploy hostage to it.
 
 do $mig$
 declare
@@ -58,7 +105,20 @@ declare
   v_zero text;
   v_residual text;
   v_mcq_bad text;
+  v_mcq_payload_bad text;
+  v_unresolved int := 0;
+  v_report text := '';
 begin
+  -- Durable home for the soft-failure findings (see FAILURE POLICY above). A
+  -- warning scrolls past in a deploy log; a row does not.
+  create table if not exists lesson.content_fix_reports (
+    id bigserial primary key,
+    migration text not null,
+    ran_at timestamptz not null default now(),
+    unresolved_count integer not null,
+    detail text not null
+  );
+
   -- required = this exact text was observed in the stored jsonb of a database
   -- built by replaying 0001..0055, so a zero hit means the pattern is wrong.
   -- optional = an older wording that a later seed/migration already superseded;
@@ -294,11 +354,26 @@ begin
       raise notice E'0057: re-run — % required patterns already corrected.',
         (select count(*) from _c0057 where required and pre_hits = 0);
     else
-      raise exception E'0057: % required patterns matched NOTHING. The stored jsonb does not contain this text, so the fix silently did nothing (the 0051 failure). Correct the patterns before shipping:\n%',
+      -- WARN + RECORD, not abort: a required pattern missing its target means
+      -- the stored jsonb no longer looks like this text (the 0051 failure), and
+      -- the false claim may still be live in some other wording. That needs a
+      -- human — but the content is equally broken with or without this deploy,
+      -- so blocking the deploy fixes nothing and blocks unrelated hotfixes.
+      v_unresolved := v_unresolved
+        + (select count(*)::int from _c0057 where required and pre_hits = 0);
+      v_report := v_report
+        || format(
+             E'%s required pattern(s) matched NOTHING — the fix may have silently done nothing (the 0051 failure). Rewrite them against the current stored jsonb:\n%s\n',
+             (select count(*) from _c0057 where required and pre_hits = 0), v_zero);
+      raise warning E'0057: % required patterns matched NOTHING. The stored jsonb does not contain this text, so the fix may have silently done nothing (the 0051 failure). Recorded in lesson.content_fix_reports — correct the patterns:\n%',
         (select count(*) from _c0057 where required and pre_hits = 0), v_zero;
     end if;
   end if;
 
+  -- HARD FAIL: a pattern that matched and is STILL there means the replace
+  -- above did not do what it says. That is a bug in this file — it cannot be
+  -- caused by upstream drift (an unmatched pattern has pre = post = 0) — and it
+  -- means a false claim we believe we corrected is still being served.
   select string_agg(format('  #%s post=%s "%s"', seq, post_hits, left(find, 70)), E'\n' order by seq)
     into v_residual from _c0057 where post_hits > 0;
   if v_residual is not null then
@@ -307,12 +382,22 @@ begin
 
   -- A total no-op against a populated catalog means the patterns are wrong.
   -- Tolerated only when the corrected copy is already present (re-run).
+  -- WARN + RECORD for the same reason as the required-pattern check above.
   if v_content_rows > 0 and v_pre_total = 0 and v_sentinel = 0 then
-    raise exception '0057: NO-OP — % lesson payload rows exist but no pattern matched and the corrected copy is absent. The stored jsonb does not look like these patterns; fix them rather than shipping this.', v_content_rows;
+    v_unresolved := v_unresolved + 1;
+    v_report := v_report
+      || format(
+           E'NO-OP: %s lesson payload rows exist but no pattern matched and the corrected copy is absent — the stored jsonb does not look like these patterns.\n',
+           v_content_rows);
+    raise warning '0057: NO-OP — % lesson payload rows exist but no pattern matched and the corrected copy is absent. The stored jsonb does not look like these patterns. Recorded in lesson.content_fix_reports; fix the patterns.', v_content_rows;
   end if;
 
   -- The two graded questions must agree with their on-screen options in every
   -- table that serves them. This is the 0054 failure, checked directly.
+  --
+  -- HARD FAIL half: lesson.questions vs lesson.question_options. Both sides are
+  -- set by the unconditional by-id UPDATEs above, so a mismatch here is this
+  -- file being internally wrong — nothing upstream can cause it.
   select string_agg(format('  %s / %s', src, qid), E'\n')
     into v_mcq_bad
     from (
@@ -323,8 +408,19 @@ begin
            select 1 from lesson.question_options o
             where o.question_id = q.id and o.option_text = q.correct_answer
          )
-      union all
-      select 'published_lessons' as src, q.id
+    ) bad;
+
+  if v_mcq_bad is not null then
+    raise exception E'0057: graded key has no matching option row — learners would be marked wrong for the right answer:\n%', v_mcq_bad;
+  end if;
+
+  -- WARN + RECORD half: the published payloads. These depend on the text
+  -- patterns above having matched, so drifted content lands here rather than in
+  -- the hard failure. Still a real learner-facing bug — hence the record.
+  select string_agg(format('  %s / %s', src, qid), E'\n')
+    into v_mcq_payload_bad
+    from (
+      select 'published_lessons' as src, q.id as qid
         from lesson.questions q
         join lesson.published_lessons pl
           on position(format('"id": "%s"', q.id) in pl.payload::text) > 0
@@ -339,11 +435,36 @@ begin
          and position(q.correct_answer in plp.payload::text) = 0
     ) bad;
 
-  if v_mcq_bad is not null then
-    raise exception E'0057: graded key has no matching on-screen option — learners would be marked wrong for the right answer:\n%', v_mcq_bad;
+  if v_mcq_payload_bad is not null then
+    v_unresolved := v_unresolved + 1;
+    v_report := v_report
+      || format(
+           E'Graded key absent from the published payload text — learners would be marked wrong for the right answer:\n%s\n',
+           v_mcq_payload_bad);
+    raise warning E'0057: graded key absent from the published payload text — learners would be marked wrong for the right answer. Recorded in lesson.content_fix_reports:\n%',
+      v_mcq_payload_bad;
   end if;
 
-  raise notice '0057: OK — % false-claim occurrences corrected across %; graded keys verified.',
-    v_pre_total, array_to_string(v_tables, ', ');
+  -- One row per run, always — an absent row is itself a signal that this
+  -- migration never executed here.
+  insert into lesson.content_fix_reports (migration, unresolved_count, detail)
+  values (
+    '0057_fix_false_content_claims',
+    v_unresolved,
+    case
+      when v_unresolved = 0 then format(
+        'OK — %s false-claim occurrences corrected across %s; graded keys verified.',
+        v_pre_total, array_to_string(v_tables, ', '))
+      else v_report
+    end
+  );
+
+  if v_unresolved > 0 then
+    raise warning '0057: % unresolved finding(s) recorded in lesson.content_fix_reports. False content may still be live — see docs/mainnet-deploy-runbook.md §11a.',
+      v_unresolved;
+  else
+    raise notice '0057: OK — % false-claim occurrences corrected across %; graded keys verified.',
+      v_pre_total, array_to_string(v_tables, ', ');
+  end if;
 end
 $mig$;

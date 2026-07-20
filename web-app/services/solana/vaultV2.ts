@@ -328,7 +328,14 @@ export async function buildOpenLockTransaction(
     ],
     data: encodeOpenLockData(courseIdHash),
   });
-  return new Transaction().add(ix);
+  // A deposit is TWO transactions and this is the FIRST — it pays the lock PDA
+  // + collateral ATA rent. Left unpriced it is the one dropped under mainnet
+  // congestion, and executeDeposit sends them sequentially, so losing it aborts
+  // the deposit before the priced lock_funds tx is ever built. Price it too.
+  return new Transaction()
+    .add(ComputeBudgetProgram.setComputeUnitLimit({ units: COMPUTE_UNIT_LIMIT }))
+    .add(await buildPriorityFeeIx(writableKeysOf(ix)))
+    .add(ix);
 }
 
 /**

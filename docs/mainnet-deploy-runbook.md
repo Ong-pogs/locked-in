@@ -124,6 +124,21 @@ Fill `scripts/deploy/env.mainnet.backend.template` into Render (secrets via
 The backend refuses to boot on a mainnet RPC with dev-fallback secrets or a
 dev/mock yield profile. Then deploy backend (git push / Render deploy).
 
+**Scope oracle — one value, two variable names.** If you override the Kamino
+scope-prices account (i.e. you pinned a reserve other than the default main-market
+USDC one), it must be set for BOTH sides or they refresh different oracles for
+the same reserve:
+
+- frontend (Vercel): `NEXT_PUBLIC_KAMINO_SCOPE_PRICES` — read by
+  `web-app/services/solana/vaultV2.ts` (deposit/claim).
+- backend/ops scripts: `KAMINO_SCOPE_PRICES` — read by
+  `backend/scripts/force-return-crank.mjs`, which also **falls back to
+  `NEXT_PUBLIC_KAMINO_SCOPE_PRICES`** so a shell that only has the documented
+  frontend name still cranks against the right oracle. Setting the backend name
+  explicitly is still preferred; it wins when both are present.
+
+Leaving it unset on both sides is fine — they share the same default.
+
 ## 9. Apply the cron blueprint `[YOU]`
 
 Apply `render.yaml` as a Render Blueprint — it defines THREE crons, all of
@@ -158,6 +173,30 @@ but set the cluster var explicitly, always.
 ```bash
 cd backend && DATABASE_URL=<prod> npm run migrate
 ```
+
+## 11a. `[RUN]` Content-fix report — check for unresolved findings
+
+Migration `0057_fix_false_content_claims.sql` corrects live course content that
+misstates custody and risk (it claims deposits are diversified across Kamino
+*and* Marginfi, and that funds stay "safe and accessible" through another
+interface — both false). Its patterns are matched against stored jsonb, so
+content drift can make a pattern miss silently.
+
+It no longer aborts the migration when that happens — a stale string match must
+not kill an unrelated deploy — it records the finding instead. **Check it after
+every migrate run:**
+
+```bash
+psql "<prod>" -c "select migration, ran_at, unresolved_count, detail
+                    from lesson.content_fix_reports
+                   order by ran_at desc limit 5"
+```
+
+`unresolved_count = 0` on the latest row is the pass condition. Anything else
+means false content may still be served: rewrite 0057's patterns against the
+current stored jsonb and re-apply. (A pattern that matched and survived the
+replace, or a graded key that disagrees with its own option rows, still hard-fails
+the migration — those can only be bugs in the file itself.)
 
 ## 11b. `[⚠][RUN]` Cutover reset — purge devnet user state
 
@@ -234,8 +273,20 @@ Notes:
 
 ## 14. Rollback
 
-- Program bug pre-funds: pause via `set_config_v2`. Principal is always
-  claimable (owner-only redeem); no admin drain path.
+- Program bug pre-funds: pause via `set_config_v2`. Pausing stops new deposits;
+  claims still work, and there is **no admin drain path** — the program can never
+  move a user's principal to us.
+- **`[⚠]` There is NO owner-only redeem.** Do not plan a rollback around one.
+  `claim_v2` (`programs/locked_in/src/vault_v2.rs`) requires an ed25519
+  completion voucher signed by the ops key, so a user cannot exit unaided while
+  the backend is down or refusing to sign. The only non-voucher exit is
+  `force_return_v2`, callable by anyone **180 days** after lock start
+  (`FORCE_RETURN_AFTER_SECS`), and it settles at `user_yield_bps = 0`: principal
+  returns to the owner, **all** yield goes to the community pot. Principal is
+  therefore recoverable but not promptly and not by the owner alone. If the
+  backend is down or the ops key is compromised, follow
+  `docs/mainnet-emergency-runbook.md` — restoring voucher signing is the exit,
+  not the chain.
 - Frontend/backend: revert the env flip + redeploy (points back at devnet
   staging `3RC9…`).
 

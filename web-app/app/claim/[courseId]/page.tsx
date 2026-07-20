@@ -10,6 +10,7 @@ import { PenaltyBanner } from '@/components/v2/PenaltyBanner';
 import { useCourseStore, useUserStore } from '@/stores';
 import { getCompletionVoucher, getLockPosition } from '@/services/api/progress/progressApi';
 import { fetchWithAuth } from '@/services/api';
+import { reportClaimResult, type ClaimResultPhase } from '@/services/api/locks/locksApi';
 import { hasVaultV2Config } from '@/services/solana/vaultV2';
 import { captureError } from '@/services/observability';
 import { ApiError } from '@/services/api/errors';
@@ -32,6 +33,7 @@ type ClaimPhase =
   | 'signing'
   | 'success'
   | 'error'
+  | 'pending'
   | 'not-configured'
   | 'no-voucher'
   | 'already-claimed'
@@ -56,6 +58,25 @@ const PHASE_COPY: Record<V2ActionPhase, string> = {
 function signatureFromError(error: unknown): string | null {
   const candidate = (error as { signature?: unknown } | null)?.signature;
   return typeof candidate === 'string' && candidate.length > 0 ? candidate : null;
+}
+
+// Claim audit trail. executeClaim runs entirely in the browser, so this POST is
+// the ONLY way the server ever learns a user tried to get their money out —
+// without it "my claim failed" is unanswerable from the logs.
+//
+// STRICTLY fire-and-forget: not awaited, and every failure mode (auth expiry,
+// network, 4xx/5xx, a synchronous throw) is swallowed. Losing a telemetry line
+// must never delay, block or fail a claim.
+function reportClaim(
+  courseId: string,
+  phase: ClaimResultPhase,
+  extra: { signature?: string | null; errorMessage?: string | null } = {},
+) {
+  try {
+    void fetchWithAuth((t) => reportClaimResult(courseId, { phase, ...extra }, t)).catch(() => {});
+  } catch {
+    // Telemetry never touches the money path.
+  }
 }
 
 // Contrast-audit style for small money copy on CozyCard glass (10-13px):
@@ -96,6 +117,7 @@ export default function ClaimPage() {
   const [actionPhase, setActionPhase] = useState<V2ActionPhase | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successRecord, setSuccessRecord] = useState<ClaimSuccessRecord | null>(null);
+  const [pendingSignature, setPendingSignature] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Server truth first: the on-chain principal from the position endpoint.
@@ -285,6 +307,7 @@ export default function ClaimPage() {
       } catch {
         // sessionStorage full/blocked — success screen still renders from state
       }
+      reportClaim(courseId, 'confirmed', { signature: result.signature });
       // Lock is closed on-chain; clear the local custody pointer.
       useCourseStore.getState().clearLockForCourse(courseId);
       setSuccessRecord(record);
@@ -304,8 +327,26 @@ export default function ClaimPage() {
           principalUi: position?.principalUi ?? null,
         },
       });
-      setErrorMessage(error instanceof Error ? error.message : 'Claim failed');
-      setPhase('error');
+      // A tx that has not confirmed YET is not a failed claim. Rendering it as
+      // an error re-armed the Claim button, and a second claim_v2 against a
+      // lock that is about to close is exactly the double-claim this error
+      // class exists to prevent. Keep it in its own terminal phase.
+      // Name-based rather than instanceof: the seam is dynamically imported, so
+      // a duplicate module instance would break an identity check.
+      const signature = signatureFromError(error);
+      const message = error instanceof Error ? error.message : 'Claim failed';
+      if (error instanceof Error && error.name === 'TransactionPendingError') {
+        // Sent but unconfirmed — reported as 'submitted', NOT 'failed'. Support
+        // needs these two apart: a pending claim may still land on its own, a
+        // failed one never will.
+        reportClaim(courseId, 'submitted', { signature, errorMessage: message });
+        setPendingSignature(signature);
+        setPhase('pending');
+      } else {
+        reportClaim(courseId, 'failed', { signature, errorMessage: message });
+        setErrorMessage(message);
+        setPhase('error');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -435,6 +476,46 @@ export default function ClaimPage() {
         <p className="font-pixel-mono text-[12px]" style={MUTED_STRONG}>
           Head back to the dashboard and reopen the claim — a fresh voucher will be issued.
         </p>
+        {backToDashboard}
+      </CozyCard>,
+    );
+  }
+
+  // Sent but not yet confirmed. Deliberately NOT the error screen and
+  // deliberately WITHOUT a retry: the transaction may still land, and a second
+  // claim_v2 against a closing lock is the failure this state exists to
+  // prevent. Offer the signature and a re-check instead.
+  if (phase === 'pending') {
+    return shell(
+      <CozyCard data-testid="v2-claim-pending" className="text-center" style={{ padding: 28 }}>
+        <p className="font-pixel text-lg mb-2" style={{ color: '#F0A878', textShadow: COZY_TEXT_SHADOW }}>
+          Still confirming
+        </p>
+        <p className="font-pixel-mono text-[12px] mb-3" style={MUTED_STRONG}>
+          Your claim was sent and has <strong>not</strong> failed — the network is still
+          confirming it. Do not claim again. This can take a few minutes.
+        </p>
+        {pendingSignature && (
+          <p
+            className="font-pixel-mono text-[10px] break-all mb-4"
+            style={MUTED_STRONG}
+            title="Transaction signature"
+          >
+            tx: {pendingSignature}
+          </p>
+        )}
+        <button
+          onClick={() => router.refresh()}
+          className="w-full py-3 rounded-lg border font-pixel text-sm uppercase tracking-[2px] font-bold min-h-[44px]"
+          style={{
+            backgroundColor: 'rgba(255,213,128,0.12)',
+            borderColor: 'rgba(255,213,128,0.4)',
+            color: COZY_TEXT,
+            textShadow: COZY_TEXT_SHADOW,
+          }}
+        >
+          Check status
+        </button>
         {backToDashboard}
       </CozyCard>,
     );

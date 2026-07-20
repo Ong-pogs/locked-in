@@ -122,12 +122,21 @@ export default function RiskPage() {
           redistributed to other users. This is the core mechanic, not a fee — it is designed to
           cost you something when you stop showing up.
         </p>
+        <p style={body}>
+          There is a second way to lose all of your yield that has nothing to do with your streak:
+          if your lock is exited through the 180-day force return rather than by completing the
+          course, 100% of the accrued yield goes to the community pot even if you never missed a
+          day. See &ldquo;Exit timing&rdquo; below.
+        </p>
 
         <h2 style={h2}>Exit timing</h2>
         <p style={body}>
           Your deposit is not freely withdrawable on demand. The normal exit is completing the
-          course. The fallback is the 180-day force return, after which the position can be returned
-          to you by anyone. Plan for the possibility that your money is unavailable for that long.
+          course. The fallback is the 180-day force return, which anyone can trigger once a lock is
+          that old — but it returns your principal only and forfeits 100% of the accrued yield to
+          the community pot. So the fallback is not an equivalent exit: if you end up relying on
+          it, you wait up to 180 days and earn nothing. Plan for the possibility that your money is
+          unavailable for that long.
         </p>
 
         <h2 style={h2}>Tax and legal</h2>
