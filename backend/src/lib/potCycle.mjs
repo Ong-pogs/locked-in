@@ -41,10 +41,12 @@ import {
 // 727274001 is migrate.mjs's advisory-lock key; this one is the pot cycle's.
 export const POT_CYCLE_ADVISORY_LOCK_KEY = 727274002;
 
-// Verified live: PotConfig.authority AND the live v2 config.authority both
-// equal the Render relay worker key. The preflight compares PotConfig
-// authority to the ACTUAL relay signer; this constant is for the loud log.
-const EXPECTED_RELAY_AUTHORITY = '2myuLZ82FoZgk9rboKpog2n5qbHvoWeCxJ75R2n4VF1t';
+// DEVNET reference only: on devnet, PotConfig.authority AND the live v2
+// config.authority both equal this Render relay worker key. The preflight
+// compares PotConfig.authority to the ACTUAL relay signer; this constant is
+// only a hint in the loud log, and a devnet pubkey would misdirect a mainnet
+// operator — so the hint is suppressed off-devnet.
+const DEVNET_EXPECTED_RELAY_AUTHORITY = '2myuLZ82FoZgk9rboKpog2n5qbHvoWeCxJ75R2n4VF1t';
 const COMMINGLED_OPS_VAULT = 'GCWEHFyJPS3ARfXk9V3jnfsZfaFCe8xmQfPKknjMM3yJ';
 const BRIDGE_REMEDY =
   'run `node scripts/bridge-v2-pot-transfer.mjs --execute` locally with the ' +
@@ -282,7 +284,8 @@ export async function runPotCycle({
         reason: 'PREFLIGHT_FAILED',
         detail: {
           failures: [
-            `PotConfig.authority ${potConfig.authority} does not match the relay signer ${signerAuthority} (expected ${EXPECTED_RELAY_AUTHORITY})`,
+            `PotConfig.authority ${potConfig.authority} does not match the relay signer ${signerAuthority}` +
+              (CLUSTER === 'devnet' ? ` (devnet expected ${DEVNET_EXPECTED_RELAY_AUTHORITY})` : ''),
           ],
         },
       });

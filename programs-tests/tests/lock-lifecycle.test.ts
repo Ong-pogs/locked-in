@@ -263,7 +263,9 @@ describe('Lock lifecycle (merged locked_in: vault × pot)', () => {
       .rpc();
 
     await program.methods
-      .initializePot(stableMint.publicKey)
+      // Second arg = the STORED PotConfig.authority (ops relay key); the
+      // signer must be the upgrade authority. In this test they're the same.
+      .initializePot(stableMint.publicKey, authority.publicKey)
       .accounts({
         protocolConfig: potConfig,
         authority: authority.publicKey,

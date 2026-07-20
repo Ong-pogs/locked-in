@@ -1,5 +1,11 @@
 // Initialize the POT (community-pot) config on the merged `locked_in` program.
 //
+// ⚠ DEPRECATED (devnet-era): matches the OLD initialize_pot(stable_mint)
+// signature. The current program takes (stable_mint, authority) and gates the
+// signer on the upgrade authority — for mainnet use
+// scripts/deploy/init-mainnet-pot.mjs. Kept only as a record of how the
+// existing devnet PotConfig was created.
+//
 // Merged program (vault + pot under ONE program ID). This script calls the
 // `initialize_pot` instruction:
 //   * config PDA seed  = b"pot-protocol" (re-seeded to avoid colliding with

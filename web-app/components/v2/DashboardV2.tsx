@@ -13,6 +13,8 @@ import { fetchWithAuth } from '@/services/api';
 import { retryPendingEnrolls } from '@/services/enroll/pendingEnroll';
 import { hasVaultV2Config } from '@/services/solana/vaultV2';
 import { PositionCard, type PositionCardData } from './PositionCard';
+import { ClosedPositionCard } from './ClosedPositionCard';
+import { readClaimSuccessRecord } from '@/services/claim/claimReceipt';
 import {
   ActivityHeatmap,
   JourneyStats,
@@ -50,6 +52,7 @@ export function DashboardV2() {
   const [positions, setPositions] = useState<Record<string, LockPositionResponse>>({});
   const [positionErrors, setPositionErrors] = useState<Record<string, boolean>>({});
   const [retryTick, setRetryTick] = useState(0);
+  const [positionsTab, setPositionsTab] = useState<'active' | 'claimed'>('active');
   const claimEnabled = hasVaultV2Config();
 
   // Pending-enroll heal (ruling R13): deposits whose server-side enroll failed
@@ -287,21 +290,117 @@ export function DashboardV2() {
             </button>
           </CozyCard>
         ) : (
-          <>
-            <CozySectionLabel>Your positions</CozySectionLabel>
-            <div className="flex flex-col gap-4 mb-5">
-              {cards.map((card) => (
-                <PositionCard
-                  key={card.courseId}
-                  data={card}
-                  position={positions[card.courseId] ?? null}
-                  positionError={Boolean(positionErrors[card.courseId])}
-                  onRetryPosition={() => setRetryTick((t) => t + 1)}
-                  claimEnabled={claimEnabled}
-                />
-              ))}
-            </div>
-          </>
+          (() => {
+            // Settled positions move to the Claimed tab: the course is done
+            // AND the position provably ended in a claim — status CLOSED
+            // (claim_v2 marks the lock), or NONE with this session's claim
+            // receipt. Bare NONE is NOT settled: it also means "never locked
+            // in v2" (v1-carryover enrollments), and routing those to a card
+            // that says "principal + yield returned" would be a false payout
+            // statement. They stay on Active, where the practice-mode badge
+            // makes no money claims. Loading/errored positions also stay on
+            // Active so a live position can never hide behind the wrong tab.
+            const isSettled = (card: PositionCardData) => {
+              const pos = positions[card.courseId];
+              const courseDone =
+                card.totalLessons > 0 && card.completedLessons >= card.totalLessons;
+              return (
+                courseDone &&
+                pos != null &&
+                (pos.status === 'CLOSED' ||
+                  (pos.status === 'NONE' && readClaimSuccessRecord(card.courseId) != null))
+              );
+            };
+            const activeCards = cards.filter((c) => !isSettled(c));
+            const claimedCards = cards.filter(isSettled);
+            const shown = positionsTab === 'active' ? activeCards : claimedCards;
+
+            const tabStyle = (selected: boolean) =>
+              ({
+                backgroundColor: selected ? 'rgba(255,213,128,0.14)' : 'rgba(255,255,255,0.03)',
+                borderColor: selected ? 'rgba(255,213,128,0.5)' : T.borderDormant,
+                color: selected ? COZY_TEXT : T.textMutedStrong,
+                textShadow: COZY_TEXT_SHADOW,
+              }) as const;
+
+            return (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <CozySectionLabel>Your positions</CozySectionLabel>
+                  <div className="flex items-center gap-1.5 mb-3" role="tablist" aria-label="Positions">
+                    <button
+                      data-testid="v2-positions-tab-active"
+                      role="tab"
+                      aria-selected={positionsTab === 'active'}
+                      onClick={() => setPositionsTab('active')}
+                      className="px-3 py-1.5 rounded-md border font-pixel-mono text-[10px] uppercase tracking-[1.5px] cursor-pointer"
+                      style={tabStyle(positionsTab === 'active')}
+                    >
+                      Active{activeCards.length > 0 ? ` · ${activeCards.length}` : ''}
+                    </button>
+                    <button
+                      data-testid="v2-positions-tab-claimed"
+                      role="tab"
+                      aria-selected={positionsTab === 'claimed'}
+                      onClick={() => setPositionsTab('claimed')}
+                      className="px-3 py-1.5 rounded-md border font-pixel-mono text-[10px] uppercase tracking-[1.5px] cursor-pointer"
+                      style={tabStyle(positionsTab === 'claimed')}
+                    >
+                      Claimed{claimedCards.length > 0 ? ` · ${claimedCards.length}` : ''}
+                    </button>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-4 mb-5">
+                  {shown.length === 0 ? (
+                    <CozyCard
+                      data-testid="v2-positions-tab-empty"
+                      className="text-center"
+                      style={{ padding: 20 }}
+                    >
+                      <p className="font-pixel-mono text-[12px]" style={{ color: T.textMutedStrong }}>
+                        {positionsTab === 'active'
+                          ? 'No active positions — lock a stake on a new course to keep earning.'
+                          : 'Nothing claimed yet — finish a course and claim your stake back.'}
+                      </p>
+                      {positionsTab === 'active' && (
+                        <button
+                          onClick={() => router.push('/courses')}
+                          className="mt-3 px-5 py-2.5 rounded-lg border font-pixel-mono text-[11px] uppercase tracking-[1.5px] min-h-[40px]"
+                          style={{
+                            backgroundColor: 'rgba(255,213,128,0.12)',
+                            borderColor: 'rgba(255,213,128,0.4)',
+                            color: COZY_TEXT,
+                          }}
+                        >
+                          Browse courses
+                        </button>
+                      )}
+                    </CozyCard>
+                  ) : positionsTab === 'active' ? (
+                    activeCards.map((card) => (
+                      <PositionCard
+                        key={card.courseId}
+                        data={card}
+                        position={positions[card.courseId] ?? null}
+                        positionError={Boolean(positionErrors[card.courseId])}
+                        onRetryPosition={() => setRetryTick((t) => t + 1)}
+                        claimEnabled={claimEnabled}
+                      />
+                    ))
+                  ) : (
+                    claimedCards.map((card) => (
+                      <ClosedPositionCard
+                        key={card.courseId}
+                        courseId={card.courseId}
+                        title={card.title}
+                        receipt={readClaimSuccessRecord(card.courseId)}
+                      />
+                    ))
+                  )}
+                </div>
+              </>
+            );
+          })()
         )}
 
         {/* Journey + activity (carried from the legacy dashboard). */}

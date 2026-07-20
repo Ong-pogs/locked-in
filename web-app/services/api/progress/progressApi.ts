@@ -73,6 +73,19 @@ export function checkLessonQuestion(
   );
 }
 
+// Stateless recall verdict — no attempt, nothing locked. Only answers for
+// lessons the caller already completed (server 403s otherwise).
+export function checkRecallQuestion(
+  lessonId: string,
+  payload: { questionId: string; answerText: string },
+  token: string,
+): Promise<{ questionId: string; isCorrect: boolean; correctAnswer: string }> {
+  return httpRequest(
+    `/v1/progress/lessons/${lessonId}/recall-check`,
+    { method: 'POST', body: payload, token },
+  );
+}
+
 export function submitLesson(
   lessonId: string,
   payload: ProgressSubmitLessonRequest,

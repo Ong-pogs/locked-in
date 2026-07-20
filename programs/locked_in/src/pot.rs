@@ -22,11 +22,32 @@ const OPEN_STATUS: u8 = 0;
 const CLOSED_STATUS: u8 = 1;
 const DISTRIBUTED_STATUS: u8 = 2;
 
-pub fn initialize_pot(ctx: Context<InitializePot>, stable_mint: Pubkey) -> Result<()> {
+pub fn initialize_pot(
+    ctx: Context<InitializePot>,
+    stable_mint: Pubkey,
+    authority: Pubkey,
+) -> Result<()> {
+    // The stored key is an unchecked arg (no proof-of-possession — the signer
+    // is the upgrade authority, not this key). Reject the obvious foot-gun;
+    // a wrong-but-real key is recoverable via set_pot_authority below.
+    require!(authority != Pubkey::default(), CommunityPotError::InvalidPotAuthority);
     let protocol = &mut ctx.accounts.protocol_config;
-    protocol.authority = ctx.accounts.authority.key();
+    // Mirrors InitializeVaultV2: the SIGNER must be the upgrade authority
+    // (front-run gate), but the STORED authority is a designated ops key so
+    // the pot crons (record_redirect / close / distribute, all has_one =
+    // authority) never need the deploy key hot.
+    protocol.authority = authority;
     protocol.stable_mint = stable_mint;
     protocol.bump = ctx.bumps.protocol_config;
+    Ok(())
+}
+
+/// Rotate PotConfig.authority. Gated on the program upgrade authority —
+/// the recovery net the vault already has (set_authority_v2) so a mis-stored
+/// pot authority can never permanently freeze forfeited-yield distribution.
+pub fn set_pot_authority(ctx: Context<SetPotAuthority>, new_authority: Pubkey) -> Result<()> {
+    require!(new_authority != Pubkey::default(), CommunityPotError::InvalidPotAuthority);
+    ctx.accounts.protocol_config.authority = new_authority;
     Ok(())
 }
 
@@ -221,6 +242,19 @@ pub struct InitializePot<'info> {
     #[account(constraint = program_data.upgrade_authority_address == Some(authority.key()) @ CommunityPotError::NotUpgradeAuthority)]
     pub program_data: Account<'info, ProgramData>,
     pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct SetPotAuthority<'info> {
+    #[account(mut, seeds = [PotConfig::SEED], bump = protocol_config.bump)]
+    pub protocol_config: Account<'info, PotConfig>,
+    pub authority: Signer<'info>,
+    // Same upgrade-authority gate as InitializePot: only the program's
+    // upgrade authority (the Squads vault after handover) may rotate.
+    #[account(constraint = program.programdata_address()? == Some(program_data.key()) @ CommunityPotError::NotUpgradeAuthority)]
+    pub program: Program<'info, crate::program::LockedIn>,
+    #[account(constraint = program_data.upgrade_authority_address == Some(authority.key()) @ CommunityPotError::NotUpgradeAuthority)]
+    pub program_data: Account<'info, ProgramData>,
 }
 
 #[derive(Accounts)]
@@ -591,6 +625,8 @@ pub enum CommunityPotError {
     NumericalOverflow,
     #[msg("Only the program upgrade authority may initialize the pot config.")]
     NotUpgradeAuthority,
+    #[msg("Pot authority must be a real key (not the default pubkey).")]
+    InvalidPotAuthority,
 }
 
 fn transfer_checked_from_protocol<'info>(

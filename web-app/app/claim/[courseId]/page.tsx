@@ -14,6 +14,11 @@ import { hasVaultV2Config } from '@/services/solana/vaultV2';
 import { ApiError } from '@/services/api/errors';
 import type { CompletionVoucherResponse, LockPositionResponse } from '@/services/api/types';
 import type { V2ActionPhase } from '@/services/solana/v2Actions';
+import {
+  claimSuccessKey,
+  readClaimSuccessRecord,
+  type ClaimSuccessRecord,
+} from '@/services/claim/claimReceipt';
 
 // CLAIM flow (spec §5): dedicated auth-gated route. Mount fetches ONLY the
 // voucher (mockable backend call); every chain interaction runs inside the
@@ -31,25 +36,8 @@ type ClaimPhase =
   | 'already-claimed'
   | 'expired';
 
-interface ClaimSuccessRecord {
-  signature: string;
-  principalUi: string | null;
-  receivedUi: string | null;
-  bps: number;
-  lapseCount: number;
-  claimedAt: string;
-}
-
-const successKey = (courseId: string) => `locked-in-claim-success:${courseId}`;
-
-function readSuccessRecord(courseId: string): ClaimSuccessRecord | null {
-  try {
-    const raw = sessionStorage.getItem(successKey(courseId));
-    return raw ? (JSON.parse(raw) as ClaimSuccessRecord) : null;
-  } catch {
-    return null;
-  }
-}
+// Receipt shape + reader live in services/claim/claimReceipt (shared with the
+// dashboard's Claimed tab).
 
 const PHASE_COPY: Record<V2ActionPhase, string> = {
   building: 'Building transaction…',
@@ -117,7 +105,7 @@ export default function ClaimPage() {
   // then the voucher fetch. NO solana imports execute here.
   useEffect(() => {
     if (!courseId) return;
-    const existing = readSuccessRecord(courseId);
+    const existing = readClaimSuccessRecord(courseId);
     if (existing) {
       setSuccessRecord(existing);
       setPhase('success');
@@ -264,7 +252,7 @@ export default function ClaimPage() {
         claimedAt: new Date().toISOString(),
       };
       try {
-        sessionStorage.setItem(successKey(courseId), JSON.stringify(record));
+        sessionStorage.setItem(claimSuccessKey(courseId), JSON.stringify(record));
       } catch {
         // sessionStorage full/blocked — success screen still renders from state
       }
@@ -278,7 +266,7 @@ export default function ClaimPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [voucher, walletAddress, courseId, isSubmitting, principalUi, privySignTransaction, solanaWallets]);
+  }, [voucher, walletAddress, courseId, isSubmitting, position?.principalUi, privySignTransaction, solanaWallets]);
 
   const backToDashboard = (
     <button

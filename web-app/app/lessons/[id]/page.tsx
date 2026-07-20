@@ -8,6 +8,7 @@ import {
   startLesson,
   submitLesson,
   checkLessonQuestion,
+  checkRecallQuestion,
   fetchWithAuth,
 } from '@/services/api';
 import { buildLessonResultParams } from '@/services/lessons/resultParams';
@@ -152,10 +153,10 @@ export default function LessonPage(props: {
     const previousLessons = allLessons
       .filter((l: Lesson) => l.order < lesson.order && lessonProgress[l.id]?.completed);
     if (previousLessons.length === 0) return null;
-    const pool: Array<{ question: Question; lessonTitle: string }> = [];
+    const pool: Array<{ question: Question; lessonTitle: string; sourceLessonId: string }> = [];
     for (const prev of previousLessons) {
       for (const q of prev.questions ?? []) {
-        pool.push({ question: q, lessonTitle: prev.title });
+        pool.push({ question: q, lessonTitle: prev.title, sourceLessonId: prev.id });
       }
     }
     if (pool.length === 0) return null;
@@ -670,6 +671,24 @@ export default function LessonPage(props: {
           question={recallData.question}
           lessonTitle={recallData.lessonTitle}
           onComplete={() => setPhase('reading')}
+          // Prod payloads carry no answer key — grade the pick via the
+          // stateless recall-check endpoint (source lesson is completed, so
+          // the server will reveal). Local/mock lessons keep the local key.
+          checkAnswer={
+            usesRemoteVerification && recallData.question.type === 'mcq'
+              ? async (answerText: string) => {
+                  const res = await fetchWithAuth((t) =>
+                    checkRecallQuestion(
+                      recallData.sourceLessonId,
+                      { questionId: recallData.question.id, answerText },
+                      t,
+                    ),
+                  );
+                  if (!res) throw new Error('Session expired');
+                  return res;
+                }
+              : undefined
+          }
         />
       </CozyLessonShell>
     );

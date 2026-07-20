@@ -1,15 +1,19 @@
 // Initialize the community-pot PotConfig on MAINNET (audit H5). Creates the
-// 'pot-protocol' PDA whose authority is the ops relay key — the ONLY signer
-// allowed to record_redirect / close / distribute later. Run this BEFORE
-// init-mainnet-vault.mjs so the pot vault (the protocol PDA's USDC ATA) can be
-// wired as vault_v2's pot_vault, making forfeits auto-fund distribution.
+// 'pot-protocol' PDA. Run this BEFORE init-mainnet-vault.mjs so the pot vault
+// (the protocol PDA's USDC ATA) can be wired as vault_v2's pot_vault, making
+// forfeits auto-fund distribution.
 //
-//   MAINNET_RPC_URL=... POT_AUTHORITY_KEYPAIR=<ops-relay.json> \
+//   MAINNET_RPC_URL=... DEPLOY_KEYPAIR=<upgrade-authority.json> \
+//     POT_AUTHORITY_PUBKEY=<ops-relay pubkey> \
 //     node scripts/deploy/init-mainnet-pot.mjs
 //
-// POT_AUTHORITY_KEYPAIR MUST be the keypair whose bs58 secret is the backend's
-// COMMUNITY_POT_WORKER_PRIVATE_KEY (the pot cycle refuses to run if PotConfig.
-// authority != the relay signer). It pays rent and becomes PotConfig.authority.
+// Two distinct keys (mirrors init-mainnet-vault.mjs):
+//   - DEPLOY_KEYPAIR signs + pays rent. The on-chain front-run gate requires
+//     the signer to be the program's UPGRADE AUTHORITY at init time.
+//   - POT_AUTHORITY_PUBKEY is STORED as PotConfig.authority — it must be the
+//     pubkey of the backend's COMMUNITY_POT_WORKER_PRIVATE_KEY (the pot cycle
+//     preflight refuses to run if PotConfig.authority != the relay signer),
+//     so the crons never need the deploy key hot.
 import {
   Connection, Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction,
   sendAndConfirmTransaction,
@@ -24,7 +28,23 @@ const USDC = new PublicKey(process.env.LOCK_VAULT_USDC_MINT || 'EPjFWdd5AufqSSqe
 const POT_CONFIG_SEED = Buffer.from('pot-protocol');
 
 const loadKp = (p) => Keypair.fromSecretKey(Uint8Array.from(JSON.parse(readFileSync(p, 'utf8'))));
-const authority = loadKp(req('POT_AUTHORITY_KEYPAIR'));
+const deployer = loadKp(req('DEPLOY_KEYPAIR'));
+const potAuthority = new PublicKey(req('POT_AUTHORITY_PUBKEY'));
+// The stored authority is an unchecked pubkey (no signature proves possession)
+// and PotConfig is an init-once singleton — a paste error would strand the pot
+// crons until a set_pot_authority rotation. Require the key twice.
+if (process.env.CONFIRM_POT_AUTHORITY !== potAuthority.toBase58()) {
+  console.error(
+    'ERROR: set CONFIRM_POT_AUTHORITY to the SAME base58 pubkey as ' +
+      'POT_AUTHORITY_PUBKEY (double-entry check against paste errors). ' +
+      'It must be the pubkey of COMMUNITY_POT_WORKER_PRIVATE_KEY.',
+  );
+  process.exit(1);
+}
+if (potAuthority.equals(PublicKey.default)) {
+  console.error('ERROR: POT_AUTHORITY_PUBKEY must not be the default pubkey.');
+  process.exit(1);
+}
 const programKp = loadKp(process.env.PROGRAM_KEYPAIR || 'keys/mainnet/locked_in-mainnet-keypair.json');
 const PROGRAM_ID = programKp.publicKey;
 
@@ -34,7 +54,8 @@ async function main() {
   const [protocolConfig] = PublicKey.findProgramAddressSync([POT_CONFIG_SEED], PROGRAM_ID);
   console.log('program        :', PROGRAM_ID.toBase58());
   console.log('PotConfig PDA  :', protocolConfig.toBase58());
-  console.log('authority      :', authority.publicKey.toBase58(), '(= COMMUNITY_POT_WORKER_PRIVATE_KEY pubkey)');
+  console.log('signer (deploy):', deployer.publicKey.toBase58(), '(must be the upgrade authority)');
+  console.log('pot authority  :', potAuthority.toBase58(), '(= COMMUNITY_POT_WORKER_PRIVATE_KEY pubkey)');
   console.log('stable mint    :', USDC.toBase58());
 
   if (await conn.getAccountInfo(protocolConfig)) {
@@ -42,29 +63,29 @@ async function main() {
     return;
   }
 
-  // Front-run gate: initialize_pot now requires the program + its ProgramData
-  // account, and constrains program_data.upgrade_authority == authority. So the
-  // POT_AUTHORITY_KEYPAIR must be the program's UPGRADE AUTHORITY at init time.
+  // Front-run gate: initialize_pot requires the program + its ProgramData
+  // account and constrains program_data.upgrade_authority == signer.
   const BPF_UPGRADEABLE_LOADER = new PublicKey('BPFLoaderUpgradeab1e11111111111111111111111');
   const [programData] = PublicKey.findProgramAddressSync([PROGRAM_ID.toBuffer()], BPF_UPGRADEABLE_LOADER);
-  console.log('program_data   :', programData.toBase58(), '(authority must be its upgrade_authority)');
+  console.log('program_data   :', programData.toBase58());
 
-  // initialize_pot(stable_mint):
+  // initialize_pot(stable_mint, authority):
   //   [protocol_config(w,pda), authority(signer,w), program, program_data, system_program]
-  const data = Buffer.concat([disc('initialize_pot'), USDC.toBuffer()]);
+  const data = Buffer.concat([disc('initialize_pot'), USDC.toBuffer(), potAuthority.toBuffer()]);
   const ix = new TransactionInstruction({
     programId: PROGRAM_ID,
     keys: [
       { pubkey: protocolConfig, isSigner: false, isWritable: true },
-      { pubkey: authority.publicKey, isSigner: true, isWritable: true },
+      { pubkey: deployer.publicKey, isSigner: true, isWritable: true },
       { pubkey: PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: programData, isSigner: false, isWritable: false },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     ],
     data,
   });
-  const sig = await sendAndConfirmTransaction(conn, new Transaction().add(ix), [authority]);
+  const sig = await sendAndConfirmTransaction(conn, new Transaction().add(ix), [deployer]);
   console.log('\n✅ initialize_pot OK —', sig);
+  console.log('PotConfig.authority =', potAuthority.toBase58());
   console.log('next: init-mainnet-vault.mjs (pot vault auto-derives from this PDA)');
 }
 

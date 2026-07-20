@@ -33,6 +33,7 @@ import {
   startLessonAttempt,
   submitLessonAttempt,
   checkQuestionAnswer,
+  checkRecallAnswer,
   devCompleteCourse,
 } from './repository.mjs';
 import { isDevnetOnly } from '../../lib/faucet.mjs';
@@ -106,6 +107,26 @@ export async function progressRoutes(app) {
         questionId,
         answerText,
       );
+    },
+  );
+
+  // Stateless recall verdict (pre-lesson "Quick Recall"). No attempt state,
+  // nothing locked; 403s unless the caller has completed the lesson, so it
+  // can never act as an answer-key oracle for gradable content.
+  app.post(
+    '/v1/progress/lessons/:lessonId/recall-check',
+    {
+      preHandler: requireAccessAuth,
+      config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
+    },
+    async (request) => {
+      const lessonId = assertPathParam(request.params?.lessonId, 'lessonId');
+      const questionId = assertBodyField(request.body?.questionId, 'questionId');
+      const answerText = request.body?.answerText;
+      if (typeof answerText !== 'string' || answerText.trim().length === 0) {
+        throw badRequest('answerText is required', 'MISSING_ANSWER_TEXT');
+      }
+      return checkRecallAnswer(request.auth.walletAddress, lessonId, questionId, answerText);
     },
   );
 

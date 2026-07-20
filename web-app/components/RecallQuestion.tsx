@@ -13,34 +13,52 @@ function normalize(s: string): string {
   return s.trim().toLowerCase();
 }
 
+export interface RecallVerdict {
+  isCorrect: boolean;
+  correctAnswer: string;
+}
+
 interface RecallQuestionProps {
   question: Question;
   lessonTitle: string;
   onComplete: () => void;
+  /**
+   * Server-side verdict for MCQ picks when the payload carries no answer key
+   * (prod strips it — integrity fix). Wired by the lesson page to the
+   * recall-check endpoint; absent for local/mock lessons that ship the key.
+   */
+  checkAnswer?: (answerText: string) => Promise<RecallVerdict>;
 }
 
 /**
  * Spaced-retrieval recall shown before a new lesson. Not graded (doesn't affect
- * the lesson score). We DO give a right/wrong read when the answer key is
- * present in the payload — reinforcement lands better with feedback. In prod
- * the backend omits the key, so we fall back to "you picked X, continue".
+ * the lesson score), but it ALWAYS gives a right/wrong read: locally when the
+ * answer key is in the payload, otherwise via the stateless recall-check
+ * endpoint. If the server check fails, the pick stays selectable and the user
+ * can continue — recall must never dead-end a lesson.
  */
-export function RecallQuestion({ question, lessonTitle, onComplete }: RecallQuestionProps) {
+export function RecallQuestion({ question, lessonTitle, onComplete, checkAnswer }: RecallQuestionProps) {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [textAnswer, setTextAnswer] = useState('');
   const [revealed, setRevealed] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [serverVerdict, setServerVerdict] = useState<RecallVerdict | null>(null);
+  const [checkFailed, setCheckFailed] = useState(false);
 
   const isMcq = question.type === 'mcq';
-  const correct = (question as { correctAnswer?: string }).correctAnswer ?? null;
-  const hasKey = Boolean(correct);
+  const localKey = (question as { correctAnswer?: string }).correctAnswer ?? null;
+  // Verdict source: local key (mock lessons) or the server's reveal.
+  const effectiveKey = localKey ?? serverVerdict?.correctAnswer ?? null;
+  const hasKey = Boolean(effectiveKey);
 
   const isOptionCorrect = (optId: string, optText: string) =>
-    hasKey && (normalize(optId) === normalize(correct!) || normalize(optText) === normalize(correct!));
+    hasKey &&
+    (normalize(optId) === normalize(effectiveKey!) || normalize(optText) === normalize(effectiveKey!));
 
-  const answeredCorrectly =
-    hasKey && selectedOption != null
-      ? // reveal uses the option currently selected
-        (question.options ?? []).some((o) => {
+  const answeredCorrectly = serverVerdict
+    ? serverVerdict.isCorrect
+    : hasKey && selectedOption != null
+      ? (question.options ?? []).some((o) => {
           const id = typeof o === 'string' ? o : o.id;
           const text = typeof o === 'string' ? o : o.text;
           return id === selectedOption && isOptionCorrect(id, text);
@@ -50,10 +68,27 @@ export function RecallQuestion({ question, lessonTitle, onComplete }: RecallQues
   const hasSelection =
     (isMcq && Boolean(selectedOption)) || (!isMcq && textAnswer.trim().length > 0);
 
-  const pickMcq = (optId: string) => {
-    if (revealed) return; // lock after reveal
+  const pickMcq = (optId: string, optText: string) => {
+    if (revealed || checking) return; // lock after reveal / during check
     setSelectedOption(optId);
-    if (hasKey) setRevealed(true);
+    if (localKey) {
+      setRevealed(true);
+      return;
+    }
+    if (checkAnswer && !checkFailed) {
+      setChecking(true);
+      checkAnswer(optText)
+        .then((verdict) => {
+          setServerVerdict(verdict);
+          setRevealed(true);
+        })
+        .catch(() => {
+          // Degrade to the old "you picked X, continue" behavior — the pick
+          // stays changeable and Continue still works.
+          setCheckFailed(true);
+        })
+        .finally(() => setChecking(false));
+    }
   };
 
   return (
@@ -117,8 +152,8 @@ export function RecallQuestion({ question, lessonTitle, onComplete }: RecallQues
               return (
                 <button
                   key={optId}
-                  onClick={() => pickMcq(optId)}
-                  disabled={revealed}
+                  onClick={() => pickMcq(optId, optText)}
+                  disabled={revealed || checking}
                   aria-label={optText}
                   className="w-full text-left px-4 py-3.5 rounded-xl border font-pixel transition-colors flex items-center justify-between gap-3"
                   style={{
@@ -126,7 +161,7 @@ export function RecallQuestion({ question, lessonTitle, onComplete }: RecallQues
                     backgroundColor: bgColor,
                     color: T.textPrimary,
                     fontSize: 15,
-                    cursor: revealed ? 'default' : 'pointer',
+                    cursor: revealed || checking ? 'default' : 'pointer',
                   }}
                 >
                   <span>{optText}</span>
@@ -158,13 +193,29 @@ export function RecallQuestion({ question, lessonTitle, onComplete }: RecallQues
           />
         )}
 
-        {/* Feedback line (only when we have the key) */}
+        {/* Verdict / status line */}
+        {checking && (
+          <p
+            data-testid="recall-checking"
+            role="status"
+            className="mt-4 font-pixel-mono text-[13px]"
+            style={{ color: T.textMutedStrong }}
+          >
+            Checking…
+          </p>
+        )}
         {revealed && hasKey && (
           <p
+            data-testid="recall-verdict"
             className="mt-4 font-pixel-mono text-[13px]"
             style={{ color: answeredCorrectly ? GREEN : CRIMSON }}
           >
-            {answeredCorrectly ? '✓ Correct — nice recall.' : `✕ Not quite. The answer is: ${correct}`}
+            {answeredCorrectly ? '✓ Correct — nice recall.' : `✕ Not quite. The answer is: ${effectiveKey}`}
+          </p>
+        )}
+        {checkFailed && !revealed && (
+          <p className="mt-4 font-pixel-mono text-[12px]" style={{ color: T.textMutedStrong }}>
+            Couldn&apos;t verify your pick — continue when ready.
           </p>
         )}
 
@@ -172,15 +223,15 @@ export function RecallQuestion({ question, lessonTitle, onComplete }: RecallQues
         <button
           type="button"
           onClick={onComplete}
-          disabled={!hasSelection}
+          disabled={!hasSelection || checking}
           className="mt-6 w-full py-3.5 rounded-xl text-center font-bold uppercase tracking-[1.5px] font-pixel text-[13px] transition-colors"
           style={{
-            border: `1px solid ${hasSelection ? AMBER : COZY_BORDER}`,
-            background: hasSelection ? 'rgba(255,213,128,0.14)' : 'transparent',
-            color: hasSelection ? AMBER : T.textMuted,
-            boxShadow: hasSelection ? `0 0 14px ${AMBER}55` : 'none',
-            opacity: hasSelection ? 1 : 0.45,
-            cursor: hasSelection ? 'pointer' : 'not-allowed',
+            border: `1px solid ${hasSelection && !checking ? AMBER : COZY_BORDER}`,
+            background: hasSelection && !checking ? 'rgba(255,213,128,0.14)' : 'transparent',
+            color: hasSelection && !checking ? AMBER : T.textMuted,
+            boxShadow: hasSelection && !checking ? `0 0 14px ${AMBER}55` : 'none',
+            opacity: hasSelection && !checking ? 1 : 0.45,
+            cursor: hasSelection && !checking ? 'pointer' : 'not-allowed',
           }}
         >
           Continue to Lesson

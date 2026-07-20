@@ -88,7 +88,16 @@ export function collectBootGuardViolations(config) {
   // guards below MUST still fire for it (audit H: fail-closed).
   const mainnetOrStricter = cluster !== 'devnet' && cluster !== 'local';
 
-  // (b) mainnet vault_v2 must not pair with a mock/devnet yield adapter.
+  // (b) mainnet vault_v2 must not pair with a mock/devnet yield adapter —
+  // nor with NO adapter: with yield vars simply absent, /v1/yield/current-apy
+  // serves the simulated fixed rate labeled as mainnet (audit S3).
+  if (mainnetOrStricter && config.vaultV2ProgramId && !config.yieldStrategyEnabled) {
+    violations.push(
+      `VAULT_V2_PROGRAM_ID is configured on mainnet but the yield strategy is ` +
+        `disabled/unset — the APY endpoint would serve the simulated fixed rate. ` +
+        `Set YIELD_STRATEGY_ENABLED=true with YIELD_STRATEGY_PROFILE=kamino_usdc_mainnet.`,
+    );
+  }
   if (mainnetOrStricter && config.vaultV2ProgramId && config.yieldStrategyEnabled) {
     const kind = config.yieldStrategyKind ?? '';
     const profile = config.yieldStrategyProfile ?? '';

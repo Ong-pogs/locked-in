@@ -47,9 +47,10 @@ const CATEGORY_LABELS: Record<CourseCategory, string> = {
   rust: 'Rust',
 };
 
-function Tag({ label, color }: { label: string; color: string }) {
+function Tag({ label, color, testId }: { label: string; color: string; testId?: string }) {
   return (
     <span
+      data-testid={testId}
       className="px-2 py-[3px] rounded text-[9px] font-bold uppercase tracking-[1px] font-pixel-mono"
       style={{ color, backgroundColor: `${color}14`, border: `1px solid ${color}30` }}
     >
@@ -140,6 +141,10 @@ function CourseCard({
   const isComingSoon =
     forceComingSoon ?? (actualLessonCount === 0 && course.totalLessons === 0);
   const showInlineLockCta = !!onLock && !!selected && !isComingSoon && !showEnrollButton;
+  // Store recomputes completedLessons from lessonProgress, so this survives
+  // claiming the stake (the course drops back into "Available" afterwards).
+  const isCompleted =
+    course.totalLessons > 0 && (course.completedLessons ?? 0) >= course.totalLessons;
 
   return (
     <div
@@ -178,6 +183,13 @@ function CourseCard({
             label={CATEGORY_LABELS[course.category] ?? course.category}
             color={catColor}
           />
+          {isCompleted && (
+            <Tag
+              label={'✓ Completed'}
+              color={T.green}
+              testId="course-completed-badge"
+            />
+          )}
           <div className="flex-1" />
           <DifficultyFlasks level={difficultyLevel} />
         </div>

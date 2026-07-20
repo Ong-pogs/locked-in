@@ -122,8 +122,19 @@ pub mod locked_in {
     // ── Pot domain (yield-redirect accumulator + payout) ─────────────────
 
     /// Initialize the community-pot config (was `community_pot::initialize_protocol`).
-    pub fn initialize_pot(ctx: Context<InitializePot>, stable_mint: Pubkey) -> Result<()> {
-        pot::initialize_pot(ctx, stable_mint)
+    pub fn initialize_pot(
+        ctx: Context<InitializePot>,
+        stable_mint: Pubkey,
+        authority: Pubkey,
+    ) -> Result<()> {
+        pot::initialize_pot(ctx, stable_mint, authority)
+    }
+
+    pub fn set_pot_authority(
+        ctx: Context<SetPotAuthority>,
+        new_authority: Pubkey,
+    ) -> Result<()> {
+        pot::set_pot_authority(ctx, new_authority)
     }
 
     pub fn record_redirect(

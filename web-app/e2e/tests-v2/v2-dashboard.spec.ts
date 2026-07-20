@@ -115,9 +115,16 @@ test.describe('v2 dashboard — claimable', () => {
 
 test.describe('v2 dashboard — practice mode', () => {
   test.use({ scenario: 'practice' });
-  test('completed course with CLOSED lock shows practice badge, never CLAIM', async ({ v2Page: page }) => {
+  // Positions-tabs successor behavior: a completed course with a CLOSED lock
+  // is SETTLED — it leaves the Active tab entirely and renders as a closed
+  // card under Claimed. CLAIM must not exist on either tab.
+  test('completed course with CLOSED lock settles into the Claimed tab, never CLAIM', async ({ v2Page: page }) => {
     await page.goto('/dashboard');
-    await expect(page.getByTestId('v2-practice-badge')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId('v2-positions-tab-claimed')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId('v2-claim-cta')).toHaveCount(0);
+    await page.getByTestId('v2-positions-tab-claimed').click();
+    await expect(page.getByTestId('v2-closed-card')).toBeVisible();
+    await expect(page.getByTestId('v2-claimed-chip')).toBeVisible();
     await expect(page.getByTestId('v2-claim-cta')).toHaveCount(0);
   });
 });

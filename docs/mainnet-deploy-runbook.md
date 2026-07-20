@@ -70,14 +70,23 @@ Both inits require the payer/authority relationships below; `initialize_vault_v2
 needs the payer to be the program's CURRENT upgrade authority (the deploy wallet
 after step 5), so do all of step 6 now, then transfer in step 7.
 
-**6a. Community-pot config** (creates the `pot-protocol` PDA). `POT_AUTHORITY_KEYPAIR`
-MUST be the keypair whose bs58 secret is the backend's `COMMUNITY_POT_WORKER_PRIVATE_KEY`
-— the pot cycle refuses to run otherwise.
+**6a. Community-pot config** (creates the `pot-protocol` PDA). Two distinct
+keys, mirroring 6b: the SIGNER is the deploy wallet (the on-chain front-run
+gate requires the program's current upgrade authority), and
+`POT_AUTHORITY_PUBKEY` — stored as `PotConfig.authority` — MUST be the pubkey
+of the backend's `COMMUNITY_POT_WORKER_PRIVATE_KEY`; the pot cycle refuses to
+run otherwise.
 
 ```bash
-MAINNET_RPC_URL=https://<paid-rpc> POT_AUTHORITY_KEYPAIR=<ops-relay.json> \
+MAINNET_RPC_URL=https://<paid-rpc> DEPLOY_KEYPAIR=<deploy-wallet.json> \
+  POT_AUTHORITY_PUBKEY=<ops-relay-pubkey> \
+  CONFIRM_POT_AUTHORITY=<ops-relay-pubkey again — double-entry guard> \
   node scripts/deploy/init-mainnet-pot.mjs
 ```
+
+If the stored authority is ever wrong anyway, `set_pot_authority` (signed by
+the current upgrade authority — the Squads vault after step 7) rotates it
+without a program upgrade.
 
 **6b. Vault config.** The pot vault is auto-derived as the pot-protocol PDA's
 USDC ATA, so forfeited yield lands straight in the vault `distribute_window`
@@ -115,18 +124,34 @@ Fill `scripts/deploy/env.mainnet.backend.template` into Render (secrets via
 The backend refuses to boot on a mainnet RPC with dev-fallback secrets or a
 dev/mock yield profile. Then deploy backend (git push / Render deploy).
 
-## 9. Apply the pot cron blueprint `[YOU]`
+## 9. Apply the cron blueprint `[YOU]`
 
-Apply `render.yaml` as a Render Blueprint (adds `locked-in-pot-cycle`, monthly).
-Set its `SCHEDULER_SECRET` + `POT_CYCLE_BASE_URL`. No further action — it closes
-+ distributes the previous UTC month automatically.
+Apply `render.yaml` as a Render Blueprint — it defines THREE crons, all of
+which must be configured or real money behavior silently breaks:
+
+- `locked-in-pot-cycle` (daily 03:00 UTC): set `SCHEDULER_SECRET` +
+  `POT_CYCLE_BASE_URL`. Closes + distributes the previous UTC month.
+- `locked-in-lapse-sweep` (daily): set `SCHEDULER_SECRET` +
+  `LAPSE_SWEEP_BASE_URL`. This is the ONLY miss judge off-devnet (the
+  in-process worker refuses to start on mainnet) — without it, lapse
+  penalties are never applied and every voucher pays full yield.
+- `locked-in-leaderboard-snapshot-refresh`: set `SCHEDULER_SECRET` +
+  `LEADERBOARD_REFRESH_BASE_URL`.
 
 ## 10. Frontend env + deploy `[YOU]`
 
 Fill `scripts/deploy/env.mainnet.frontend.template` into Vercel:
 `NEXT_PUBLIC_SOLANA_CLUSTER=mainnet-beta`, `NEXT_PUBLIC_SOLANA_RPC_URL`,
-`NEXT_PUBLIC_VAULT_V2_PROGRAM_ID=FAuFtX…`, real USDC mint, scope oracle. Then
-**git push** (NEXT_PUBLIC_* bake at build — `vercel redeploy` alone won't rebuild env).
+`NEXT_PUBLIC_SOLANA_WS_URL` (**replace the stale devnet wss**),
+`NEXT_PUBLIC_VAULT_V2_PROGRAM_ID=FAuFtX…`, real USDC mint, scope oracle; confirm
+`NEXT_PUBLIC_E2E_TX_STUB` is absent. Then **git push** (NEXT_PUBLIC_* bake at
+build — `vercel redeploy` alone won't rebuild env).
+
+⚠ The FRONTEND cluster detection fails OPEN to devnet: if
+`NEXT_PUBLIC_SOLANA_CLUSTER` is unset and the RPC hostname doesn't contain
+"mainnet" (Triton/custom domains don't), the UI shows devnet chrome (dev
+button, "· devnet" APY suffix). The backend fails closed, so no money risk —
+but set the cluster var explicitly, always.
 
 ## 11. DB migrations `[RUN]`
 

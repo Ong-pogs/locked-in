@@ -4582,6 +4582,75 @@ export async function checkQuestionAnswer(
   });
 }
 
+/**
+ * Pure MCQ verdict for the pre-lesson recall. Matching mirrors
+ * checkQuestionAnswer's normalizeAnswerText semantics. Returns null (refuse,
+ * never guess) for non-MCQ questions or a missing key — short-text rubric
+ * anchors must never leave the server.
+ */
+export function gradeRecallAnswer(question, answerText) {
+  if (!question || question.questionType !== 'mcq') {
+    return null;
+  }
+  const key = typeof question.correctAnswer === 'string' ? question.correctAnswer.trim() : '';
+  if (!key) {
+    return null;
+  }
+  const normalized = normalizeAnswerText(answerText);
+  return {
+    isCorrect: normalized.length > 0 && normalized === normalizeAnswerText(key),
+    correctAnswer: key,
+  };
+}
+
+/**
+ * Stateless recall check: grade an MCQ pick against a lesson the caller has
+ * ALREADY COMPLETED, without creating or locking any attempt state (unlike
+ * checkQuestionAnswer). Prod payloads strip answer keys (integrity fix), so
+ * this is the only way the recall card can show right/wrong.
+ *
+ * Reveal gate: completion is permanent and replays are ungraded practice, so
+ * returning the key for a completed lesson leaks nothing gradable. For any
+ * other lesson this 403s — it must never become an answer-key oracle.
+ */
+export async function checkRecallAnswer(walletAddress, lessonId, questionId, answerText) {
+  if (!questionId || typeof questionId !== 'string') {
+    throw badRequest('questionId is required', 'MISSING_QUESTION_ID');
+  }
+  if (typeof answerText !== 'string' || answerText.trim().length === 0) {
+    throw badRequest('answerText is required', 'MISSING_ANSWER_TEXT');
+  }
+  if (!hasDatabase()) {
+    throw new HttpError(503, 'Recall check is unavailable', 'DATABASE_UNAVAILABLE');
+  }
+
+  return withTransactionAsWallet(walletAddress, async (client) => {
+    const done = await client.query(
+      `select 1
+         from lesson.user_lesson_progress
+        where wallet_address = $1 and lesson_id = $2 and completed = true
+        limit 1`,
+      [walletAddress, lessonId],
+    );
+    if (done.rowCount === 0) {
+      throw new HttpError(403, 'Recall is only available for completed lessons', 'LESSON_NOT_COMPLETED');
+    }
+
+    const lessonVersion = await getPublishedLessonVersion(client, lessonId);
+    const questions = await listLessonQuestions(client, lessonVersion.lessonVersionId);
+    const question = questions.find((q) => q.id === questionId);
+    if (!question) {
+      throw badRequest(`Unknown question for this lesson: ${questionId}`, 'UNKNOWN_QUESTION_ID');
+    }
+
+    const verdict = gradeRecallAnswer(question, answerText);
+    if (!verdict) {
+      throw new HttpError(422, 'Recall check supports MCQ questions only', 'RECALL_UNSUPPORTED');
+    }
+    return { questionId, ...verdict };
+  });
+}
+
 export async function submitLessonAttempt(
   walletAddress,
   lessonId,

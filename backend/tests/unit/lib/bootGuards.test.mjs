@@ -200,6 +200,17 @@ describe('collectBootGuardViolations — (b) mainnet vaultV2 vs mock yield', () 
     expect(violations).toEqual([]);
   });
 
+  // Hole found in the mainnet-transition audit (S3): with yield vars simply
+  // ABSENT the old guard was silent, and /v1/yield/current-apy served the
+  // simulated 8% labeled "· mainnet". Real custody must never pair with a
+  // silently-disabled yield strategy.
+  it('refuses vaultV2 on mainnet with the yield strategy disabled/unset', () => {
+    const violations = collectBootGuardViolations(
+      cleanConfig({ ...mainnetV2, yieldStrategyEnabled: false }),
+    );
+    expect(violations.some((v) => /disabled|unset/i.test(v))).toBe(true);
+  });
+
   it('allows the mock adapter on devnet even with vaultV2 configured', () => {
     const violations = collectBootGuardViolations(
       cleanConfig({
