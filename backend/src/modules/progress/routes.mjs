@@ -5,6 +5,7 @@ import { autoMissEventId } from '../../lib/missEvents.mjs';
 import { secureEquals } from '../../lib/secureCompare.mjs';
 import { appConfig } from '../../config.mjs';
 import { requireAccessAuth } from '../../plugins/auth.mjs';
+import { keyGenerator } from '../../plugins/rateKey.mjs';
 import {
   getUserXp,
   closeCommunityPotWindowAndSnapshot,
@@ -90,7 +91,7 @@ export async function progressRoutes(app) {
     '/v1/progress/lessons/:lessonId/check',
     {
       preHandler: requireAccessAuth,
-      config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
+      config: { rateLimit: { max: 60, timeWindow: '1 minute', keyGenerator } },
     },
     async (request) => {
       const lessonId = assertPathParam(request.params?.lessonId, 'lessonId');
@@ -117,7 +118,7 @@ export async function progressRoutes(app) {
     '/v1/progress/lessons/:lessonId/recall-check',
     {
       preHandler: requireAccessAuth,
-      config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
+      config: { rateLimit: { max: 60, timeWindow: '1 minute', keyGenerator } },
     },
     async (request) => {
       const lessonId = assertPathParam(request.params?.lessonId, 'lessonId');

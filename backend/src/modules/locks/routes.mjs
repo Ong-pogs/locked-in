@@ -1,6 +1,7 @@
 import { PublicKey } from '@solana/web3.js';
 import { badRequest, notFound, HttpError } from '../../lib/errors.mjs';
 import { requireAccessAuth } from '../../plugins/auth.mjs';
+import { keyGenerator } from '../../plugins/rateKey.mjs';
 import { hasPositionConfig, readLockPosition } from '../../lib/lockPosition.mjs';
 import { hasDatabase, query, queryAsWallet } from '../../lib/db.mjs';
 import {
@@ -208,7 +209,7 @@ export async function locksRoutes(app) {
     '/v1/locks/:courseId/claim-result',
     {
       preHandler: requireAccessAuth,
-      config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+      config: { rateLimit: { max: 30, timeWindow: '1 minute', keyGenerator } },
     },
     async (request) => {
       const courseId = assertCourseIdParam(request);
@@ -282,7 +283,7 @@ export async function locksRoutes(app) {
     '/v1/locks/consent',
     {
       preHandler: requireAccessAuth,
-      config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+      config: { rateLimit: { max: 20, timeWindow: '1 minute', keyGenerator } },
     },
     async (request) => {
       const walletAddress = request.auth.walletAddress;

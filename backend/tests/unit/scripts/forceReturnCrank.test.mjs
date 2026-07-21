@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { createHash } from 'node:crypto';
-import { Keypair, SystemProgram, SYSVAR_INSTRUCTIONS_PUBKEY } from '@solana/web3.js';
+import {
+  ComputeBudgetProgram,
+  Keypair,
+  PublicKey,
+  SystemProgram,
+  SYSVAR_INSTRUCTIONS_PUBKEY,
+} from '@solana/web3.js';
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
@@ -11,10 +17,19 @@ import {
   FORCE_RETURN_V2_DISCRIMINATOR,
   LOCKV2_ACCOUNT_DISCRIMINATOR,
   LOCKV2_ACCOUNT_SIZE,
+  KLEND_PROGRAM_ID,
+  KAMINO_SCOPE_PRICES,
+  REFRESH_RESERVE_DISCRIMINATOR,
+  PRIORITY_FEE_FLOOR,
+  PRIORITY_FEE_CEILING,
   decodeLockV2,
   decodeVaultV2Config,
   isForceReturnable,
   buildForceReturnV2Instruction,
+  buildRefreshReserveIx,
+  buildPriorityFeeIx,
+  writableKeysOf,
+  buildForceReturnTransactionIxs,
 } from '../../../scripts/force-return-crank.mjs';
 
 const sha8 = (preimage) =>
@@ -191,5 +206,227 @@ describe('buildForceReturnV2Instruction — exact ForceReturnV2 account order', 
       expect(ix.keys[i].isWritable, `account #${i} isWritable`).toBe(isWritable);
       expect(ix.keys[i].isSigner, `account #${i} isSigner`).toBe(isSigner);
     });
+  });
+});
+
+// Literal values the CLIENT (web-app/services/solana/vaultV2.ts) hard-codes.
+// Pinned here so buildRefreshReserveIx is proven byte-identical to the client
+// impl, not merely internally consistent with the crank's own constants.
+const CLIENT_KLEND_PROGRAM_ID = 'KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD';
+const CLIENT_SCOPE_PRICES = '3t4JZcueEzTbVP6kLxXrL3VpWx45jDer4eqysweBchNH';
+
+function fullConfig(overrides = {}) {
+  return {
+    authority: fakeKey(), usdcMint: fakeKey(), kaminoProgram: fakeKey(),
+    kaminoReserve: fakeKey(), kaminoMarket: fakeKey(), kaminoLma: fakeKey(),
+    kaminoLiquiditySupply: fakeKey(), kaminoCollateralMint: fakeKey(),
+    potVault: fakeKey(), feeVault: fakeKey(),
+    ...overrides,
+  };
+}
+
+describe('buildRefreshReserveIx', () => {
+  it('sanity-pins the crank constants against the client literals', () => {
+    // If either side drifts, the refresh_reserve tx silently points at the
+    // wrong program/oracle — the whole point of keeping them in lockstep.
+    expect(KLEND_PROGRAM_ID).toBe(CLIENT_KLEND_PROGRAM_ID);
+    expect(KAMINO_SCOPE_PRICES).toBe(CLIENT_SCOPE_PRICES);
+  });
+
+  it('returns null for a mock/devnet config (kaminoProgram != klend)', () => {
+    // The devnet mock reserve is a different program and needs no refresh.
+    expect(buildRefreshReserveIx(fullConfig())).toBeNull();
+  });
+
+  it('builds the exact 6-account klend refresh_reserve, byte-identical to the client', () => {
+    const config = fullConfig({ kaminoProgram: new PublicKey(CLIENT_KLEND_PROGRAM_ID) });
+    const ix = buildRefreshReserveIx(config);
+
+    expect(ix.programId.equals(new PublicKey(CLIENT_KLEND_PROGRAM_ID))).toBe(true);
+    expect(Buffer.from(ix.data)).toEqual(sha8('global:refresh_reserve'));
+    expect(Buffer.from(ix.data)).toEqual(Buffer.from(REFRESH_RESERVE_DISCRIMINATOR));
+    // Pinned bytes from the program/client spec.
+    expect([...ix.data]).toEqual([2, 218, 138, 235, 79, 201, 25, 102]);
+
+    const klend = new PublicKey(CLIENT_KLEND_PROGRAM_ID);
+    const scope = new PublicKey(CLIENT_SCOPE_PRICES);
+    // [reserve(w), lendingMarket, pyth, switchboardPrice, switchboardTwap, scopePrices];
+    // absent oracles use the klend program-id as the sentinel (USDC = Scope-only).
+    const expected = [
+      [config.kaminoReserve, true],  // reserve (mut)
+      [config.kaminoMarket, false],  // lending_market
+      [klend, false],                // pyth (sentinel)
+      [klend, false],                // switchboard price (sentinel)
+      [klend, false],                // switchboard twap (sentinel)
+      [scope, false],                // scope_prices
+    ];
+    expect(ix.keys).toHaveLength(expected.length);
+    expected.forEach(([pubkey, isWritable], i) => {
+      expect(ix.keys[i].pubkey.equals(pubkey), `account #${i} pubkey`).toBe(true);
+      expect(ix.keys[i].isWritable, `account #${i} isWritable`).toBe(isWritable);
+      expect(ix.keys[i].isSigner, `account #${i} isSigner`).toBe(false);
+    });
+  });
+});
+
+describe('buildPriorityFeeIx', () => {
+  // A fake Connection whose getRecentPrioritizationFees is fully stubbed — the
+  // builder must never touch the real network to price a bid.
+  const fakeConn = (impl) => ({ getRecentPrioritizationFees: impl });
+  // Decode setComputeUnitPrice: data[0]=3 discriminator, then u64 LE microLamports.
+  const priceOf = (ix) => {
+    expect(ix.programId.equals(ComputeBudgetProgram.programId)).toBe(true);
+    expect(ix.data[0]).toBe(3);
+    return Number(Buffer.from(ix.data).readBigUInt64LE(1));
+  };
+
+  it('floors when getRecentPrioritizationFees throws (RPC unsupported/timeout)', async () => {
+    const ix = await buildPriorityFeeIx(
+      fakeConn(async () => { throw new Error('RPC method not supported'); }),
+      [fakeKey()],
+    );
+    expect(priceOf(ix)).toBe(PRIORITY_FEE_FLOOR);
+  });
+
+  it('floors on an empty recent-fee window (quiet network)', async () => {
+    const ix = await buildPriorityFeeIx(fakeConn(async () => []), [fakeKey()]);
+    expect(priceOf(ix)).toBe(PRIORITY_FEE_FLOOR);
+  });
+
+  it('floors when every sample is zero/invalid and gets filtered out', async () => {
+    const ix = await buildPriorityFeeIx(
+      fakeConn(async () => [
+        { prioritizationFee: 0 },
+        { prioritizationFee: -5 },
+        { prioritizationFee: Number.NaN },
+      ]),
+      [fakeKey()],
+    );
+    expect(priceOf(ix)).toBe(PRIORITY_FEE_FLOOR);
+  });
+
+  it('clamps a huge outlier sample down to the ceiling', async () => {
+    const ix = await buildPriorityFeeIx(
+      fakeConn(async () => [{ prioritizationFee: 50_000_000 }]),
+      [fakeKey()],
+    );
+    expect(priceOf(ix)).toBe(PRIORITY_FEE_CEILING);
+  });
+
+  it('picks the p75 of a spread — above the median, below the max()', async () => {
+    // 10 shuffled samples, all inside the [floor, ceiling] band, plus junk that
+    // must be filtered. Sorted ascending: 15,25,...,105k. index = floor(10*0.75)
+    // = 7 → the 8th sample (85_000), NOT the 105_000 max.
+    const fees = [55_000, 15_000, 105_000, 35_000, 95_000, 25_000, 85_000, 45_000, 75_000, 65_000];
+    const ix = await buildPriorityFeeIx(
+      fakeConn(async () => [
+        ...fees.map((prioritizationFee) => ({ prioritizationFee })),
+        { prioritizationFee: 0 },
+        { prioritizationFee: Number.NaN },
+      ]),
+      [fakeKey()],
+    );
+    const picked = priceOf(ix);
+    expect(picked).toBe(85_000);
+    expect(picked).toBeGreaterThan(Math.max(...fees) / 2); // above the median
+    expect(picked).toBeLessThan(Math.max(...fees)); // below the outlier max
+  });
+});
+
+describe('writableKeysOf', () => {
+  it('dedups writable keys across instructions and drops read-only ones', () => {
+    const a = fakeKey();
+    const b = fakeKey();
+    const ro = fakeKey();
+    const ix1 = { keys: [
+      { pubkey: a, isWritable: true, isSigner: false },
+      { pubkey: ro, isWritable: false, isSigner: false },
+    ] };
+    const ix2 = { keys: [
+      { pubkey: a, isWritable: true, isSigner: false }, // duplicate of ix1
+      { pubkey: b, isWritable: true, isSigner: false },
+    ] };
+    const out = writableKeysOf([ix1, ix2]);
+    const base58 = out.map((k) => k.toBase58()).sort();
+    expect(out).toHaveLength(2);
+    expect(base58).toEqual([a.toBase58(), b.toBase58()].sort());
+    expect(base58).not.toContain(ro.toBase58());
+  });
+});
+
+describe('buildForceReturnTransactionIxs — instruction ordering', () => {
+  const programId = fakeKey();
+  const configPda = fakeKey();
+  const lockPda = fakeKey();
+  const owner = fakeKey();
+  const caller = fakeKey();
+  // A distinct injected bid we can recognise by reference in the output.
+  const priorityFeeIx = ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 42_000 });
+
+  const isAtaCreate = (ix) => ix.programId.equals(ASSOCIATED_TOKEN_PROGRAM_ID);
+  const isCuLimit = (ix) =>
+    ix.programId.equals(ComputeBudgetProgram.programId) && ix.data[0] === 2;
+  const isCuPrice = (ix) =>
+    ix.programId.equals(ComputeBudgetProgram.programId) && ix.data[0] === 3;
+  const isForceReturn = (ix) =>
+    ix.programId.equals(programId) &&
+    Buffer.from(ix.data).equals(Buffer.from(FORCE_RETURN_V2_DISCRIMINATOR));
+
+  it('mock/devnet config: [create-ATA, cu_limit, cu_price, force_return] — no refresh', () => {
+    const config = fullConfig(); // kaminoProgram != klend → refresh null
+    const ixs = buildForceReturnTransactionIxs({
+      programId, configPda, lockPda, owner, caller, config, priorityFeeIx,
+    });
+
+    expect(ixs).toHaveLength(4);
+    expect(isAtaCreate(ixs[0])).toBe(true);
+    expect(isCuLimit(ixs[1])).toBe(true);
+    expect(ixs[1].data).toEqual(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }).data);
+    expect(ixs[2]).toBe(priorityFeeIx); // injected bid passed through untouched
+    expect(isForceReturn(ixs[3])).toBe(true);
+
+    // Both a CU limit and a CU price are present.
+    expect(ixs.filter(isCuLimit)).toHaveLength(1);
+    expect(ixs.filter(isCuPrice)).toHaveLength(1);
+    // No refresh_reserve on the mock path.
+    expect(ixs.some((ix) => ix.programId.equals(new PublicKey(CLIENT_KLEND_PROGRAM_ID)))).toBe(false);
+  });
+
+  it('klend config: refresh_reserve is present and immediately precedes force_return', () => {
+    const config = fullConfig({ kaminoProgram: new PublicKey(CLIENT_KLEND_PROGRAM_ID) });
+    const ixs = buildForceReturnTransactionIxs({
+      programId, configPda, lockPda, owner, caller, config, priorityFeeIx,
+    });
+
+    // [create-ATA, cu_limit, cu_price, refresh_reserve, force_return]
+    expect(ixs).toHaveLength(5);
+    expect(isAtaCreate(ixs[0])).toBe(true);
+    expect(isCuLimit(ixs[1])).toBe(true);
+    expect(ixs[2]).toBe(priorityFeeIx);
+
+    const refreshIdx = 3;
+    const forceIdx = 4;
+    expect(ixs[refreshIdx].programId.equals(new PublicKey(CLIENT_KLEND_PROGRAM_ID))).toBe(true);
+    expect(Buffer.from(ixs[refreshIdx].data)).toEqual(Buffer.from(REFRESH_RESERVE_DISCRIMINATOR));
+    expect(isForceReturn(ixs[forceIdx])).toBe(true);
+    // The settling ix must come straight after the refresh (klend max oracle
+    // age 180s — nothing may sit between them).
+    expect(forceIdx).toBe(refreshIdx + 1);
+
+    expect(ixs.filter(isCuLimit)).toHaveLength(1);
+    expect(ixs.filter(isCuPrice)).toHaveLength(1);
+  });
+
+  it('omitting the injected bid drops only the cu_price ix, keeping the rest ordered', () => {
+    const config = fullConfig();
+    const ixs = buildForceReturnTransactionIxs({
+      programId, configPda, lockPda, owner, caller, config,
+    });
+    // [create-ATA, cu_limit, force_return] — the un-prioritised devnet shape.
+    expect(ixs).toHaveLength(3);
+    expect(isAtaCreate(ixs[0])).toBe(true);
+    expect(isCuLimit(ixs[1])).toBe(true);
+    expect(isForceReturn(ixs[2])).toBe(true);
+    expect(ixs.some(isCuPrice)).toBe(false);
   });
 });

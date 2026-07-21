@@ -12,6 +12,8 @@ import { getCompletionVoucher, getLockPosition } from '@/services/api/progress/p
 import { fetchWithAuth } from '@/services/api';
 import { reportClaimResult, type ClaimResultPhase } from '@/services/api/locks/locksApi';
 import { hasVaultV2Config } from '@/services/solana/vaultV2';
+import { connection } from '@/services/solana/connection';
+import { PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { captureError } from '@/services/observability';
 import { ApiError } from '@/services/api/errors';
 import type { CompletionVoucherResponse, LockPositionResponse } from '@/services/api/types';
@@ -37,6 +39,7 @@ type ClaimPhase =
   | 'not-configured'
   | 'no-voucher'
   | 'already-claimed'
+  | 'needs-sol'
   | 'expired';
 
 // Receipt shape + reader live in services/claim/claimReceipt (shared with the
@@ -50,6 +53,48 @@ const PHASE_COPY: Record<V2ActionPhase, string> = {
   success: 'Claimed!',
   error: 'Transaction failed',
 };
+
+// SOL gas gate (claim side).
+//
+// A claim is cheaper than a deposit — it does NOT init the LockV2 PDA or a
+// collateral ATA — but it is NOT free. buildClaimTransaction always prepends
+// createAssociatedTokenAccountIdempotent for the owner's USDC ATA (payer =
+// owner). That is a no-op when the ATA already exists, but a user who never had
+// a USDC account, or closed it, pays a one-time ~0.00204 SOL of rent for the
+// 165-byte token account on top of the signature + priority fees.
+//
+// So the deposit's ~0.005 figure would be wrong here (no PDA/collateral rent),
+// but zero is wrong too. 0.003 SOL is a defensible floor: it covers the worst
+// case (ATA rent ~0.00204 + fees) with margin, while not scaring off a funded
+// wallet. This matters most on the mainnet path this whole gate exists for: a
+// Google-login embedded wallet that only ever received USDC and holds ~0 SOL —
+// without the gate it signs, the chain rejects for lamports, and the user reads
+// a raw RPC string while wondering whether their principal is gone.
+const MIN_SOL_LAMPORTS = 0.003 * LAMPORTS_PER_SOL;
+const MIN_SOL_UI = '0.003';
+const CLAIM_ATA_RENT_SOL_UI = '~0.002';
+
+// 'unknown' deliberately does NOT block. A failed balance read is only a
+// missing warning, not proof the wallet is empty; blocking a funded user out of
+// their own claim on an RPC blip is the worse failure, and the on-chain
+// rejection copy still catches a genuinely broke wallet (mirrors DepositV2).
+type SolGateState =
+  | { status: 'ok' }
+  | { status: 'insufficient'; lamports: number }
+  | { status: 'unknown' };
+
+function formatSol(lamports: number): string {
+  return (lamports / LAMPORTS_PER_SOL).toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+async function readSolGate(owner: string): Promise<SolGateState> {
+  try {
+    const lamports = await connection.getBalance(new PublicKey(owner));
+    return lamports >= MIN_SOL_LAMPORTS ? { status: 'ok' } : { status: 'insufficient', lamports };
+  } catch {
+    return { status: 'unknown' };
+  }
+}
 
 // A claim that dies after the transaction was sent is the expensive case to
 // support: the user has a signature, we have nothing. v2Actions does not attach
@@ -119,6 +164,7 @@ export default function ClaimPage() {
   const [successRecord, setSuccessRecord] = useState<ClaimSuccessRecord | null>(null);
   const [pendingSignature, setPendingSignature] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [solGateLamports, setSolGateLamports] = useState<number | null>(null);
 
   // Server truth first: the on-chain principal from the position endpoint.
   // The local store's lockAmount is only a fallback — it can go stale (e.g.
@@ -270,6 +316,20 @@ export default function ClaimPage() {
     try {
       // Chain code loads HERE, not at mount — keeps the route mockable.
       const { executeClaim, isTxStubActive } = await import('@/services/solana/v2Actions');
+      // Binding SOL gate: read the balance right before building any tx, so we
+      // never sign a claim the chain will reject for lamports (fees + a
+      // possible one-time USDC-ATA rent). Skipped under the e2e tx stub, which
+      // drives a zero-SOL mocked wallet and never actually signs. 'unknown'
+      // (read failed) and 'ok' both proceed — only a confirmed 'insufficient'
+      // blocks, so an RPC blip can't strand a funded user.
+      if (!isTxStubActive()) {
+        const gate = await readSolGate(walletAddress);
+        if (gate.status === 'insufficient') {
+          setSolGateLamports(gate.lamports);
+          setPhase('needs-sol');
+          return; // `finally` clears isSubmitting; nothing was built or signed
+        }
+      }
       const { pickSignerWallet, missingSignerMessage } = await import(
         '@/services/solana/pickSignerWallet'
       );
@@ -361,6 +421,22 @@ export default function ClaimPage() {
     privySignTransaction,
     solanaWallets,
   ]);
+
+  // Re-read the balance from the needs-sol screen. Funded (or unreadable) →
+  // back to review so the user can claim; still short → refresh the figure.
+  const recheckSol = useCallback(async () => {
+    if (!walletAddress) {
+      setPhase('review');
+      return;
+    }
+    const gate = await readSolGate(walletAddress);
+    if (gate.status === 'insufficient') {
+      setSolGateLamports(gate.lamports);
+      setPhase('needs-sol');
+    } else {
+      setPhase('review');
+    }
+  }, [walletAddress]);
 
   const backToDashboard = (
     <button
@@ -476,6 +552,39 @@ export default function ClaimPage() {
         <p className="font-pixel-mono text-[12px]" style={MUTED_STRONG}>
           Head back to the dashboard and reopen the claim — a fresh voucher will be issued.
         </p>
+        {backToDashboard}
+      </CozyCard>,
+    );
+  }
+
+  if (phase === 'needs-sol') {
+    return shell(
+      <CozyCard data-testid="v2-claim-needs-sol" className="text-center" style={{ padding: 28 }}>
+        <p className="font-pixel text-lg mb-2" style={{ color: '#F0A878', textShadow: COZY_TEXT_SHADOW }}>
+          You need a little SOL first
+        </p>
+        <p className="font-pixel-mono text-[12px] mb-3" style={MUTED_STRONG}>
+          {solGateLamports != null ? `This wallet holds ${formatSol(solGateLamports)} SOL. ` : ''}
+          Claiming needs at least {MIN_SOL_UI} SOL — Solana charges network fees in SOL, and if your
+          USDC account was ever closed the claim re-creates it, a one-time refundable rent of{' '}
+          {CLAIM_ATA_RENT_SOL_UI} SOL.
+        </p>
+        <p className="font-pixel-mono text-[12px] mb-5" style={MUTED_STRONG}>
+          Your locked USDC and yield are untouched and still fully claimable. Send at least{' '}
+          {MIN_SOL_UI} SOL to this wallet from an exchange or another wallet, then come back.
+        </p>
+        <button
+          onClick={recheckSol}
+          className="w-full py-3 rounded-lg border font-pixel text-sm uppercase tracking-[2px] font-bold min-h-[44px]"
+          style={{
+            backgroundColor: 'rgba(255,213,128,0.12)',
+            borderColor: 'rgba(255,213,128,0.4)',
+            color: COZY_TEXT,
+            textShadow: COZY_TEXT_SHADOW,
+          }}
+        >
+          Check again
+        </button>
         {backToDashboard}
       </CozyCard>,
     );
