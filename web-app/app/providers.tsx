@@ -3,11 +3,16 @@
 import { PrivyProvider } from '@privy-io/react-auth';
 import { toSolanaWalletConnectors } from '@privy-io/react-auth/solana';
 import { createSolanaRpc, createSolanaRpcSubscriptions } from '@solana/kit';
+import { CLUSTER, RPC_ENDPOINT } from '@/services/solana/connection';
 
 const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID ?? '';
-const SOLANA_CLUSTER = process.env.NEXT_PUBLIC_SOLANA_CLUSTER ?? 'devnet';
-const RPC_URL = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? `https://api.${SOLANA_CLUSTER}.solana.com`;
-const WS_URL = process.env.NEXT_PUBLIC_SOLANA_WS_URL ?? `wss://api.${SOLANA_CLUSTER}.solana.com`;
+// connection.ts is the single source of truth for the resolved cluster (audit
+// M5) — re-deriving it here let the Privy chain key drift from the cluster that
+// gates the dev UI, cluster tags, and APY suffix. Map the resolved cluster to
+// Privy's chain-key slug ('mainnet-beta' → 'mainnet').
+const CHAIN_SLUG = CLUSTER === 'mainnet-beta' ? 'mainnet' : CLUSTER;
+const RPC_URL = RPC_ENDPOINT;
+const WS_URL = process.env.NEXT_PUBLIC_SOLANA_WS_URL ?? `wss://api.${CLUSTER}.solana.com`;
 
 const solanaRpc = createSolanaRpc(RPC_URL);
 const solanaRpcSubscriptions = createSolanaRpcSubscriptions(WS_URL);
@@ -25,7 +30,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
               rpc: solanaRpc,
               rpcSubscriptions: solanaRpcSubscriptions,
             },
-            [`solana:${SOLANA_CLUSTER}`]: {
+            [`solana:${CHAIN_SLUG}`]: {
               rpc: solanaRpc,
               rpcSubscriptions: solanaRpcSubscriptions,
             },

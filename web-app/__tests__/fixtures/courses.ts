@@ -2,7 +2,7 @@ import type { Course, CourseLockPolicy, CourseModule, Lesson, LessonBlock, Quest
 
 export function buildLockPolicy(overrides?: Partial<CourseLockPolicy>): CourseLockPolicy {
   return {
-    minPrincipalAmountUi: '5',
+    minPrincipalAmountUi: '10',
     maxPrincipalAmountUi: '100',
     demoPrincipalAmountUi: '1',
     minLockDurationDays: 10,

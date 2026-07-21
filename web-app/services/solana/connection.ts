@@ -7,7 +7,7 @@ const envRpcEndpoint = (process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? '').trim();
 // the clusterApiUrl fallback). A recognized explicit cluster wins; otherwise
 // derive from the RPC URL so a mainnet RPC with a missing/typo'd cluster env
 // still fails closed to mainnet rather than silently to devnet (audit M5).
-function resolveCluster(): Cluster {
+export function resolveCluster(): Cluster {
   const c = (process.env.NEXT_PUBLIC_SOLANA_CLUSTER ?? '').trim().toLowerCase();
   if (c === 'mainnet-beta' || c === 'mainnet') return 'mainnet-beta';
   if (c === 'testnet') return 'testnet';

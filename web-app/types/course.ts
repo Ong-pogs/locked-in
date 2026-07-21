@@ -32,7 +32,7 @@ export function defaultCourseLockPolicyForDifficulty(
     case 'beginner':
     default:
       return {
-        minPrincipalAmountUi: '5',
+        minPrincipalAmountUi: '10',
         maxPrincipalAmountUi: '100',
         demoPrincipalAmountUi: '1',
         minLockDurationDays: 10,
