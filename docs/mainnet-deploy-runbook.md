@@ -256,6 +256,28 @@ Notes:
   `terms_version`, the old rows do not satisfy it and no purge is needed.
 - If you ever re-point at devnet and back, run it again — it is idempotent.
 
+## 11c. `[⚠][RUN]` Pre-flight check — env + on-chain must agree
+
+Read-only. Run it AFTER init (step 6), the env is set (steps 8/10), migrations
+(11) and the cutover reset (11b), and BEFORE the first real deposit. It mirrors
+the boot guards and decodes the live on-chain config, so a misconfig surfaces
+here instead of after money is in flight. It must print `0 FAIL`.
+
+```bash
+cd backend && node scripts/mainnet-preflight-check.mjs \
+  --backend-env  ../scripts/deploy/env.mainnet.backend.filled \
+  --frontend-env ../scripts/deploy/env.mainnet.frontend.filled \
+  --squads <SQUADS_VAULT_PUBKEY>
+```
+
+Fails loudly on the launch-killers: `config.authority != LOCK_VAULT_WORKER_
+PRIVATE_KEY` (every voucher unclaimable), `PotConfig.authority != COMMUNITY_POT_
+WORKER_PRIVATE_KEY` (pot cron refuses), non-canonical USDC mint, kaminoProgram
+not klend, the upgrade authority still a hot key (pass `--squads` to assert the
+handover landed), `DEV_TOOLS_ENABLED=true`, frontend program-id/mint/cluster
+disagreeing with the backend, a devnet WS url, or devnet completion residue in
+the DB. Resolve every FAIL, review every WARN, then proceed.
+
 ## 12. Smoke test `[RUN]`
 
 - `/v1/courses` returns courses; `/v1/yield/current-apy` returns the live
