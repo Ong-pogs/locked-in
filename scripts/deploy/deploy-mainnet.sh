@@ -36,11 +36,21 @@ echo "deploy wallet balance:"; solana balance -k "$DEPLOY_KP" --url "$RPC"
 read -r -p "Deploy to MAINNET with REAL SOL? type 'deploy' to continue: " ok
 [ "$ok" = "deploy" ] || { echo "aborted."; exit 1; }
 
+# --use-rpc: send the ~515 write-chunk txs through the paid RPC instead of
+#   forwarding to validator TPUs from this laptop (the default), which drops
+#   writes through a third-party RPC like Alchemy and strands the buffer.
+# --with-compute-unit-price: a priority fee so writes land under congestion
+#   (override via PRIORITY_MICROLAMPORTS; ~negligible cost at 527KB).
+# --max-sign-attempts: default 5 (~5 min) is too few if the network is busy.
+PRIORITY_MICROLAMPORTS="${PRIORITY_MICROLAMPORTS:-50000}"
 solana program deploy "$SO" \
   --program-id "$PROGRAM_KP" \
   --keypair "$DEPLOY_KP" \
   --url "$RPC" \
-  --commitment confirmed
+  --commitment confirmed \
+  --use-rpc \
+  --with-compute-unit-price "$PRIORITY_MICROLAMPORTS" \
+  --max-sign-attempts 30
 
 echo ""
 echo "deployed $MAINNET_ID. Upgrade authority = deploy wallet (HOT)."
