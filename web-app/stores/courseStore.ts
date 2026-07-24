@@ -5,6 +5,7 @@ import { getCourseRuntime, hasRemoteLessonApi, fetchWithAuth } from '@/services/
 import type { CourseRuntimeSnapshot, UserEnrollmentsResponse } from '@/services/api/types';
 import { batchCheckLockAccounts } from '@/services/solana';
 import type { LockAccountSnapshot } from '@/services/solana';
+import { batchCheckLockV2Accounts, hasVaultV2Config } from '@/services/solana/vaultV2';
 import { useUserStore } from './userStore';
 import type {
   Course,
@@ -580,7 +581,13 @@ export const useCourseStore = create<CourseStore>()(
           if (unenrolledCourseIds.length === 0) return;
 
           try {
-            const lockMap = await batchCheckLockAccounts(walletAddress, unenrolledCourseIds);
+            // v2 (mainnet) locks live at seed 'lock-v2' under the v2 program —
+            // the v1 checker derives seed 'lock' under the RETIRED v1 program
+            // env (absent on a mainnet build), so it can never see a v2 lock
+            // and every locked course kept rendering as "available".
+            const lockMap = hasVaultV2Config()
+              ? await batchCheckLockV2Accounts(walletAddress, unenrolledCourseIds)
+              : await batchCheckLockAccounts(walletAddress, unenrolledCourseIds);
 
             // Game state (fuel/ichor/streak/saver/redirect) lives off-chain now,
             // so after enrolling a discovered lock we hydrate it from the backend

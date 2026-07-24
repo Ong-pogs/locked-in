@@ -474,6 +474,75 @@ export async function buildClaimTransaction(
   return tx.add(edIx).add(claimIx);
 }
 
+/**
+ * Batch-check which courses have an ACTIVE on-chain LockV2 for this wallet.
+ * One getMultipleAccountsInfo call across all derived lock PDAs. Returns the
+ * v1 LockAccountSnapshot shape so courseStore.syncOnChainEnrollments can use
+ * either service unchanged (v2 has no lock_end_ts — claim is completion-driven
+ * — so lockEndDate is '' and the store falls back to its default duration).
+ * Claimed/forfeited locks (status != 0) are excluded: a settled lock must not
+ * resurrect the course as "active".
+ */
+export async function batchCheckLockV2Accounts(
+  ownerAddress: string,
+  courseIds: string[],
+): Promise<
+  Map<
+    string,
+    {
+      lockAccountAddress: string;
+      principalAmountUi: string;
+      lockStartDate: string;
+      lockEndDate: string;
+      unlockEligible: boolean;
+      status: number;
+    }
+  >
+> {
+  const result = new Map<
+    string,
+    {
+      lockAccountAddress: string;
+      principalAmountUi: string;
+      lockStartDate: string;
+      lockEndDate: string;
+      unlockEligible: boolean;
+      status: number;
+    }
+  >();
+  if (courseIds.length === 0 || !hasVaultV2Config()) return result;
+
+  const pdas = await Promise.all(
+    courseIds.map((id) => deriveLockPda(ownerAddress, id)),
+  );
+  const accounts = await connection.getMultipleAccountsInfo(pdas, 'confirmed');
+
+  for (let i = 0; i < courseIds.length; i++) {
+    const info = accounts[i];
+    if (!info) continue;
+    try {
+      const d = info.data;
+      const status = d[88];
+      if (status !== 0) continue; // claimed/forfeited — not an active enrollment
+      result.set(courseIds[i], {
+        lockAccountAddress: pdas[i].toBase58(),
+        principalAmountUi: formatAtomicUsdc(d.readBigUInt64LE(72)),
+        lockStartDate: new Date(Number(d.readBigInt64LE(80)) * 1000).toISOString(),
+        lockEndDate: '',
+        unlockEligible: false,
+        status,
+      });
+    } catch (err) {
+      console.warn(`[vaultV2] Failed to decode LockV2 for course ${courseIds[i]}:`, err);
+    }
+  }
+
+  if (result.size === 0 && courseIds.length > 0) {
+    console.info('[vaultV2] No active LockV2 accounts found for this wallet');
+  }
+  return result;
+}
+
 /** Read + decode the LockV2 account for (owner, course). Null if it doesn't exist. */
 export async function readLockV2(
   ownerAddress: string,
