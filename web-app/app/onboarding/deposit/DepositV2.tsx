@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useWallets, useSignTransaction } from '@privy-io/react-auth/solana';
 import { T } from '@/components/theme';
@@ -18,6 +18,9 @@ import {
   enrollLockWithRetry,
   writePendingEnroll,
 } from '@/services/enroll/pendingEnroll';
+import { useAddFunds } from '@/services/onramp/useAddFunds';
+import { requestGasStipend } from '@/services/onramp/gasStipend';
+import { clearFundingBreadcrumb } from '@/services/onramp/fundingBreadcrumb';
 import type { LockIneligibleCode } from '@/services/api/types';
 import type { V2ActionPhase } from '@/services/solana/v2Actions';
 
@@ -233,6 +236,79 @@ function DepositV2Content() {
   const [solGate, setSolGate] = useState<SolGateState>({ status: 'checking' });
   const [solGateTick, setSolGateTick] = useState(0);
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
+  // Fiat onramp: "your USDC may still be settling" status line, and a guard so
+  // the auto gas-stipend fires at most once per mount.
+  const [fundingNotice, setFundingNotice] = useState<string | null>(null);
+  const { addFunds, pending: fundingPending, error: addFundsError } = useAddFunds();
+  const stipendRequestedRef = useRef(false);
+
+  // Auto gas-stipend: a Google-login embedded wallet arrives with 0 SOL and
+  // hits the SOL gate. The backend drips 0.005 SOL once per wallet (JWT-bound,
+  // capped); on success re-run the gate so the form appears without a manual
+  // "Check again". cap_reached / 503 / errors leave the gate's honest copy in
+  // place — never sell USDC into a wallet that cannot transact.
+  useEffect(() => {
+    if (solGate.status !== 'insufficient' || stipendRequestedRef.current) return;
+    stipendRequestedRef.current = true;
+    fetchWithAuth(requestGasStipend)
+      .then((res) => {
+        if (res.status === 'dripped') setSolGateTick((t) => t + 1);
+      })
+      .catch(() => {
+        // Unauthenticated / cap / outage — the SOL gate copy stands.
+      });
+  }, [solGate.status]);
+
+  // Post-funding: one balance re-read; covered → clear the breadcrumb and the
+  // notice, short/unchanged → keep the settling notice (card settlement can
+  // take many minutes — "Check again" and tab-refocus both re-run this).
+  const recheckFunding = useCallback(async () => {
+    if (!walletAddress) return;
+    const next = await readWalletUsdcUi(walletAddress);
+    if (next != null) setWalletBalanceUi(next);
+  }, [walletAddress]);
+
+  const handleAddFunds = useCallback(
+    async (deficitUsdc: number) => {
+      if (!walletAddress) return;
+      setFundingNotice(null);
+      // The deficit was computed against this pre-modal balance in the form —
+      // "covered" below means the wallet gained at least the deficit, i.e. the
+      // new balance reaches the lock amount.
+      const before = Number(walletBalanceUi ?? '0');
+      const ran = await addFunds({ deficitUsdc, ownerAddress: walletAddress, wallets: solanaWallets });
+      if (!ran) return; // refused or failed pre-modal — addFundsError carries the copy
+      const next = await readWalletUsdcUi(walletAddress);
+      if (next != null) setWalletBalanceUi(next);
+      const nextNum = next != null ? Number(next) : null;
+      if (nextNum != null && nextNum >= before + deficitUsdc) {
+        // Landed already (instant methods / test transfers) — done.
+        clearFundingBreadcrumb();
+        setFundingNotice(null);
+      } else if (nextNum != null && nextNum <= before) {
+        // Unchanged — the user most likely just closed the modal. Silent
+        // return; the breadcrumb still guards an in-transit purchase.
+        setFundingNotice(null);
+      } else {
+        // Improved-but-short, or unreadable: card settlement takes minutes.
+        setFundingNotice(
+          'Funds can take a few minutes to arrive — check back shortly. Your card was only charged if you completed the purchase.',
+        );
+      }
+    },
+    [walletAddress, walletBalanceUi, solanaWallets, addFunds],
+  );
+
+  // While the settling notice is up, a tab refocus re-reads the balance (the
+  // provider leg usually happened in another tab/app).
+  useEffect(() => {
+    if (!fundingNotice) return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void recheckFunding();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [fundingNotice, recheckFunding]);
 
   // R12 eligibility pre-gate, mount-time: paint the blocked state before the
   // user even types an amount. Fail closed — an error is a block, not a pass.
@@ -554,6 +630,10 @@ function DepositV2Content() {
                 phase={phase}
                 statusMessage={statusMessage}
                 onSubmit={handleSubmit}
+                onAddFunds={handleAddFunds}
+                fundingPending={fundingPending}
+                fundingNotice={fundingNotice ?? addFundsError}
+                onFundingRecheck={fundingNotice ? recheckFunding : undefined}
               />
               {phase === 'error' && errorDetail && (
                 <p

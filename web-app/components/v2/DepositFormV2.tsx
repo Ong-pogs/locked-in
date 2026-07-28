@@ -59,6 +59,8 @@ interface Props {
   /** Post-funding status line ("funds can take a few minutes…") or a funding
    *  error, rendered under the CTA. */
   fundingNotice?: string | null;
+  /** Manual re-read of the wallet balance while funds are settling. */
+  onFundingRecheck?: () => void;
 }
 
 const PHASE_COPY: Record<V2ActionPhase, string> = {
@@ -80,6 +82,7 @@ export function DepositFormV2({
   onAddFunds,
   fundingPending = false,
   fundingNotice = null,
+  onFundingRecheck,
 }: Props) {
   const [amount, setAmount] = useState('25');
   // Double-charge gate: a fresh breadcrumb means a card purchase may still be
@@ -305,14 +308,32 @@ export function DepositFormV2({
                 : `Add funds — you need $${usdcDeficit.toFixed(2).replace(/\.00$/, '')} more`}
           </button>
           {fundingNotice && (
-            <p
-              data-testid="v2-funding-notice"
-              className="font-pixel-mono text-[11px] mt-2"
-              style={{ color: COZY_TEXT, opacity: 0.85 }}
-              role="status"
-            >
-              {fundingNotice}
-            </p>
+            <>
+              <p
+                data-testid="v2-funding-notice"
+                className="font-pixel-mono text-[11px] mt-2"
+                style={{ color: COZY_TEXT, opacity: 0.85 }}
+                role="status"
+              >
+                {fundingNotice}
+              </p>
+              {onFundingRecheck && (
+                <button
+                  data-testid="v2-funding-check-again"
+                  type="button"
+                  onClick={onFundingRecheck}
+                  className="mt-2 px-4 py-2 rounded-lg border font-pixel-mono text-[11px] uppercase tracking-[1px] min-h-[36px]"
+                  style={{
+                    backgroundColor: 'rgba(255,213,128,0.10)',
+                    borderColor: 'rgba(255,213,128,0.35)',
+                    color: COZY_TEXT,
+                    textShadow: COZY_TEXT_SHADOW,
+                  }}
+                >
+                  Check again
+                </button>
+              )}
+            </>
           )}
         </div>
       )}
