@@ -238,11 +238,17 @@ function encodeU64LE(value: bigint): Buffer {
 /**
  * Wallet USDC balance (UI string) for the deposit form — v2-native: needs only
  * the USDC mint, NOT the legacy v1 lock-vault program env (which does not exist
- * on a v2/mainnet build). Best-effort; null when the ATA is absent (audit M7).
+ * on a v2/mainnet build). Best-effort, with one distinction that matters for
+ * the onramp: an ABSENT ATA is a real $0 balance (every fresh embedded wallet
+ * starts this way — the Add-funds CTA must render for exactly these users),
+ * while an RPC failure is `null` = unknown (never offer a card purchase off an
+ * unknown balance).
  */
 export async function readWalletUsdcUi(ownerAddress: string): Promise<string | null> {
   try {
     const ata = getAssociatedTokenAddressSync(getUsdcMint(), new PublicKey(ownerAddress));
+    const info = await connection.getAccountInfo(ata);
+    if (!info) return '0';
     const { value } = await connection.getTokenAccountBalance(ata);
     return value.uiAmountString ?? null;
   } catch {
