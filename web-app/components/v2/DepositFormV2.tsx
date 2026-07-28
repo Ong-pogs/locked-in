@@ -6,6 +6,7 @@ import { CozyCard, CozySectionLabel, COZY_TEXT, COZY_TEXT_SHADOW } from '@/compo
 import { T } from '@/components/theme';
 import { fetchWithAuth } from '@/services/api';
 import { httpRequest } from '@/services/api/httpClient';
+import { readFundingBreadcrumb } from '@/services/onramp/fundingBreadcrumb';
 import type { V2ActionPhase } from '@/services/solana/v2Actions';
 
 // v2 deposit (spec §5): $10–50, NO duration picker — the lock releases on
@@ -50,6 +51,14 @@ interface Props {
   phase: V2ActionPhase | 'idle';
   statusMessage: string | null;
   onSubmit: (amountUi: string) => void;
+  /** Fiat onramp: when provided, an "Add funds" CTA renders in the
+   *  insufficient-USDC state with the computed shortfall. */
+  onAddFunds?: (deficitUsdc: number) => void;
+  /** True while the funding modal is open — disables the CTA. */
+  fundingPending?: boolean;
+  /** Post-funding status line ("funds can take a few minutes…") or a funding
+   *  error, rendered under the CTA. */
+  fundingNotice?: string | null;
 }
 
 const PHASE_COPY: Record<V2ActionPhase, string> = {
@@ -68,8 +77,14 @@ export function DepositFormV2({
   phase,
   statusMessage,
   onSubmit,
+  onAddFunds,
+  fundingPending = false,
+  fundingNotice = null,
 }: Props) {
   const [amount, setAmount] = useState('25');
+  // Double-charge gate: a fresh breadcrumb means a card purchase may still be
+  // settling — require an explicit second tap before re-opening the modal.
+  const [confirmRebuy, setConfirmRebuy] = useState(false);
   const accepted = useSyncExternalStore(subscribeToConsent, readConsent, () => false);
   const busy = phase !== 'idle' && phase !== 'error' && phase !== 'success';
 
@@ -107,6 +122,35 @@ export function DepositFormV2({
   }, [amount, numericAmount, walletBalanceUi]);
 
   const capacityPct = Math.min(100, (currentTvlUi / GLOBAL_CAP_UI) * 100);
+
+  // Fiat-onramp shortfall. Non-null ONLY when: the amount itself is valid
+  // (format + $10-50 bounds), the balance is KNOWN (null = RPC unknown —
+  // never offer a card purchase off an unknown balance), and it falls short.
+  const usdcDeficit = useMemo(() => {
+    if (!onAddFunds) return null;
+    const trimmed = amount.trim();
+    if (!/^\d+(\.\d{1,6})?$/.test(trimmed)) return null;
+    if (!Number.isFinite(numericAmount) || numericAmount < MIN_UI || numericAmount > MAX_UI) {
+      return null;
+    }
+    if (walletBalanceUi == null) return null;
+    const balance = Number(walletBalanceUi);
+    if (!Number.isFinite(balance) || numericAmount <= balance) return null;
+    return numericAmount - balance;
+  }, [onAddFunds, amount, numericAmount, walletBalanceUi]);
+
+  // Never sell USDC for a lock the chain will reject on the beta TVL cap.
+  const capacityShort = usdcDeficit != null && numericAmount > GLOBAL_CAP_UI - currentTvlUi;
+
+  const handleAddFundsTap = () => {
+    if (usdcDeficit == null) return;
+    if (!confirmRebuy && readFundingBreadcrumb() != null) {
+      setConfirmRebuy(true);
+      return;
+    }
+    setConfirmRebuy(false);
+    onAddFunds?.(usdcDeficit);
+  };
 
   return (
     <CozyCard data-testid="v2-deposit-form" className="w-full" style={{ padding: 20 }}>
@@ -217,6 +261,60 @@ export function DepositFormV2({
         >
           {validationError}
         </p>
+      )}
+
+      {/* Fiat onramp — offered only for a known shortfall on a valid amount. */}
+      {usdcDeficit != null && capacityShort && (
+        <p
+          data-testid="v2-capacity-blocked"
+          className="font-pixel-mono text-[11px] mb-3"
+          style={{ color: '#F0A878' }}
+        >
+          Beta capacity is nearly full — locking this amount isn&apos;t possible right now.
+        </p>
+      )}
+      {usdcDeficit != null && !capacityShort && (
+        <div className="mb-3">
+          {confirmRebuy && (
+            <p
+              data-testid="v2-funding-confirm"
+              className="font-pixel-mono text-[11px] mb-2"
+              style={{ color: '#F0A878' }}
+            >
+              A purchase may still be on its way — buying again can charge your card twice.
+            </p>
+          )}
+          <button
+            data-testid="v2-add-funds"
+            type="button"
+            disabled={fundingPending}
+            onClick={handleAddFundsTap}
+            className="w-full py-3 rounded-lg border font-pixel-mono text-[12px] uppercase tracking-[1.5px] font-bold min-h-[44px]"
+            style={{
+              backgroundColor: fundingPending ? 'rgba(42,232,212,0.05)' : 'rgba(42,232,212,0.12)',
+              borderColor: 'rgba(42,232,212,0.45)',
+              color: '#2AE8D4',
+              textShadow: '0 1px 2px rgba(0,0,0,0.7)',
+              opacity: fundingPending ? 0.5 : 1,
+            }}
+          >
+            {fundingPending
+              ? 'Funding in progress…'
+              : confirmRebuy
+                ? 'Buy anyway'
+                : `Add funds — you need $${usdcDeficit.toFixed(2).replace(/\.00$/, '')} more`}
+          </button>
+          {fundingNotice && (
+            <p
+              data-testid="v2-funding-notice"
+              className="font-pixel-mono text-[11px] mt-2"
+              style={{ color: COZY_TEXT, opacity: 0.85 }}
+              role="status"
+            >
+              {fundingNotice}
+            </p>
+          )}
+        </div>
       )}
 
       {busy && (
