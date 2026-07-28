@@ -1,7 +1,7 @@
 'use client';
 
 import { PrivyProvider } from '@privy-io/react-auth';
-import { toSolanaWalletConnectors } from '@privy-io/react-auth/solana';
+import { toSolanaWalletConnectors, useSolanaFundingPlugin } from '@privy-io/react-auth/solana';
 import { createSolanaRpc, createSolanaRpcSubscriptions } from '@solana/kit';
 import { CLUSTER, RPC_ENDPOINT } from '@/services/solana/connection';
 
@@ -16,6 +16,16 @@ const WS_URL = process.env.NEXT_PUBLIC_SOLANA_WS_URL ?? `wss://api.${CLUSTER}.so
 
 const solanaRpc = createSolanaRpc(RPC_URL);
 const solanaRpcSubscriptions = createSolanaRpcSubscriptions(WS_URL);
+
+/**
+ * Privy v3 plugin architecture: the fiat-funding UI (used by useFundWallet on
+ * the deposit screen's Add-funds flow) is activated by calling this hook once
+ * inside the provider tree. Without it, fundWallet() has no modal to open.
+ */
+export function SolanaFundingBridge() {
+  useSolanaFundingPlugin();
+  return null;
+}
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -56,6 +66,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         },
       }}
     >
+      <SolanaFundingBridge />
       {children}
     </PrivyProvider>
   );
