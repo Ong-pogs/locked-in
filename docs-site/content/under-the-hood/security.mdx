@@ -1,44 +1,36 @@
 ---
-title: Security model
+title: Trust & security
 ---
 
-# Security model
+# Trust & security
 
-## Key separation
+The high-level answers to "why should I trust this with money?"
 
-Three distinct authorities, deliberately kept apart:
+## You can't cheat the learning
 
-- **The voucher signer** — the only key the backend holds. Its worst-case
-  abuse is issuing a voucher with a wrong *yield percentage*; it cannot touch
-  principal.
-- **The program upgrade authority** — kept cold, offline, and separate from
-  the voucher signer. Program changes are visible on-chain before they affect
-  anyone.
-- **Your wallet** — the only key that can ever be the destination of your
-  principal.
+- All grading happens on our servers — answer keys never reach your browser.
+- Answers lock once checked, so options can't be brute-forced.
+- Replays and practice runs are clearly separated and never count toward
+  streaks or yield.
 
-## Blast-radius limits
+## We can't touch your principal
 
-- **Beta caps**: $50 per lock, $1,000 platform TVL — enforced in-program, so
-  the maximum at risk during beta is bounded regardless of any bug above the
-  chain.
-- **180-day force return**: the recovery path of last resort requires nothing
-  from Locked In — not our servers, not our keys, not our existence.
-- **Narrow program surface**: custody, settle, pot, force-return. No admin
-  withdrawal instruction exists.
+- The vault is owned by an on-chain program with no "withdraw to admin"
+  ability. The only destination your principal can ever have is **your
+  wallet**.
+- The worst our servers could ever get wrong is the *yield percentage* on a
+  claim — never the principal.
 
-## Backend hardening
+## The blast radius is capped
 
-- Sessions require a wallet-signature challenge on top of Privy auth.
-- Enrollment is confirmed by **reading the chain**, not by trusting the
-  client's claim of a deposit.
-- All money-adjacent writes are idempotent — retries and race conditions
-  can't double-credit or double-judge.
-- Mainnet deployments run boot-time guards that refuse to start with dev
-  secrets, dev yield profiles, or misconfigured programs.
+- Beta limits ($50 per lock, $1,000 platform-wide) are enforced by the
+  blockchain itself, bounding what could ever be at risk while the system is
+  young.
+- If Locked In vanished tomorrow, the **180-day force return** still gets
+  everyone their funds back — it needs nothing from us to work.
 
-## Disclosure
+## Found a problem?
 
-Found a vulnerability? Please reach out before exploiting it —
-responsible disclosure will be respected and credited. Contact links are in
-the app footer at [www.lockedin.quest](https://www.lockedin.quest).
+If you believe you've found a security issue, please reach out before making
+it public — responsible disclosure will be respected and credited. Contact
+links are at [www.lockedin.quest](https://www.lockedin.quest).

@@ -1,54 +1,37 @@
 ---
-title: Architecture overview
+title: How it works
 ---
 
-# Architecture overview
+# How it works
 
-Locked In is three layers with a deliberate division of labor: **money
-on-chain, game off-chain, learning in the browser.**
+You don't need this page to use Locked In — it's here for the curious. The
+short version: **your money lives on the blockchain, your learning lives with
+us, and the two only meet at the finish line.**
 
-```
-┌─────────────────────────────────────────────┐
-│  Web app (Next.js PWA)                      │
-│  village · lessons · dashboard · claim      │
-└──────────────┬──────────────────────────────┘
-               │ HTTPS (JWT sessions via Privy + wallet signature)
-┌──────────────▼──────────────────────────────┐
-│  Backend API (Fastify + PostgreSQL)         │
-│  content · grading · streak/shield/lapse    │
-│  vouchers · leaderboard · pot accounting    │
-│  daily crons: lapse sweep · pot cycle ·     │
-│  leaderboard snapshot                       │
-└──────────────┬──────────────────────────────┘
-               │ RPC reads/writes
-┌──────────────▼──────────────────────────────┐
-│  Solana mainnet                             │
-│  locked_in program: USDC vault custody,     │
-│  Kamino yield position, settlement split,   │
-│  community pot, 180-day force return        │
-└─────────────────────────────────────────────┘
-```
+## Three layers
 
-## The division of labor
+**Your money is on Solana.** When you lock USDC, it goes into an on-chain
+vault that Locked In's servers cannot spend. While locked, it earns yield in
+an established lending protocol (Kamino). Everything about custody — the
+caps, the payout rules, the 180-day safety valve — is enforced by the
+blockchain itself, and you can verify all of it on a public explorer. The
+details are in [Your Money](/your-money/custody).
 
-**On-chain** holds what must be trustless: principal custody, the yield
-position, the settlement math (principal → owner, yield split by voucher, fee
-hard-capped), the pot balance, and the force-return valve. If our servers
-vanished, everything in this layer still works.
+**Your learning is judged by our servers.** Lessons, grading, streaks,
+Shields, and Lapses are handled off-chain — grading a written answer simply
+isn't something a blockchain can do. Grading always happens server-side, so
+there's nothing in your browser to tamper with.
 
-**The backend** owns what must be judged: lesson grading (including rubric
-grading of free-text answers), the streak/Shield/Lapse engine, the daily
-**lapse sweep** (runs after 00:30 UTC, judges yesterday for every active
-lock), monthly pot windows, and leaderboard snapshots. Its output crosses to
-the chain in exactly one narrow form: the **signed claim voucher**.
+**The app is just a window.** The website shows you what the other two layers
+already know. It never holds your funds and its claims are always checked
+against the chain and the servers.
 
-**The web app** is a stateless view. Enrollment and balances are read back
-from the chain; game state is read from the backend; nothing the browser
-asserts is trusted for money.
+## Where they meet
 
-## Why this split
-
-Fully on-chain grading is impossible (you can't grade an essay in a Solana
-program), and fully off-chain custody would mean trusting us with money. The
-voucher is the bridge: the backend can only influence the **yield percentage**
-(100/50/0), signed and auditable — it has no path to your principal.
+When you complete a course, our servers issue a single, signed
+**claim voucher** stating the yield share you earned. The on-chain program
+checks that signature and pays out accordingly — your full principal, plus
+your share of the yield. That voucher is the *only* influence the game layer
+has on the money layer, which is exactly the point: even if everything above
+the blockchain failed, your principal would still come back to you (see
+[Claiming & force return](/your-money/claiming-force-return)).
