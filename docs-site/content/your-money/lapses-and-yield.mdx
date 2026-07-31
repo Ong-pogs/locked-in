@@ -1,0 +1,41 @@
+---
+title: Lapses & your yield
+---
+
+import { Callout } from 'nextra/components'
+
+# Lapses & your yield
+
+This page is the money view of the
+[Streak, Shields & Lapses](/game-systems/streak-shields-lapses) mechanic.
+
+## The split
+
+Your Lapse count at course completion sets your yield share — checked and
+enforced by the on-chain program at claim time:
+
+| Lapses | You keep | Community Pot receives |
+|---|---|---|
+| 0 | 100% of net yield | 0% |
+| 1 | 50% | 50% |
+| 2+ | 0% | 100% |
+
+"Net yield" is gross yield minus the platform fee (currently **0%**, so today
+net = gross).
+
+## The guarantees
+
+- **Principal first.** The settlement math pays your principal back in full
+  before any split happens. Lapses cannot touch it.
+- **Frozen at completion.** The count that matters is your Lapse count when
+  you pass the final lesson. After that, nothing — not even months of
+  inactivity before claiming — can change it.
+- **Nothing goes to us.** Redirected yield goes to the
+  [Community Pot](/your-money/community-pot) and is distributed to other
+  learners. Locked In's cut is the fee (0% in beta), nothing else.
+
+<Callout type="info">
+  The system is designed so that the *platform* never benefits from your
+  failure. If you lapse, your yield funds the people who didn't — that keeps
+  our incentives pointed at helping you finish.
+</Callout>

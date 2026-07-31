@@ -1,0 +1,54 @@
+---
+title: Architecture overview
+---
+
+# Architecture overview
+
+Locked In is three layers with a deliberate division of labor: **money
+on-chain, game off-chain, learning in the browser.**
+
+```
+┌─────────────────────────────────────────────┐
+│  Web app (Next.js PWA)                      │
+│  village · lessons · dashboard · claim      │
+└──────────────┬──────────────────────────────┘
+               │ HTTPS (JWT sessions via Privy + wallet signature)
+┌──────────────▼──────────────────────────────┐
+│  Backend API (Fastify + PostgreSQL)         │
+│  content · grading · streak/shield/lapse    │
+│  vouchers · leaderboard · pot accounting    │
+│  daily crons: lapse sweep · pot cycle ·     │
+│  leaderboard snapshot                       │
+└──────────────┬──────────────────────────────┘
+               │ RPC reads/writes
+┌──────────────▼──────────────────────────────┐
+│  Solana mainnet                             │
+│  locked_in program: USDC vault custody,     │
+│  Kamino yield position, settlement split,   │
+│  community pot, 180-day force return        │
+└─────────────────────────────────────────────┘
+```
+
+## The division of labor
+
+**On-chain** holds what must be trustless: principal custody, the yield
+position, the settlement math (principal → owner, yield split by voucher, fee
+hard-capped), the pot balance, and the force-return valve. If our servers
+vanished, everything in this layer still works.
+
+**The backend** owns what must be judged: lesson grading (including rubric
+grading of free-text answers), the streak/Shield/Lapse engine, the daily
+**lapse sweep** (runs after 00:30 UTC, judges yesterday for every active
+lock), monthly pot windows, and leaderboard snapshots. Its output crosses to
+the chain in exactly one narrow form: the **signed claim voucher**.
+
+**The web app** is a stateless view. Enrollment and balances are read back
+from the chain; game state is read from the backend; nothing the browser
+asserts is trusted for money.
+
+## Why this split
+
+Fully on-chain grading is impossible (you can't grade an essay in a Solana
+program), and fully off-chain custody would mean trusting us with money. The
+voucher is the bridge: the backend can only influence the **yield percentage**
+(100/50/0), signed and auditable — it has no path to your principal.

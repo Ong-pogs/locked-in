@@ -1,0 +1,54 @@
+---
+title: Lock into a course
+---
+
+import { Callout } from 'nextra/components'
+
+# Lock into a course
+
+Head to the **Academy** (the big building on the left of the village) to browse
+courses. Each course shows its modules and lessons up front — you can see
+exactly what you're committing to before you lock anything.
+
+## The deposit
+
+When you choose a course, you pick how much USDC to lock:
+
+| Rule | Value (beta) |
+|---|---|
+| Minimum per course | **$10** |
+| Maximum per course | **$50** |
+| Platform-wide cap | **$1,000** total locked across all users |
+| Quick presets | $10 / $25 / $50 |
+
+These are **beta caps enforced on-chain** — the program itself rejects
+deposits outside them, and will tell you if the platform cap would be
+exceeded.
+
+## There is no timer
+
+Your lock has **no fixed duration**. It releases when you **complete the
+course** — that's the whole deal. Finish in two weeks, get your money in two
+weeks. There's also a hard safety valve: if a lock ever sits unresolved for
+**180 days**, the funds can be force-returned to you regardless of anything
+else. See [Claiming & force return](/your-money/claiming-force-return).
+
+## What signing means
+
+Locking is a real Solana transaction that you sign with your wallet:
+
+1. You approve the transfer of your chosen USDC amount into the course's
+   **on-chain vault account** (owned by the Locked In program, not by us — see
+   [Custody](/your-money/custody)).
+2. Before your first deposit you'll be asked to accept the terms and risk
+   disclosure. This is recorded once, and it's a condition of using the
+   platform.
+3. The backend confirms your lock **from the chain itself** — your enrollment
+   is driven by what's actually on-chain, not by what the app claims.
+
+<Callout type="info">
+  One lock per course. Once you complete a course you can't re-lock into it —
+  completed means done. You can lock into a different course any time.
+</Callout>
+
+Next: [Your daily loop](/start-here/daily-loop).

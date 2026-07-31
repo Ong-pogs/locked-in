@@ -1,0 +1,79 @@
+---
+title: Streak, Shields & Lapses
+---
+
+import { Callout } from 'nextra/components'
+
+# Streak, Shields & Lapses
+
+This is the core mechanic of Locked In. Everything — the flame, the
+leaderboard, your yield — hangs off these three numbers.
+
+## Streak
+
+Your **streak** is the count of consecutive **lesson-days**: UTC days on which
+you passed at least one lesson you hadn't passed before.
+
+- Pass a new lesson today (UTC) → streak +1 for that day.
+- Extra lessons the same day are great for finishing faster, but the streak
+  counts **days**, not lessons.
+
+## Shields
+
+Shields are your safety net. They absorb missed days so that real life doesn't
+destroy your progress.
+
+| Rule | Value |
+|---|---|
+| Maximum Shields held | **3** |
+| Earning rate | **+1 Shield per 3 consecutive lesson-days** |
+| Miss a day with a Shield | Shield burns, streak **pauses** — no reset, no Lapse |
+| Can you buy Shields? | **No.** Shields are only earned by learning |
+
+"Pauses" means exactly that: a 12-day streak that hits a shielded miss stays
+a 12-day streak, and continues to 13 when you return.
+
+## Lapses
+
+A **Lapse** is what happens when you miss a day with **no Shields left**:
+
+- Your streak resets to **0**.
+- Your Lapse count goes up by 1 — permanently, for this course.
+- Your yield share drops (see the table below).
+
+Two rules soften this:
+
+1. **Consecutive missed days merge into one Lapse.** If you disappear for a
+   week with no Shields, that's *one* Lapse, not seven. The Lapse "closes"
+   when you come back and pass a lesson; only a later, separate absence can
+   open a new one.
+2. **Lapses stop mattering at 2.** The count is capped — after two Lapses
+   your yield share is already 0% and can't go lower. Your principal is
+   untouchable regardless.
+
+## What Lapses cost you
+
+| Lapses | Yield you keep at claim | Where the rest goes |
+|---|---|---|
+| 0 | **100%** | — |
+| 1 | **50%** | [Community Pot](/your-money/community-pot) |
+| 2+ | **0%** | Community Pot |
+
+<Callout type="info">
+  **Your principal is never touched.** The worst case, ever, is receiving
+  exactly what you deposited (subject to
+  [strategy risk](/your-money/risks)) with zero yield. Locked In never takes
+  principal as a penalty.
+</Callout>
+
+## Who judges a missed day
+
+A daily sweep runs shortly after **00:30 UTC** and evaluates the previous day
+for every active lock: lesson-day, shielded miss, or Lapse. The current UTC day
+is never judged early — you have until midnight UTC, always.
+
+## Completion freezes everything
+
+The moment you complete a course, its streak/Shield/Lapse state is **frozen**.
+A completed course can never gain a Lapse — your earned yield share is safe
+even if you take a long break before claiming.

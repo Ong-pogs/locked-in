@@ -1,0 +1,48 @@
+---
+title: Claiming & force return
+---
+
+import { Callout } from 'nextra/components'
+
+# Claiming & force return
+
+## The claim voucher
+
+Completing a course earns you a **claim voucher** — a short, signed
+authorization stating your yield percentage. The on-chain program verifies the
+voucher's signature against the protocol authority before paying anything, so
+neither the app nor anyone else can inflate (or deflate) what you're owed.
+
+| Voucher fact | Value |
+|---|---|
+| Issued | Automatically, the moment you complete the course |
+| Valid for | **90 days** per voucher |
+| If expired | A fresh voucher can be issued from your claim page |
+| Gas needed to claim | about **0.003 SOL** |
+
+## Claiming, step by step
+
+1. Open your completed course → **Claim**.
+2. The app checks you hold enough SOL for fees (~0.003 SOL) and builds the
+   transaction with your voucher attached.
+3. You sign. The program redeems the position, pays your **full principal +
+   your yield share** to your wallet, and books the remainder (if any) to the
+   Community Pot.
+4. Done — the USDC is yours, verifiable on any explorer.
+
+## The 180-day force return
+
+The program has a permissionless safety valve: once a lock is **180 days old**
+and still unresolved, *anyone* can trigger a return of the funds — and they
+can only go to the lock's owner. You. This is your guarantee that:
+
+- a bug in our backend can't strand your money,
+- Locked In disappearing entirely can't strand your money,
+- you never need our permission — or our servers — to eventually be made
+  whole.
+
+<Callout type="warning">
+  Force return is the emergency exit, not the intended path — finish your
+  course and claim properly to receive your yield share. But it means the
+  worst-case scenario for your principal has a hard, on-chain expiry date.
+</Callout>

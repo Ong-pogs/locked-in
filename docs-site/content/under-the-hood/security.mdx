@@ -1,0 +1,44 @@
+---
+title: Security model
+---
+
+# Security model
+
+## Key separation
+
+Three distinct authorities, deliberately kept apart:
+
+- **The voucher signer** — the only key the backend holds. Its worst-case
+  abuse is issuing a voucher with a wrong *yield percentage*; it cannot touch
+  principal.
+- **The program upgrade authority** — kept cold, offline, and separate from
+  the voucher signer. Program changes are visible on-chain before they affect
+  anyone.
+- **Your wallet** — the only key that can ever be the destination of your
+  principal.
+
+## Blast-radius limits
+
+- **Beta caps**: $50 per lock, $1,000 platform TVL — enforced in-program, so
+  the maximum at risk during beta is bounded regardless of any bug above the
+  chain.
+- **180-day force return**: the recovery path of last resort requires nothing
+  from Locked In — not our servers, not our keys, not our existence.
+- **Narrow program surface**: custody, settle, pot, force-return. No admin
+  withdrawal instruction exists.
+
+## Backend hardening
+
+- Sessions require a wallet-signature challenge on top of Privy auth.
+- Enrollment is confirmed by **reading the chain**, not by trusting the
+  client's claim of a deposit.
+- All money-adjacent writes are idempotent — retries and race conditions
+  can't double-credit or double-judge.
+- Mainnet deployments run boot-time guards that refuse to start with dev
+  secrets, dev yield profiles, or misconfigured programs.
+
+## Disclosure
+
+Found a vulnerability? Please reach out before exploiting it —
+responsible disclosure will be respected and credited. Contact links are in
+the app footer at [www.lockedin.quest](https://www.lockedin.quest).

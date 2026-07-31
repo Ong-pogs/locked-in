@@ -1,0 +1,43 @@
+---
+title: How completions are verified
+---
+
+# How completions are verified
+
+"Learn to earn" only works if you can't fake the learning. Locked In's
+grading and streak pipeline is built to make cheating more expensive than
+studying.
+
+## Grading is server-side, always
+
+Lessons are graded by the backend, never in your browser:
+
+- **Multiple choice** is checked against server-held answer keys — correct
+  answers are never shipped to the client.
+- **Short answers** are graded against a rubric with partial credit by an
+  AI grading pipeline that **fails closed**: if grading isn't available, you
+  don't pass by default.
+- Per-question instant checks **lock the answer** once checked — no
+  brute-forcing options one check at a time.
+- The pass bar is **55/100** on every lesson.
+
+## Streaks are judged by the clock, not the client
+
+The daily **lapse sweep** (after 00:30 UTC) is the only judge of missed days.
+It replays each active lock's calendar day by day — lesson-day, shielded miss,
+or Lapse — idempotently, so an outage delays judgment but never doubles it.
+The current day is never judged early.
+
+## The chain trusts one thing only
+
+The entire game layer compresses into a single value the chain ever sees:
+**your yield percentage** (100/50/0), carried by a signed voucher. The
+program verifies the signature; the backend can't move principal, and the
+frontend can't influence grading. Every layer's authority is capped at
+exactly what it needs.
+
+## Practice never pollutes
+
+Replayed lessons (and all of Practice Mode) run through the same grader but
+write nothing to progress, streak, XP, or events — verified separations, so
+grinding old lessons can't farm anything.

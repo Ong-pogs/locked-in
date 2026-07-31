@@ -1,0 +1,53 @@
+---
+title: Custody
+---
+
+import { Callout } from 'nextra/components'
+
+# Custody: where your USDC actually sits
+
+When you lock into a course, your USDC does **not** go to a Locked In bank
+account. It goes into a vault owned by an on-chain program on Solana mainnet.
+
+## The on-chain facts
+
+| | |
+|---|---|
+| Program | `FAuFtXbTAT9SiJTghxdZ1ZD4ShgrdTk2EqgyPxfq2gZ6` |
+| Network | Solana mainnet |
+| Asset | USDC (`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`) |
+| Per-lock limits | $10 min / $50 max (beta) |
+| Global cap | $1,000 total value locked (beta) |
+
+Every lock is its own on-chain account tied to **your wallet** and the course.
+You can verify your lock, its principal, and its status on any Solana explorer
+— the app's view of your enrollment is itself driven by reading the chain, not
+the other way around.
+
+## What the program allows — and what it doesn't
+
+The program is deliberately narrow. Once your USDC is locked, there are
+exactly two ways it moves:
+
+1. **To you**, via a claim with a completion voucher — your principal plus
+   your yield share.
+2. **To you**, via the permissionless 180-day force return
+   (see [Claiming & force return](/your-money/claiming-force-return)).
+
+There is no instruction that sends your principal anywhere else. The split
+math (your share vs. Community Pot vs. fee) is enforced **inside the program**
+at settlement, with a hard-coded on-chain **maximum fee of 20%** — and the
+current fee is **0%** (see [Yield & APY](/your-money/yield-apy)).
+
+<Callout type="info">
+  **Principal is never a penalty.** The consequence system
+  ([Lapses](/game-systems/streak-shields-lapses)) can only redirect *yield*.
+  The program's settlement math structurally cannot take deposited principal
+  as punishment.
+</Callout>
+
+## Beta caps are guardrails
+
+The $50/lock and $1,000-platform caps exist so that, while the system is
+young, the blast radius of any failure is small. They're enforced by the
+program itself — not a promise, a constraint.

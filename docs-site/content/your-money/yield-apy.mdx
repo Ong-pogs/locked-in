@@ -1,0 +1,49 @@
+---
+title: Yield & APY
+---
+
+import { Callout } from 'nextra/components'
+
+# Yield & APY
+
+While your USDC is locked, it isn't idle — it's deposited into
+**[Kamino Finance](https://kamino.com)**, an established Solana lending
+protocol, where it earns lending yield in the main USDC market.
+
+## How it works
+
+1. You lock USDC → the program's vault deposits it into Kamino's USDC reserve.
+2. While you learn, the position accrues lending yield continuously.
+3. When you claim, the position is redeemed. Everything above your principal
+   is the **gross yield**, which is split at settlement:
+
+```
+gross yield = redeemed amount − your principal
+fee         = 0% of gross yield        (beta; hard on-chain max 20%)
+your share  = (gross yield − fee) × your yield percentage (100/50/0%)
+pot share   = whatever remains
+```
+
+Your yield percentage is set by your Lapse count — see
+[Lapses & your yield](/your-money/lapses-and-yield).
+
+## What APY should you expect?
+
+The APY shown in the app is **Kamino's live USDC lending rate** — it's read
+from the market, and it moves with the market.
+
+<Callout type="warning">
+  **Yield is not guaranteed.** Lending rates float continuously; the rate you
+  see when you lock is not a promise of the rate over your whole course.
+  Locked In does not set, boost, or guarantee any APY. In an extreme scenario
+  the strategy can even lose value — see [Risks](/your-money/risks) for
+  what that means for you.
+</Callout>
+
+## Fees
+
+Locked In's platform fee on yield is currently **0%**. The program allows a
+fee of at most **20% of gross yield** (never principal) — hard-capped
+on-chain, so a fee above that is impossible without a program change you'd be
+able to see. If we introduce a fee, it will be announced and visible before it
+applies to new locks.

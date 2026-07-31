@@ -1,0 +1,49 @@
+---
+title: Fund your wallet
+---
+
+import { Callout } from 'nextra/components'
+
+# Fund your wallet
+
+To lock into a course you need **USDC on Solana** in your wallet. There are two
+ways to get it, both available right from the deposit screen.
+
+## Option 1 — Pay by card
+
+If your wallet doesn't have enough USDC when you try to lock, the deposit form
+shows an **Add funds** button. It opens a card checkout (powered by Stripe,
+inside the wallet flow) that delivers USDC straight to your Solana wallet.
+
+- The amount is **prefilled to slightly more than your shortfall** (a small
+  buffer above what you're missing, minimum $10) so card and network fees
+  don't leave you a few cents short.
+- After payment, the USDC lands in your wallet within moments and your balance
+  on the deposit screen updates automatically.
+
+<Callout type="warning">
+  If you complete a card payment, **wait for your balance to update before
+  paying again**. The app guards against accidental double charges — if it
+  thinks a payment may already be in flight, it will ask you to confirm before
+  opening checkout a second time.
+</Callout>
+
+## Option 2 — Send USDC yourself
+
+Already have crypto? Send USDC (Solana network) to your wallet address from any
+exchange or wallet. Your address is visible in the wallet section of the app.
+
+<Callout type="error">
+  Send **USDC on the Solana network only**. USDC on Ethereum, Base, or any
+  other chain will not arrive in your Solana wallet.
+</Callout>
+
+## Gas — handled for you
+
+Solana transactions need a tiny amount of SOL for network fees. If your wallet
+has none, Locked In automatically sends you a **one-time SOL top-up** (0.005
+SOL) the first time you need it, so your first deposit doesn't dead-end on
+"insufficient SOL". After that, keep a little SOL around — claiming your funds
+at the end needs roughly **0.003 SOL** in fees.
+
+Next: [Lock into a course](/start-here/lock-into-course).

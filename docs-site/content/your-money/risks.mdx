@@ -1,0 +1,52 @@
+---
+title: Risks
+---
+
+import { Callout } from 'nextra/components'
+
+# Risks
+
+Locked In involves real money on a real blockchain. Here is the honest list of
+what can go wrong. (The in-app risk disclosure you accept before depositing
+covers the same ground.)
+
+## Smart-contract risk
+
+Your USDC is held by our on-chain program and deposited into Kamino. A bug or
+exploit in either could result in loss of funds. Mitigations, not guarantees:
+the program is deliberately small, beta caps limit total exposure ($50/lock,
+$1,000 platform-wide), and the 180-day force return bounds how long funds can
+be stuck — but smart-contract risk is never zero.
+
+## Strategy (yield) risk
+
+Yield comes from lending USDC on Kamino. Lending rates float, and in an
+extreme event (bad debt, depeg-related losses in the market) the position
+could be worth **less than deposited**. In that case the shortfall is borne by
+the depositor — the Community Pot receives nothing, and Locked In does not
+cover losses.
+
+<Callout type="warning">
+  "Principal is never slashed" means Locked In **never takes** principal as a
+  penalty. It is not insurance against the underlying market. These are
+  different promises — we make the first, no one can honestly make the second.
+</Callout>
+
+## Stablecoin risk
+
+USDC is a fiat-backed stablecoin issued by Circle. If USDC depegs, your
+deposit's dollar value moves with it.
+
+## Behavioral risk (the intended one)
+
+The product's entire premise is that missing days costs you yield. If you lock
+in and don't learn, you will earn nothing on your deposit and the yield goes
+to others. Only lock what you're genuinely committing to learn against — and
+never money you can't afford to have illiquid until course completion (or the
+180-day force return at the outside).
+
+## Platform risk
+
+Our backend grades lessons and judges streaks. If it were down, lessons
+couldn't be completed during the outage. Your funds, however, never depend on
+our uptime: custody, settlement, and force return live on-chain.

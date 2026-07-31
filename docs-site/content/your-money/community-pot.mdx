@@ -1,0 +1,50 @@
+---
+title: The Community Pot
+---
+
+import { Callout } from 'nextra/components'
+
+# The Community Pot
+
+The Community Pot (the **Tavern** in the village) is where redirected yield
+goes — and where it comes back out, monthly, to the people who kept their
+streaks.
+
+## Money in
+
+Whenever someone claims with Lapses, the yield share they forfeited
+(50% or 100% of their net yield) is booked to the pot at settlement, on-chain.
+The pot is funded **only** by redirected yield — never by principal, and never
+topped up with house money that could distort incentives.
+
+## Money out — the monthly distribution
+
+Once a month, the previous **full UTC calendar month** is closed and the pot
+accumulated in that window is distributed.
+
+**Eligibility** — at the time the window closes you need:
+
+- an **active lock** (real principal, on-chain, still locked), and
+- a **current streak greater than 0**.
+
+**Your share** is proportional to your weight:
+
+```
+weight = your locked principal × your current streak
+```
+
+A $50 lock with a 30-day streak weighs six times as much as a $50 lock with a
+5-day streak — the pot rewards sustained consistency, scaled by skin in the
+game. Payouts are calculated so the window's pot is fully distributed with no
+rounding leftovers lost.
+
+<Callout type="info">
+  Completing a course doesn't disqualify you from a window you were active in
+  — and every payout is a real on-chain USDC transfer you can verify.
+</Callout>
+
+## Seeing it
+
+The Tavern shows the current pot size, the next distribution window, and past
+distributions. The [Leaderboard](/game-systems/leaderboard) shows recent pot
+payouts per wallet.

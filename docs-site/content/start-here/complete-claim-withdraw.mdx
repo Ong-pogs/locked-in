@@ -1,0 +1,58 @@
+---
+title: Complete, claim & withdraw
+---
+
+import { Callout } from 'nextra/components'
+
+# Complete, claim & withdraw
+
+## Completing the course
+
+When you pass the final lesson of the final module, the course is **complete**.
+Two things happen immediately:
+
+1. Your course state is **frozen** — no future missed day can touch what
+   you've earned. Your streak, your Lapse count, and your yield share are
+   locked in at their values the moment you finish.
+2. A **claim voucher** is issued for you automatically. The voucher is a
+   signed authorization that tells the on-chain program exactly what share of
+   yield you're entitled to.
+
+## Claiming
+
+Go to your course's claim page and hit **Claim**. Your wallet signs one
+transaction, and the program pays out:
+
+- **Your full principal** — always 100%, regardless of anything.
+- **Your yield share** — 100%, 50%, or 0% of the yield your deposit earned,
+  depending on your Lapse count
+  (see [Lapses & your yield](/your-money/lapses-and-yield)).
+- Anything you don't receive from yield goes to the
+  [Community Pot](/your-money/community-pot) — it is never kept by us.
+
+Two practical requirements:
+
+<Callout type="warning">
+  - **Gas:** claiming needs about **0.003 SOL** in your wallet for network
+    fees. The claim page checks this and will tell you if you're short.
+  - **Voucher expiry:** each claim voucher is valid for **90 days**. Don't
+    finish a course and disappear for four months — claim while it's fresh.
+    (If a voucher does expire, a fresh one can be issued from your claim
+    page — your funds are not lost.)
+</Callout>
+
+## The 180-day safety valve
+
+If a lock ever sits unresolved for **180 days** after it was created, the
+program allows the funds to be returned to the owner — permissionlessly,
+meaning anyone can trigger it, and the funds can only go to **you**. This
+exists so that no bug, outage, or disappearance of Locked In itself can strand
+your money. Details in
+[Claiming & force return](/your-money/claiming-force-return).
+
+## After claiming
+
+The USDC (principal + yield share) is in your wallet — it's yours, do what you
+like. The completed course unlocks **Practice Mode** forever (see
+[Practice Mode](/game-systems/practice-mode)), and you can lock into your next
+course whenever you're ready.

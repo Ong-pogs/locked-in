@@ -1,0 +1,54 @@
+---
+title: The on-chain program
+---
+
+# The on-chain program
+
+One Anchor program handles all custody:
+`FAuFtXbTAT9SiJTghxdZ1ZD4ShgrdTk2EqgyPxfq2gZ6` on Solana mainnet.
+
+## Accounts
+
+- **Config** — protocol authority (the voucher-verification key), fee setting,
+  and beta caps.
+- **Lock** — one per (wallet, course): owner, principal, start timestamp,
+  status. Note what's *absent*: no streak, no game state. The chain doesn't
+  know or care whether you did your lessons — only the voucher carries that
+  verdict, and only as a yield percentage.
+- **Pot** — the community pot's accounting and vault.
+
+## Beta caps (enforced in-program)
+
+| Cap | Value |
+|---|---|
+| Min principal per lock | 10 USDC |
+| Max principal per lock | 50 USDC |
+| Global TVL | 1,000 USDC |
+| Max fee | 2,000 bps (20%) — hard ceiling; current fee 0 |
+| Force return after | 15,552,000 s (180 days) |
+
+## Settlement math
+
+At claim, the program redeems the Kamino position and splits:
+
+```
+gross_yield = redeemed − principal
+fee         = gross_yield × fee_bps / 10_000        (fee_bps = 0 in beta)
+user_yield  = (gross_yield − fee) × user_yield_bps / 10_000
+to_pot      = gross_yield − fee − user_yield
+```
+
+- `user_yield_bps` (10000 / 5000 / 0) comes from the **claim voucher**, whose
+  Ed25519 signature the program verifies against the config authority. No
+  valid voucher, no claim.
+- Principal always pays out first and in full. Rounding dust goes to the pot,
+  never silently lost.
+- If the position redeemed **below** principal (strategy loss), the owner
+  absorbs the shortfall and the pot receives nothing — losses are never
+  socialized into the pot, and the pot never subsidizes them.
+
+## Force return
+
+After 180 days from lock creation, `force_return` becomes callable **by
+anyone**, returning the position to the lock owner. It requires no voucher, no
+backend, and no permission — it's the trust anchor for the whole system.
