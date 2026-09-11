@@ -1,8 +1,8 @@
 {
   "source": "https://locked-in-backend-oetf.onrender.com",
-  "generatedAt": "2026-07-18T11:29:39.485Z",
-  "releaseId": "3a12a9c6-71d2-4f5b-9d42-a4dc4bf9a03f",
-  "publishedAt": "2026-07-10T11:42:06.735Z",
+  "generatedAt": "2026-09-11T02:44:33.805Z",
+  "releaseId": "46e34cff-2819-420a-a58e-02779778f0fa",
+  "publishedAt": "2026-09-11T02:43:12.659Z",
   "courses": [
     {
       "id": "anchor-dev",
@@ -21,7 +21,7 @@
         "minPrincipalAmountUi": "25.00",
         "demoPrincipalAmountUi": "1.00"
       },
-      "publishedAt": "2026-07-10T11:42:06.735Z"
+      "publishedAt": "2026-09-11T02:43:12.659Z"
     },
     {
       "id": "blockchain-wallets",
@@ -37,10 +37,10 @@
         "maxLockDurationDays": 30,
         "minLockDurationDays": 10,
         "maxPrincipalAmountUi": "100.00",
-        "minPrincipalAmountUi": "5.00",
+        "minPrincipalAmountUi": "10.00",
         "demoPrincipalAmountUi": "1.00"
       },
-      "publishedAt": "2026-07-10T11:42:06.735Z"
+      "publishedAt": "2026-09-11T02:43:12.659Z"
     },
     {
       "id": "defi-how-money-earns",
@@ -56,29 +56,10 @@
         "maxLockDurationDays": 30,
         "minLockDurationDays": 10,
         "maxPrincipalAmountUi": "100.00",
-        "minPrincipalAmountUi": "5.00",
+        "minPrincipalAmountUi": "10.00",
         "demoPrincipalAmountUi": "1.00"
       },
-      "publishedAt": "2026-07-10T11:42:06.735Z"
-    },
-    {
-      "id": "defi-protocols",
-      "slug": "defi-protocols",
-      "title": "DeFi Protocols",
-      "description": "Understand AMMs, lending, and yield on Solana.",
-      "difficulty": "intermediate",
-      "category": "defi",
-      "imageUrl": null,
-      "totalModules": 0,
-      "totalLessons": 0,
-      "lockPolicy": {
-        "maxLockDurationDays": 90,
-        "minLockDurationDays": 30,
-        "maxPrincipalAmountUi": "250.00",
-        "minPrincipalAmountUi": "25.00",
-        "demoPrincipalAmountUi": "1.00"
-      },
-      "publishedAt": "2026-07-10T11:42:06.735Z"
+      "publishedAt": "2026-09-11T02:43:12.659Z"
     },
     {
       "id": "keys-and-seed-phrases",
@@ -94,10 +75,10 @@
         "maxLockDurationDays": 30,
         "minLockDurationDays": 10,
         "maxPrincipalAmountUi": "100.00",
-        "minPrincipalAmountUi": "5.00",
+        "minPrincipalAmountUi": "10.00",
         "demoPrincipalAmountUi": "1.00"
       },
-      "publishedAt": "2026-07-10T11:42:06.735Z"
+      "publishedAt": "2026-09-11T02:43:12.659Z"
     },
     {
       "id": "reading-solana",
@@ -113,10 +94,10 @@
         "maxLockDurationDays": 30,
         "minLockDurationDays": 10,
         "maxPrincipalAmountUi": "100.00",
-        "minPrincipalAmountUi": "5.00",
+        "minPrincipalAmountUi": "10.00",
         "demoPrincipalAmountUi": "1.00"
       },
-      "publishedAt": "2026-07-10T11:42:06.735Z"
+      "publishedAt": "2026-09-11T02:43:12.659Z"
     },
     {
       "id": "rust-solana",
@@ -132,10 +113,10 @@
         "maxLockDurationDays": 30,
         "minLockDurationDays": 10,
         "maxPrincipalAmountUi": "100.00",
-        "minPrincipalAmountUi": "5.00",
+        "minPrincipalAmountUi": "10.00",
         "demoPrincipalAmountUi": "1.00"
       },
-      "publishedAt": "2026-07-10T11:42:06.735Z"
+      "publishedAt": "2026-09-11T02:43:12.659Z"
     },
     {
       "id": "solana-fundamentals",
@@ -151,10 +132,48 @@
         "maxLockDurationDays": 30,
         "minLockDurationDays": 10,
         "maxPrincipalAmountUi": "100.00",
-        "minPrincipalAmountUi": "5.00",
+        "minPrincipalAmountUi": "10.00",
         "demoPrincipalAmountUi": "1.00"
       },
-      "publishedAt": "2026-07-10T11:42:06.735Z"
+      "publishedAt": "2026-09-11T02:43:12.659Z"
+    },
+    {
+      "id": "stablecoins-money-on-chain",
+      "slug": "stablecoins-and-money-on-chain",
+      "title": "Stablecoins & Money On Chain",
+      "description": "What a dollar on a blockchain really is — who backs USDC, the three ways a peg gets defended, what actually happened when UST died and when USDC wobbled, and how money crosses between a bank account and a wallet.",
+      "difficulty": "beginner",
+      "category": "web3",
+      "imageUrl": null,
+      "totalModules": 1,
+      "totalLessons": 6,
+      "lockPolicy": {
+        "maxLockDurationDays": 30,
+        "minLockDurationDays": 10,
+        "maxPrincipalAmountUi": "100.00",
+        "minPrincipalAmountUi": "10.00",
+        "demoPrincipalAmountUi": "1.00"
+      },
+      "publishedAt": "2026-09-11T02:43:12.659Z"
+    },
+    {
+      "id": "swaps-and-dexs",
+      "slug": "swaps-dexs-and-slippage",
+      "title": "Swaps, DEXs & Slippage",
+      "description": "How trading actually works on Solana — why a DEX is a pool and not an order book, what really sets your price, the difference between slippage and price impact, and why your tolerance setting is the one that protects you.",
+      "difficulty": "beginner",
+      "category": "defi",
+      "imageUrl": null,
+      "totalModules": 1,
+      "totalLessons": 6,
+      "lockPolicy": {
+        "maxLockDurationDays": 30,
+        "minLockDurationDays": 10,
+        "maxPrincipalAmountUi": "100.00",
+        "minPrincipalAmountUi": "10.00",
+        "demoPrincipalAmountUi": "1.00"
+      },
+      "publishedAt": "2026-09-11T02:43:12.659Z"
     },
     {
       "id": "test-kitchen",
@@ -173,7 +192,7 @@
         "minPrincipalAmountUi": "1.00",
         "demoPrincipalAmountUi": "1.00"
       },
-      "publishedAt": "2026-07-10T11:42:06.735Z"
+      "publishedAt": "2026-09-11T02:43:12.659Z"
     },
     {
       "id": "tokens-nfts-staking",
@@ -189,10 +208,10 @@
         "maxLockDurationDays": 30,
         "minLockDurationDays": 10,
         "maxPrincipalAmountUi": "100.00",
-        "minPrincipalAmountUi": "5.00",
+        "minPrincipalAmountUi": "10.00",
         "demoPrincipalAmountUi": "1.00"
       },
-      "publishedAt": "2026-07-10T11:42:06.735Z"
+      "publishedAt": "2026-09-11T02:43:12.659Z"
     }
   ],
   "modulesByCourse": {
@@ -223,7 +242,6 @@
         "estimatedMinutes": 60
       }
     ],
-    "defi-protocols": [],
     "keys-and-seed-phrases": [
       {
         "id": "keys-seed-phrases-module-core",
@@ -252,6 +270,32 @@
     ],
     "rust-solana": [],
     "solana-fundamentals": [],
+    "stablecoins-money-on-chain": [
+      {
+        "id": "stablecoins-module-core",
+        "courseId": "stablecoins-money-on-chain",
+        "slug": "stablecoins-core",
+        "title": "Stablecoins & Money On Chain Core",
+        "description": "Core module for Course 7: Stablecoins & Money On Chain.",
+        "order": 1,
+        "difficulty": "beginner",
+        "totalLessons": 6,
+        "estimatedMinutes": 45
+      }
+    ],
+    "swaps-and-dexs": [
+      {
+        "id": "swaps-and-dexs-module-core",
+        "courseId": "swaps-and-dexs",
+        "slug": "swaps-and-dexs-core",
+        "title": "Swaps, DEXs & Slippage Core",
+        "description": "Core module for Course 6: Swaps, DEXs & Slippage.",
+        "order": 1,
+        "difficulty": "beginner",
+        "totalLessons": 6,
+        "estimatedMinutes": 45
+      }
+    ],
     "test-kitchen": [
       {
         "id": "test-kitchen-module",
@@ -826,7 +870,7 @@
               },
               {
                 "id": "bw-4-q1-opt-3",
-                "text": "Principal is your locked USDC, always returned; yield is the interest it earns, forfeited only if you lapse"
+                "text": "Principal is the USDC you locked — never taken as a penalty, though not guaranteed; yield is the interest it earns, forfeited if you lapse"
               }
             ]
           },
@@ -875,7 +919,7 @@
           }
         ],
         "releaseId": "247aa94a-83d3-45ab-a474-237822b056a0",
-        "contentHash": "3a3951737b3242c675eed1f7dad5118a82137a58d446ce5d4d3b3e2c6458fecf"
+        "contentHash": "d1669c371af991f995bec75fceb5bf0952b49b4b1a3278e57e4dc6ec835f4752"
       },
       {
         "id": "bw-5",
@@ -893,7 +937,7 @@
           },
           {
             "id": "bw-5-block-2",
-            "text": "The LockedIn Smart Contract\n\nHere's what the rules look like (simplified):\n\n- **Lock:** Accept USDC, record who locked it, for how long. Cannot be withdrawn early.\n- **Yield:** Deposit the locked USDC into Kamino, where it earns real yield while the user learns.\n- **Flame:** When a user completes their daily lesson, keep the flame lit. Yield accrues while the flame is lit.\n- **Streak:** Track daily completion. If the user lapses after shields are spent: earned yield is forfeited to the community pot — principal is always returned.\n- **Unlock:** When end date reached — return USDC to user's wallet.\n\nThese rules are **immutable** — once deployed, nobody can change them.",
+            "text": "The LockedIn Smart Contract\n\nHere's what the rules look like (simplified):\n\n- **Lock:** Accept USDC, record who locked it, for how long. Cannot be withdrawn early.\n- **Yield:** Deposit the locked USDC into Kamino, where it earns real yield while the user learns.\n- **Flame:** When a user completes their daily lesson, keep the flame lit. Yield accrues while the flame is lit.\n- **Streak:** Track daily completion. If the user lapses after shields are spent: earned yield is forfeited to the community pot. A lapse never takes principal — but principal is not guaranteed either. It is supplied to Kamino, so a protocol loss, a USDC depeg or a Solana failure can return less than was deposited, and nobody tops up the difference.\n- **Unlock:** When end date reached — return USDC to user's wallet.\n\nThese rules are **immutable** — once deployed, nobody can change them.",
             "type": "paragraph",
             "order": 2
           },
@@ -910,7 +954,7 @@
               {
                 "desc": "Lends your tokens, earns interest, manages collateral automatically",
                 "icon": "🏦",
-                "name": "Lending (Kamino, Marginfi)"
+                "name": "Lending (Kamino)"
               },
               {
                 "desc": "Holds NFTs in escrow, executes sales when buyer pays",
@@ -928,7 +972,7 @@
           },
           {
             "id": "bw-5-block-4",
-            "text": "If LockedIn as a company disappeared tomorrow, the smart contract **keeps running**. Your USDC is still locked. Your yield is still accruing. When the unlock date arrives, you can claim your funds through another app. The smart contract doesn't need us.",
+            "text": "If LockedIn as a company disappeared tomorrow, the smart contract **keeps running**. Your USDC is still locked. Your yield is still accruing. But a normal claim needs a completion voucher signed by LockedIn's operator key, so another app cannot simply pay you out. What the contract guarantees on its own is a force-return 180 days after your lock starts: **your principal comes back to your wallet, and the earned yield goes to the community pot**.",
             "type": "callout",
             "order": 4,
             "variant": "takeaway",
@@ -954,7 +998,7 @@
               },
               {
                 "id": "bw-5-q1-opt-3",
-                "text": "It stays in the smart contract on the blockchain — safe and accessible"
+                "text": "Your principal comes back via the 180-day force-return — but the yield is forfeited"
               }
             ]
           },
@@ -1003,7 +1047,7 @@
           }
         ],
         "releaseId": "247aa94a-83d3-45ab-a474-237822b056a0",
-        "contentHash": "2f82974bf5020e65291cb3dc6c26bbd6b3d851e7d93b2c222a296d7d3a83f97d"
+        "contentHash": "f6ba3a8d7e8380f0f2fa0e6aca11ab2ad6023377129b4ede411af85c01fdebf7"
       },
       {
         "id": "bw-6",
@@ -1562,13 +1606,13 @@
           },
           {
             "id": "df-2-block-5",
-            "text": "How This Connects to Your USDC\n\nYour locked USDC is deposited into lending protocols like Kamino and Marginfi on Solana. You lock USDC in LockedIn → LockedIn deposits into Kamino/Marginfi → Borrowers pay interest → Yield flows back (typically 3-8% annually) → That yield accrues to you while your flame stays lit → Finish the course and claim it along with your principal.\n\nYou're a lender. You've been a lender this whole time. You just didn't know it.",
+            "text": "How This Connects to Your USDC\n\nYour locked USDC is deposited into Kamino, the only lending protocol LockedIn uses. You lock USDC in LockedIn → LockedIn deposits into Kamino → Borrowers pay interest → Yield flows back (typically 3-8% annually) → That yield accrues to you while your flame stays lit → Finish the course and claim it along with your principal.\n\nYou're a lender. You've been a lender this whole time. You just didn't know it.",
             "type": "paragraph",
             "order": 5
           },
           {
             "id": "df-2-block-6",
-            "text": "Quick Recap: DeFi lending = lenders deposit funds into a pool, borrowers pay interest to use them. No bank in the middle — smart contracts manage everything automatically. Borrowers must provide collateral (deposit more than they borrow) so lenders are protected. Your locked USDC is deposited into lending protocols (Kamino/Marginfi) earning yield. That yield is what backs your yield — you've been a lender this whole time.",
+            "text": "Quick Recap: DeFi lending = lenders deposit funds into a pool, borrowers pay interest to use them. No bank in the middle — smart contracts manage everything automatically. Borrowers must provide collateral (deposit more than they borrow) so lenders are protected. Your locked USDC is deposited into Kamino — one lending protocol, not several — where it earns yield. That yield is what backs your yield — you've been a lender this whole time.",
             "type": "callout",
             "order": 6,
             "calloutTone": "info"
@@ -1599,7 +1643,7 @@
           }
         ],
         "releaseId": "d15dc0dd-1c8f-40a6-931e-81b172ef350e",
-        "contentHash": "6a7745f2d8c017a422a74a7ae80c52dfba327635c942e6520f362d69482703fc"
+        "contentHash": "96eb4430936a55f118cf9e5bc073bc42e12385eaae8cd3cdf27b0a039ac45e8f"
       },
       {
         "id": "df-3",
@@ -1672,13 +1716,13 @@
         "blocks": [
           {
             "id": "df-4-block-1",
-            "text": "Meet Kamino and Marginfi\n\nYour locked USDC is currently deposited in real DeFi protocols on Solana. Kamino is a lending and liquidity platform — one of Solana's largest lending protocols. Battle-tested, audited, transparent.",
+            "text": "Meet Kamino\n\nYour locked USDC is currently deposited in exactly one real DeFi protocol on Solana. Kamino is a lending and liquidity platform — one of Solana's largest lending protocols. Battle-tested, audited, transparent.",
             "type": "paragraph",
             "order": 1
           },
           {
             "id": "df-4-block-2",
-            "text": "Marginfi is another lending protocol on Solana. Why two? Diversification — don't put all your eggs in one basket. LockedIn reduces risk, optimizes rates, and avoids concentration.",
+            "text": "LockedIn uses Kamino and only Kamino — the on-chain program rejects any other lending venue. That means no diversification: if Kamino has a problem, every locked deposit is exposed. One protocol is easier to verify, but it concentrates risk instead of spreading it.",
             "type": "paragraph",
             "order": 2
           },
@@ -1690,13 +1734,13 @@
           },
           {
             "id": "df-4-block-4",
-            "text": "How It All Fits Together:\n\n                    YOUR LOCKED USDC\n                          │\n                LockedIn Smart Contract\n                     │         │\n                ┌────┘         └────┐\n                ▼                   ▼\n           ┌─────────┐       ┌───────────┐\n           │  KAMINO  │       │ MARGINFI  │\n           │ Lending  │       │ Lending   │\n           │  Pool    │       │  Pool     │\n           └────┬─────┘       └────┬──────┘\n                │                   │\n                └──────┐   ┌───────┘\n                       ▼   ▼\n                 Yield flows back\n                       │\n                LockedIn Smart Contract\n                │              │\n          LockedIn fee    the Community Pot\n          (10-20%)             │\n                          Your Yield\n                               │\n                       Jupiter (swap layer)\n                               │\n                          USDC payout",
+            "text": "How It All Fits Together:\n\n                    YOUR LOCKED USDC\n                          │\n                LockedIn Smart Contract\n                          │\n                          ▼\n                    ┌───────────┐\n                    │  KAMINO   │\n                    │  Lending  │\n                    │   Pool    │\n                    └─────┬─────┘\n                          │\n                   Yield flows back\n                          │\n                LockedIn Smart Contract\n                │                    │\n         You finish            You lapse, or the\n         the course            180-day force-return\n                │                    │\n        Principal + yield     Principal to your wallet,\n         to your wallet        yield to the community pot",
             "type": "code",
             "order": 4
           },
           {
             "id": "df-4-block-5",
-            "text": "Quick Recap: Kamino and Marginfi are lending protocols — your USDC earns yield there. Two protocols = diversification. Jupiter handles swaps. All smart contracts — automated, transparent, verifiable on-chain.",
+            "text": "Quick Recap: Kamino is the single lending protocol where your USDC earns yield. One protocol means no diversification — Kamino is a single point of failure. Jupiter is a Solana swap aggregator; your lock does not route through it. All smart contracts — automated, transparent, verifiable on-chain.",
             "type": "callout",
             "order": 5,
             "calloutTone": "info"
@@ -1709,25 +1753,25 @@
           {
             "id": "df-4-q1",
             "type": "mcq",
-            "prompt": "Why does LockedIn split your USDC across multiple DeFi protocols instead of using just one?",
+            "prompt": "Which DeFi lending protocols does LockedIn deposit your locked USDC into?",
             "options": [
               {
                 "id": "df-4-q1-opt-1",
-                "text": "It's cheaper"
+                "text": "Kamino and Marginfi, split for diversification"
               },
               {
                 "id": "df-4-q1-opt-2",
-                "text": "To diversify risk and optimize for the best rates"
+                "text": "Kamino only — the program rejects any other lending protocol"
               },
               {
                 "id": "df-4-q1-opt-3",
-                "text": "Because each protocol holds a different type of USDC"
+                "text": "Whichever protocol is paying the highest rate that week"
               }
             ]
           }
         ],
         "releaseId": "d15dc0dd-1c8f-40a6-931e-81b172ef350e",
-        "contentHash": "7855bdbff7578bd881b785115c06a2a9fe0bf0710ffb7a90219dad6622879f32"
+        "contentHash": "aa7424b72ac0f606beede592eefd7b293ab57a8d8f011aefb19bc7feb9a7d2d3"
       },
       {
         "id": "df-5",
@@ -1736,7 +1780,7 @@
         "blocks": [
           {
             "id": "df-5-block-1",
-            "text": "Nothing Is Risk-Free\n\nDeFi is not a savings account. The five risks: 1) Smart contract risk (bugs/exploits — most significant, mitigated by audits and diversification). 2) Interest rate risk (rates fluctuate — normal, not dangerous).",
+            "text": "Nothing Is Risk-Free\n\nDeFi is not a savings account. The five risks: 1) Smart contract risk (bugs/exploits — most significant, reduced by audits but NOT by diversification: every deposit sits in Kamino). 2) Interest rate risk (rates fluctuate — normal, not dangerous).",
             "type": "paragraph",
             "order": 1
           },
@@ -1748,7 +1792,7 @@
           },
           {
             "id": "df-5-block-3",
-            "text": "The honest summary: The most meaningful risk is smart contract risk. Everything else is either unlikely, temporary, or doesn't affect your principal. LockedIn mitigates this by using established, audited protocols and diversifying.",
+            "text": "The honest summary: The most meaningful risk is smart contract risk. Everything else is either unlikely, temporary, or doesn't affect your principal. LockedIn reduces this by using a single established, audited protocol — Kamino — but it does not diversify, so a Kamino exploit would affect every deposit.",
             "type": "paragraph",
             "order": 3
           },
@@ -1760,7 +1804,7 @@
           },
           {
             "id": "df-5-block-5",
-            "text": "Quick Recap: DeFi is NOT risk-free. Most significant risk: smart contract exploits. LockedIn mitigates with audited protocols and diversification. Interest rates fluctuate normally. USDC very likely stays at $1. Never invest more than you can afford to lose.",
+            "text": "Quick Recap: DeFi is NOT risk-free. Most significant risk: smart contract exploits. LockedIn uses one audited protocol, Kamino, and does not diversify. Interest rates fluctuate normally. USDC very likely stays at $1. Never invest more than you can afford to lose.",
             "type": "callout",
             "order": 5,
             "calloutTone": "info"
@@ -1791,7 +1835,7 @@
           }
         ],
         "releaseId": "d15dc0dd-1c8f-40a6-931e-81b172ef350e",
-        "contentHash": "082ae11526f562e2e243f63ae749e604317dfae196d51cda45271b52453336b4"
+        "contentHash": "65e1819fa251b535bed07ee008be02607871ea3fc2155db46c92f979c131c337"
       },
       {
         "id": "df-6",
@@ -2930,6 +2974,922 @@
         ],
         "releaseId": "69636b12-73e1-4ae2-9090-e288709175e7",
         "contentHash": "5fcd60101caa314a2d09b5e97a16469763337be5c6df63696b8325ad83de74cc"
+      }
+    ],
+    "stablecoins-module-core": [
+      {
+        "id": "sc-1",
+        "order": 1,
+        "title": "What \"Stable\" Actually Means",
+        "blocks": [
+          {
+            "id": "sc-1-block-1",
+            "text": "A Price That Someone Defends\n\nA stablecoin is a token designed to hold a steady value — almost always one US dollar. USDC, USDT, PYUSD: all aiming at 1.00 dollars.\n\nBut nothing in the code forces that. A token cannot decree its own price any more than a share certificate can. The peg holds because of a mechanism outside the token: someone stands ready to swap it for a real dollar, or a system stands ready to buy it when it dips. Remove that mechanism and the \"stable\" part evaporates immediately.\n\nSo the useful question is never \"is this a stablecoin?\" It is \"what exactly is defending this peg, and who is doing the defending?\"",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "sc-1-block-2",
+            "text": "Why Anyone Wants One\n\nCrypto without stablecoins is exhausting. Every price is quoted in a volatile asset, every transfer is a bet on that asset's next hour, and nobody can quote you a stable price for anything.\n\nA stablecoin makes a chain usable as money. You can hold value without holding volatility, price goods, settle debts, and — crucially for lending and trading — share a unit of account everyone agrees on. It is why the largest markets on almost every chain are stablecoin pairs, and why the money you lock on this platform is USDC rather than SOL.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "sc-1-block-3",
+            "text": "Stable Is a Design Goal, Not a Guarantee: \"Stablecoin\" describes what a token is trying to do, not what it is certain to achieve. Every one of them can trade below a dollar, and some have gone to zero. The rest of this course is about telling apart the designs where that is a brief wobble from the designs where it is fatal.",
+            "type": "callout",
+            "order": 3,
+            "calloutTone": "warning"
+          }
+        ],
+        "version": 1,
+        "courseId": "stablecoins-money-on-chain",
+        "moduleId": "stablecoins-module-core",
+        "questions": [
+          {
+            "id": "sc-1-q1",
+            "type": "mcq",
+            "prompt": "What actually makes a stablecoin hold its price?",
+            "options": [
+              {
+                "id": "sc-1-q1-opt-1",
+                "text": "A mechanism outside the token — someone redeeming or defending it"
+              },
+              {
+                "id": "sc-1-q1-opt-2",
+                "text": "Code inside the token that fixes its price at one dollar"
+              },
+              {
+                "id": "sc-1-q1-opt-3",
+                "text": "A rule enforced by the blockchain itself"
+              }
+            ]
+          },
+          {
+            "id": "sc-1-q2",
+            "type": "mcq",
+            "prompt": "Why are stablecoins so widely used across DeFi?",
+            "options": [
+              {
+                "id": "sc-1-q2-opt-1",
+                "text": "They let you hold and price value without holding volatility"
+              },
+              {
+                "id": "sc-1-q2-opt-2",
+                "text": "They pay a guaranteed rate of interest"
+              },
+              {
+                "id": "sc-1-q2-opt-3",
+                "text": "They are the only tokens that can be sent between wallets"
+              }
+            ]
+          },
+          {
+            "id": "sc-1-q3",
+            "type": "short_text",
+            "prompt": "What is the question you should ask about any stablecoin's peg?"
+          }
+        ],
+        "releaseId": "46e34cff-2819-420a-a58e-02779778f0fa",
+        "contentHash": "ce7e43a8b56127916dd076b1434318cd6e29a17543e258112ddbb919bc1e3329"
+      },
+      {
+        "id": "sc-2",
+        "order": 2,
+        "title": "Who Backs USDC",
+        "blocks": [
+          {
+            "id": "sc-2-block-1",
+            "text": "One Token, One Dollar, Held Somewhere Real\n\nUSDC is issued by Circle, a regulated US company, and the model is deliberately boring. You give Circle a dollar, Circle mints one USDC and sends it to you. You return one USDC, Circle burns it and wires you a dollar. Supply expands and contracts with real deposits.\n\nThose dollars are not stacked in a vault as cash. They are held as reserves — largely short-dated US Treasury bills and cash at banks — in accounts kept separate from Circle's own corporate money. Circle publishes monthly attestation reports from an independent accounting firm stating what the reserves held and what they were worth.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "sc-2-block-2",
+            "text": "What This Buys, and What It Costs\n\nThe upside is the strongest peg mechanism available. If USDC trades at 0.99 dollars, anyone who can redeem with Circle buys it cheap and redeems it for a full dollar, and that arbitrage pushes the price back up. The peg is defended by the profit motive of everyone who can reach the redemption window.\n\nThe cost is that you are trusting a company and its banks. Circle can freeze specific addresses, and has done so at law enforcement request. If its reserves were mismanaged or its banks failed, the token would follow them down. That is a real, concentrated counterparty risk rather than a theoretical one — and it is precisely the trade you accept in exchange for the sturdiest peg on offer.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "sc-2-block-3",
+            "text": "Attestation Is Not the Same as Audit: A monthly attestation is an accountant confirming a snapshot of what the reserves held on a particular date. That is meaningful, and it is public — and it is a narrower exercise than a full audit of the company. Read reserve reports as strong evidence rather than as a guarantee, and check that the one you are reading is recent.",
+            "type": "callout",
+            "order": 3,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "stablecoins-money-on-chain",
+        "moduleId": "stablecoins-module-core",
+        "questions": [
+          {
+            "id": "sc-2-q1",
+            "type": "mcq",
+            "prompt": "How does a new USDC come into existence?",
+            "options": [
+              {
+                "id": "sc-2-q1-opt-1",
+                "text": "Someone gives Circle a dollar and Circle mints one USDC"
+              },
+              {
+                "id": "sc-2-q1-opt-2",
+                "text": "Validators mint it as a reward for producing blocks"
+              },
+              {
+                "id": "sc-2-q1-opt-3",
+                "text": "It is created automatically whenever SOL is staked"
+              }
+            ]
+          },
+          {
+            "id": "sc-2-q2",
+            "type": "mcq",
+            "prompt": "USDC is trading at 0.99 dollars. What pushes it back toward one dollar?",
+            "options": [
+              {
+                "id": "sc-2-q2-opt-1",
+                "text": "Arbitrage — buying it cheap and redeeming it with Circle for a full dollar"
+              },
+              {
+                "id": "sc-2-q2-opt-2",
+                "text": "The Solana network automatically corrects the price"
+              },
+              {
+                "id": "sc-2-q2-opt-3",
+                "text": "Nothing — it stays at 0.99 dollars permanently"
+              }
+            ]
+          },
+          {
+            "id": "sc-2-q3",
+            "type": "short_text",
+            "prompt": "What is the main risk you take on with a fiat-backed stablecoin like USDC?"
+          }
+        ],
+        "releaseId": "46e34cff-2819-420a-a58e-02779778f0fa",
+        "contentHash": "9200402f7b5ca6d0d46f5cedf0254a758e0537102fb489f31a52585102a4052f"
+      },
+      {
+        "id": "sc-3",
+        "order": 3,
+        "title": "The Three Designs — Fiat, Crypto & Algorithmic",
+        "blocks": [
+          {
+            "id": "sc-3-block-1",
+            "text": "Design One: Fiat-Backed\n\nThis is USDC and USDT. Every token is matched by roughly a dollar of real-world reserves held by a company and redeemable through that company. It is simple, it is capital-efficient — one dollar in, one token out — and it has the strongest peg record of the three.\n\nThe trade is centralization. A company mints, a company redeems, a company can freeze, and regulators can reach all of it.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "sc-3-block-2",
+            "text": "Design Two: Crypto-Backed\n\nHere the collateral lives on chain and anyone can inspect it. You lock crypto in a smart contract and mint stablecoins against it. Because that collateral swings in value, these systems are overcollateralized — locking perhaps 150 dollars of crypto to mint 100 dollars of stablecoin. If your collateral falls too close to your debt, the contract liquidates it automatically to keep the system solvent.\n\nNobody needs a bank, and you can verify the backing yourself. The costs are capital efficiency — a dollar of stablecoin ties up more than a dollar — and a dependence on those liquidations actually clearing while markets are moving fast.\n\nDesign Three: Algorithmic\n\nNo meaningful collateral at all. The peg is defended by a mechanism, typically minting and burning a second volatile \"sister\" token to absorb changes in supply and demand. It is elegant on paper and needs no reserves whatsoever. It is also the design that has failed most spectacularly, which is the subject of the next lesson.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "sc-3-block-3",
+            "text": "Pick Your Trust: Fiat-backed asks you to trust a company. Crypto-backed asks you to trust code and market liquidations. Algorithmic asks you to trust that demand keeps arriving. The first two have durable track records at scale; the third's flagship went to zero in about a week.",
+            "type": "callout",
+            "order": 3,
+            "calloutTone": "warning"
+          }
+        ],
+        "version": 1,
+        "courseId": "stablecoins-money-on-chain",
+        "moduleId": "stablecoins-module-core",
+        "questions": [
+          {
+            "id": "sc-3-q1",
+            "type": "mcq",
+            "prompt": "Why are crypto-backed stablecoins overcollateralized?",
+            "options": [
+              {
+                "id": "sc-3-q1-opt-1",
+                "text": "The collateral is volatile, so the extra cushion keeps the system solvent"
+              },
+              {
+                "id": "sc-3-q1-opt-2",
+                "text": "Regulators require a fixed extra percentage"
+              },
+              {
+                "id": "sc-3-q1-opt-3",
+                "text": "It makes the stablecoin cheaper to mint"
+              }
+            ]
+          },
+          {
+            "id": "sc-3-q2",
+            "type": "mcq",
+            "prompt": "What backs a purely algorithmic stablecoin?",
+            "options": [
+              {
+                "id": "sc-3-q2-opt-1",
+                "text": "Essentially nothing — a minting mechanism and continued demand"
+              },
+              {
+                "id": "sc-3-q2-opt-2",
+                "text": "Gold held by the issuing foundation"
+              },
+              {
+                "id": "sc-3-q2-opt-3",
+                "text": "An equal amount of Bitcoin held in reserve"
+              }
+            ]
+          },
+          {
+            "id": "sc-3-q3",
+            "type": "short_text",
+            "prompt": "What does a fiat-backed stablecoin ask you to trust?"
+          }
+        ],
+        "releaseId": "46e34cff-2819-420a-a58e-02779778f0fa",
+        "contentHash": "76f8910d9bd7c67d4a87e68e3064f458c1eb57d5bbeed157ec2ff0323f29aa4d"
+      },
+      {
+        "id": "sc-4",
+        "order": 4,
+        "title": "When Pegs Break — UST and the USDC Weekend",
+        "blocks": [
+          {
+            "id": "sc-4-block-1",
+            "text": "UST and the Death Spiral\n\nIn May 2022, TerraUSD (UST) was the third-largest stablecoin, worth roughly 18 billion dollars. It was algorithmic: you could always burn one dollar of UST for one dollar's worth of its sister token LUNA, and the reverse. Much of the demand came from a protocol paying around 20% on UST deposits.\n\nThen UST slipped below a dollar. Holders did the rational thing and burned UST for LUNA — which minted enormous quantities of new LUNA and crushed its price. Cheaper LUNA meant the backstop was worth less, so more holders fled, so still more LUNA was minted. The mechanism designed to defend the peg was now the thing destroying it.\n\nWithin about a week UST was worth cents and LUNA was worth essentially nothing. Tens of billions of dollars evaporated. The design did not have a bad month; it had a feedback loop pointed in the wrong direction.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "sc-4-block-2",
+            "text": "USDC's Very Different Weekend\n\nIn March 2023, Silicon Valley Bank failed — and Circle had roughly 3.3 billion dollars of USDC reserves sitting in it. The news broke on a Friday night, with redemptions closed for the weekend and no way to know whether that money was recoverable. USDC fell to about 0.87 dollars.\n\nOn the Monday, US regulators guaranteed the bank's deposits. The reserves were whole, redemptions reopened, and USDC traded back near one dollar within days.\n\nThe contrast is the entire lesson. UST broke because its peg mechanism consumed itself, and nothing could have stopped it. USDC broke because the market doubted whether one bank still held one slice of the reserves — a doubt that a fact could settle. Same headline, completely different failure.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "sc-4-block-3",
+            "text": "Read the Cause, Not the Chart: Both events show a token trading below a dollar. Only one of them was survivable. When a stablecoin depegs, the question is whether the thing backing it is still intact — and note that USDC's recovery depended on an external decision going a particular way. A depeg resolving well once is not a promise that the next one will.",
+            "type": "callout",
+            "order": 3,
+            "calloutTone": "warning"
+          }
+        ],
+        "version": 1,
+        "courseId": "stablecoins-money-on-chain",
+        "moduleId": "stablecoins-module-core",
+        "questions": [
+          {
+            "id": "sc-4-q1",
+            "type": "mcq",
+            "prompt": "Why did UST's collapse accelerate instead of stabilizing?",
+            "options": [
+              {
+                "id": "sc-4-q1-opt-1",
+                "text": "Burning UST minted more LUNA, crushing the price of the very thing backing it"
+              },
+              {
+                "id": "sc-4-q1-opt-2",
+                "text": "Its bank reserves were frozen by regulators"
+              },
+              {
+                "id": "sc-4-q1-opt-3",
+                "text": "The Terra blockchain ran out of block space"
+              }
+            ]
+          },
+          {
+            "id": "sc-4-q2",
+            "type": "mcq",
+            "prompt": "What caused USDC to fall to about 0.87 dollars in March 2023?",
+            "options": [
+              {
+                "id": "sc-4-q2-opt-1",
+                "text": "Part of its reserves sat in a bank that failed, with redemptions closed for the weekend"
+              },
+              {
+                "id": "sc-4-q2-opt-2",
+                "text": "Circle had never held any reserves at all"
+              },
+              {
+                "id": "sc-4-q2-opt-3",
+                "text": "Its algorithmic mechanism entered a death spiral"
+              }
+            ]
+          },
+          {
+            "id": "sc-4-q3",
+            "type": "short_text",
+            "prompt": "A stablecoin has depegged. What is the key question to ask about it?"
+          }
+        ],
+        "releaseId": "46e34cff-2819-420a-a58e-02779778f0fa",
+        "contentHash": "babf02ee852c0d43049facd6f645aff85c6d244635c09a4e849026b67d84a885"
+      },
+      {
+        "id": "sc-5",
+        "order": 5,
+        "title": "On-Ramps & Off-Ramps — Crossing the Edge",
+        "blocks": [
+          {
+            "id": "sc-5-block-1",
+            "text": "The Hard Part Is the Edge\n\nMoving value between two wallets is trivial. Moving it between a bank account and a wallet is the part involving paperwork, waiting, and somebody's compliance department.\n\nThat crossing is an on-ramp going in and an off-ramp coming out. The usual routes are a centralized exchange, where you deposit by bank transfer or card and withdraw the stablecoin to your own wallet; or a card provider embedded directly in an app, which buys the token and delivers it to your wallet in a single flow.\n\nBoth require identity verification, because both touch the regulated banking system. This is the point at which crypto stops being anonymous, and it is unavoidable at the edges.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "sc-5-block-2",
+            "text": "Costs, and the Mistake That Cannot Be Undone\n\nRamps are where fees hide. Card purchases carry the steepest spread, bank transfers are usually the cheapest and the slowest, and the exchange rate you are quoted often already contains a margin. Compare the amount that actually lands in your wallet, not the advertised fee.\n\nTwo mistakes matter far more than cost. The first is withdrawing on the wrong network: the same ticker exists on many chains, and tokens sent to a Solana address over the wrong network are generally not recoverable. The second is assuming a transfer can be reversed. Once a stablecoin transfer confirms on chain, no support desk can undo it. Check the network, and check the first and last characters of the address, before confirming anything.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "sc-5-block-3",
+            "text": "The Habit Worth Building: On any new address, any new exchange, or any new network, send a small test amount first and wait for it to arrive. The fee on a test transfer is trivial. The cost of discovering a wrong network with your whole balance is the whole balance.",
+            "type": "callout",
+            "order": 3,
+            "calloutTone": "warning"
+          }
+        ],
+        "version": 1,
+        "courseId": "stablecoins-money-on-chain",
+        "moduleId": "stablecoins-module-core",
+        "questions": [
+          {
+            "id": "sc-5-q1",
+            "type": "mcq",
+            "prompt": "What is an off-ramp?",
+            "options": [
+              {
+                "id": "sc-5-q1-opt-1",
+                "text": "Converting crypto back into money in a bank account"
+              },
+              {
+                "id": "sc-5-q1-opt-2",
+                "text": "Moving tokens between two wallets you own"
+              },
+              {
+                "id": "sc-5-q1-opt-3",
+                "text": "Swapping one stablecoin for another on a DEX"
+              }
+            ]
+          },
+          {
+            "id": "sc-5-q2",
+            "type": "mcq",
+            "prompt": "You withdraw USDC to a Solana address but select the wrong network. What usually happens?",
+            "options": [
+              {
+                "id": "sc-5-q2-opt-1",
+                "text": "The funds are generally unrecoverable"
+              },
+              {
+                "id": "sc-5-q2-opt-2",
+                "text": "The network detects the error and refunds you"
+              },
+              {
+                "id": "sc-5-q2-opt-3",
+                "text": "They arrive as normal, just more slowly"
+              }
+            ]
+          },
+          {
+            "id": "sc-5-q3",
+            "type": "short_text",
+            "prompt": "What should you do before sending a large amount to a new address?"
+          }
+        ],
+        "releaseId": "46e34cff-2819-420a-a58e-02779778f0fa",
+        "contentHash": "09a144c1d6593e6e28c6e7311a065eeccb4d63dcdba5ae9f032721abdb3e8201"
+      },
+      {
+        "id": "sc-6",
+        "order": 6,
+        "title": "Money That Moves Like Email",
+        "blocks": [
+          {
+            "id": "sc-6-block-1",
+            "text": "Settlement, Not Messaging\n\nA conventional international transfer is a chain of messages between banks, each keeping its own ledger and reconciling later. That is why it takes days, why it stops at weekends, and why the fee is what it is.\n\nA stablecoin transfer on Solana is different in kind. There is one ledger, and when your transaction confirms — typically in under a second, for a fraction of a cent — the value has moved. There is no clearing, no settlement window, no pending state waiting to be reconciled on Monday. Final is final, at 2am, on a public holiday, across any border.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "sc-6-block-2",
+            "text": "Where This Genuinely Wins, and Where It Does Not\n\nThe clear wins are exactly where the old system is worst: remittances through expensive corridors, paying contractors across borders, businesses settling with each other outside banking hours, and people in high-inflation economies holding dollars without needing a US bank account.\n\nThe honest limits are just as real. You still need the ramps from the last lesson to touch actual cash, and those keep bank hours and bank rules. The irreversibility that makes settlement final also means a mistaken payment has no recourse. And holding dollars means holding dollar risk — a stablecoin protects you from crypto volatility, not from inflation and not from the issuer.\n\nWhat has actually changed is narrow and significant: the transfer step went from days and percentages to seconds and fractions of a cent. The edges around it are still ordinary finance.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "sc-6-block-3",
+            "text": "What You Are Actually Holding: A stablecoin in your wallet is a claim, not a deposit. It is not a bank account, it carries no deposit insurance, and it pays you nothing by simply sitting there. It is a fast, borderless, self-custodied way to hold and move dollar value — and understanding exactly that is what makes it a tool rather than a gamble.",
+            "type": "callout",
+            "order": 3,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "stablecoins-money-on-chain",
+        "moduleId": "stablecoins-module-core",
+        "questions": [
+          {
+            "id": "sc-6-q1",
+            "type": "mcq",
+            "prompt": "What is the main structural difference between a stablecoin transfer and a bank wire?",
+            "options": [
+              {
+                "id": "sc-6-q1-opt-1",
+                "text": "One shared ledger settles it immediately; banks exchange messages and reconcile later"
+              },
+              {
+                "id": "sc-6-q1-opt-2",
+                "text": "Bank wires are cheaper but slower to arrive"
+              },
+              {
+                "id": "sc-6-q1-opt-3",
+                "text": "Stablecoin transfers are reversible for 24 hours"
+              }
+            ]
+          },
+          {
+            "id": "sc-6-q2",
+            "type": "mcq",
+            "prompt": "Which of these is a genuine limitation of stablecoin payments?",
+            "options": [
+              {
+                "id": "sc-6-q2-opt-1",
+                "text": "A mistaken transfer is final and cannot be reversed"
+              },
+              {
+                "id": "sc-6-q2-opt-2",
+                "text": "They cannot be sent outside your own country"
+              },
+              {
+                "id": "sc-6-q2-opt-3",
+                "text": "They take several business days to settle"
+              }
+            ]
+          },
+          {
+            "id": "sc-6-q3",
+            "type": "short_text",
+            "prompt": "A stablecoin shields you from crypto volatility. What does it NOT shield you from?"
+          }
+        ],
+        "releaseId": "46e34cff-2819-420a-a58e-02779778f0fa",
+        "contentHash": "3d4042d0513a15719756c83a56fc2bc538fbfd38b9df95979f6f55073e9d4192"
+      }
+    ],
+    "swaps-and-dexs-module-core": [
+      {
+        "id": "sw-1",
+        "order": 1,
+        "title": "Why a DEX Isn't an Exchange",
+        "blocks": [
+          {
+            "id": "sw-1-block-1",
+            "text": "The Order Book, and Why It Struggles On Chain\n\nA traditional exchange runs an order book: a live list of everyone's bids and asks. Your buy order sits there until someone's sell order matches it. It works beautifully — as long as somebody is on the other side, and as long as posting, editing and cancelling orders is nearly free.\n\nOn a blockchain, none of that is free. Every order placed and every order cancelled is a transaction that costs a fee and waits for a block. Market makers who normally requote thousands of times a second would go broke doing it on chain. Early on-chain order books were thin and expensive for exactly this reason.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "sw-1-block-2",
+            "text": "The Pool Replaces the Counterparty\n\nAn AMM — automated market maker — throws the order book out. Instead of matching you with a person, it holds a liquidity pool: a smart contract stocked with two tokens, say SOL and USDC. You want SOL? You hand the pool USDC and it hands you SOL, priced by a formula rather than by a counterparty.\n\nThere is nobody to wait for. The pool quotes a price the instant you ask, at 3am, for any size, with no account and no sign-up. That availability is the whole trick — and it is why \"DEX\" on Solana almost always means an AMM.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "sw-1-block-3",
+            "text": "You Never Deposit: A centralized exchange makes you send funds in, trade inside their ledger, then withdraw. A DEX swap is one transaction from your own wallet — the tokens leave and arrive in the same instruction. It is atomic: either both legs settle or the whole thing reverts and you keep what you had. You are never holding an IOU.",
+            "type": "callout",
+            "order": 3,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "swaps-and-dexs",
+        "moduleId": "swaps-and-dexs-module-core",
+        "questions": [
+          {
+            "id": "sw-1-q1",
+            "type": "mcq",
+            "prompt": "On an AMM-based DEX, who is on the other side of your trade?",
+            "options": [
+              {
+                "id": "sw-1-q1-opt-1",
+                "text": "Another trader whose order happened to match yours"
+              },
+              {
+                "id": "sw-1-q1-opt-2",
+                "text": "A liquidity pool — a smart contract holding both tokens"
+              },
+              {
+                "id": "sw-1-q1-opt-3",
+                "text": "The DEX company's in-house trading desk"
+              }
+            ]
+          },
+          {
+            "id": "sw-1-q2",
+            "type": "mcq",
+            "prompt": "What does it mean that a swap is atomic?",
+            "options": [
+              {
+                "id": "sw-1-q2-opt-1",
+                "text": "Either the entire swap settles or it reverts and you keep your tokens"
+              },
+              {
+                "id": "sw-1-q2-opt-2",
+                "text": "Nobody else on the network can see that it happened"
+              },
+              {
+                "id": "sw-1-q2-opt-3",
+                "text": "It is broken into many tiny trades spread over an hour"
+              }
+            ]
+          },
+          {
+            "id": "sw-1-q3",
+            "type": "short_text",
+            "prompt": "Why is running an order book on chain so expensive compared with an AMM?"
+          }
+        ],
+        "releaseId": "77d49842-16d7-4cd9-95ee-9edb8807e9de",
+        "contentHash": "2b63afff9b77769022d30ea806c67ff12c1b4f1d2fdb5c863cdb2057973d04ab"
+      },
+      {
+        "id": "sw-2",
+        "order": 2,
+        "title": "The Constant Product Curve",
+        "blocks": [
+          {
+            "id": "sw-2-block-1",
+            "text": "One Formula Runs the Whole Thing\n\nThe classic AMM pool follows a single rule: x × y = k. Multiply the amount of token X in the pool by the amount of token Y, and that number — k — must not fall.\n\nSay a pool holds 1,000 SOL and 100,000 USDC. k is 100,000,000. The price of SOL right now is just the ratio: 100,000 ÷ 1,000 = $100. Nobody set that price. It falls out of the balances.\n\nNow you buy. You add USDC and take SOL out. The SOL in the pool drops, the USDC rises, and because their product has to stay at k, the ratio moves — SOL just got more expensive. The pool repriced itself automatically, with no oracle and no market maker.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "sw-2-block-2",
+            "text": "Depth Decides Your Price\n\nThe formula draws a curve, not a straight line, and that matters enormously once your trade gets large.\n\nBuy 1 SOL from that 1,000-SOL pool and you barely move along the curve — you pay about $100. Buy 100 SOL from the same pool and you are taking a tenth of its entire SOL balance; by the last coin you are paying far more than $100, and your average price lands closer to $111.\n\nSame pool, same formula. The only thing that changed is the size of your trade relative to the pool's depth. A deep pool absorbs your order quietly. A shallow one makes you pay for the privilege.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "sw-2-block-3",
+            "text": "The Pool Cannot Be Drained: Because x × y = k approaches the axes without ever touching them, buying the last SOL out of a pool would cost infinite USDC. That is a feature — no trade, however large, can empty a pool. It just gets ruinously expensive first, which is the curve's way of telling you your order is too big for this pool.",
+            "type": "callout",
+            "order": 3,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "swaps-and-dexs",
+        "moduleId": "swaps-and-dexs-module-core",
+        "questions": [
+          {
+            "id": "sw-2-q1",
+            "type": "mcq",
+            "prompt": "In a constant product pool, what has to stay constant?",
+            "options": [
+              {
+                "id": "sw-2-q1-opt-1",
+                "text": "The product of the two token balances"
+              },
+              {
+                "id": "sw-2-q1-opt-2",
+                "text": "The price of each token"
+              },
+              {
+                "id": "sw-2-q1-opt-3",
+                "text": "The number of traders using the pool"
+              }
+            ]
+          },
+          {
+            "id": "sw-2-q2",
+            "type": "mcq",
+            "prompt": "A pool holds 1,000 SOL and 100,000 USDC. What price does it quote for SOL?",
+            "options": [
+              {
+                "id": "sw-2-q2-opt-1",
+                "text": "About $100 — the ratio of the two balances"
+              },
+              {
+                "id": "sw-2-q2-opt-2",
+                "text": "Whatever the largest centralized exchange is quoting"
+              },
+              {
+                "id": "sw-2-q2-opt-3",
+                "text": "About $1,000 — the SOL balance itself"
+              }
+            ]
+          },
+          {
+            "id": "sw-2-q3",
+            "type": "short_text",
+            "prompt": "Why does buying 100 SOL from a pool cost more per coin than buying 1 SOL?"
+          }
+        ],
+        "releaseId": "77d49842-16d7-4cd9-95ee-9edb8807e9de",
+        "contentHash": "9f08b1709da750b16e9be2f40d1841380187c3a56fe40edbf646d30d28538dfa"
+      },
+      {
+        "id": "sw-3",
+        "order": 3,
+        "title": "Slippage vs Price Impact",
+        "blocks": [
+          {
+            "id": "sw-3-block-1",
+            "text": "Two Different Things Everyone Calls Slippage\n\nPrice impact is what YOUR trade does to the price. It is the move along the curve from the last lesson, it is fully knowable before you sign, and the swap screen shows it to you as a percentage. Big trade in a shallow pool, big price impact.\n\nSlippage is what everybody ELSE does to the price in the gap between you pressing confirm and your transaction landing. Blocks take time. Other people trade in that window. The price you were quoted is not the price you are guaranteed.\n\nOne is caused by you and is predictable. The other is caused by the world and is not.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "sw-3-block-2",
+            "text": "What the Slippage Tolerance Setting Actually Does\n\nThat \"1%\" box on the swap screen is not a fee and not a target. It is a limit attached to your transaction: if I would end up receiving more than 1% less than quoted, cancel the whole thing.\n\nSet it too tight and your swap fails on the smallest wobble — you lose the network fee and try again. Set it too loose and you have announced that you will accept a far worse price than quoted, which is an invitation we come back to in the last lesson.\n\nFor a deep pool in calm conditions, a few tenths of a percent is plenty. Thin pools and violent markets need more room.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "sw-3-block-3",
+            "text": "A Failed Swap Is the Setting Working: When a swap reverts for exceeding slippage tolerance, nothing was taken and no tokens moved — you paid only the network fee. That revert is the protection doing precisely its job: refusing a fill worse than the limit you set. Widening the tolerance until swaps stop failing is treating the alarm as the problem.",
+            "type": "callout",
+            "order": 3,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "swaps-and-dexs",
+        "moduleId": "swaps-and-dexs-module-core",
+        "questions": [
+          {
+            "id": "sw-3-q1",
+            "type": "mcq",
+            "prompt": "What is price impact?",
+            "options": [
+              {
+                "id": "sw-3-q1-opt-1",
+                "text": "The price move your own trade causes by travelling along the pool's curve"
+              },
+              {
+                "id": "sw-3-q1-opt-2",
+                "text": "The fee the DEX charges for using it"
+              },
+              {
+                "id": "sw-3-q1-opt-3",
+                "text": "The price change caused by other people's trades while you wait"
+              }
+            ]
+          },
+          {
+            "id": "sw-3-q2",
+            "type": "mcq",
+            "prompt": "What does setting slippage tolerance to 1% do?",
+            "options": [
+              {
+                "id": "sw-3-q2-opt-1",
+                "text": "It cancels the swap if you would receive more than 1% less than quoted"
+              },
+              {
+                "id": "sw-3-q2-opt-2",
+                "text": "It charges you a 1% fee on the trade"
+              },
+              {
+                "id": "sw-3-q2-opt-3",
+                "text": "It guarantees you a price 1% better than quoted"
+              }
+            ]
+          },
+          {
+            "id": "sw-3-q3",
+            "type": "short_text",
+            "prompt": "Your swap reverted for exceeding slippage tolerance. What did that cost you?"
+          }
+        ],
+        "releaseId": "77d49842-16d7-4cd9-95ee-9edb8807e9de",
+        "contentHash": "33496b86b2bbfc082842030e9fa2a0bb9dcdfea376cbae9816fbf79387f3e863"
+      },
+      {
+        "id": "sw-4",
+        "order": 4,
+        "title": "Being the Pool — LP Tokens & Impermanent Loss",
+        "blocks": [
+          {
+            "id": "sw-4-block-1",
+            "text": "Somebody Had to Put the Tokens There\n\nEvery pool you trade against was stocked by liquidity providers — ordinary users who deposited both tokens in the pool's current ratio. In return they receive LP tokens: a receipt representing their share of the pool.\n\nTraders pay a fee on every swap, commonly around 0.25% to 0.30%, and that fee stays in the pool. So the pool grows slightly with each trade, and every LP token becomes redeemable for a little more than before. Burn your LP tokens and you withdraw your share, fees included.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "sw-4-block-2",
+            "text": "Impermanent Loss, Honestly\n\nHere is the part the yield numbers do not show you. When one token's price moves, arbitrage traders rebalance the pool — buying the cheap side until the pool's ratio matches the outside market. That rebalancing is automatic, and it always leaves you holding more of the token that fell and less of the token that rose.\n\nThe result: withdrawing after a large price move returns less value than if you had simply held the two tokens in your wallet and done nothing. That gap is called impermanent loss, and the name misleads — it is only \"impermanent\" if the price happens to wander back to where it started. If it does not, the loss is entirely permanent.\n\nFees earned can outweigh it. They also might not. Providing liquidity is a real position with real risk, not a savings account.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "sw-4-block-3",
+            "text": "The Honest Comparison: The benchmark for an LP position is not \"did my balance go up\" — it is \"did I end up with more than if I had just held both tokens?\" A pool advertising a high rate on a volatile pair can still leave you behind that benchmark. Judge liquidity provision against holding, and treat any advertised yield as an estimate, never a promise.",
+            "type": "callout",
+            "order": 3,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "swaps-and-dexs",
+        "moduleId": "swaps-and-dexs-module-core",
+        "questions": [
+          {
+            "id": "sw-4-q1",
+            "type": "mcq",
+            "prompt": "What do you receive for depositing tokens into a liquidity pool?",
+            "options": [
+              {
+                "id": "sw-4-q1-opt-1",
+                "text": "LP tokens — a receipt for your share of the pool"
+              },
+              {
+                "id": "sw-4-q1-opt-2",
+                "text": "A fixed interest payment from the DEX"
+              },
+              {
+                "id": "sw-4-q1-opt-3",
+                "text": "An NFT proving you own the pool"
+              }
+            ]
+          },
+          {
+            "id": "sw-4-q2",
+            "type": "mcq",
+            "prompt": "What is impermanent loss?",
+            "options": [
+              {
+                "id": "sw-4-q2-opt-1",
+                "text": "Ending up with less value than if you had simply held both tokens"
+              },
+              {
+                "id": "sw-4-q2-opt-2",
+                "text": "A fee the pool charges liquidity providers to withdraw"
+              },
+              {
+                "id": "sw-4-q2-opt-3",
+                "text": "Tokens that are permanently locked and cannot be recovered"
+              }
+            ]
+          },
+          {
+            "id": "sw-4-q3",
+            "type": "short_text",
+            "prompt": "What should you compare an LP position's result against to judge it fairly?"
+          }
+        ],
+        "releaseId": "77d49842-16d7-4cd9-95ee-9edb8807e9de",
+        "contentHash": "024d435c8fd962daaca108b905b180d7424abed53e43ad58b141893a389e1b71"
+      },
+      {
+        "id": "sw-5",
+        "order": 5,
+        "title": "Routing & Aggregators — Why Your Trade Gets Split",
+        "blocks": [
+          {
+            "id": "sw-5-block-1",
+            "text": "There Is Not One Pool\n\nSolana hosts many DEXes — Orca, Raydium, Meteora and others — and each can run several pools for the very same pair, with different depths and different fees. There is no single \"SOL/USDC price\"; at any instant there are dozens of slightly different ones.\n\nWorse, the pair you actually want may not exist. Swapping one obscure token for another obscure token? Quite possibly no pool holds both. But a path might: token A to SOL, then SOL to token B. Two hops, still one transaction.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "sw-5-block-2",
+            "text": "What an Aggregator Does For You\n\nAn aggregator such as Jupiter sits above all of them. Ask it for a swap and it searches the routes: direct pools, two- and three-hop paths, and — for larger orders — splitting your trade across several pools at once so that no single pool absorbs the whole price impact.\n\nThat last part matters more than it sounds. Remember the curve: a 100-SOL order into one pool travels a long way along it. The same order split four ways across four pools barely moves any of them, and you keep much more of the quoted price.\n\nThe cost is complexity. More hops means more accounts touched and a slightly higher network fee. On anything but the smallest trade, the better route wins comfortably.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "sw-5-block-3",
+            "text": "Route Quality Is Price: Two apps quoting the same pair can hand you meaningfully different amounts purely because one found a better path. When you compare swap venues you are comparing routing engines as much as anything else — the pools underneath are largely the same public pools.",
+            "type": "callout",
+            "order": 3,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "swaps-and-dexs",
+        "moduleId": "swaps-and-dexs-module-core",
+        "questions": [
+          {
+            "id": "sw-5-q1",
+            "type": "mcq",
+            "prompt": "Why can an aggregator get you a better price on a large swap?",
+            "options": [
+              {
+                "id": "sw-5-q1-opt-1",
+                "text": "It splits the order across several pools so no single pool takes the full price impact"
+              },
+              {
+                "id": "sw-5-q1-opt-2",
+                "text": "It waits until the price improves before submitting"
+              },
+              {
+                "id": "sw-5-q1-opt-3",
+                "text": "It removes the network fee entirely"
+              }
+            ]
+          },
+          {
+            "id": "sw-5-q2",
+            "type": "mcq",
+            "prompt": "You want to swap token A for token B, but no pool holds both. What can a router do?",
+            "options": [
+              {
+                "id": "sw-5-q2-opt-1",
+                "text": "Route through an intermediate token — A to SOL, then SOL to B"
+              },
+              {
+                "id": "sw-5-q2-opt-2",
+                "text": "Create a brand new pool for you automatically"
+              },
+              {
+                "id": "sw-5-q2-opt-3",
+                "text": "Nothing — the swap is impossible"
+              }
+            ]
+          },
+          {
+            "id": "sw-5-q3",
+            "type": "short_text",
+            "prompt": "What is a multi-hop route?"
+          }
+        ],
+        "releaseId": "77d49842-16d7-4cd9-95ee-9edb8807e9de",
+        "contentHash": "44da6c734b9f19d02a92417aef5ab70f03ef84e0e71e213a568470e1854e91cf"
+      },
+      {
+        "id": "sw-6",
+        "order": 6,
+        "title": "MEV & Sandwich Attacks — Why Tolerance Is a Security Setting",
+        "blocks": [
+          {
+            "id": "sw-6-block-1",
+            "text": "Your Pending Trade Is Public\n\nA transaction you sign does not land instantly. It travels to validators and waits to be included in a block. In that window it is visible — and it states exactly what you intend to buy, how much of it, and the worst price you are willing to accept.\n\nSophisticated bots watch that flow constantly. Extracting profit from the ordering of transactions has a name: MEV, or maximal extractable value. Not all of it is hostile — arbitrage between pools is MEV, and it is the thing keeping pool prices honest. But one form is aimed squarely at you.",
+            "type": "paragraph",
+            "order": 1
+          },
+          {
+            "id": "sw-6-block-2",
+            "text": "The Sandwich\n\nA bot spots your pending buy. It buys the same token first, pushing the price up along the curve. Your trade then executes at that worse price, pushing it up further. The bot immediately sells into your buy and pockets the difference. Your order is the filling in the sandwich.\n\nNotice what made it possible: your slippage tolerance. It is a public statement of how much worse than quoted you will accept. A 1% tolerance caps what a bot can extract at roughly 1%. A 20% tolerance — the kind people set to stop swaps failing — tells the bot it may take up to 20%, and it will take very nearly all of it.\n\nThe defences are practical. Keep the tolerance as tight as the pool allows, prefer deep pools where the same attack costs a bot far more to mount, and use a swap app that supports private transaction submission so bots never see your order waiting.",
+            "type": "paragraph",
+            "order": 2
+          },
+          {
+            "id": "sw-6-block-3",
+            "text": "Tolerance Is a Security Setting: The slippage box is the one number that decides your worst case. Nothing else on the swap screen protects you as directly. Raising it to force a stubborn swap through is the same as raising the ceiling on what a sandwich bot is permitted to take — set it deliberately, not by trial and error.",
+            "type": "callout",
+            "order": 3,
+            "calloutTone": "info"
+          }
+        ],
+        "version": 1,
+        "courseId": "swaps-and-dexs",
+        "moduleId": "swaps-and-dexs-module-core",
+        "questions": [
+          {
+            "id": "sw-6-q1",
+            "type": "mcq",
+            "prompt": "In a sandwich attack, what does the bot do?",
+            "options": [
+              {
+                "id": "sw-6-q1-opt-1",
+                "text": "Buys just before your trade and sells just after, profiting from the price it pushed"
+              },
+              {
+                "id": "sw-6-q1-opt-2",
+                "text": "Steals the tokens directly out of your wallet"
+              },
+              {
+                "id": "sw-6-q1-opt-3",
+                "text": "Cancels your transaction before it reaches a validator"
+              }
+            ]
+          },
+          {
+            "id": "sw-6-q2",
+            "type": "mcq",
+            "prompt": "Why does a very high slippage tolerance make a sandwich attack worse?",
+            "options": [
+              {
+                "id": "sw-6-q2-opt-1",
+                "text": "It tells bots how much worse than quoted you will accept, so they take up to that much"
+              },
+              {
+                "id": "sw-6-q2-opt-2",
+                "text": "It makes your transaction take longer to confirm"
+              },
+              {
+                "id": "sw-6-q2-opt-3",
+                "text": "It increases the network fee you pay"
+              }
+            ]
+          },
+          {
+            "id": "sw-6-q3",
+            "type": "short_text",
+            "prompt": "Which setting most directly caps how much a sandwich bot can take from your trade?"
+          }
+        ],
+        "releaseId": "77d49842-16d7-4cd9-95ee-9edb8807e9de",
+        "contentHash": "99a6c7730f3102329a1de0d53e3a095d55dcd3e95342ece32b0e0b628ecd11e4"
       }
     ],
     "test-kitchen-module": [
