@@ -53,3 +53,21 @@ services:
         sync: false
       - key: LAPSE_SWEEP_BASE_URL
         sync: false
+
+  # Arena expiry sweep. Async 1v1 matches have a 24h window; without this cron
+  # an abandoned match never settles and both players' ladder rows stay stuck.
+  # Runs every 15 minutes because the window closes continuously rather than on
+  # a daily boundary. Idempotent + advisory-locked, so overlapping runs and
+  # retries are no-ops.
+  - type: cron
+    name: locked-in-arena-sweep
+    runtime: node
+    rootDir: backend
+    schedule: "*/15 * * * *"
+    buildCommand: npm ci
+    startCommand: npm run cron:arena-sweep
+    envVars:
+      - key: SCHEDULER_SECRET
+        sync: false
+      - key: ARENA_SWEEP_BASE_URL
+        sync: false

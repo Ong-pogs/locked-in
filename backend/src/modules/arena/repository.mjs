@@ -323,3 +323,130 @@ export async function submitAnswer(walletAddress, matchId, questionId, chosenOpt
     return { isCorrect, answered, correctCount: correct, totalMs, done: false, question: served.question };
   });
 }
+
+// ---------------------------------------------------------------------------
+// Open queue
+// ---------------------------------------------------------------------------
+
+// How long a queuer waits before we admit nobody is coming and offer the link
+// path instead. At current population that is the normal outcome, not an edge
+// case, so the UI must say so rather than spin forever.
+export const QUEUE_SUGGEST_LINK_AFTER_MS = 30_000;
+
+export async function enterQueue(walletAddress) {
+  return withTransaction(async (client) => {
+    // Claim the oldest waiting opponent. `skip locked` so two simultaneous
+    // joiners cannot both claim the same person.
+    const opponent = await client.query(
+      `select wallet_address from arena.queue
+        where wallet_address <> $1
+        order by enqueued_at
+        limit 1 for update skip locked`,
+      [walletAddress],
+    );
+
+    if (opponent.rowCount === 0) {
+      await client.query(
+        `insert into arena.queue (wallet_address) values ($1)
+         on conflict (wallet_address) do nothing`,
+        [walletAddress],
+      );
+      return { matched: false, suggestLink: false, waiting: true };
+    }
+
+    const other = opponent.rows[0].wallet_address;
+    await client.query(`delete from arena.queue where wallet_address = any($1::text[])`,
+      [[walletAddress, other]]);
+
+    const questionIds = await drawQuestionIds(client, other);
+    const inserted = await client.query(
+      `insert into arena.matches
+         (origin, status, creator, opponent, question_ids, expires_at)
+       values ('queue', 'ACTIVE', $1, $2, $3, now() + interval '24 hours')
+       returning id as "matchId"`,
+      [other, walletAddress, questionIds],
+    );
+    const matchId = inserted.rows[0].matchId;
+    await client.query(
+      `insert into arena.match_players (match_id, wallet_address) values ($1, $2), ($1, $3)`,
+      [matchId, other, walletAddress],
+    );
+    return { matched: true, matchId };
+  });
+}
+
+export async function pollQueue(walletAddress) {
+  // Paired already? The match will be ACTIVE with this wallet on it.
+  const m = await query(
+    `select id as "matchId" from arena.matches
+      where origin = 'queue' and status = 'ACTIVE'
+        and (creator = $1 or opponent = $1)
+      order by created_at desc limit 1`,
+    [walletAddress],
+  );
+  if (m.rowCount > 0) return { matched: true, matchId: m.rows[0].matchId };
+
+  const q = await query(
+    `select enqueued_at as "enqueuedAt" from arena.queue where wallet_address = $1`,
+    [walletAddress],
+  );
+  if (q.rowCount === 0) return { matched: false, waiting: false, suggestLink: false };
+
+  const waitedMs = Date.now() - new Date(q.rows[0].enqueuedAt).getTime();
+  return {
+    matched: false,
+    waiting: true,
+    waitedMs,
+    suggestLink: waitedMs >= QUEUE_SUGGEST_LINK_AFTER_MS,
+  };
+}
+
+export async function leaveQueue(walletAddress) {
+  await query(`delete from arena.queue where wallet_address = $1`, [walletAddress]);
+  return { left: true };
+}
+
+// ---------------------------------------------------------------------------
+// Ladder
+// ---------------------------------------------------------------------------
+
+export async function getLadder(season = 1, limit = 100) {
+  const capped = Math.min(Math.max(Number(limit) || 100, 1), 100);
+  const r = await query(
+    `select wallet_address as "walletAddress", rating, games, wins, losses, draws,
+            rank() over (order by rating desc, games desc)::int as rank
+       from arena.ratings
+      where season = $1 and games > 0
+      order by rating desc, games desc
+      limit $2`,
+    [season, capped],
+  );
+  return r.rows;
+}
+
+export async function getMyArena(walletAddress, season = 1) {
+  const r = await query(
+    `select rating, games, wins, losses, draws from arena.ratings
+      where wallet_address = $1 and season = $2`,
+    [walletAddress, season],
+  );
+  const recent = await query(
+    `select m.id as "matchId", m.status, m.origin, m.resolved_at as "resolvedAt",
+            e.delta, p.correct_count as "correctCount", p.total_ms as "totalMs"
+       from arena.matches m
+       join arena.match_players p on p.match_id = m.id and p.wallet_address = $1
+       left join arena.rating_events e on e.match_id = m.id and e.wallet_address = $1
+      where m.creator = $1 or m.opponent = $1
+      order by m.created_at desc limit 10`,
+    [walletAddress],
+  );
+  return {
+    // An unplayed wallet is 1200 with a clean record, not an error.
+    rating: r.rows[0]?.rating ?? 1200,
+    games: r.rows[0]?.games ?? 0,
+    wins: r.rows[0]?.wins ?? 0,
+    losses: r.rows[0]?.losses ?? 0,
+    draws: r.rows[0]?.draws ?? 0,
+    recentMatches: recent.rows,
+  };
+}
