@@ -7,7 +7,8 @@
 import { randomBytes } from 'node:crypto';
 import { query, getPool } from '../../lib/db.mjs';
 import { badRequest, notFound, conflict } from '../../lib/errors.mjs';
-import { ARENA_QUESTION_COUNT } from '../../lib/arenaScoring.mjs';
+import { ARENA_QUESTION_COUNT, ARENA_QUESTION_TIMEOUT_MS, clampElapsed } from '../../lib/arenaScoring.mjs';
+import { maybeSettleMatch } from './settle.mjs';
 
 // Crockford-style: no I, O, 0 or 1, so a code read aloud or retyped from a
 // screenshot cannot silently resolve to a different match.
@@ -153,4 +154,172 @@ export async function getMatchState(walletAddress, matchId) {
       submittedAt: p.submittedAt,
     })),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Play
+// ---------------------------------------------------------------------------
+
+// Deliberately omits correct_option_id. Arena questions are reused across many
+// matches, so a key that ships once is burned forever.
+function publicQuestion(row, order) {
+  return {
+    id: row.id,
+    order,
+    prompt: row.prompt,
+    options: row.options,
+    timeoutMs: ARENA_QUESTION_TIMEOUT_MS,
+  };
+}
+
+async function loadPlayerMatch(client, matchId, walletAddress) {
+  const r = await client.query(
+    `select m.id, m.status, m.question_ids as "questionIds",
+            m.expires_at as "expiresAt",
+            p.started_at as "startedAt", p.submitted_at as "submittedAt"
+       from arena.matches m
+       join arena.match_players p
+         on p.match_id = m.id and p.wallet_address = $2
+      where m.id = $1
+      for update of m`,
+    [matchId, walletAddress],
+  );
+  if (r.rowCount === 0) throw notFound('Match not found', 'ARENA_MATCH_NOT_FOUND');
+  const row = r.rows[0];
+  if (new Date(row.expiresAt).getTime() < Date.now()) {
+    throw conflict('This match has expired', 'ARENA_MATCH_EXPIRED');
+  }
+  return row;
+}
+
+// Inserts a placeholder row at SERVE time so served_at is stamped by the
+// server. The client's clock never contributes to the score.
+async function serveNext(client, matchId, walletAddress, questionIds) {
+  const answered = await client.query(
+    `select question_id, answered_at from arena.match_answers
+      where match_id = $1 and wallet_address = $2`,
+    [matchId, walletAddress],
+  );
+  const done = new Set(answered.rows.filter((r) => r.answered_at).map((r) => r.question_id));
+  const nextId = questionIds.find((id) => !done.has(id));
+  if (!nextId) {
+    return { question: null, answered: done.size, total: questionIds.length };
+  }
+
+  const order = questionIds.indexOf(nextId) + 1;
+  await client.query(
+    `insert into arena.match_answers
+       (match_id, wallet_address, question_id, question_order, served_at)
+     values ($1, $2, $3, $4, now())
+     on conflict (match_id, wallet_address, question_id) do nothing`,
+    [matchId, walletAddress, nextId, order],
+  );
+
+  const q = await client.query(
+    `select id, prompt, options from arena.questions where id = $1`,
+    [nextId],
+  );
+  return {
+    question: publicQuestion(q.rows[0], order),
+    answered: done.size,
+    total: questionIds.length,
+  };
+}
+
+export async function startAttempt(walletAddress, matchId) {
+  return withTransaction(async (client) => {
+    const match = await loadPlayerMatch(client, matchId, walletAddress);
+    if (match.startedAt) {
+      throw conflict('You have already started this match', 'ARENA_ALREADY_STARTED');
+    }
+    if (match.status !== 'ACTIVE') {
+      throw conflict('This match is not ready to play yet', 'ARENA_MATCH_NOT_ACTIVE');
+    }
+    await client.query(
+      `update arena.match_players set started_at = now()
+        where match_id = $1 and wallet_address = $2`,
+      [matchId, walletAddress],
+    );
+    const served = await serveNext(client, matchId, walletAddress, match.questionIds);
+    return { questionsTotal: match.questionIds.length, ...served };
+  });
+}
+
+export async function nextQuestion(walletAddress, matchId) {
+  return withTransaction(async (client) => {
+    const match = await loadPlayerMatch(client, matchId, walletAddress);
+    if (!match.startedAt) {
+      throw conflict('Start the match first', 'ARENA_NOT_STARTED');
+    }
+    const served = await serveNext(client, matchId, walletAddress, match.questionIds);
+    return { questionsTotal: match.questionIds.length, ...served };
+  });
+}
+
+export async function submitAnswer(walletAddress, matchId, questionId, chosenOptionId) {
+  if (!questionId || typeof questionId !== 'string') {
+    throw badRequest('questionId is required', 'ARENA_BAD_ANSWER');
+  }
+  return withTransaction(async (client) => {
+    const match = await loadPlayerMatch(client, matchId, walletAddress);
+    if (!match.startedAt) throw conflict('Start the match first', 'ARENA_NOT_STARTED');
+    if (match.submittedAt) throw conflict('You have already finished', 'ARENA_ALREADY_SUBMITTED');
+    if (!match.questionIds.includes(questionId)) {
+      throw badRequest('That question is not part of this match', 'ARENA_UNKNOWN_QUESTION');
+    }
+
+    const existing = await client.query(
+      `select served_at, answered_at from arena.match_answers
+        where match_id = $1 and wallet_address = $2 and question_id = $3
+        for update`,
+      [matchId, walletAddress, questionId],
+    );
+    if (existing.rowCount === 0) {
+      throw badRequest('That question has not been served to you', 'ARENA_QUESTION_NOT_SERVED');
+    }
+    if (existing.rows[0].answered_at) {
+      throw conflict('You already answered that question', 'ARENA_ALREADY_ANSWERED');
+    }
+
+    // Grading and timing are both server-side. The client sends only a choice.
+    const key = await client.query(
+      `select correct_option_id as "correctOptionId" from arena.questions where id = $1`,
+      [questionId],
+    );
+    const isCorrect = chosenOptionId != null
+      && chosenOptionId === key.rows[0].correctOptionId;
+    const elapsedMs = clampElapsed(Date.now() - new Date(existing.rows[0].served_at).getTime());
+
+    await client.query(
+      `update arena.match_answers
+          set answered_at = now(), chosen_option_id = $4,
+              is_correct = $5, elapsed_ms = $6
+        where match_id = $1 and wallet_address = $2 and question_id = $3`,
+      [matchId, walletAddress, questionId, chosenOptionId ?? null, isCorrect, elapsedMs],
+    );
+
+    const tally = await client.query(
+      `select count(*) filter (where answered_at is not null)::int as answered,
+              count(*) filter (where is_correct)::int as correct,
+              coalesce(sum(elapsed_ms) filter (where answered_at is not null), 0)::int as "totalMs"
+         from arena.match_answers where match_id = $1 and wallet_address = $2`,
+      [matchId, walletAddress],
+    );
+    const { answered, correct, totalMs } = tally.rows[0];
+    const done = answered >= match.questionIds.length;
+
+    if (done) {
+      await client.query(
+        `update arena.match_players
+            set submitted_at = now(), correct_count = $3, total_ms = $4
+          where match_id = $1 and wallet_address = $2`,
+        [matchId, walletAddress, correct, totalMs],
+      );
+      await maybeSettleMatch(client, matchId);
+      return { isCorrect, answered, correctCount: correct, totalMs, done: true, question: null };
+    }
+
+    const served = await serveNext(client, matchId, walletAddress, match.questionIds);
+    return { isCorrect, answered, correctCount: correct, totalMs, done: false, question: served.question };
+  });
 }

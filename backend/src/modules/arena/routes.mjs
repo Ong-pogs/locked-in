@@ -1,6 +1,9 @@
 import { requireAccessAuth } from '../../plugins/auth.mjs';
 import { keyGenerator } from '../../plugins/rateKey.mjs';
-import { createLinkMatch, joinMatchByCode, getMatchState } from './repository.mjs';
+import {
+  createLinkMatch, joinMatchByCode, getMatchState,
+  startAttempt, nextQuestion, submitAnswer,
+} from './repository.mjs';
 
 export async function arenaRoutes(app) {
   app.post(
@@ -28,5 +31,27 @@ export async function arenaRoutes(app) {
     '/v1/arena/matches/:id',
     { preHandler: requireAccessAuth },
     async (request) => getMatchState(request.auth.walletAddress, request.params.id),
+  );
+  app.post(
+    '/v1/arena/matches/:id/start',
+    { preHandler: requireAccessAuth },
+    async (request) => startAttempt(request.auth.walletAddress, request.params.id),
+  );
+
+  app.get(
+    '/v1/arena/matches/:id/question',
+    { preHandler: requireAccessAuth },
+    async (request) => nextQuestion(request.auth.walletAddress, request.params.id),
+  );
+
+  app.post(
+    '/v1/arena/matches/:id/answer',
+    { preHandler: requireAccessAuth },
+    async (request) => submitAnswer(
+      request.auth.walletAddress,
+      request.params.id,
+      request.body?.questionId,
+      request.body?.chosenOptionId,
+    ),
   );
 }
