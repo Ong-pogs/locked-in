@@ -18,3 +18,7 @@ export function unauthorized(message, code = 'UNAUTHORIZED') {
 export function notFound(message, code = 'NOT_FOUND') {
   return new HttpError(404, message, code);
 }
+
+export function conflict(message, code = 'CONFLICT') {
+  return new HttpError(409, message, code);
+}

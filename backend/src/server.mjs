@@ -12,6 +12,7 @@ import { yieldRoutes } from './modules/yield/routes.mjs';
 import { locksRoutes } from './modules/locks/routes.mjs';
 import { dripRoutes } from './modules/drip/routes.mjs';
 import { walletRoutes } from './modules/wallet/routes.mjs';
+import { arenaRoutes } from './modules/arena/routes.mjs';
 import { registerLeaderboardSnapshotWorker } from './workers/leaderboardSnapshotWorker.mjs';
 import { registerRuntimeSchedulerWorker } from './workers/runtimeSchedulerWorker.mjs';
 import { registerUnlockIndexerWorker } from './workers/unlockIndexerWorker.mjs';
@@ -176,6 +177,7 @@ export function buildServer() {
   app.register(locksRoutes);
   app.register(dripRoutes);
   app.register(walletRoutes);
+  app.register(arenaRoutes);
   registerLeaderboardSnapshotWorker(app);
   registerRuntimeSchedulerWorker(app);
   registerUnlockIndexerWorker(app);
