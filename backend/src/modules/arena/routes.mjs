@@ -83,6 +83,13 @@ export async function arenaRoutes(app) {
     async (request) => pollQueue(request.auth.walletAddress),
   );
 
+  // POST alias: the web-app's shared httpClient only speaks GET/POST.
+  app.post(
+    '/v1/arena/queue/leave',
+    { preHandler: requireAccessAuth },
+    async (request) => leaveQueue(request.auth.walletAddress),
+  );
+
   app.delete(
     '/v1/arena/queue',
     { preHandler: requireAccessAuth },
