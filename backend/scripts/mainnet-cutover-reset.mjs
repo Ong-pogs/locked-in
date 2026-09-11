@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // Mainnet cutover reset — purge devnet-era per-user state, preserve all content.
 //
 // This is NOT a migration and MUST NOT be placed in backend/sql. Migrations run

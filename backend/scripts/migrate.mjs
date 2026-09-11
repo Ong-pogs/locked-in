@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // Schema-migrations runner + tracker.
 //
 // Binding spec: docs/superpowers/rulings/2026-07-10-backend-round2-rulings.md,
