@@ -23,7 +23,19 @@ async function seedBank() {
   }
 }
 
-async function playAll(matchId, headers, optionId) {
+async function keyFor(questionId) {
+  const r = await db.query(
+    'select correct_option_id as k from arena.questions where id = $1', [questionId]);
+  return r.rows[0].k;
+}
+
+async function wrongFor(questionId) {
+  const r = await db.query(
+    'select options, correct_option_id as k from arena.questions where id = $1', [questionId]);
+  return r.rows[0].options.map((o) => o.id).find((id) => id !== r.rows[0].k);
+}
+
+async function playAll(matchId, headers, mode) {
   const started = (await app.inject({
     method: 'POST', url: `/v1/arena/matches/${matchId}/start`, headers,
   })).json();
@@ -31,7 +43,10 @@ async function playAll(matchId, headers, optionId) {
   for (let i = 0; i < 7; i++) {
     const r = (await app.inject({
       method: 'POST', url: `/v1/arena/matches/${matchId}/answer`, headers,
-      payload: { questionId: current.id, chosenOptionId: optionId },
+      payload: {
+        questionId: current.id,
+        chosenOptionId: mode === 'correct' ? await keyFor(current.id) : await wrongFor(current.id),
+      },
     })).json();
     current = r.question ?? current;
   }
@@ -45,8 +60,8 @@ async function decidedMatch() {
   const lAuth = await getTestAuthHeaders(loser);
   const created = (await app.inject({ method: 'POST', url: '/v1/arena/matches', headers: wAuth })).json();
   await app.inject({ method: 'POST', url: `/v1/arena/join/${created.joinCode}`, headers: lAuth });
-  await playAll(created.matchId, wAuth, 'a');
-  await playAll(created.matchId, lAuth, 'b');
+  await playAll(created.matchId, wAuth, 'correct');
+  await playAll(created.matchId, lAuth, 'wrong');
   return { matchId: created.matchId, winner, loser };
 }
 

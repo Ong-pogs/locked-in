@@ -9,6 +9,7 @@ import { createTestServer, closeTestServer } from '../../helpers/test-server.mjs
 import { generateTestWallet, getTestAuthHeaders } from '../../helpers/test-auth.mjs';
 
 let app;
+let db;
 let aliceAuth;
 let bobAuth;
 
@@ -42,17 +43,33 @@ async function makeActiveMatch() {
   return created.matchId;
 }
 
-/** Plays a full 7-question attempt, always picking `optionId`. */
-async function playAll(matchId, headers, optionId = 'a') {
+// The draw prefers unseen questions, so a match may contain anything in the
+// bank. Tests therefore look the key up rather than assuming a fixed option —
+// otherwise they silently depend on which fixtures happen to be seeded.
+async function keyFor(questionId) {
+  const r = await db.query(
+    'select correct_option_id as k from arena.questions where id = $1', [questionId]);
+  return r.rows[0].k;
+}
+
+async function wrongFor(questionId) {
+  const r = await db.query(
+    'select options, correct_option_id as k from arena.questions where id = $1', [questionId]);
+  return r.rows[0].options.map((o) => o.id).find((id) => id !== r.rows[0].k);
+}
+
+/** Plays a full attempt. mode 'correct' answers every question right, 'wrong' every one wrong. */
+async function playAll(matchId, headers, mode = 'correct') {
   const started = (await app.inject({
     method: 'POST', url: `/v1/arena/matches/${matchId}/start`, headers,
   })).json();
   let current = started.question;
   let last;
   for (let i = 0; i < 7; i++) {
+    const pick = mode === 'correct' ? await keyFor(current.id) : await wrongFor(current.id);
     last = (await app.inject({
       method: 'POST', url: `/v1/arena/matches/${matchId}/answer`, headers,
-      payload: { questionId: current.id, chosenOptionId: optionId },
+      payload: { questionId: current.id, chosenOptionId: pick },
     })).json();
     current = last.question ?? current;
   }
@@ -61,6 +78,7 @@ async function playAll(matchId, headers, optionId = 'a') {
 
 beforeAll(async () => {
   app = await createTestServer();
+  db = await import('../../../src/lib/db.mjs');
   await seedBank();
   aliceAuth = await getTestAuthHeaders(generateTestWallet());
   bobAuth = await getTestAuthHeaders(generateTestWallet());
@@ -104,7 +122,7 @@ describe('arena play', () => {
     })).json();
     const res = await app.inject({
       method: 'POST', url: `/v1/arena/matches/${matchId}/answer`, headers: aliceAuth,
-      payload: { questionId: started.question.id, chosenOptionId: 'a' },
+      payload: { questionId: started.question.id, chosenOptionId: await keyFor(started.question.id) },
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
@@ -121,7 +139,7 @@ describe('arena play', () => {
     })).json();
     const res = await app.inject({
       method: 'POST', url: `/v1/arena/matches/${matchId}/answer`, headers: aliceAuth,
-      payload: { questionId: started.question.id, chosenOptionId: 'b' },
+      payload: { questionId: started.question.id, chosenOptionId: await wrongFor(started.question.id) },
     });
     expect(res.json().isCorrect).toBe(false);
   });
@@ -131,7 +149,7 @@ describe('arena play', () => {
     const started = (await app.inject({
       method: 'POST', url: `/v1/arena/matches/${matchId}/start`, headers: aliceAuth,
     })).json();
-    const payload = { questionId: started.question.id, chosenOptionId: 'a' };
+    const payload = { questionId: started.question.id, chosenOptionId: await keyFor(started.question.id) };
     await app.inject({ method: 'POST', url: `/v1/arena/matches/${matchId}/answer`, headers: aliceAuth, payload });
     const res = await app.inject({
       method: 'POST', url: `/v1/arena/matches/${matchId}/answer`, headers: aliceAuth, payload,
@@ -174,8 +192,8 @@ describe('arena play', () => {
 
   it('resolves the match once both sides finish', async () => {
     const matchId = await makeActiveMatch();
-    await playAll(matchId, aliceAuth, 'a');   // 7 correct
-    await playAll(matchId, bobAuth, 'b');     // 0 correct
+    await playAll(matchId, aliceAuth, 'correct');
+    await playAll(matchId, bobAuth, 'wrong');
     const body = (await app.inject({
       method: 'GET', url: `/v1/arena/matches/${matchId}`, headers: aliceAuth,
     })).json();
