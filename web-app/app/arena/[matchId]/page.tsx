@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { T, ScreenBackground } from '../../../components/theme';
 import { fetchWithAuth } from '../../../services/api/httpClient';
-import { answerQuestion, getMatch, startMatch } from '../../../services/api/arena/arenaApi';
+import { answerQuestion, getMatch, getMyArena, startMatch } from '../../../services/api/arena/arenaApi';
+import { useUserStore } from '../../../stores/userStore';
 import type { ArenaMatchState, ArenaQuestion } from '../../../types/arena';
 
 type Phase = 'loading' | 'ready' | 'playing' | 'waiting' | 'resolved' | 'error';
@@ -21,7 +22,9 @@ export default function ArenaMatchPage() {
   const [total, setTotal] = useState(7);
   const [remainingMs, setRemainingMs] = useState(20_000);
   const [message, setMessage] = useState<string | null>(null);
+  const [ratingDelta, setRatingDelta] = useState<number | null>(null);
   const submitting = useRef(false);
+  const myWallet = useUserStore((st) => st.walletAddress);
 
   const loadMatch = useCallback(async () => {
     try {
@@ -40,6 +43,18 @@ export default function ArenaMatchPage() {
   }, [matchId]);
 
   useEffect(() => { loadMatch(); }, [loadMatch]);
+
+  // The delta lives on the profile's recent-match list, not on the match
+  // itself — the match endpoint deliberately exposes no rating data.
+  useEffect(() => {
+    if (phase !== 'resolved') return;
+    fetchWithAuth((t) => getMyArena(t))
+      .then((profile) => {
+        const row = profile.recentMatches.find((m) => m.matchId === matchId);
+        if (row?.delta != null) setRatingDelta(row.delta);
+      })
+      .catch(() => setRatingDelta(null));
+  }, [phase, matchId]);
 
   const submit = useCallback(async (questionId: string, optionId: string | null) => {
     if (submitting.current) return;
@@ -92,6 +107,25 @@ export default function ArenaMatchPage() {
     }
   }
 
+  const me = match?.players.find((p) => p.walletAddress === myWallet) ?? null;
+  const them = match?.players.find((p) => p.walletAddress !== myWallet) ?? null;
+  let outcome: 'won' | 'lost' | 'draw' = 'draw';
+  if (me && them) {
+    if ((me.correctCount ?? 0) !== (them.correctCount ?? 0)) {
+      outcome = (me.correctCount ?? 0) > (them.correctCount ?? 0) ? 'won' : 'lost';
+    } else if ((me.totalMs ?? 0) !== (them.totalMs ?? 0)) {
+      outcome = (me.totalMs ?? 0) < (them.totalMs ?? 0) ? 'won' : 'lost';
+    }
+  }
+
+  const winnerWallet = me && them
+    ? ((me.correctCount ?? 0) !== (them.correctCount ?? 0)
+        ? ((me.correctCount ?? 0) > (them.correctCount ?? 0) ? me.walletAddress : them.walletAddress)
+        : ((me.totalMs ?? 0) !== (them.totalMs ?? 0)
+            ? ((me.totalMs ?? 0) < (them.totalMs ?? 0) ? me.walletAddress : them.walletAddress)
+            : null))
+    : null;
+
   const seconds = Math.ceil(remainingMs / 1000);
 
   return (
@@ -126,12 +160,21 @@ export default function ArenaMatchPage() {
 
         {phase === 'playing' && question && (
           <div>
-            <div className="mb-3 flex items-center justify-between">
-              <span className="font-pixel-mono text-[11px]" style={{ color: T.textMuted }}>
-                {answered + 1} / {total}
+            {/* Progress sits on its own solid strip: over the ornate frame
+                art, plain muted text was effectively unreadable. */}
+            <div
+              className="mb-4 flex items-center justify-between rounded-md px-3 py-2"
+              style={{ background: 'rgba(6,6,12,0.75)', border: `1px solid ${T.borderDormant}` }}
+            >
+              <span
+                className="font-pixel-mono text-[12px]"
+                style={{ color: T.textPrimary }}
+                data-testid="arena-progress"
+              >
+                Question {answered + 1} of {total}
               </span>
               <span
-                className="font-pixel text-lg"
+                className="font-pixel text-xl"
                 style={{ color: seconds <= 5 ? T.crimson : T.teal }}
                 data-testid="arena-countdown"
               >
@@ -139,12 +182,18 @@ export default function ArenaMatchPage() {
               </span>
             </div>
 
+            {/* The prompt has to read as a QUESTION, not as a fourth option —
+                same-styled cards made it ambiguous at a glance. */}
             <div
-              className="rounded-lg p-4"
-              style={{ background: T.bgCard, border: `1px solid ${T.borderAlive}` }}
+              className="rounded-lg p-5"
+              style={{
+                background: 'rgba(10,8,18,0.92)',
+                border: `1px solid ${T.borderAlive}`,
+                borderLeft: `3px solid ${T.amber}`,
+              }}
             >
               <p
-                className="text-[15px] leading-relaxed"
+                className="text-[17px] font-semibold leading-relaxed"
                 style={{ color: T.textPrimary }}
                 data-testid="arena-question-prompt"
               >
@@ -152,21 +201,34 @@ export default function ArenaMatchPage() {
               </p>
             </div>
 
-            <div className="mt-3 grid gap-2">
+            <div
+              className="mt-2 mb-2 font-pixel-mono text-[10px] uppercase tracking-[1px]"
+              style={{ color: T.textMuted }}
+            >
+              Choose one
+            </div>
+
+            <div className="grid gap-2">
               {question.options.map((option, i) => (
                 <button
                   key={option.id}
                   type="button"
                   onClick={() => submit(question.id, option.id)}
                   data-testid={`arena-option-${i}`}
-                  className="rounded-lg px-4 py-3 text-left text-[13px]"
+                  className="flex items-center gap-3 rounded-lg px-4 py-3 text-left text-[14px] transition-colors hover:brightness-125"
                   style={{
                     background: T.bgCardActive,
                     border: `1px solid ${T.borderDormant}`,
                     color: T.textPrimary,
                   }}
                 >
-                  {option.text}
+                  <span
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded font-pixel-mono text-[11px]"
+                    style={{ background: 'rgba(255,255,255,0.06)', color: T.textMuted }}
+                  >
+                    {String.fromCharCode(65 + i)}
+                  </span>
+                  <span>{option.text}</span>
                 </button>
               ))}
             </div>
@@ -194,7 +256,27 @@ export default function ArenaMatchPage() {
 
         {phase === 'resolved' && match && (
           <div data-testid="arena-match-result">
-            <h1 className="font-pixel text-lg" style={{ color: T.amber }}>Result</h1>
+            {/* A list of two rows made the reader do the comparison themselves.
+                State the outcome first, then the evidence. */}
+            <h1
+              className="font-pixel text-2xl"
+              style={{
+                color: outcome === 'won' ? T.green : outcome === 'lost' ? T.crimson : T.amber,
+              }}
+              data-testid="arena-outcome"
+            >
+              {outcome === 'won' ? 'You won' : outcome === 'lost' ? 'You lost' : 'Draw'}
+            </h1>
+            {ratingDelta !== null && (
+              <div
+                className="mt-1 font-pixel-mono text-[13px]"
+                style={{ color: ratingDelta > 0 ? T.green : ratingDelta < 0 ? T.crimson : T.textMuted }}
+                data-testid="arena-rating-delta"
+              >
+                {ratingDelta > 0 ? '+' : ''}{ratingDelta} rating
+                {ratingDelta === 0 ? ' (evenly matched)' : ''}
+              </div>
+            )}
             <div
               className="mt-3 overflow-hidden rounded-lg"
               style={{ background: T.bgCard, border: `1px solid ${T.borderAlive}` }}
@@ -207,13 +289,18 @@ export default function ArenaMatchPage() {
                   data-testid="arena-result-row"
                 >
                   <span className="font-pixel-mono text-[11px]" style={{ color: T.textPrimary }}>
-                    {p.walletAddress.slice(0, 4)}…{p.walletAddress.slice(-4)}
+                    {p.walletAddress === myWallet
+                      ? 'You'
+                      : `${p.walletAddress.slice(0, 4)}…${p.walletAddress.slice(-4)}`}
                     {p.forfeited ? ' (did not play)' : ''}
+                    {winnerWallet === p.walletAddress && (
+                      <span className="ml-2" style={{ color: T.green }}>winner</span>
+                    )}
                   </span>
                   <span className="font-pixel text-[14px]" style={{ color: T.teal }}>
                     {p.correctCount ?? 0}/{total}
                     <span className="ml-2 font-pixel-mono text-[11px]" style={{ color: T.textMuted }}>
-                      {p.totalMs != null ? `${(p.totalMs / 1000).toFixed(1)}s` : '—'}
+                      {p.totalMs != null ? `${(p.totalMs / 1000).toFixed(2)}s` : '—'}
                     </span>
                   </span>
                 </div>

@@ -33,6 +33,9 @@ const PUBLIC_ROUTES = [
   '/terms',
   '/privacy',
   '/risk',
+  // The arena ladder is browsable logged-out (see proxy.ts). The invite
+  // landing is handled by the prefix test below because it carries a [code].
+  '/arena',
 ];
 
 // Routes allowed during onboarding (before active lock)
@@ -72,6 +75,9 @@ function useFlowGuard(hydrated: boolean) {
 
     // Skip guard on public routes
     if (PUBLIC_ROUTES.includes(pathname)) return;
+    // Arena invites are the growth loop and must render for a logged-out
+    // visitor — prefix match because of the dynamic [code] segment.
+    if (pathname.startsWith('/arena/join/')) return;
 
     // Gate 1: No wallet/JWT → village hub (they can browse without auth)
     if (!walletAddress || !isAuthenticated) {
