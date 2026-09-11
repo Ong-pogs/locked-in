@@ -5,7 +5,8 @@
 // anyone to sign in.
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { T, ScreenBackground } from '../../../../components/theme';
+import { T } from '../../../../components/theme';
+import { ArenaBackground } from '../../ArenaBackground';
 import { fetchWithAuth } from '../../../../services/api/httpClient';
 import { joinByCode } from '../../../../services/api/arena/arenaApi';
 import { useUserStore } from '../../../../stores/userStore';
@@ -47,7 +48,7 @@ export default function ArenaJoinPage() {
   }, [walletAddress]);
 
   return (
-    <ScreenBackground>
+    <ArenaBackground>
       <div className="mx-auto w-full max-w-md px-4 py-12 text-center">
         <div
           className="font-pixel-mono text-[10px] uppercase tracking-[2px]"
@@ -116,6 +117,6 @@ export default function ArenaJoinPage() {
           </div>
         )}
       </div>
-    </ScreenBackground>
+    </ArenaBackground>
   );
 }

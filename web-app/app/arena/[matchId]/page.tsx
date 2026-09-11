@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { T, ScreenBackground } from '../../../components/theme';
+import { T } from '../../../components/theme';
+import { ArenaBackground } from '../ArenaBackground';
 import { fetchWithAuth } from '../../../services/api/httpClient';
 import { answerQuestion, getMatch, getMyArena, startMatch } from '../../../services/api/arena/arenaApi';
 import { useUserStore } from '../../../stores/userStore';
@@ -129,7 +130,7 @@ export default function ArenaMatchPage() {
   const seconds = Math.ceil(remainingMs / 1000);
 
   return (
-    <ScreenBackground>
+    <ArenaBackground>
       <div className="mx-auto w-full max-w-xl px-4 py-8">
         {phase === 'loading' && (
           <div className="text-[12px]" style={{ color: T.textMuted }}>Loading match…</div>
@@ -321,6 +322,6 @@ export default function ArenaMatchPage() {
           <div className="mt-4 text-[12px]" style={{ color: T.crimson }}>{message}</div>
         )}
       </div>
-    </ScreenBackground>
+    </ArenaBackground>
   );
 }
