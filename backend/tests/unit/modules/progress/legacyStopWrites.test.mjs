@@ -27,6 +27,17 @@ const DOOMED_COLUMNS = [
   'saver_recovery_mode',
 ];
 
+// Read the repository source with line endings normalised to LF.
+//
+// core.autocrlf=true checks the file out with CRLF on Windows, and the scan
+// below looks for a line that is exactly "}" — which never matches once every
+// newline is a CR/LF pair. Without this, extractFunction throws on the first
+// function and the whole guard stops checking the columns it exists to guard.
+async function readSource() {
+  const raw = await readFile(repositoryPath, 'utf8');
+  return raw.split('\r\n').join('\n');
+}
+
 // Extract a top-level function's full text: from its declaration line to the
 // next line that is exactly '}' at column 0.
 function extractFunction(source, declaration) {
@@ -39,7 +50,7 @@ function extractFunction(source, declaration) {
 
 describe('legacy stop-writes guard (T1)', () => {
   it('ensure/completion/scheduler/enrollments SQL references none of the ten doomed columns', async () => {
-    const source = await readFile(repositoryPath, 'utf8');
+    const source = await readSource();
     const functions = {
       ensureCourseRuntimeState: extractFunction(source, 'async function ensureCourseRuntimeState('),
       applyVerifiedCompletionToCourseRuntime: extractFunction(
@@ -62,7 +73,7 @@ describe('legacy stop-writes guard (T1)', () => {
   });
 
   it('the completion UPDATE sets exactly day + streak + updated_at', async () => {
-    const source = await readFile(repositoryPath, 'utf8');
+    const source = await readSource();
     const fn = extractFunction(source, 'async function applyVerifiedCompletionToCourseRuntime(');
     const updateMatch = fn.match(/update lesson\.user_course_runtime_state\s+set ([\s\S]*?)where/);
     expect(updateMatch).not.toBeNull();

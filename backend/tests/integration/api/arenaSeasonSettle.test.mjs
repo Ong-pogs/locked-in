@@ -1,0 +1,307 @@
+// Settlement end to end: a lost season takes exactly one tier off the voucher
+// the loser's course eventually signs, and takes nothing off anyone else's.
+//
+// The last test in this file is the one the whole feature exists for — it
+// decodes the 91 signed bytes and asserts the bps the program will actually
+// read. If that says 10000, everything else here is decoration.
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { PublicKey } from '@solana/web3.js';
+import { createTestServer, closeTestServer } from '../../helpers/test-server.mjs';
+import { generateTestWallet } from '../../helpers/test-auth.mjs';
+import { __setLockV2FreshReadOverride, deriveLockPdaServer } from '../../../src/lib/lockPosition.mjs';
+import { runArenaSeasonSweep } from '../../../src/lib/arenaSeasonSweep.mjs';
+import {
+  readArenaPenaltyTiers,
+  issueCourseCompletionVoucher,
+  persistCompletionVoucher,
+  getStoredCompletionVoucher,
+} from '../../../src/modules/progress/repository.mjs';
+import { effectiveYieldBps } from '../../../src/lib/claimVoucher.mjs';
+
+let app;
+let db;
+
+const COURSE = 'test-kitchen';
+const OTHER_COURSE = 'swaps-and-dexs';
+const OTHER_LOCK = 'Lock2222222222222222222222222222222222222';
+const SEASON = 909;
+const quiet = { log: { error: () => {} } };
+
+// The entry's lock_address must be the REAL derived PDA, not a placeholder:
+// in production it comes from readLockV2AccountFresh, and the voucher signer
+// looks the penalty up by the PDA it derives itself. A fake address here would
+// make the join silently miss and the test would pass while production didn't.
+const lockFor = (wallet, courseId = COURSE) =>
+  deriveLockPdaServer(process.env.VAULT_V2_PROGRAM_ID, wallet, courseId).toBase58();
+
+const liveLock = (wallet, status = 'ACTIVE', lockAddress = null) => async () => ({
+  mismatch: false,
+  status,
+  principal: status === 'ACTIVE' ? 10_000_000n : 0n,
+  lockStartTs: 0,
+  lockAddress: lockAddress ?? lockFor(wallet),
+});
+
+/** A CLOSED season holding one PENDING entry whose counted links sum to delta. */
+async function seedClosedSeasonWithEntry(wallet, { stakedDelta, counted = true }) {
+  await db.query(
+    `insert into arena.seasons (id, starts_at, ends_at, status)
+     values ($1, now() - interval '31 days', now() - interval '1 day', 'CLOSED')
+     on conflict (id) do update set status = 'CLOSED'`,
+    [SEASON],
+  );
+  await db.query(
+    `insert into arena.season_entries
+       (stake_season_id, wallet_address, course_id, lock_address, consent_version,
+        rating_at_start, outcome)
+     values ($1, $2, $3, $4, 'v1', 1200, 'PENDING')
+     on conflict do nothing`,
+    [SEASON, wallet, COURSE, lockFor(wallet)],
+  );
+  const m = await db.query(
+    `insert into arena.matches
+       (origin, status, creator, opponent, question_ids, expires_at, resolved_at)
+     values ('queue', 'COMPLETE', $1, $2, array['x'], now(), now())
+     returning id`,
+    [wallet, generateTestWallet()],
+  );
+  const matchId = m.rows[0].id;
+  await db.query(
+    `insert into arena.rating_events
+       (match_id, wallet_address, rating_before, rating_after, delta)
+     values ($1, $2, 1200, $3, $4)`,
+    [matchId, wallet, 1200 + stakedDelta, stakedDelta],
+  );
+  await db.query(
+    `insert into arena.season_match_links (stake_season_id, match_id, wallet_address, counted)
+     values ($1, $2, $3, $4)`,
+    [SEASON, matchId, wallet, counted],
+  );
+  return matchId;
+}
+
+async function entryOf(wallet) {
+  const r = await db.query(
+    `select outcome, staked_delta, voided_reason, rating_at_end, settled_at
+       from arena.season_entries
+      where stake_season_id = $1 and wallet_address = $2`,
+    [SEASON, wallet],
+  );
+  return r.rows[0];
+}
+
+/** Mark the course complete so a voucher can legitimately be signed for it. */
+async function completeCourse(wallet, courseId = COURSE) {
+  const lessons = await db.query(
+    `select distinct pl.lesson_id
+       from lesson.published_modules pm
+       join lesson.published_lessons pl
+         on pl.module_id = pm.module_id and pl.release_id = pm.release_id
+      where pm.course_id = $1`,
+    [courseId],
+  );
+  for (const { lesson_id } of lessons.rows) {
+    await db.query(
+      `insert into lesson.user_lesson_progress
+         (wallet_address, lesson_id, completed, completed_at, updated_at)
+       values ($1, $2, true, now(), now())
+       on conflict (wallet_address, lesson_id)
+       do update set completed = true, completed_at = now(), updated_at = now()`,
+      [wallet, lesson_id],
+    );
+  }
+  // The freeze stamp too: getStoredCompletionVoucher serves nothing without it
+  // (branch (a)), so a test that only wrote lesson rows would never exercise
+  // the stored-and-replayed path.
+  await db.query(
+    `insert into lesson.user_course_runtime_state
+       (wallet_address, course_id, fuel_cap, course_completed_at)
+     values ($1, $2, 7, now())
+     on conflict (wallet_address, course_id)
+     do update set course_completed_at = coalesce(
+       lesson.user_course_runtime_state.course_completed_at, now())`,
+    [wallet, courseId],
+  );
+  return lessons.rows.length;
+}
+
+beforeAll(async () => {
+  app = await createTestServer();
+  db = await import('../../../src/lib/db.mjs');
+});
+
+afterAll(async () => {
+  __setLockV2FreshReadOverride(null);
+  await closeTestServer(app);
+});
+
+describe('season settlement', () => {
+  it('a negative staked delta forfeits exactly one tier', async () => {
+    const wallet = generateTestWallet();
+    await seedClosedSeasonWithEntry(wallet, { stakedDelta: -16 });
+    __setLockV2FreshReadOverride(liveLock(wallet));
+
+    await runArenaSeasonSweep(quiet);
+
+    const e = await entryOf(wallet);
+    expect(e.outcome).toBe('FORFEIT');
+    expect(e.staked_delta).toBe(-16);
+    expect(e.settled_at).not.toBeNull();
+    expect(await readArenaPenaltyTiers(wallet, COURSE, lockFor(wallet))).toBe(1);
+    expect(effectiveYieldBps({ lapseCount: 0, arenaPenaltyTiers: 1 })).toBe(5_000);
+  });
+
+  it('a positive staked delta keeps the tier', async () => {
+    const wallet = generateTestWallet();
+    await seedClosedSeasonWithEntry(wallet, { stakedDelta: 24 });
+    __setLockV2FreshReadOverride(liveLock(wallet));
+
+    await runArenaSeasonSweep(quiet);
+
+    expect((await entryOf(wallet)).outcome).toBe('KEPT');
+    expect(await readArenaPenaltyTiers(wallet, COURSE, lockFor(wallet))).toBe(0);
+  });
+
+  it('an uncounted link contributes nothing — the pair cap actually bites', async () => {
+    const wallet = generateTestWallet();
+    // The only link is a 3rd-meeting loss, written counted = false.
+    await seedClosedSeasonWithEntry(wallet, { stakedDelta: -48, counted: false });
+    __setLockV2FreshReadOverride(liveLock(wallet));
+
+    await runArenaSeasonSweep(quiet);
+
+    const e = await entryOf(wallet);
+    expect(e.staked_delta).toBe(0);
+    expect(e.outcome).toBe('KEPT');
+  });
+
+  it('a closed lock voids rather than forfeits', async () => {
+    const wallet = generateTestWallet();
+    await seedClosedSeasonWithEntry(wallet, { stakedDelta: -48 });
+    __setLockV2FreshReadOverride(liveLock(wallet, 'CLOSED'));
+
+    await runArenaSeasonSweep(quiet);
+
+    const e = await entryOf(wallet);
+    expect(e.outcome).toBe('VOID');
+    expect(e.voided_reason).toBe('LOCK_NOT_ACTIVE');
+    // VOID costs nothing. Nobody is penalised retroactively.
+    expect(await readArenaPenaltyTiers(wallet, COURSE, lockFor(wallet))).toBe(0);
+  });
+
+  it('a different lock on the same course voids rather than forfeits', async () => {
+    const wallet = generateTestWallet();
+    await seedClosedSeasonWithEntry(wallet, { stakedDelta: -48 });
+    // Relocked under a different PDA — the staked position is gone.
+    __setLockV2FreshReadOverride(liveLock(wallet, 'ACTIVE', OTHER_LOCK));
+
+    await runArenaSeasonSweep(quiet);
+
+    expect((await entryOf(wallet)).outcome).toBe('VOID');
+  });
+
+  it('an unreadable chain leaves the entry PENDING rather than guessing', async () => {
+    const wallet = generateTestWallet();
+    await seedClosedSeasonWithEntry(wallet, { stakedDelta: -16 });
+    __setLockV2FreshReadOverride(async () => { throw new Error('rpc down'); });
+
+    const r = await runArenaSeasonSweep(quiet);
+
+    expect((await entryOf(wallet)).outcome).toBe('PENDING');
+    expect(r.failed).toBeGreaterThan(0);
+  });
+
+  it('settles exactly once — a second sweep does not re-settle', async () => {
+    const wallet = generateTestWallet();
+    await seedClosedSeasonWithEntry(wallet, { stakedDelta: -16 });
+    __setLockV2FreshReadOverride(liveLock(wallet));
+
+    await runArenaSeasonSweep(quiet);
+    const first = await entryOf(wallet);
+    await runArenaSeasonSweep(quiet);
+    const second = await entryOf(wallet);
+
+    expect(second.outcome).toBe('FORFEIT');
+    expect(second.settled_at).toEqual(first.settled_at);
+  });
+
+  it("a forfeit on one lock does not touch the wallet's other course", async () => {
+    const wallet = generateTestWallet();
+    await seedClosedSeasonWithEntry(wallet, { stakedDelta: -16 });
+    __setLockV2FreshReadOverride(liveLock(wallet));
+    await runArenaSeasonSweep(quiet);
+
+    expect(await readArenaPenaltyTiers(wallet, COURSE, lockFor(wallet))).toBe(1);
+    // A different course, a different lock — untouched.
+    expect(await readArenaPenaltyTiers(wallet, OTHER_COURSE, OTHER_LOCK)).toBe(0);
+  });
+});
+
+describe('the penalty reaches the signed bytes', () => {
+  it('signs 5000 into the 91-byte message after a FORFEIT, and replays it', async () => {
+    const wallet = generateTestWallet();
+    await seedClosedSeasonWithEntry(wallet, { stakedDelta: -16 });
+    __setLockV2FreshReadOverride(liveLock(wallet));
+    await runArenaSeasonSweep(quiet);
+    expect((await entryOf(wallet)).outcome).toBe('FORFEIT');
+
+    await completeCourse(wallet);
+    const v = await issueCourseCompletionVoucher(wallet, COURSE);
+
+    expect(v.arenaPenaltyTiers).toBe(1);
+    expect(v.lapseCount).toBe(0);
+    expect(v.bps).toBe(5_000);
+
+    // THE assertion: what the Ed25519 precompile and settle.rs will read.
+    // bps sits at offset 81..83 of the 91-byte message (domain 17 + program 32
+    // + lock 32). If this is 10000 the feature is a no-op.
+    const message = Buffer.from(v.message, 'base64');
+    expect(message.length).toBe(91);
+    expect(message.readUInt16LE(81)).toBe(5_000);
+    // ...and it is a voucher for this wallet's lock on this course.
+    expect(message.subarray(49, 81).equals(new PublicKey(v.lock).toBuffer())).toBe(true);
+
+    // Store it, then serve it again: the stored tier is replayed, never
+    // recomputed — same bps, byte-for-byte same signature.
+    await persistCompletionVoucher(wallet, COURSE, v);
+    const again = await getStoredCompletionVoucher(wallet, COURSE, { log: { error: () => {} } });
+    expect(again.bps).toBe(5_000);
+    expect(again.arenaPenaltyTiers).toBe(1);
+    expect(again.signature).toBe(v.signature);
+  });
+
+  it('a KEPT season signs the full 10000', async () => {
+    const wallet = generateTestWallet();
+    await seedClosedSeasonWithEntry(wallet, { stakedDelta: 24 });
+    __setLockV2FreshReadOverride(liveLock(wallet));
+    await runArenaSeasonSweep(quiet);
+
+    await completeCourse(wallet);
+    const v = await issueCourseCompletionVoucher(wallet, COURSE);
+
+    expect(v.arenaPenaltyTiers).toBe(0);
+    expect(v.bps).toBe(10_000);
+    expect(Buffer.from(v.message, 'base64').readUInt16LE(81)).toBe(10_000);
+  });
+
+  it('a forfeit stacks with one lapse to reach 0, and never below it', async () => {
+    const wallet = generateTestWallet();
+    await seedClosedSeasonWithEntry(wallet, { stakedDelta: -16 });
+    __setLockV2FreshReadOverride(liveLock(wallet));
+    await runArenaSeasonSweep(quiet);
+
+    await completeCourse(wallet);
+    await db.query(
+      `insert into lesson.user_course_runtime_state (wallet_address, course_id, fuel_cap, lapse_count)
+       values ($1, $2, 7, 1)
+       on conflict (wallet_address, course_id) do update set lapse_count = 1`,
+      [wallet, COURSE],
+    );
+
+    const v = await issueCourseCompletionVoucher(wallet, COURSE);
+    expect(v.lapseCount).toBe(1);
+    expect(v.arenaPenaltyTiers).toBe(1);
+    expect(v.bps).toBe(0);
+    expect(Buffer.from(v.message, 'base64').readUInt16LE(81)).toBe(0);
+  });
+});
