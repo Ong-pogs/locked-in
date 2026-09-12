@@ -405,3 +405,32 @@ describe('a course completed BEFORE the season settles', () => {
     expect(await readArenaPenaltyTiers(wallet, COURSE, lockFor(wallet))).toBe(1);
   });
 });
+
+describe('the expiry clamp', () => {
+  it('never signs a voucher that is already dead', async () => {
+    // If the cron has not run since a season ended, clamping to that season
+    // would produce an expiry in the past — locking a user out of their own
+    // principal because of our scheduling, not their play.
+    const wallet = generateTestWallet();
+    // Only one season may be OPEN, and earlier tests here leave one behind.
+    await db.query(`update arena.seasons set status = 'SETTLED' where status = 'OPEN'`);
+    await db.query(
+      `insert into arena.seasons (id, starts_at, ends_at, status)
+       values (911, now() - interval '40 days', now() - interval '9 days', 'OPEN')
+       on conflict (id) do update set status = 'OPEN',
+         starts_at = excluded.starts_at, ends_at = excluded.ends_at`);
+    await db.query(
+      `insert into arena.season_entries
+         (stake_season_id, wallet_address, course_id, lock_address, lock_start_ts,
+          consent_version, rating_at_start, outcome)
+       values (911, $1, $2, $3, $4, 'v1', 1200, 'PENDING')
+       on conflict do nothing`,
+      [wallet, COURSE, lockFor(wallet), LOCK_START]);
+
+    await completeCourse(wallet);
+    const v = await issueCourseCompletionVoucher(wallet, COURSE);
+
+    expect(v.expiry * 1000).toBeGreaterThan(Date.now());
+    await db.query(`update arena.seasons set status = 'SETTLED' where id = 911`);
+  });
+});

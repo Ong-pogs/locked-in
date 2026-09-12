@@ -46,6 +46,11 @@ import { awardXp, ensureUserXp, xpToLevel, XP_LEVEL_THRESHOLDS } from '../../lib
 // locked out of claiming by our own scheduling.
 const ARENA_VOUCHER_GRACE_SECONDS = 3 * 24 * 60 * 60;
 
+// A clamped voucher is never given less life than this. Bounds the escape to
+// about a day while guaranteeing a signed voucher is always claimable when it
+// is issued — a dead-on-arrival voucher would block a user's own principal.
+const ARENA_VOUCHER_MIN_SECONDS = 24 * 60 * 60;
+
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -315,8 +320,15 @@ export async function voucherExpiryFor(walletAddress, courseId) {
       [walletAddress, courseId],
     );
     if (r.rowCount === 0) return full;
+
+    // Never below a floor. If the cron is late — or simply has not run since
+    // the season ended — clamping to the season would hand out a voucher that
+    // is already expired, locking a user out of their own principal over our
+    // scheduling. A short live window is the right trade: the read path
+    // re-signs at the settled tier as soon as the season resolves anyway.
+    const floor = Math.floor(Date.now() / 1000) + ARENA_VOUCHER_MIN_SECONDS;
     const seasonEnd = Number(r.rows[0].endsAt) + ARENA_VOUCHER_GRACE_SECONDS;
-    return Math.min(full, seasonEnd);
+    return Math.max(Math.min(full, seasonEnd), Math.min(full, floor));
   } catch {
     return full;
   }
