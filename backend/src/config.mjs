@@ -274,6 +274,9 @@ export const appConfig = {
   // page's date-only "valid until" display misleading and let a fetched
   // voucher expire before the user finished signing.
   voucherTtlSeconds: optionalInt('VOUCHER_TTL_SECONDS', 90 * 24 * 60 * 60),
+  // Arena stake-season length. Platform-fixed at 30 days; overridable only so
+  // a test season can open and settle inside one run rather than one month.
+  arenaSeasonDays: optionalInt('ARENA_SEASON_DAYS', 30),
   lockVaultWorkerPrivateKey:
     process.env.LOCK_VAULT_WORKER_PRIVATE_KEY ??
     deployerKeyFallback ??
