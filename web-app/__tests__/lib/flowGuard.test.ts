@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { flowGuardRedirect, isArenaRoute } from '../../lib/flowGuard';
+import { flowGuardRedirect, isSpireRoute } from '../../lib/flowGuard';
 
 const signedIn = {
   walletAddress: 'Wa11et1111111111111111111111111111111111',
@@ -8,35 +8,35 @@ const signedIn = {
   hasActiveLock: false,
 };
 
-const MATCH = '/arena/342883f5-cc14-4f5f-8a9e-f0bf382139fc';
+const MATCH = '/spire/342883f5-cc14-4f5f-8a9e-f0bf382139fc';
 
-describe('isArenaRoute', () => {
+describe('isSpireRoute', () => {
   it('matches the hub and anything beneath it', () => {
-    expect(isArenaRoute('/arena')).toBe(true);
-    expect(isArenaRoute(MATCH)).toBe(true);
-    expect(isArenaRoute('/arena/join/KJ4MAWC6')).toBe(true);
+    expect(isSpireRoute('/spire')).toBe(true);
+    expect(isSpireRoute(MATCH)).toBe(true);
+    expect(isSpireRoute('/spire/join/KJ4MAWC6')).toBe(true);
   });
 
   it('does not match a route that merely starts with the same letters', () => {
-    expect(isArenaRoute('/arenaFoo')).toBe(false);
-    expect(isArenaRoute('/arena-history')).toBe(false);
+    expect(isSpireRoute('/spireFoo')).toBe(false);
+    expect(isSpireRoute('/spire-history')).toBe(false);
   });
 });
 
-describe('flow guard — the Arena never requires an active lock', () => {
+describe('flow guard — the Spire never requires an active lock', () => {
   // The regression: a signed-in player with no lock clicked "Find an opponent",
   // got matched, and was thrown to /courses the instant the match page mounted.
   it('lets a signed-in player with NO lock onto a match page', () => {
     expect(flowGuardRedirect({ ...signedIn, pathname: MATCH })).toBeNull();
   });
 
-  it('lets a signed-in player with no lock onto the arena hub', () => {
-    expect(flowGuardRedirect({ ...signedIn, pathname: '/arena' })).toBeNull();
+  it('lets a signed-in player with no lock onto the spire hub', () => {
+    expect(flowGuardRedirect({ ...signedIn, pathname: '/spire' })).toBeNull();
   });
 
   it('still lets a LOGGED-OUT visitor see an invite (the growth loop)', () => {
     expect(flowGuardRedirect({
-      pathname: '/arena/join/KJ4MAWC6',
+      pathname: '/spire/join/KJ4MAWC6',
       walletAddress: null,
       isAuthenticated: false,
       phase: 'auth',

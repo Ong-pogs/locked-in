@@ -5,20 +5,20 @@ import { T } from '../../components/theme';
 import { HubButton } from '../../components/HubButton';
 
 /**
- * Tavern backdrop for every arena screen.
+ * Tavern backdrop for every Clockwork Spire screen.
  *
- * The arena was on the generic wood texture (ScreenBackground), which is the
+ * The Spire was on the generic wood texture (ScreenBackground), which is the
  * pre-village look and reads as unfinished next to the rest of the app. The
  * tavern is already the backdrop for /leaderboard and /community-pot — the two
  * other social, competitive surfaces — and leaderboard's own comment calls it
- * "the most social location". A duel is issued in a tavern, so the arena
+ * "the most social location". A duel is issued in a tavern, so the Spire
  * belongs to that family rather than getting a seventh look.
  *
  * The markup mirrors app/leaderboard/page.tsx exactly (fixed layer, pixelated,
  * graceful onError) but lives here once instead of being pasted into all three
- * arena routes.
+ * Spire routes.
  */
-export function ArenaBackground({ children }: { children: ReactNode }) {
+export function SpireBackground({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen relative" style={{ backgroundColor: T.bg }}>
       <div aria-hidden className="fixed inset-0 z-0 pointer-events-none">
@@ -33,7 +33,7 @@ export function ArenaBackground({ children }: { children: ReactNode }) {
             (e.currentTarget as HTMLImageElement).style.display = 'none';
           }}
         />
-        {/* The scrim is heavier at the foot than leaderboard's: arena screens
+        {/* The scrim is heavier at the foot than leaderboard's: Spire screens
             put small mono text and quiz options low on the page, where the
             painted tables and patrons are busiest. */}
         <div

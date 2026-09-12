@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { T } from '../../../components/theme';
-import { ArenaBackground } from '../ArenaBackground';
+import { SpireBackground } from '../SpireBackground';
 import { fetchWithAuth } from '../../../services/api/httpClient';
 import { answerQuestion, getMatch, getMyArena, startMatch } from '../../../services/api/arena/arenaApi';
 import { useUserStore } from '../../../stores/userStore';
@@ -165,7 +165,7 @@ export default function ArenaMatchPage() {
   const seconds = Math.ceil(remainingMs / 1000);
 
   return (
-    <ArenaBackground>
+    <SpireBackground>
       <div className="mx-auto w-full max-w-xl px-4 pb-8 pt-20">
         {phase === 'loading' && (
           <div className="text-[12px]" style={{ color: T.textMuted }}>Loading match…</div>
@@ -322,11 +322,11 @@ export default function ArenaMatchPage() {
             </p>
             <button
               type="button"
-              onClick={() => router.push('/arena')}
+              onClick={() => router.push('/spire')}
               className="mt-5 rounded px-4 py-2 font-pixel-mono text-[11px]"
               style={{ background: T.bgCardActive, border: `1px solid ${T.borderDormant}`, color: T.textPrimary }}
             >
-              Back to the Arena
+              Back to the Spire
             </button>
           </div>
         )}
@@ -385,11 +385,11 @@ export default function ArenaMatchPage() {
             </div>
             <button
               type="button"
-              onClick={() => router.push('/arena')}
+              onClick={() => router.push('/spire')}
               className="mt-5 rounded px-4 py-2 font-pixel-mono text-[11px]"
               style={{ background: T.bgCardActive, border: `1px solid ${T.borderDormant}`, color: T.textPrimary }}
             >
-              Back to the Arena
+              Back to the Spire
             </button>
           </div>
         )}
@@ -398,6 +398,6 @@ export default function ArenaMatchPage() {
           <div className="mt-4 text-[12px]" style={{ color: T.crimson }}>{message}</div>
         )}
       </div>
-    </ArenaBackground>
+    </SpireBackground>
   );
 }

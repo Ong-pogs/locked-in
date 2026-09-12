@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { T } from '../../../../components/theme';
-import { ArenaBackground } from '../../ArenaBackground';
+import { SpireBackground } from '../../SpireBackground';
 import { fetchWithAuth } from '../../../../services/api/httpClient';
 import { joinByCode } from '../../../../services/api/arena/arenaApi';
 import { useUserStore } from '../../../../stores/userStore';
@@ -25,7 +25,7 @@ export default function ArenaJoinPage() {
     setError(null);
     try {
       const { matchId } = await fetchWithAuth((t) => joinByCode(t, code));
-      router.push(`/arena/${matchId}`);
+      router.push(`/spire/${matchId}`);
     } catch (err) {
       const message = (err as { code?: string })?.code;
       setError(
@@ -48,7 +48,7 @@ export default function ArenaJoinPage() {
   }, [walletAddress]);
 
   return (
-    <ArenaBackground>
+    <SpireBackground>
       <div className="mx-auto w-full max-w-md px-4 py-12 text-center">
         <div
           className="font-pixel-mono text-[10px] uppercase tracking-[2px]"
@@ -79,7 +79,7 @@ export default function ArenaJoinPage() {
 
         <p className="mx-auto mt-5 max-w-sm text-[12px] leading-relaxed" style={{ color: T.textMuted }}>
           Seven questions on Solana, wallets and DeFi. Twenty seconds each.
-          Most correct wins; fastest breaks the tie. It costs nothing — the Arena
+          Most correct wins; fastest breaks the tie. It costs nothing — the Spire
           plays for rating and XP only, never for money.
         </p>
 
@@ -117,6 +117,6 @@ export default function ArenaJoinPage() {
           </div>
         )}
       </div>
-    </ArenaBackground>
+    </SpireBackground>
   );
 }

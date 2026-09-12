@@ -19,9 +19,9 @@ const PUBLIC_ROUTES = [
   '/terms',
   '/privacy',
   '/risk',
-  // The arena ladder is a shop window: a logged-out visitor should be able to
+  // The Spire ladder is a shop window: a logged-out visitor should be able to
   // see who is winning before being asked to sign up.
-  '/arena',
+  '/spire',
 ];
 
 // Auth guard — redirects unauthenticated users to landing page
@@ -43,10 +43,10 @@ export function proxy(request: NextRequest) {
   const isStaticAsset = /\.(?:js|mjs|css|map|json|webmanifest|txt|xml|ico|png|jpe?g|gif|svg|webp|avif|woff2?|ttf|otf|eot|mp3|mp4|webm|wasm)$/i.test(
     pathname,
   );
-  // An arena invite is the growth loop: it is frequently the FIRST page a
+  // A Spire invite is the growth loop: it is frequently the FIRST page a
   // non-user ever opens, so it must render the challenge before asking
   // anyone to sign in. A prefix test, not an exact match, because of [code].
-  if (pathname.startsWith('/arena/join/')) {
+  if (pathname.startsWith('/spire/join/')) {
     return NextResponse.next();
   }
 

@@ -7,7 +7,7 @@ import { COZY_TEXT_SHADOW } from '@/components/cozy';
 // named cause is the worst thing a money surface can show.
 //
 //   lapseCount         missed-day lapses (one-mercy: 0 -> 100%, 1 -> 50%, 2+ -> 0%)
-//   arenaPenaltyTiers  1 if a staked Arena season settled FORFEIT on this lock
+//   arenaPenaltyTiers  1 if a staked Clockwork Spire season settled FORFEIT on this lock
 //
 // The ladder here mirrors backend claimVoucher.effectiveYieldBps. That function
 // is the authority — this only explains what it already decided.
@@ -29,13 +29,13 @@ function reasonFor(lapses: number, arena: number, forfeitPct: number): string {
   const allGone = forfeitPct >= 100;
   if (lapses > 0 && arena > 0) {
     return allGone
-      ? 'A lapse and a lost Arena season — 100% of yield forfeits to the community pot. Principal stays yours.'
-      : `A lapse and a lost Arena season — ${forfeitPct}% of yield forfeits to the community pot.`;
+      ? 'A lapse and a lost Spire season — 100% of yield forfeits to the community pot. Principal stays yours.'
+      : `A lapse and a lost Spire season — ${forfeitPct}% of yield forfeits to the community pot.`;
   }
   if (arena > 0) {
     return allGone
-      ? 'Your staked Arena season finished behind — 100% of yield forfeits to the community pot. Principal stays yours.'
-      : `Your staked Arena season finished behind — ${forfeitPct}% of yield forfeits to the community pot. Principal stays yours.`;
+      ? 'Your staked Spire season finished behind — 100% of yield forfeits to the community pot. Principal stays yours.'
+      : `Your staked Spire season finished behind — ${forfeitPct}% of yield forfeits to the community pot. Principal stays yours.`;
   }
   return allGone
     ? '2nd lapse — 100% of yield forfeits to the community pot. Principal stays yours.'
@@ -49,7 +49,7 @@ export function PenaltyBanner({
   className = '',
 }: {
   lapseCount: number;
-  /** 1 if a staked Arena season settled FORFEIT on this lock. */
+  /** 1 if a staked Clockwork Spire season settled FORFEIT on this lock. */
   arenaPenaltyTiers?: number;
   /** Concrete USDC amount being forfeited (formatted, no $) — shown when known. */
   forfeitUi?: string | null;

@@ -1,8 +1,8 @@
 /**
  * Flow-guard routing decision, extracted from AppShell so it can be tested.
  *
- * This rule has caused two production bugs — first /arena bouncing to /village,
- * then /arena/[matchId] bouncing to /courses — because it lived inside an effect
+ * This rule has caused two production bugs — first /spire bouncing to /village,
+ * then /spire/[matchId] bouncing to /courses — because it lived inside an effect
  * with no test covering it. The logic is unchanged from AppShell; it is only
  * pure now, so a route rule can be asserted instead of clicked.
  *
@@ -39,19 +39,19 @@ export const PUBLIC_ROUTES = [
   '/terms',
   '/privacy',
   '/risk',
-  '/arena',
+  '/spire',
 ];
 
 export const ONBOARDING_ROUTES = ['/courses', '/onboarding/deposit', '/onboarding/tutorial'];
 
-/** True for /arena and anything beneath it, but not /arenaFoo. */
-export function isArenaRoute(pathname: string): boolean {
-  return pathname === '/arena' || pathname.startsWith('/arena/');
+/** True for /spire and anything beneath it, but not /spireFoo. */
+export function isSpireRoute(pathname: string): boolean {
+  return pathname === '/spire' || pathname.startsWith('/spire/');
 }
 
 /** The invite landing renders for logged-out visitors — it is the growth loop. */
-export function isArenaInvite(pathname: string): boolean {
-  return pathname.startsWith('/arena/join/');
+export function isSpireInvite(pathname: string): boolean {
+  return pathname.startsWith('/spire/join/');
 }
 
 /**
@@ -67,7 +67,7 @@ export function flowGuardRedirect({
   if (PUBLIC_ROUTES.includes(pathname)) return null;
 
   // Before the auth gates: an invite must render to someone with no account.
-  if (isArenaInvite(pathname)) return null;
+  if (isSpireInvite(pathname)) return null;
 
   // Gate 1 — no wallet/JWT.
   if (!walletAddress || !isAuthenticated) return '/village';
@@ -75,11 +75,11 @@ export function flowGuardRedirect({
   // Gate 2 — still at the auth step.
   if (phase === 'auth') return '/village';
 
-  // The Arena needs a signed-in user but NEVER an active lock: it plays for
+  // The Spire needs a signed-in user but NEVER an active lock: it plays for
   // rating and XP only and takes no deposit. Sitting above the lock gates is
   // the whole point — otherwise a player who has not locked into a course gets
   // thrown to /courses the instant a match starts.
-  if (isArenaRoute(pathname)) return null;
+  if (isSpireRoute(pathname)) return null;
 
   // Gate 3 — onboarding WITH an active lock: main routes are fine, but the
   // onboarding routes themselves send you on to courses.

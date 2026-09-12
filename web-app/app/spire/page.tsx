@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { T } from '../../components/theme';
-import { ArenaBackground } from './ArenaBackground';
+import { SpireBackground } from './SpireBackground';
 import { StakePanel } from './StakePanel';
 import { fetchWithAuth } from '../../services/api/httpClient';
 import {
@@ -15,7 +15,7 @@ function shortWallet(address: string) {
   return `${address.slice(0, 4)}…${address.slice(-4)}`;
 }
 
-export default function ArenaPage() {
+export default function SpirePage() {
   const router = useRouter();
   const [ladder, setLadder] = useState<ArenaLadderRow[] | null>(null);
   const [profile, setProfile] = useState<ArenaProfile | null>(null);
@@ -57,7 +57,7 @@ export default function ArenaPage() {
   async function onCopy() {
     if (!joinCode) return;
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/arena/join/${joinCode}`);
+      await navigator.clipboard.writeText(`${window.location.origin}/spire/join/${joinCode}`);
       setCopied(true);
     } catch {
       // Clipboard can be blocked; the code is on screen to type either way.
@@ -72,7 +72,7 @@ export default function ArenaPage() {
     try {
       const first = await fetchWithAuth((t) => enterQueue(t));
       if (first.matched && first.matchId) {
-        router.push(`/arena/${first.matchId}`);
+        router.push(`/spire/${first.matchId}`);
         return;
       }
       pollRef.current = setInterval(async () => {
@@ -81,7 +81,7 @@ export default function ArenaPage() {
           if (state.matched && state.matchId) {
             stopPolling();
             setQueueing(false);
-            router.push(`/arena/${state.matchId}`);
+            router.push(`/spire/${state.matchId}`);
           } else if (state.suggestLink) {
             setSuggestLink(true);
           }
@@ -104,7 +104,7 @@ export default function ArenaPage() {
   }
 
   return (
-    <ArenaBackground>
+    <SpireBackground>
       <div className="mx-auto w-full max-w-2xl px-4 pb-8 pt-20">
         {/* Backed rather than bare: the tavern art is at its busiest behind the
             header, and small muted copy straight on top of it was hard to read. */}
@@ -117,7 +117,7 @@ export default function ArenaPage() {
             style={{ color: T.amber }}
             data-testid="arena-title"
           >
-            The Arena
+            Clockwork Spire
           </h1>
           <p className="mt-1 text-[12px]" style={{ color: T.textMutedStrong }}>
             Head-to-head recall. Seven questions, twenty seconds each, fastest correct wins.
@@ -275,6 +275,6 @@ export default function ArenaPage() {
           </div>
         </section>
       </div>
-    </ArenaBackground>
+    </SpireBackground>
   );
 }
