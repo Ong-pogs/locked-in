@@ -14,32 +14,9 @@ import { useResurfaceStore } from '@/stores/resurfaceStore';
 import { getUserEnrollments } from '@/services/api/progress/progressApi';
 import { fetchWithAuth } from '@/services/api';
 import { T } from './theme';
+import { flowGuardRedirect } from '@/lib/flowGuard';
 
-// Routes that don't require authentication
-// Pages new users can browse without a wallet connected. Only "do something"
-// flows (deposit / brew / redeem / lessons) gate on auth.
-const PUBLIC_ROUTES = [
-  '/courses',
-  '/village',
-  // '/menu' removed: internal design-QA index, gated behind auth.
-  '/dashboard',
-  '/shop',
-  '/alchemy',
-  '/community-pot',
-  '/inventory',
-  '/leaderboard',
-  // Legal surface — see proxy.ts. Both lists must agree or the flow guard
-  // redirects a logged-out reader away from a page the proxy just allowed.
-  '/terms',
-  '/privacy',
-  '/risk',
-  // The arena ladder is browsable logged-out (see proxy.ts). The invite
-  // landing is handled by the prefix test below because it carries a [code].
-  '/arena',
-];
 
-// Routes allowed during onboarding (before active lock)
-const ONBOARDING_ROUTES = ['/courses', '/onboarding/deposit', '/onboarding/tutorial'];
 
 /**
  * Flow enforcement — mirrors AppNavigator.tsx from the RN app exactly.
@@ -73,46 +50,13 @@ function useFlowGuard(hydrated: boolean) {
     // non-public route (e.g. /claim, /onboarding/deposit) to /village.
     if (!hydrated) return;
 
-    // Skip guard on public routes
-    if (PUBLIC_ROUTES.includes(pathname)) return;
-    // Arena invites are the growth loop and must render for a logged-out
-    // visitor — prefix match because of the dynamic [code] segment.
-    if (pathname.startsWith('/arena/join/')) return;
-
-    // Gate 1: No wallet/JWT → village hub (they can browse without auth)
-    if (!walletAddress || !isAuthenticated) {
-      router.replace('/village');
-      return;
-    }
-
-    // Gate 2: phase 'auth' → village
-    if (phase === 'auth') {
-      router.replace('/village');
-      return;
-    }
-
-    // Gate 3: phase 'onboarding' WITH active lock → allow main routes + deposit
-    if (phase === 'onboarding' && hasActiveLock) {
-      // Allow deposit page (enrolling in additional courses)
-      if (pathname.startsWith('/onboarding/deposit')) return;
-      // Other onboarding routes → redirect to courses
-      if (ONBOARDING_ROUTES.includes(pathname)) {
-        router.replace('/courses');
-      }
-      return;
-    }
-
-    // Gate 4: phase 'onboarding', no active lock → onboarding routes only
-    if (phase === 'onboarding') {
-      const isOnboardingRoute = ONBOARDING_ROUTES.some((r) => pathname.startsWith(r));
-      if (!isOnboardingRoute) {
-        router.replace('/courses');
-      }
-      return;
-    }
-
-    // Gate 5: phase 'main' → allow everything
-    // (no redirect needed)
+    // The decision itself lives in lib/flowGuard.ts so it can be unit-tested;
+    // see __tests__/lib/flowGuard.test.ts. Keeping it inline here is what let
+    // /arena and then /arena/[matchId] ship broken.
+    const target = flowGuardRedirect({
+      pathname, walletAddress, isAuthenticated, phase, hasActiveLock,
+    });
+    if (target && target !== pathname) router.replace(target);
   }, [hydrated, pathname, walletAddress, isAuthenticated, phase, hasActiveLock, router]);
 }
 
