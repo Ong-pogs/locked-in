@@ -6,7 +6,7 @@ import { CozyCard, COZY_TEXT, COZY_TEXT_SHADOW } from '@/components/cozy';
 import { T } from '@/components/theme';
 import { FlameGauge } from './FlameGauge';
 import { ShieldPips } from './ShieldPips';
-import { PenaltyBanner } from './PenaltyBanner';
+import { PenaltyBanner, combinedKeptBps } from './PenaltyBanner';
 import { deriveFlameState, yieldKeptBps } from '@/services/flame/deriveFlameState';
 import { CLUSTER } from '@/services/solana/connection';
 import { useUserStore } from '@/stores';
@@ -145,6 +145,8 @@ export function PositionCard({ data, position, positionError, onRetryPosition, c
   // Once lapsed, yield is being forfeited (50%/100%) — never render it as a
   // green gain next to the penalty banner.
   const lapsed = data.lapseCount > 0;
+  const arenaPenaltyTiers = position?.voucher?.arenaPenaltyTiers ?? 0;
+  const penalised = lapsed || arenaPenaltyTiers > 0;
 
   return (
     <CozyCard
@@ -225,15 +227,19 @@ export function PositionCard({ data, position, positionError, onRetryPosition, c
         </p>
       )}
 
-      {/* Penalty banner (lapsed only) — with the concrete USDC amount the
-          lapse costs, derived from the live yield line. */}
+      {/* Penalty banner — with the concrete USDC amount the penalty costs,
+          derived from the live yield line. Reads the arena tier off the
+          embedded voucher so a staked player who lost their season sees the
+          real figure here and not a lapse-only one. */}
       <PenaltyBanner
         lapseCount={data.lapseCount}
+        arenaPenaltyTiers={arenaPenaltyTiers}
         forfeitUi={
-          lapsed && tickingYield != null
+          penalised && tickingYield != null
             ? (
-                (Number(tickingYield) * (10_000 - yieldKeptBps(data.lapseCount))) /
-                10_000
+                (Number(tickingYield)
+                  * (10_000 - combinedKeptBps(data.lapseCount, arenaPenaltyTiers)))
+                / 10_000
               ).toFixed(4)
             : null
         }

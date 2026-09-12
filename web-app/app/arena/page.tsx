@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { T } from '../../components/theme';
 import { ArenaBackground } from './ArenaBackground';
+import { StakePanel } from './StakePanel';
 import { fetchWithAuth } from '../../services/api/httpClient';
 import {
   createChallenge, getLadder, getMyArena, enterQueue, pollQueue, leaveQueue,
@@ -120,7 +121,8 @@ export default function ArenaPage() {
           </h1>
           <p className="mt-1 text-[12px]" style={{ color: T.textMutedStrong }}>
             Head-to-head recall. Seven questions, twenty seconds each, fastest correct wins.
-            Rating and XP only — nothing here touches your deposit, streak or shields.
+            Free to play for rating and XP. Stake a course and a losing season costs it half its
+            yield — never your deposit, streak or shields.
           </p>
         </header>
 
@@ -144,6 +146,8 @@ export default function ArenaPage() {
               : 'Unranked — play your first match to join the ladder'}
           </div>
         </section>
+
+        <StakePanel />
 
         {/* Actions */}
         <section className="mb-6 grid gap-3 sm:grid-cols-2">

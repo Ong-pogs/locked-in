@@ -291,6 +291,9 @@ export interface EnrollRetryErrorDetails {
 export interface CompletionVoucherResponse {
   courseId: string;
   lapseCount: number;
+  /** 1 if a staked Arena season settled FORFEIT on this lock, else 0. Costs one
+   * yield tier on top of any lapses. Optional so an older backend parses. */
+  arenaPenaltyTiers?: number;
   lock: string;
   authorityPubkey: string;
   bps: number;
