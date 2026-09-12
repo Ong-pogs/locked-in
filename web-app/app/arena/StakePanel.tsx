@@ -204,8 +204,9 @@ export function StakePanel() {
 
       <p className="mt-2 text-[12px] leading-relaxed" style={{ color: T.textMutedStrong }}>
         Put one of your locked courses on this season. Finish level or ahead across your staked
-        matches and it keeps <strong style={{ color: T.green }}>all</strong> of its yield. Finish
-        behind and it keeps <strong style={{ color: T.crimson }}>half</strong> instead.{' '}
+        matches and <strong style={{ color: T.green }}>nothing changes</strong>. Finish behind and
+        it gives up <strong style={{ color: T.crimson }}>one yield tier</strong> — all of its yield
+        down to half, or half down to none if you have already missed a day.{' '}
         <strong style={{ color: T.textPrimary }}>Your deposit is never at risk either way.</strong>
       </p>
 

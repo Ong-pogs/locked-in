@@ -98,7 +98,7 @@ export async function runArenaSeasonSweep({ log = console } = {}) {
             `select rating from arena.ratings where wallet_address = $1 and season = 1`,
             [entry.walletAddress],
           );
-          await client.query(
+          const updated = await client.query(
             `update arena.season_entries
                 set outcome = $4, staked_delta = $5, rating_at_end = $6,
                     voided_reason = $7, settled_at = now()
@@ -111,7 +111,11 @@ export async function runArenaSeasonSweep({ log = console } = {}) {
             ],
           );
           await client.query('commit');
-          settled += 1;
+          // Only count a row this run actually moved. The `outcome = 'PENDING'`
+          // guard is what makes settlement exactly-once, so a zero here means
+          // it was already settled — counting it anyway would make the cron's
+          // own log the least trustworthy account of what happened.
+          if (updated.rowCount > 0) settled += 1;
         } catch (err) {
           try { await client.query('rollback'); } catch { /* connection gone */ }
           failed += 1;
