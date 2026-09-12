@@ -386,6 +386,8 @@ describe('GET /v1/locks/:courseId/position voucher embed (R6/R7)', () => {
     expect(v).toEqual({
       courseId: COURSE_ID,
       lapseCount: 1,
+      // Nothing staked this lock, so the arena costs it nothing.
+      arenaPenaltyTiers: 0,
       lock: derivedPda(wallet),
       authorityPubkey: WORKER_PUBKEY,
       bps: 5000,

@@ -228,6 +228,33 @@ async function readCourseCompletionFreeze(client, walletAddress, courseId) {
 }
 
 /**
+ * Tiers the arena stake costs this lock: 1 iff the most recent SETTLED season
+ * entry for (wallet, course, lock) was a FORFEIT, else 0.
+ *
+ * Reads arena.season_entries. This is the ONLY direction the dependency runs —
+ * the arena module never writes a lesson.* money table, which is what keeps
+ * tests/integration/api/arenaIsolation.test.mjs true.
+ *
+ * Fails SAFE: any error, missing table or absent row resolves to 0. A signing
+ * path that cannot read the arena must not invent a penalty.
+ */
+export async function readArenaPenaltyTiers(walletAddress, courseId, lockAddress) {
+  try {
+    const r = await query(
+      `select outcome from arena.season_entries
+        where wallet_address = $1 and course_id = $2 and lock_address = $3
+          and settled_at is not null
+        order by settled_at desc
+        limit 1`,
+      [walletAddress, courseId, lockAddress],
+    );
+    return r.rows[0]?.outcome === 'FORFEIT' ? 1 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
  * Issue a signed completion voucher for a fully-completed course. The client
  * embeds the returned Ed25519 message+signature in a precompile instruction
  * placed before claim_v2 in the same transaction; the program verifies the
@@ -274,6 +301,11 @@ export async function issueCourseCompletionVoucher(walletAddress, courseId) {
   );
   const lapseCount = Number(lapseRow.rows[0]?.lapseCount ?? 0);
 
+  // The lock PDA is deterministic per (owner, courseIdHash), so it can be
+  // derived before signing and used to scope the arena lookup.
+  const lockAddress = deriveLockPdaServer(programId, walletAddress, courseId).toBase58();
+  const arenaPenaltyTiers = await readArenaPenaltyTiers(walletAddress, courseId, lockAddress);
+
   const expiry = Math.floor(Date.now() / 1000) + appConfig.voucherTtlSeconds;
 
   const voucher = issueVoucher({
@@ -282,6 +314,7 @@ export async function issueCourseCompletionVoucher(walletAddress, courseId) {
     owner: walletAddress,
     courseIdHash: courseIdHashBytes(courseId),
     lapseCount,
+    arenaPenaltyTiers,
     expiry,
   });
 
@@ -304,7 +337,41 @@ export async function issueCourseCompletionVoucher(walletAddress, courseId) {
     }
   }
 
-  return { courseId, lapseCount, ...voucher };
+  return { courseId, lapseCount, arenaPenaltyTiers, ...voucher };
+}
+
+/**
+ * Re-sign a voucher at a tier that was already decided, rather than at
+ * whatever the tier would be today.
+ *
+ * A voucher is signed at course completion with a 90-day TTL against a 30-day
+ * season. Between the two, arena_penalty_tiers can change. If a re-issue
+ * recomputed it, a user who asked twice would be handed two different bps for
+ * the same completed course — so every re-issue replays the stored value.
+ */
+export async function reissueStoredVoucher(walletAddress, courseId, stored) {
+  const programId = appConfig.vaultV2ProgramId;
+  const authoritySecretKey = appConfig.lockVaultWorkerPrivateKey;
+  if (!programId || !authoritySecretKey) {
+    throw new HttpError(
+      503,
+      'Voucher signing is not configured',
+      'VOUCHER_SIGNING_UNCONFIGURED',
+    );
+  }
+  const lapseCount = Number(stored.lapseCount) || 0;
+  const arenaPenaltyTiers = Number(stored.arenaPenaltyTiers) || 0;
+  const expiry = Math.floor(Date.now() / 1000) + appConfig.voucherTtlSeconds;
+  const voucher = issueVoucher({
+    programId,
+    authoritySecretKey,
+    owner: walletAddress,
+    courseIdHash: courseIdHashBytes(courseId),
+    lapseCount,
+    arenaPenaltyTiers,
+    expiry,
+  });
+  return { courseId, lapseCount, arenaPenaltyTiers, ...voucher };
 }
 
 /**
@@ -317,12 +384,13 @@ export async function issueCourseCompletionVoucher(walletAddress, courseId) {
 export async function persistCompletionVoucher(walletAddress, courseId, voucher) {
   await query(
     `INSERT INTO lesson.completion_vouchers
-       (wallet_address, course_id, lock_address, lapse_count, bps, expiry,
-        authority_pubkey, message, signature, issued_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+       (wallet_address, course_id, lock_address, lapse_count, arena_penalty_tiers,
+        bps, expiry, authority_pubkey, message, signature, issued_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
      ON CONFLICT (wallet_address, course_id) DO UPDATE SET
        lock_address = excluded.lock_address,
        lapse_count = excluded.lapse_count,
+       arena_penalty_tiers = excluded.arena_penalty_tiers,
        bps = excluded.bps,
        expiry = excluded.expiry,
        authority_pubkey = excluded.authority_pubkey,
@@ -334,6 +402,7 @@ export async function persistCompletionVoucher(walletAddress, courseId, voucher)
       courseId,
       voucher.lock,
       voucher.lapseCount,
+      voucher.arenaPenaltyTiers ?? 0,
       voucher.bps,
       voucher.expiry,
       voucher.authorityPubkey,
@@ -350,6 +419,7 @@ function voucherRowToResponse(courseId, row) {
   return {
     courseId,
     lapseCount: Number(row.voucher_lapse_count),
+    arenaPenaltyTiers: Number(row.voucher_arena_penalty_tiers ?? 0),
     lock: row.lock_address,
     authorityPubkey: row.authority_pubkey,
     bps: Number(row.bps),
@@ -379,6 +449,7 @@ export async function getStoredCompletionVoucher(walletAddress, courseId, { log 
   const result = await query(
     `SELECT v.lock_address,
             v.lapse_count AS voucher_lapse_count,
+            coalesce(v.arena_penalty_tiers, 0) AS voucher_arena_penalty_tiers,
             v.bps,
             v.expiry,
             v.authority_pubkey,
@@ -424,9 +495,14 @@ export async function getStoredCompletionVoucher(walletAddress, courseId, { log 
       }
       return voucherRowToResponse(courseId, row);
     }
-    // (c) expired — re-issue at the (frozen) current tier.
+    // (c) expired — re-sign at the tier that was already decided. Recomputing
+    // here would change the bps out from under a user who simply waited: the
+    // voucher's 90-day TTL outlives a 30-day stake season.
     if (voucherSigningConfigured()) {
-      const voucher = await issueCourseCompletionVoucher(walletAddress, courseId);
+      const voucher = await reissueStoredVoucher(walletAddress, courseId, {
+        lapseCount: Number(row.voucher_lapse_count),
+        arenaPenaltyTiers: Number(row.voucher_arena_penalty_tiers ?? 0),
+      });
       await persistCompletionVoucher(walletAddress, courseId, voucher);
       return voucher;
     }

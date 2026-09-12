@@ -21,6 +21,7 @@ import {
   getUnlockReceipts,
   getYieldHistory,
   getModuleProgress,
+  getStoredCompletionVoucher,
   issueCourseCompletionVoucher,
   persistCompletionVoucher,
   refreshLeaderboardSnapshot,
@@ -505,13 +506,45 @@ export async function progressRoutes(app) {
     { preHandler: requireAccessAuth },
     async (request) => {
       const courseId = assertPathParam(request.params?.courseId, 'courseId');
-      const voucher = await issueCourseCompletionVoucher(
-        request.auth.walletAddress,
-        courseId,
-      );
-      // Best-effort store (voucher-autoissue ruling R8): a storage failure
-      // must never turn a signable voucher into an error response — this POST
-      // remains the client's claim-path safety net forever.
+      // STORED FIRST, sign only if there is nothing to serve.
+      //
+      // This endpoint used to sign unconditionally, so a client that called
+      // POST got a freshly computed tier while a client that read the position
+      // endpoint got the stored one — the same user, two different bps,
+      // decided by which call their client happened to make. Preferring the
+      // stored voucher closes that.
+      //
+      // It is NOT a pure read-through, because getStoredCompletionVoucher
+      // requires the course_completed_at freeze stamp while signing only
+      // requires the course to actually be complete. A completer without the
+      // stamp would otherwise lose their claim path entirely — and this POST
+      // is that safety net (R8). A storage failure must not remove it either,
+      // so an unreadable store falls through to signing rather than 500ing.
+      let voucher = null;
+      try {
+        voucher = await getStoredCompletionVoucher(
+          request.auth.walletAddress,
+          courseId,
+          { log: request.log },
+        );
+      } catch (error) {
+        request.log.warn(
+          {
+            walletAddress: request.auth.walletAddress,
+            courseId,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          'voucher.stored_read_failed',
+        );
+      }
+      if (voucher) return voucher;
+
+      // Nothing stored. Sign fresh — this throws 404 for an unknown course and
+      // 403 for an incomplete one, which is the contract this endpoint has
+      // always had.
+      voucher = await issueCourseCompletionVoucher(request.auth.walletAddress, courseId);
+      // Best-effort store (R8): a storage failure must never turn a signable
+      // voucher into an error response.
       try {
         await persistCompletionVoucher(request.auth.walletAddress, courseId, voucher);
       } catch (error) {
