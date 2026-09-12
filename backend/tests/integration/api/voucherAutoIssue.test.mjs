@@ -20,7 +20,7 @@ import { PublicKey } from '@solana/web3.js';
 import { createTestServer, closeTestServer } from '../../helpers/test-server.mjs';
 import { getTestAuthHeaders, generateTestWallet, enrollWalletForTest } from '../../helpers/test-auth.mjs';
 import { query } from '../../../src/lib/db.mjs';
-import { yieldBpsForLapses } from '../../../src/lib/claimVoucher.mjs';
+import { effectiveYieldBps } from '../../../src/lib/claimVoucher.mjs';
 import {
   deriveLockPdaServer,
   primeLockPositionCache,
@@ -213,7 +213,10 @@ describe('auto-issue on the completing submit (R4)', () => {
     expect(row.lock_address).toBe(clientLockPda(wallet));
     expect(row.authority_pubkey).toBe(WORKER_PUBKEY);
     expect(Number(row.lapse_count)).toBe(0);
-    expect(Number(row.bps)).toBe(yieldBpsForLapses(Number(row.lapse_count)));
+    expect(Number(row.bps)).toBe(effectiveYieldBps({
+      lapseCount: Number(row.lapse_count),
+      arenaPenaltyTiers: Number(row.arena_penalty_tiers ?? 0),
+    }));
     expect(Number(row.expiry) * 1000).toBeGreaterThan(Date.now());
     // The stored signature must be the on-chain-valid one, byte for byte.
     expect(

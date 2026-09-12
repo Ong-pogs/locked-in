@@ -16,9 +16,11 @@ export const SHIELD_CAP = 3;
 export const SHIELD_REGEN_EVERY = 3;
 export const MAX_LAPSE = 2;
 
-// Yield-kept bps by lapse count (one-mercy): [10000, 5000, 0][min(lapse,2)].
-// Mirrors settle.rs VALID_YIELD_BPS and claimVoucher.yieldBpsForLapses.
-export function userYieldBps(lapseCount) {
+// Redirect bookkeeping ONLY — this is not the signed tier. The bps a voucher
+// signs comes from claimVoucher.effectiveYieldBps, which also folds in the
+// arena stake penalty. Named apart from that owner so the two can never be
+// confused at a call site.
+export function lapseRedirectBps(lapseCount) {
   const tiers = [10_000, 5_000, 0];
   const n = Math.max(0, Math.min(Number(lapseCount) || 0, MAX_LAPSE));
   return tiers[n];

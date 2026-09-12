@@ -3,23 +3,28 @@ import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import { PublicKey } from '@solana/web3.js';
 import {
-  VOUCHER_DOMAIN, VALID_YIELD_BPS, yieldBpsForLapses, deriveLockPda,
+  VOUCHER_DOMAIN, VALID_YIELD_BPS, effectiveYieldBps, deriveLockPda,
   buildVoucherMessage, issueVoucher,
 } from '../../../src/lib/claimVoucher.mjs';
 
 const PROGRAM = 'EUABEbHUjiUn9NijapRJT2MVqQ5nSdqH3gSzTxyGucsN';
 const LOCK = '8S5ja1JUwVDzUvfiwYbcoaxN6HxKx3FwKJZkMUmtrQZT';
 
-describe('yieldBpsForLapses (one-mercy)', () => {
+// The full input matrix for effectiveYieldBps lives in effectiveYieldBps.test.mjs.
+// What matters here is that the lapse ladder this file has always asserted still
+// holds now that the tier owner takes the arena penalty as a second input.
+describe('effectiveYieldBps (one-mercy lapse ladder)', () => {
   it('maps lapse count to the exact settle.rs tiers', () => {
-    expect(yieldBpsForLapses(0)).toBe(10_000);
-    expect(yieldBpsForLapses(1)).toBe(5_000);
-    expect(yieldBpsForLapses(2)).toBe(0);
-    expect(yieldBpsForLapses(9)).toBe(0);
-    expect(yieldBpsForLapses(undefined)).toBe(10_000);
+    expect(effectiveYieldBps({ lapseCount: 0 })).toBe(10_000);
+    expect(effectiveYieldBps({ lapseCount: 1 })).toBe(5_000);
+    expect(effectiveYieldBps({ lapseCount: 2 })).toBe(0);
+    expect(effectiveYieldBps({ lapseCount: 9 })).toBe(0);
+    expect(effectiveYieldBps({ lapseCount: undefined })).toBe(10_000);
   });
   it('only ever returns a VALID_YIELD_BPS value', () => {
-    for (let n = 0; n < 5; n += 1) expect(VALID_YIELD_BPS).toContain(yieldBpsForLapses(n));
+    for (let n = 0; n < 5; n += 1) {
+      expect(VALID_YIELD_BPS).toContain(effectiveYieldBps({ lapseCount: n }));
+    }
   });
 });
 

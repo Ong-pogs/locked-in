@@ -21,15 +21,33 @@ export const LOCK_SEED = 'lock-v2';
 // bps a voucher may authorize — must match settle.rs VALID_YIELD_BPS.
 export const VALID_YIELD_BPS = [10_000, 5_000, 0];
 
+// The tier ladder. Index 0 keeps all yield, 1 keeps half, 2 keeps none.
+const YIELD_TIERS = [10_000, 5_000, 0];
+const MAX_TIER = YIELD_TIERS.length - 1;
+
+function clampTier(value, max) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(Math.floor(n), max);
+}
+
 /**
- * Yield tier by lapse count (one-mercy): 0 lapses keep 100%, 1 keeps 50%,
- * 2+ keep 0%. Mirrors the off-chain lapse engine and settle.rs bps set.
+ * THE MONEY TIER. This is the ONLY function permitted to decide the bps a
+ * completion voucher signs — `issueVoucher` below is its single caller, and
+ * every other yield-bps-shaped helper in this codebase is bookkeeping.
+ *
+ * Two inputs, both of which cost the user real yield:
+ *   lapseCount        missed-day lapses, 0..2 (shieldLapseEngine)
+ *   arenaPenaltyTiers 1 if the last settled arena stake season on this
+ *                     (wallet, course, lock) was a FORFEIT, else 0
+ *
+ * arenaPenaltyTiers is clamped to 0..1 on purpose: a lock may span several
+ * seasons, and an accumulating penalty would zero a position whose owner
+ * never missed a day.
  */
-export function yieldBpsForLapses(lapseCount) {
-  const n = Number(lapseCount) || 0;
-  if (n <= 0) return 10_000;
-  if (n === 1) return 5_000;
-  return 0;
+export function effectiveYieldBps({ lapseCount = 0, arenaPenaltyTiers = 0 } = {}) {
+  const tier = clampTier(lapseCount, MAX_TIER) + clampTier(arenaPenaltyTiers, 1);
+  return YIELD_TIERS[Math.min(tier, MAX_TIER)];
 }
 
 /** Derive the v2 lock PDA: [b"lock-v2", owner, course_id_hash]. */
@@ -69,13 +87,16 @@ export function buildVoucherMessage(programId, lock, bps, expiry) {
  *
  * authoritySecretKey: base58 of the 64-byte nacl secret key (the vault ops key).
  */
-export function issueVoucher({ programId, authoritySecretKey, owner, courseIdHash, lapseCount = 0, expiry }) {
+export function issueVoucher({
+  programId, authoritySecretKey, owner, courseIdHash,
+  lapseCount = 0, arenaPenaltyTiers = 0, expiry,
+}) {
   const secret = bs58lib.decode(authoritySecretKey);
   if (secret.length !== 64) throw new Error('authority secret key must be a 64-byte nacl key');
   const authorityPubkey = new PublicKey(secret.slice(32)); // last 32 bytes = public key
 
   const lock = deriveLockPda(programId, owner, courseIdHash);
-  const bps = yieldBpsForLapses(lapseCount);
+  const bps = effectiveYieldBps({ lapseCount, arenaPenaltyTiers });
   const message = buildVoucherMessage(programId, lock, bps, expiry);
   const signature = nacl.sign.detached(message, secret);
 

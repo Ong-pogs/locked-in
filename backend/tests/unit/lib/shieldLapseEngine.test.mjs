@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyLessonDay,
   applyMissDay,
-  userYieldBps,
+  lapseRedirectBps,
   normalizeState,
   SHIELD_CAP,
 } from '../../../src/lib/shieldLapseEngine.mjs';
@@ -17,13 +17,13 @@ function run(script, start = fresh()) {
   return s;
 }
 
-describe('userYieldBps (one-mercy tiers)', () => {
+describe('lapseRedirectBps (one-mercy tiers)', () => {
   it('maps lapse count to [10000, 5000, 0]', () => {
-    expect(userYieldBps(0)).toBe(10_000);
-    expect(userYieldBps(1)).toBe(5_000);
-    expect(userYieldBps(2)).toBe(0);
-    expect(userYieldBps(9)).toBe(0);
-    expect(userYieldBps(-1)).toBe(10_000);
+    expect(lapseRedirectBps(0)).toBe(10_000);
+    expect(lapseRedirectBps(1)).toBe(5_000);
+    expect(lapseRedirectBps(2)).toBe(0);
+    expect(lapseRedirectBps(9)).toBe(0);
+    expect(lapseRedirectBps(-1)).toBe(10_000);
   });
 });
 
@@ -93,7 +93,7 @@ describe('lapse coalescing', () => {
     expect(s.lapseOpen).toBe(false);
     s = applyMissDay(s); // shields still 0 -> second lapse
     expect(s.lapseCount).toBe(2);
-    expect(userYieldBps(s.lapseCount)).toBe(0);
+    expect(lapseRedirectBps(s.lapseCount)).toBe(0);
   });
 
   it('caps lapse_count at 2', () => {

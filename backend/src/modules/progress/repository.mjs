@@ -29,8 +29,8 @@ import {
   enhanceValidatorFeedback,
   gradeSubjectiveAnswerWithLlm,
 } from '../../lib/answerValidator.mjs';
-import { issueVoucher, yieldBpsForLapses } from '../../lib/claimVoucher.mjs';
-import { applyLessonDay, applyMissDay, userYieldBps } from '../../lib/shieldLapseEngine.mjs';
+import { issueVoucher, effectiveYieldBps } from '../../lib/claimVoucher.mjs';
+import { applyLessonDay, applyMissDay, lapseRedirectBps } from '../../lib/shieldLapseEngine.mjs';
 import { autoMissEventId } from '../../lib/missEvents.mjs';
 import {
   deriveLockPdaServer,
@@ -407,7 +407,10 @@ export async function getStoredCompletionVoucher(walletAddress, courseId, { log 
     if (unexpired) {
       // (b) lapse_count is frozen at completion, so a stored-bps mismatch is
       // by definition a bug — log loudly, serve the stored voucher unchanged.
-      const expectedBps = yieldBpsForLapses(Number(row.runtime_lapse_count));
+      const expectedBps = effectiveYieldBps({
+        lapseCount: Number(row.runtime_lapse_count),
+        arenaPenaltyTiers: Number(row.voucher_arena_penalty_tiers ?? 0),
+      });
       if (Number(row.bps) !== expectedBps) {
         log?.error?.(
           {
@@ -4189,7 +4192,7 @@ async function readMissConsequenceReceipt(client, walletAddress, courseId, missE
  *  (c) shields banked -> SHIELD_ABSORBED: shield burns, streak PAUSES,
  *      saver_count and current_yield_redirect_bps are NOT touched — a
  *      shielded miss is free;
- *      shields gone -> lapse: streak 0, redirect = 10000 - userYieldBps(lapse)
+ *      shields gone -> lapse: streak 0, redirect = 10000 - lapseRedirectBps(lapse)
  *      (5000 at lapse 1, 10000 at lapse 2+); consecutive dark days coalesce
  *      into one lapse via lapse_open (LAPSE_ALREADY_OPEN);
  *  (d) engine columns + streak + redirect + last_miss_day + the receipt all
@@ -4244,7 +4247,7 @@ async function applyMissConsequenceLocked(client, state, missDay, missEventId) {
     reason = 'SHIELD_ABSORBED';
   } else {
     reason = next.lapseOpen && state.lapseOpen ? 'LAPSE_ALREADY_OPEN' : 'LAPSE_APPLIED';
-    redirectBpsAfter = 10_000 - userYieldBps(next.lapseCount);
+    redirectBpsAfter = 10_000 - lapseRedirectBps(next.lapseCount);
   }
 
   // (d) persist engine columns + streak (+ redirect only past the shields) +
