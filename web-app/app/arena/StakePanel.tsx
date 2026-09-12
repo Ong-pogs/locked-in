@@ -54,7 +54,13 @@ export function StakePanel() {
       if (!live) return;
       setSeason(s);
       setStake(k);
-      setCourses((e?.enrollments ?? []).map((x) => x.courseId));
+      // Only courses that can actually be staked. Offering a finished course
+      // just to reject it on submit is a worse experience than not listing it.
+      setCourses(
+        (e?.enrollments ?? [])
+          .filter((x) => !x.runtime?.courseCompletedAt)
+          .map((x) => x.courseId),
+      );
       setLoaded(true);
     })();
     return () => { live = false; };
@@ -78,10 +84,19 @@ export function StakePanel() {
   // Nothing to say until we know whether a season exists.
   if (!loaded || (!season && !stake)) return null;
 
-  // ---------- Already staked: the standing indicator ----------
-  if (stake) {
-    const d = describeStake(stake);
-    const live = stake.outcome === 'PENDING';
+  // A stake is "live" only while its own season is still running. A settled one
+  // is a result to read once, not a state to be stuck in — otherwise staking
+  // is a thing a wallet can do exactly once, ever.
+  const liveStake = stake && stake.outcome === 'PENDING' && stake.isCurrentSeason
+    ? stake
+    : null;
+  const settledStake = stake && stake !== liveStake ? stake : null;
+
+  // ---------- Staked right now: the standing indicator ----------
+  if (liveStake) {
+    const d = describeStake(liveStake);
+    const live = true;
+    const stake = liveStake;
     return (
       <section
         className="mb-5 rounded-lg p-4"
@@ -143,9 +158,38 @@ export function StakePanel() {
     );
   }
 
-  // ---------- Not staked: the opt-in ----------
+  // ---------- Not staked this season: last result, then the opt-in ----------
   const days = season ? daysRemaining(season.endsAt) : 0;
+  const settled = settledStake ? describeStake(settledStake) : null;
+
   return (
+    <>
+    {settled && settledStake && (
+      <section
+        className="mb-3 rounded-lg p-4"
+        style={{
+          background: T.bgCard,
+          border: `1px solid ${settled.tone === 'danger' ? 'rgba(255,68,102,0.38)' : T.borderAlive}`,
+        }}
+        data-testid="arena-stake-settled"
+      >
+        <div
+          className="font-pixel-mono text-[10px] uppercase tracking-[1px]"
+          style={{ color: T.textMuted }}
+        >
+          Your last staked season
+        </div>
+        <div className="mt-1 font-pixel text-[15px]" style={{ color: TONE_COLOR[settled.tone] }}>
+          {settled.headline}
+        </div>
+        <p className="mt-2 text-[12px] leading-relaxed" style={{ color: T.textMutedStrong }}>
+          {settled.detail}
+        </p>
+        <p className="mt-1 text-[11px]" style={{ color: T.textMuted }}>
+          Staked {settledStake.courseId}.
+        </p>
+      </section>
+    )}
     <section
       className="mb-5 rounded-lg p-4"
       style={{ background: T.bgCard, border: `1px solid ${T.borderDormant}` }}
@@ -260,5 +304,6 @@ export function StakePanel() {
         </div>
       )}
     </section>
+    </>
   );
 }

@@ -124,6 +124,10 @@ export interface ArenaStakeEntry {
   /** Summed rating delta over counted staked matches — this decides the season. */
   stakedDelta: number;
   matchesCounted: number;
+  /** Missed-day lapses on the staked course. A forfeit costs a tier ON TOP. */
+  lapseCount: number;
+  /** False once this entry's season has ended — the next one can be staked. */
+  isCurrentSeason: boolean;
 }
 
 export interface ArenaStakeResult {

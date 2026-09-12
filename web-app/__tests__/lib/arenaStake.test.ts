@@ -15,6 +15,8 @@ const base: Omit<ArenaStakeEntry, 'outcome' | 'stakedDelta'> = {
   endsAt: '2026-10-01T00:00:00Z',
   seasonStatus: 'OPEN',
   matchesCounted: 2,
+  lapseCount: 0,
+  isCurrentSeason: true,
 };
 
 const entry = (o: ArenaStakeEntry['outcome'], stakedDelta: number): ArenaStakeEntry =>
@@ -46,8 +48,23 @@ describe('describeStake', () => {
   it('states the consequence after a forfeit, and that the deposit is intact', () => {
     const d = describeStake({ ...entry('FORFEIT', -30), settledAt: 'x' });
     expect(d.tone).toBe('danger');
-    expect(d.detail).toMatch(/half/i);
+    expect(d.detail).toMatch(/50% of its yield instead of 100%/);
     expect(d.detail).toMatch(/deposit/i);
+  });
+
+  it('tells a player who already has a lapse the truth about their own ladder', () => {
+    // "half its yield" is a lie to someone at 50% — a forfeit takes them to
+    // nothing.
+    const d = describeStake({ ...entry('FORFEIT', -30), lapseCount: 1, settledAt: 'x' });
+    expect(d.detail).toMatch(/none of its yield instead of 50%/);
+    expect(d.detail).not.toMatch(/half/i);
+  });
+
+  it('quotes the same ladder while the season is still running', () => {
+    const clean = describeStake(entry('PENDING', -8));
+    expect(clean.detail).toMatch(/50% of its yield instead of 100%/);
+    const lapsed = describeStake({ ...entry('PENDING', -8), lapseCount: 1 });
+    expect(lapsed.detail).toMatch(/none of its yield instead of 50%/);
   });
 
   it('says nothing was taken on a void', () => {

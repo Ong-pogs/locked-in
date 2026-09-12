@@ -232,6 +232,8 @@ export interface CourseRuntimeSnapshot {
   lapseOpen?: boolean;
   consecutiveLessonDays?: number;
   voucherAvailable?: boolean;
+  /** Set once the course is frozen complete — its yield tier is final. */
+  courseCompletedAt?: string | null;
   lastCompletedDay?: string | null;
   completedToday?: boolean;
   dayEndsAtUtc?: string;

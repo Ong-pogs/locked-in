@@ -1,4 +1,5 @@
 import type { ArenaStakeEntry } from '../types/arena';
+import { combinedKeptBps } from '../components/v2/PenaltyBanner';
 
 export type StakeTone = 'neutral' | 'good' | 'danger';
 
@@ -12,6 +13,21 @@ export interface StakeDescription {
 // behind" panel should never have to go and check whether their deposit is at
 // risk — the answer is on the same line as the warning.
 const DEPOSIT_SAFE = 'Your deposit is never at risk.';
+
+/**
+ * What a forfeit would actually cost THIS course, as a pair of percentages.
+ *
+ * "half its yield" is only true for a player with no lapses. One lapse already
+ * puts them at 50%, and a forfeit takes them to nothing — so the copy reads the
+ * real ladder rather than quoting a number that is wrong for anyone who has
+ * missed a day.
+ */
+export function penaltyWording(lapseCount: number): string {
+  const kept = combinedKeptBps(lapseCount, 0) / 100;
+  const after = combinedKeptBps(lapseCount, 1) / 100;
+  if (after === 0) return `it keeps none of its yield instead of ${kept}%`;
+  return `it keeps ${after}% of its yield instead of ${kept}%`;
+}
 
 export function daysRemaining(endsAt: string, now: Date = new Date()): number {
   const ms = new Date(endsAt).getTime() - now.getTime();
@@ -30,12 +46,13 @@ export function describeStake(entry: ArenaStakeEntry): StakeDescription {
   const n = entry.matchesCounted;
   const matches = `${n} staked ${n === 1 ? 'match' : 'matches'}`;
 
+  const lapses = Number(entry.lapseCount) || 0;
+  const cost = penaltyWording(lapses);
+
   if (entry.outcome === 'FORFEIT') {
     return {
       headline: 'Season lost',
-      detail:
-        'Your staked course keeps half its yield instead of all of it when you claim. '
-        + DEPOSIT_SAFE,
+      detail: `When you claim, ${cost}. ${DEPOSIT_SAFE}`,
       tone: 'danger',
     };
   }
@@ -49,7 +66,7 @@ export function describeStake(entry: ArenaStakeEntry): StakeDescription {
   if (entry.outcome === 'KEPT') {
     return {
       headline: 'Season won',
-      detail: `Your staked course keeps all of its yield. ${DEPOSIT_SAFE}`,
+      detail: `Nothing was taken — your staked course keeps its yield. ${DEPOSIT_SAFE}`,
       tone: 'good',
     };
   }
@@ -61,8 +78,8 @@ export function describeStake(entry: ArenaStakeEntry): StakeDescription {
     return {
       headline: `You are behind — ${left}`,
       detail:
-        `Down ${Math.abs(delta)} rating across ${matches}. If the season ends here, your staked `
-        + `course keeps half its yield instead of all of it. ${DEPOSIT_SAFE}`,
+        `Down ${Math.abs(delta)} rating across ${matches}. If the season ends here, ${cost}. `
+        + DEPOSIT_SAFE,
       tone: 'danger',
     };
   }
@@ -70,15 +87,16 @@ export function describeStake(entry: ArenaStakeEntry): StakeDescription {
     return {
       headline: `You are ahead — ${left}`,
       detail:
-        `Up ${delta} rating across ${matches}. Finish level or better and you keep all your `
-        + `yield. ${DEPOSIT_SAFE}`,
+        `Up ${delta} rating across ${matches}. Finish level or better and nothing changes. `
+        + DEPOSIT_SAFE,
       tone: 'good',
     };
   }
   return {
     headline: `Level — ${left}`,
     detail:
-      `Level keeps your full yield — only finishing the season behind costs you a tier. ${DEPOSIT_SAFE}`,
+      `Level is safe — only finishing the season behind costs you anything, and then ${cost}. `
+      + DEPOSIT_SAFE,
     tone: 'neutral',
   };
 }

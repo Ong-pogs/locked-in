@@ -283,7 +283,17 @@ export async function linkMatchForSeason(client, matchId, wallets) {
   }
 }
 
-/** What the UI shows a staked player: the season, their entry, live delta. */
+/**
+ * What the UI shows a staked player: the season, their entry, live delta.
+ *
+ * `lapseCount` rides along because the panel cannot honestly say "keeps half
+ * its yield" without it — a player already carrying one lapse is at 50%, and a
+ * forfeit takes them to nothing, not to half.
+ *
+ * `isCurrentSeason` is what lets the panel offer the next season's opt-in to
+ * someone whose last stake has already settled, instead of showing them a
+ * result forever.
+ */
 export async function getMyStake(walletAddress) {
   const r = await query(
     `select e.stake_season_id as "stakeSeasonId", e.course_id as "courseId",
@@ -291,9 +301,14 @@ export async function getMyStake(walletAddress) {
             e.rating_at_start as "ratingAtStart", e.rating_at_end as "ratingAtEnd",
             e.staked_delta as "settledDelta", e.outcome,
             e.voided_reason as "voidedReason", e.settled_at as "settledAt",
-            s.starts_at as "startsAt", s.ends_at as "endsAt", s.status as "seasonStatus"
+            s.starts_at as "startsAt", s.ends_at as "endsAt", s.status as "seasonStatus",
+            coalesce(rt.lapse_count, 0) as "lapseCount",
+            (s.status = 'OPEN' and s.starts_at <= now() and s.ends_at > now())
+              as "isCurrentSeason"
        from arena.season_entries e
        join arena.seasons s on s.id = e.stake_season_id
+       left join lesson.user_course_runtime_state rt
+         on rt.wallet_address = e.wallet_address and rt.course_id = e.course_id
       where e.wallet_address = $1
       order by e.stake_season_id desc
       limit 1`,

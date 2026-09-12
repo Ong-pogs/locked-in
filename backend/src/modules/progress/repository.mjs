@@ -2288,6 +2288,7 @@ export async function getUserEnrollments(walletAddress) {
         coalesce(ucrs.lapse_count, 0) AS "lapseCount",
         coalesce(ucrs.lapse_open, false) AS "lapseOpen",
         coalesce(ucrs.consecutive_lesson_days, 0) AS "consecutiveLessonDays",
+        ucrs.course_completed_at AS "courseCompletedAt",
         ucrs.last_completed_day::text AS "lastCompletedDay"
       FROM lesson.user_course_enrollments uce
       LEFT JOIN lesson.user_course_runtime_state ucrs
