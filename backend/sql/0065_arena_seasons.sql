@@ -51,6 +51,12 @@ create table if not exists arena.season_entries (
   wallet_address  text not null,
   course_id       text not null,
   lock_address    text not null,
+  -- The lock PDA is [lock-v2, owner, course_id_hash], so lock_address is
+  -- IDENTICAL for every lock a wallet ever opens on a course — it identifies
+  -- the slot, not the position in it. lock_start_ts is what distinguishes one
+  -- lock instance from its replacement, and without it a forfeit would follow
+  -- a user into a brand-new lock that never entered the Arena.
+  lock_start_ts   bigint not null default 0,
   opted_in_at     timestamptz not null default now(),
   consent_version text not null,
   rating_at_start integer not null,
@@ -67,9 +73,16 @@ create table if not exists arena.season_entries (
 
 create index if not exists arena_season_entries_pending_idx
   on arena.season_entries (stake_season_id, outcome);
+
+-- ONE staked course per wallet per season. The primary key is per-course so a
+-- wallet's other locks are provably untouched, but the season's outcome is a
+-- single summed delta for that wallet — so allowing two entries would take a
+-- tier off two locks for one lost match, and disclose only one of them.
+create unique index if not exists arena_season_entries_one_per_wallet_idx
+  on arena.season_entries (stake_season_id, wallet_address);
 -- The lookup the voucher signer makes on every issue.
 create index if not exists arena_season_entries_lookup_idx
-  on arena.season_entries (wallet_address, course_id, lock_address, settled_at desc);
+  on arena.season_entries (wallet_address, course_id, lock_address, outcome);
 
 -- ---------- Which matches counted ----------
 create table if not exists arena.season_match_links (
@@ -108,9 +121,15 @@ create policy season_match_links_wallet_policy
 
 -- ---------- The tier travels with the voucher ----------
 -- A voucher is signed at course completion with a 90-day TTL, against a 30-day
--- season, and is re-served or re-signed later. Recomputing the tier at re-issue
--- would hand the same user a different bps depending on when they asked, so the
--- penalty is captured at FIRST issue and replayed verbatim on every re-issue.
+-- season, so a learner who finishes mid-season gets a voucher signed BEFORE
+-- their season settles. Storing the tier here is what lets a re-issue replay
+-- the bps the user was actually given instead of recomputing a different one.
+--
+-- The stored value is not the last word: a season that settles FORFEIT after
+-- the voucher was signed raises the resolved tier, and the read path re-signs
+-- once to match. That correction is one-directional — a captured penalty is
+-- never lifted — so the bps a user sees only ever moves toward the tier they
+-- consented to when they staked.
 alter table lesson.completion_vouchers
   add column if not exists arena_penalty_tiers integer not null default 0;
 

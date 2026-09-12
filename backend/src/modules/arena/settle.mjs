@@ -78,7 +78,7 @@ async function xpEarningMatchesToday(client, wallet) {
  * arena.rating_events' unique (match_id, wallet_address): a concurrent second
  * settle violates it and rolls the whole transaction back.
  */
-export async function maybeSettleMatch(client, matchId) {
+export async function maybeSettleMatch(client, matchId, { log = console } = {}) {
   const m = await client.query(
     `select id, creator, opponent, season, status
        from arena.matches where id = $1 for update`,
@@ -145,7 +145,25 @@ export async function maybeSettleMatch(client, matchId) {
   // Record which season this match belongs to, in the same transaction as the
   // rating events it will later be summed with. Doing it here rather than in a
   // sweep means a link can never disagree with a rating event.
-  await linkMatchForSeason(client, matchId, [a.walletAddress, b.walletAddress]);
+  //
+  // Guarded: a missing link costs one match's contribution to a stake, but an
+  // exception here would roll back the whole settlement and cost both players
+  // their rating and XP for a match they actually played. The stake is the
+  // newer, smaller thing — it does not get to break the game underneath it.
+  // A SAVEPOINT, not a bare try/catch: a failed statement aborts the whole
+  // Postgres transaction, so catching the error would still leave every
+  // following query failing with "current transaction is aborted".
+  await client.query('savepoint season_link');
+  try {
+    await linkMatchForSeason(client, matchId, [a.walletAddress, b.walletAddress]);
+    await client.query('release savepoint season_link');
+  } catch (err) {
+    await client.query('rollback to savepoint season_link');
+    log?.error?.(
+      { matchId, error: err?.message ?? String(err) },
+      'arena.season_link_failed',
+    );
+  }
 
   for (const [wallet, score] of [
     [a.walletAddress, scoreA],

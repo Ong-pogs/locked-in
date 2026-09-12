@@ -89,6 +89,15 @@ describe('POST /v1/arena/stake', () => {
     expect(res.json().code).toBe('ARENA_STAKE_NO_LOCK');
   });
 
+  it('says the chain is unreachable rather than claiming you have no lock', async () => {
+    // An RPC outage is our problem, not the user's. Telling someone with a
+    // perfectly good position that they have no lock sends them off to check it.
+    __setLockV2FreshReadOverride(async () => { throw new Error('rpc down'); });
+    const res = await stake(generateTestWallet(), { courseId: COURSE, consentVersion: 'v1' });
+    expect(res.statusCode).toBe(503);
+    expect(res.json().code).toBe('ARENA_STAKE_CHAIN_UNAVAILABLE');
+  });
+
   it('accepts an ACTIVE lock and binds immediately', async () => {
     __setLockV2FreshReadOverride(async () => activeLock());
     const res = await stake(generateTestWallet(), { courseId: COURSE, consentVersion: 'v1' });
@@ -183,5 +192,59 @@ describe('GET /v1/arena/season', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().id).toBe(SEASON);
     expect(res.json().status).toBe('OPEN');
+  });
+});
+
+describe('one staked course per wallet per season', () => {
+  it('refuses a second course in the same season', async () => {
+    // The season's outcome is one summed delta for the wallet, so a second
+    // entry would take a tier off a second lock for the same lost match.
+    __setLockV2FreshReadOverride(async () => activeLock());
+    const wallet = generateTestWallet();
+    const first = await stake(wallet, { courseId: COURSE, consentVersion: 'v1' });
+    expect(first.statusCode).toBe(201);
+
+    const second = await stake(wallet, {
+      courseId: 'swaps-and-dexs', consentVersion: 'v1',
+    });
+    expect(second.statusCode).toBe(409);
+    expect(second.json().code).toBe('ARENA_STAKE_ALREADY_STAKED');
+    expect(second.json().message).toContain(COURSE);
+  });
+
+  it('still lets the same course be re-confirmed idempotently', async () => {
+    __setLockV2FreshReadOverride(async () => activeLock());
+    const wallet = generateTestWallet();
+    await stake(wallet, { courseId: COURSE, consentVersion: 'v1' });
+    const again = await stake(wallet, { courseId: COURSE, consentVersion: 'v1' });
+    expect(again.statusCode).toBe(200);
+    expect(again.json().created).toBe(false);
+  });
+});
+
+describe('the season window, not the cron, decides what is live', () => {
+  it('refuses an opt-in once the window has passed, even while status is OPEN', async () => {
+    // The cron runs daily at 00:35 UTC. Between a season ending and that run,
+    // the row still says OPEN — but nothing may join a season that is over.
+    __setLockV2FreshReadOverride(async () => activeLock());
+    await db.query(
+      `update arena.seasons set ends_at = now() - interval '1 minute' where id = $1`,
+      [SEASON],
+    );
+    const res = await stake(generateTestWallet(), { courseId: COURSE, consentVersion: 'v1' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('ARENA_SEASON_CLOSED');
+  });
+
+  it('refuses an opt-in before the window opens', async () => {
+    __setLockV2FreshReadOverride(async () => activeLock());
+    await db.query(
+      `update arena.seasons set starts_at = now() + interval '1 day',
+                                ends_at = now() + interval '30 days' where id = $1`,
+      [SEASON],
+    );
+    const res = await stake(generateTestWallet(), { courseId: COURSE, consentVersion: 'v1' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('ARENA_SEASON_CLOSED');
   });
 });

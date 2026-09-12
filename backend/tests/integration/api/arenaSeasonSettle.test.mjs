@@ -36,12 +36,15 @@ const quiet = { log: { error: () => {} } };
 const lockFor = (wallet, courseId = COURSE) =>
   deriveLockPdaServer(process.env.VAULT_V2_PROGRAM_ID, wallet, courseId).toBase58();
 
-const liveLock = (wallet, status = 'ACTIVE', lockAddress = null) => async () => ({
+const LOCK_START = 1_700_000_000;
+
+const liveLock = (wallet, status = 'ACTIVE', over = {}) => async () => ({
   mismatch: false,
   status,
   principal: status === 'ACTIVE' ? 10_000_000n : 0n,
-  lockStartTs: 0,
-  lockAddress: lockAddress ?? lockFor(wallet),
+  lockStartTs: LOCK_START,
+  lockAddress: lockFor(wallet),
+  ...over,
 });
 
 /** A CLOSED season holding one PENDING entry whose counted links sum to delta. */
@@ -54,11 +57,11 @@ async function seedClosedSeasonWithEntry(wallet, { stakedDelta, counted = true }
   );
   await db.query(
     `insert into arena.season_entries
-       (stake_season_id, wallet_address, course_id, lock_address, consent_version,
-        rating_at_start, outcome)
-     values ($1, $2, $3, $4, 'v1', 1200, 'PENDING')
+       (stake_season_id, wallet_address, course_id, lock_address, lock_start_ts,
+        consent_version, rating_at_start, outcome)
+     values ($1, $2, $3, $4, $5, 'v1', 1200, 'PENDING')
      on conflict do nothing`,
-    [SEASON, wallet, COURSE, lockFor(wallet)],
+    [SEASON, wallet, COURSE, lockFor(wallet), LOCK_START],
   );
   const m = await db.query(
     `insert into arena.matches
@@ -193,15 +196,43 @@ describe('season settlement', () => {
     expect(await readArenaPenaltyTiers(wallet, COURSE, lockFor(wallet))).toBe(0);
   });
 
-  it('a different lock on the same course voids rather than forfeits', async () => {
+  it('a relocked position voids rather than inheriting the stake', async () => {
     const wallet = generateTestWallet();
     await seedClosedSeasonWithEntry(wallet, { stakedDelta: -48 });
-    // Relocked under a different PDA — the staked position is gone.
-    __setLockV2FreshReadOverride(liveLock(wallet, 'ACTIVE', OTHER_LOCK));
+    // Closed and reopened: the PDA is UNCHANGED (it is derived from owner +
+    // course), so only the start timestamp can tell the two positions apart.
+    __setLockV2FreshReadOverride(liveLock(wallet, 'ACTIVE', { lockStartTs: LOCK_START + 5000 }));
 
     await runArenaSeasonSweep(quiet);
 
     expect((await entryOf(wallet)).outcome).toBe('VOID');
+  });
+
+  it('a chain read that cannot be trusted stays PENDING rather than voiding', async () => {
+    // A mismatch is an unreadable answer, not "the lock is gone". Settling it
+    // as VOID would let one config skew forgive every penalty in the season.
+    const wallet = generateTestWallet();
+    await seedClosedSeasonWithEntry(wallet, { stakedDelta: -16 });
+    __setLockV2FreshReadOverride(async () => ({
+      mismatch: true, reason: 'PROGRAM_OWNER_MISMATCH', lockAddress: lockFor(wallet),
+    }));
+
+    await runArenaSeasonSweep(quiet);
+
+    expect((await entryOf(wallet)).outcome).toBe('PENDING');
+  });
+
+  it('a forfeit does not follow the user into a replacement lock', async () => {
+    const wallet = generateTestWallet();
+    await seedClosedSeasonWithEntry(wallet, { stakedDelta: -16 });
+    __setLockV2FreshReadOverride(liveLock(wallet));
+    await runArenaSeasonSweep(quiet);
+    expect((await entryOf(wallet)).outcome).toBe('FORFEIT');
+    expect(await readArenaPenaltyTiers(wallet, COURSE, lockFor(wallet))).toBe(1);
+
+    // Same PDA, different position. The old lock's consequence is spent with it.
+    __setLockV2FreshReadOverride(liveLock(wallet, 'ACTIVE', { lockStartTs: LOCK_START + 9000 }));
+    expect(await readArenaPenaltyTiers(wallet, COURSE, lockFor(wallet))).toBe(0);
   });
 
   it('an unreadable chain leaves the entry PENDING rather than guessing', async () => {
@@ -307,5 +338,70 @@ describe('the penalty reaches the signed bytes', () => {
     expect(v.arenaPenaltyTiers).toBe(1);
     expect(v.bps).toBe(0);
     expect(Buffer.from(v.message, 'base64').readUInt16LE(81)).toBe(0);
+  });
+});
+
+// REGRESSION: the realistic order of events.
+//
+// Every other test here settles the season and THEN completes the course. Real
+// users do the opposite — they finish the course while the season is still
+// running, which signs a voucher immediately (repository.mjs post-commit
+// auto-issue). If the penalty cannot reach a voucher that already exists, the
+// entire loser side of this feature is a no-op for anyone who is actually
+// studying.
+describe('a course completed BEFORE the season settles', () => {
+  it('still ends up serving the penalised tier', async () => {
+    const wallet = generateTestWallet();
+    await seedClosedSeasonWithEntry(wallet, { stakedDelta: -16 });
+    __setLockV2FreshReadOverride(liveLock(wallet));
+
+    // Finish the course first, and sign+store a voucher the way the submit
+    // path does.
+    await completeCourse(wallet);
+    const early = await issueCourseCompletionVoucher(wallet, COURSE);
+    await persistCompletionVoucher(wallet, COURSE, early);
+    expect(early.bps).toBe(10_000); // nothing settled yet — correct so far
+
+    // Now the season settles against them.
+    await runArenaSeasonSweep(quiet);
+    expect((await entryOf(wallet)).outcome).toBe('FORFEIT');
+
+    // What the client actually gets from here on must carry the penalty.
+    const served = await getStoredCompletionVoucher(wallet, COURSE, { log: { error: () => {} } });
+    expect(served.arenaPenaltyTiers).toBe(1);
+    expect(served.bps).toBe(5_000);
+    expect(Buffer.from(served.message, 'base64').readUInt16LE(81)).toBe(5_000);
+  });
+
+  it('does not let a later zero-delta season erase the forfeit', async () => {
+    const wallet = generateTestWallet();
+    await seedClosedSeasonWithEntry(wallet, { stakedDelta: -16 });
+    __setLockV2FreshReadOverride(liveLock(wallet));
+    await runArenaSeasonSweep(quiet);
+    expect((await entryOf(wallet)).outcome).toBe('FORFEIT');
+
+    // A second season, opted into and never played, settles KEPT with a newer
+    // settled_at. Reading "the most recent settled entry" would wipe the
+    // penalty for free.
+    await db.query(
+      `insert into arena.seasons (id, starts_at, ends_at, status)
+       values (910, now() - interval '10 days', now() - interval '1 hour', 'CLOSED')
+       on conflict (id) do update set status = 'CLOSED'`);
+    await db.query(
+      `insert into arena.season_entries
+         (stake_season_id, wallet_address, course_id, lock_address, lock_start_ts,
+          consent_version, rating_at_start, outcome)
+       values (910, $1, $2, $3, $4, 'v1', 1200, 'PENDING')
+       on conflict do nothing`,
+      [wallet, COURSE, lockFor(wallet), LOCK_START]);
+    await runArenaSeasonSweep(quiet);
+
+    const later = await db.query(
+      `select outcome from arena.season_entries
+        where stake_season_id = 910 and wallet_address = $1`, [wallet]);
+    expect(later.rows[0].outcome).toBe('KEPT');
+
+    // The forfeit still stands.
+    expect(await readArenaPenaltyTiers(wallet, COURSE, lockFor(wallet))).toBe(1);
   });
 });

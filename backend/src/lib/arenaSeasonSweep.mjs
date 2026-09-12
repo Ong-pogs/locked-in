@@ -50,11 +50,15 @@ export async function runArenaSeasonSweep({ log = console } = {}) {
       // 2. Settle every PENDING entry of every CLOSED season, one transaction
       //    each.
       const due = await client.query(
+        // SETTLED as well as CLOSED: an opt-in can land on a season this sweep
+        // has already marked SETTLED, and an entry nothing ever settles would
+        // sit PENDING forever, holding a stake that can never resolve.
         `select e.stake_season_id as "stakeSeasonId", e.wallet_address as "walletAddress",
-                e.course_id as "courseId", e.lock_address as "lockAddress"
+                e.course_id as "courseId", e.lock_address as "lockAddress",
+                e.lock_start_ts as "lockStartTs"
            from arena.season_entries e
            join arena.seasons s on s.id = e.stake_season_id
-          where s.status = 'CLOSED' and e.outcome = 'PENDING'
+          where s.status in ('CLOSED', 'SETTLED') and e.outcome = 'PENDING'
           order by e.stake_season_id, e.wallet_address
           limit 1000`,
       );
@@ -68,9 +72,23 @@ export async function runArenaSeasonSweep({ log = console } = {}) {
           // Fresh chain read. If this throws we do NOT guess — the catch below
           // leaves the entry PENDING for the next run.
           const lock = await readLockV2AccountFresh(entry.walletAddress, entry.courseId);
+
+          // A mismatch means the account did not look like this wallet's lock
+          // at all — an unreadable answer, not "the lock is gone". Settling it
+          // as VOID would make a config skew silently forgive every penalty in
+          // the season, so it is thrown back to the retry path instead.
+          if (lock?.mismatch) {
+            throw new Error(`lock read mismatch: ${lock.reason ?? 'unknown'}`);
+          }
+
+          // lock_address is the same PDA across relocks, so the position is
+          // identified by when it started. A lock that was closed and reopened
+          // is a different position and voids the stake rather than inheriting
+          // its consequence.
           const lockLive = Boolean(
-            lock && !lock.mismatch && lock.status === 'ACTIVE'
-            && lock.lockAddress === entry.lockAddress,
+            lock && lock.status === 'ACTIVE'
+            && lock.lockAddress === entry.lockAddress
+            && Number(lock.lockStartTs) === Number(entry.lockStartTs),
           );
 
           const outcome = seasonOutcome({ stakedDelta, lockLive });

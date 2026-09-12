@@ -5,7 +5,7 @@
 // progress/repository.mjs READS it from there. Nothing here writes lesson.*.
 // The two reads of lesson.* below are eligibility checks, not writes.
 import { query } from '../../lib/db.mjs';
-import { badRequest, conflict } from '../../lib/errors.mjs';
+import { HttpError, badRequest, conflict } from '../../lib/errors.mjs';
 import { appConfig } from '../../config.mjs';
 import { readLockV2AccountFresh } from '../../lib/lockPosition.mjs';
 import { ARENA_START_RATING } from '../../lib/arenaRating.mjs';
@@ -14,14 +14,21 @@ import { shouldCountMatch } from '../../lib/arenaSeason.mjs';
 const ENTRY_COLUMNS = `
   stake_season_id as "stakeSeasonId", wallet_address as "walletAddress",
   course_id as "courseId", lock_address as "lockAddress",
-  opted_in_at as "optedInAt", rating_at_start as "ratingAtStart", outcome
+  opted_in_at as "optedInAt", rating_at_start as "ratingAtStart",
+  lock_start_ts as "lockStartTs", outcome
 `;
 
+// The live season: OPEN *and* inside its own window. The status flag is only
+// as punctual as the daily cron, so a season whose ends_at has passed must stop
+// accepting opt-ins and stop counting matches immediately rather than at 00:35.
+const LIVE_SEASON = `
+  select id, starts_at as "startsAt", ends_at as "endsAt", status
+    from arena.seasons
+   where status = 'OPEN' and starts_at <= now() and ends_at > now()
+   limit 1`;
+
 export async function getOpenSeason() {
-  const r = await query(
-    `select id, starts_at as "startsAt", ends_at as "endsAt", status
-       from arena.seasons where status = 'OPEN' limit 1`,
-  );
+  const r = await query(LIVE_SEASON);
   return r.rows[0] ?? null;
 }
 
@@ -95,6 +102,21 @@ export async function optIntoSeason(walletAddress, courseId, consentVersion) {
   const existing = await readEntry(season.id, walletAddress, courseId);
   if (existing) return { season, entry: existing, created: false };
 
+  // One staked course per wallet per season. The season's outcome is a single
+  // summed delta for the wallet, so a second entry would take a tier off a
+  // second lock for the same lost match — and the panel only ever names one.
+  const other = await query(
+    `select course_id as "courseId" from arena.season_entries
+      where stake_season_id = $1 and wallet_address = $2 limit 1`,
+    [season.id, walletAddress],
+  );
+  if (other.rowCount > 0) {
+    throw conflict(
+      `You already staked ${other.rows[0].courseId} this season — one course per season`,
+      'ARENA_STAKE_ALREADY_STAKED',
+    );
+  }
+
   // A course that is already complete, or already has a signed voucher, cannot
   // be staked: its tier is frozen and a penalty could never reach it. Refusing
   // is the honest answer — silently accepting a stake that can never be
@@ -134,7 +156,21 @@ export async function optIntoSeason(walletAddress, courseId, consentVersion) {
 
   // Eligibility is read from the CHAIN, not the database. Uncached and
   // fail-closed: if we cannot prove a live lock, there is no stake.
-  const lock = await readLockV2AccountFresh(walletAddress, courseId);
+  //
+  // A read that THROWS is not the same as a read that says "no lock": one is
+  // our problem, the other is the user's. Telling someone with a perfectly
+  // good position that they have no lock would send them to go and check it,
+  // so an unreachable RPC gets its own retryable code instead.
+  let lock;
+  try {
+    lock = await readLockV2AccountFresh(walletAddress, courseId);
+  } catch {
+    throw new HttpError(
+      503,
+      'Could not reach the chain to verify your lock. Try again in a moment.',
+      'ARENA_STAKE_CHAIN_UNAVAILABLE',
+    );
+  }
   if (!lock || lock.mismatch || lock.status !== 'ACTIVE' || !(BigInt(lock.principal ?? 0n) > 0n)) {
     throw badRequest(
       'You need an active lock on that course to stake it',
@@ -147,22 +183,31 @@ export async function optIntoSeason(walletAddress, courseId, consentVersion) {
     [walletAddress],
   );
 
+  // The insert is conditional on the season still being live, so a season that
+  // closed between the read above and this write cannot take a stake nothing
+  // will ever settle.
   const inserted = await query(
     `insert into arena.season_entries
-       (stake_season_id, wallet_address, course_id, lock_address,
+       (stake_season_id, wallet_address, course_id, lock_address, lock_start_ts,
         consent_version, rating_at_start, outcome)
-     values ($1, $2, $3, $4, $5, $6, 'PENDING')
+     select $1, $2, $3, $4, $5, $6, $7, 'PENDING'
+      where exists (
+        select 1 from arena.seasons
+         where id = $1 and status = 'OPEN' and starts_at <= now() and ends_at > now())
      on conflict (stake_season_id, wallet_address, course_id) do nothing
      returning ${ENTRY_COLUMNS}`,
     [
-      season.id, walletAddress, courseId, lock.lockAddress,
+      season.id, walletAddress, courseId, lock.lockAddress, Number(lock.lockStartTs) || 0,
       consentVersion, rating.rows[0]?.rating ?? ARENA_START_RATING,
     ],
   );
 
-  // A concurrent duplicate lost the race; re-read rather than error.
   if (inserted.rowCount === 0) {
-    return { season, entry: await readEntry(season.id, walletAddress, courseId), created: false };
+    // Either a concurrent duplicate won the race, or the season closed under
+    // us. Only the first has a row to return.
+    const again = await readEntry(season.id, walletAddress, courseId);
+    if (again) return { season, entry: again, created: false };
+    throw badRequest('That arena season has closed', 'ARENA_SEASON_CLOSED');
   }
   return { season, entry: inserted.rows[0], created: true };
 }
@@ -197,16 +242,21 @@ export async function computeStakedDelta(runner, stakeSeasonId, walletAddress) {
  */
 export async function linkMatchForSeason(client, matchId, wallets) {
   const season = await client.query(
-    `select id from arena.seasons where status = 'OPEN' limit 1`,
+    `select id from arena.seasons
+      where status = 'OPEN' and starts_at <= now() and ends_at > now() limit 1`,
   );
   if (season.rowCount === 0) return;
   const stakeSeasonId = season.rows[0].id;
 
+  // Both players must have been staked BEFORE this match was created. Without
+  // the timestamp, a player could watch a match resolve and then opt in, having
+  // already seen the result they were about to be judged on.
   const entries = await client.query(
-    `select distinct wallet_address from arena.season_entries
-      where stake_season_id = $1 and wallet_address = any($2::text[])
-        and outcome = 'PENDING'`,
-    [stakeSeasonId, wallets],
+    `select distinct e.wallet_address from arena.season_entries e
+       join arena.matches m on m.id = $3
+      where e.stake_season_id = $1 and e.wallet_address = any($2::text[])
+        and e.outcome = 'PENDING' and e.opted_in_at <= m.created_at`,
+    [stakeSeasonId, wallets, matchId],
   );
   if (entries.rowCount < 2) return;
 
