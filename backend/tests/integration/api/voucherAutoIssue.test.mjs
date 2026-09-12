@@ -19,6 +19,7 @@ import bs58Module from 'bs58';
 import { PublicKey } from '@solana/web3.js';
 import { createTestServer, closeTestServer } from '../../helpers/test-server.mjs';
 import { getTestAuthHeaders, generateTestWallet, enrollWalletForTest } from '../../helpers/test-auth.mjs';
+import { acquireSuiteLock, releaseSuiteLock } from '../../helpers/suite-lock.mjs';
 import { query } from '../../../src/lib/db.mjs';
 import { effectiveYieldBps } from '../../../src/lib/claimVoucher.mjs';
 import {
@@ -185,7 +186,15 @@ function newTestWallet() {
 }
 
 let app;
-beforeAll(async () => { app = await createTestServer(); });
+// This file DROPS lesson.completion_vouchers to prove the R11.7 "table absent"
+// behaviour, which breaks any other file reading a voucher at the same moment.
+// The suite lock keeps those files out while it does.
+let suiteLock;
+
+beforeAll(async () => {
+  suiteLock = await acquireSuiteLock();
+  app = await createTestServer();
+});
 afterAll(async () => {
   if (trackedWallets.length > 0) {
     await query(`DELETE FROM lesson.completion_vouchers WHERE wallet_address = ANY($1)`, [trackedWallets]);
@@ -193,6 +202,7 @@ afterAll(async () => {
     await query(`DELETE FROM lesson.user_course_enrollments WHERE wallet_address = ANY($1)`, [trackedWallets]);
   }
   await closeTestServer(app);
+  await releaseSuiteLock(suiteLock);
 });
 afterEach(() => { __clearPositionCache(); });
 

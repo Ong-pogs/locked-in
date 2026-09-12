@@ -8,6 +8,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PublicKey } from '@solana/web3.js';
 import { createTestServer, closeTestServer } from '../../helpers/test-server.mjs';
 import { generateTestWallet } from '../../helpers/test-auth.mjs';
+import { acquireSuiteLock, releaseSuiteLock } from '../../helpers/suite-lock.mjs';
 import { __setLockV2FreshReadOverride, deriveLockPdaServer } from '../../../src/lib/lockPosition.mjs';
 import { runArenaSeasonSweep } from '../../../src/lib/arenaSeasonSweep.mjs';
 import {
@@ -20,6 +21,7 @@ import { effectiveYieldBps } from '../../../src/lib/claimVoucher.mjs';
 
 let app;
 let db;
+let suiteLock;
 
 const COURSE = 'test-kitchen';
 const OTHER_COURSE = 'swaps-and-dexs';
@@ -126,6 +128,7 @@ async function completeCourse(wallet, courseId = COURSE) {
 }
 
 beforeAll(async () => {
+  suiteLock = await acquireSuiteLock();
   app = await createTestServer();
   db = await import('../../../src/lib/db.mjs');
 });
@@ -133,6 +136,7 @@ beforeAll(async () => {
 afterAll(async () => {
   __setLockV2FreshReadOverride(null);
   await closeTestServer(app);
+  await releaseSuiteLock(suiteLock);
 });
 
 describe('season settlement', () => {

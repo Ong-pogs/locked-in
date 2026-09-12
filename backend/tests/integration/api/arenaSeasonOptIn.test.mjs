@@ -3,10 +3,12 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { createTestServer, closeTestServer } from '../../helpers/test-server.mjs';
 import { generateTestWallet, getTestAuthHeaders } from '../../helpers/test-auth.mjs';
+import { acquireSuiteLock, releaseSuiteLock } from '../../helpers/suite-lock.mjs';
 import { __setLockV2FreshReadOverride } from '../../../src/lib/lockPosition.mjs';
 
 let app;
 let db;
+let suiteLock;
 
 const COURSE = 'test-kitchen';
 const LOCK = 'Lock1111111111111111111111111111111111111';
@@ -45,6 +47,7 @@ async function stake(wallet, body) {
 }
 
 beforeAll(async () => {
+  suiteLock = await acquireSuiteLock();
   app = await createTestServer();
   db = await import('../../../src/lib/db.mjs');
 });
@@ -52,6 +55,7 @@ beforeAll(async () => {
 afterAll(async () => {
   __setLockV2FreshReadOverride(null);
   await closeTestServer(app);
+  await releaseSuiteLock(suiteLock);
 });
 
 beforeEach(openOurSeason);

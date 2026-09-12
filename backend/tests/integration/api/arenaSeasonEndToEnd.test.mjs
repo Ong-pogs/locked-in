@@ -7,12 +7,14 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createTestServer, closeTestServer } from '../../helpers/test-server.mjs';
 import { generateTestWallet, getTestAuthHeaders } from '../../helpers/test-auth.mjs';
+import { acquireSuiteLock, releaseSuiteLock } from '../../helpers/suite-lock.mjs';
 import { __setLockV2FreshReadOverride, deriveLockPdaServer } from '../../../src/lib/lockPosition.mjs';
 import { runArenaSeasonSweep } from '../../../src/lib/arenaSeasonSweep.mjs';
 import { issueCourseCompletionVoucher } from '../../../src/modules/progress/repository.mjs';
 
 let app;
 let db;
+let suiteLock;
 
 const COURSE = 'test-kitchen';
 const SEASON = 777;
@@ -111,6 +113,7 @@ async function completeCourse(wallet) {
 }
 
 beforeAll(async () => {
+  suiteLock = await acquireSuiteLock();
   app = await createTestServer();
   db = await import('../../../src/lib/db.mjs');
   await seedBank();
@@ -119,6 +122,7 @@ beforeAll(async () => {
 afterAll(async () => {
   __setLockV2FreshReadOverride(null);
   await closeTestServer(app);
+  await releaseSuiteLock(suiteLock);
 });
 
 describe('a real staked match decides a real season', () => {

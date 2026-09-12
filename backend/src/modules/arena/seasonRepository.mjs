@@ -99,17 +99,33 @@ export async function optIntoSeason(walletAddress, courseId, consentVersion) {
   // be staked: its tier is frozen and a penalty could never reach it. Refusing
   // is the honest answer — silently accepting a stake that can never be
   // collected would be worse than saying no.
-  const settled = await query(
-    `select 1
-       from lesson.user_course_runtime_state r
-       left join lesson.completion_vouchers v
-         on v.wallet_address = r.wallet_address and v.course_id = r.course_id
-      where r.wallet_address = $1 and r.course_id = $2
-        and (r.course_completed_at is not null or v.signature is not null)
+  //
+  // Two separate reads, not one join. The completion freeze is the real gate;
+  // the voucher row is belt-and-braces for the rare completer whose freeze
+  // stamp never landed. lesson.completion_vouchers is allowed to be
+  // unavailable — every other path that touches it degrades to a warning
+  // rather than a 500 (voucher-autoissue ruling R11.7), and opting in must not
+  // be the one request that breaks when it is.
+  const frozen = await query(
+    `select 1 from lesson.user_course_runtime_state
+      where wallet_address = $1 and course_id = $2 and course_completed_at is not null
       limit 1`,
     [walletAddress, courseId],
   );
-  if (settled.rowCount > 0) {
+  let vouchered = false;
+  try {
+    const v = await query(
+      `select 1 from lesson.completion_vouchers
+        where wallet_address = $1 and course_id = $2 and signature is not null
+        limit 1`,
+      [walletAddress, courseId],
+    );
+    vouchered = v.rowCount > 0;
+  } catch {
+    // Unreadable voucher store — the freeze check above still stands.
+    vouchered = false;
+  }
+  if (frozen.rowCount > 0 || vouchered) {
     throw conflict(
       'That course is already finished — its yield tier is locked in and cannot be staked',
       'ARENA_STAKE_COURSE_SETTLED',

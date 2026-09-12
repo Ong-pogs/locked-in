@@ -161,9 +161,19 @@ describe('arena play', () => {
   it('rejects answering a question that was never served', async () => {
     const matchId = await makeActiveMatch();
     await app.inject({ method: 'POST', url: `/v1/arena/matches/${matchId}/start`, headers: aliceAuth });
+    // Ask the match which 7 it drew and pick one it did NOT. Naming a fixed id
+    // here made the test fail roughly one run in twenty, because a 7-of-N draw
+    // from a growing bank will sometimes contain whichever id you picked.
+    const drawn = await db.query(
+      'select question_ids from arena.matches where id = $1', [matchId]);
+    const outsider = (await db.query(
+      `select id from arena.questions where active and not (id = any($1::text[])) limit 1`,
+      [drawn.rows[0].question_ids],
+    )).rows[0].id;
+
     const res = await app.inject({
       method: 'POST', url: `/v1/arena/matches/${matchId}/answer`, headers: aliceAuth,
-      payload: { questionId: 'play-q-12', chosenOptionId: 'a' },
+      payload: { questionId: outsider, chosenOptionId: 'a' },
     });
     expect([400, 409]).toContain(res.statusCode);
   });
