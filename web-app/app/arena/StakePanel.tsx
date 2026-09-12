@@ -71,8 +71,14 @@ export function StakePanel() {
     setBusy(true);
     setError(null);
     try {
-      const r = await fetchWithAuth((t) => stakeSeason(t, chosen, CONSENT_VERSION));
-      setStake(r.entry);
+      await fetchWithAuth((t) => stakeSeason(t, chosen, CONSENT_VERSION));
+      // Re-read rather than trusting the POST body. That response is the raw
+      // inserted row — it has no live delta, no season end, no lapse count and
+      // no isCurrentSeason, all of which this panel renders. Using it directly
+      // showed a freshly staked player the "last staked season" block instead
+      // of their standing.
+      const fresh = await fetchWithAuth((t) => getMyStake(t));
+      setStake(fresh);
       setConfirming(false);
     } catch (err) {
       setError(messageFor(err));
@@ -87,10 +93,14 @@ export function StakePanel() {
   // A stake is "live" only while its own season is still running. A settled one
   // is a result to read once, not a state to be stuck in — otherwise staking
   // is a thing a wallet can do exactly once, ever.
-  const liveStake = stake && stake.outcome === 'PENDING' && stake.isCurrentSeason
+  // PENDING means the stake is still riding, including in the window between a
+  // season ending and the cron settling it. `!== false` rather than a truthy
+  // check so a response that omits the flag reads as live: a staked player
+  // must never be shown a settled result they have not actually got yet.
+  const liveStake = stake && stake.outcome === 'PENDING' && stake.isCurrentSeason !== false
     ? stake
     : null;
-  const settledStake = stake && stake !== liveStake ? stake : null;
+  const settledStake = stake && stake.outcome !== 'PENDING' ? stake : null;
 
   // ---------- Staked right now: the standing indicator ----------
   if (liveStake) {
