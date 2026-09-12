@@ -29,8 +29,8 @@ import {
   enhanceValidatorFeedback,
   gradeSubjectiveAnswerWithLlm,
 } from '../../lib/answerValidator.mjs';
-import { issueVoucher, yieldBpsForLapses } from '../../lib/claimVoucher.mjs';
-import { applyLessonDay, applyMissDay, userYieldBps } from '../../lib/shieldLapseEngine.mjs';
+import { issueVoucher, effectiveYieldBps } from '../../lib/claimVoucher.mjs';
+import { applyLessonDay, applyMissDay, lapseRedirectBps } from '../../lib/shieldLapseEngine.mjs';
 import { autoMissEventId } from '../../lib/missEvents.mjs';
 import {
   deriveLockPdaServer,
@@ -39,6 +39,17 @@ import {
   readVaultV2ConfigAuthority,
 } from '../../lib/lockPosition.mjs';
 import { awardXp, ensureUserXp, xpToLevel, XP_LEVEL_THRESHOLDS } from '../../lib/xp.mjs';
+
+// A voucher signed while a stake season is still running expires with that
+// season rather than at the full 90-day TTL. The grace window covers the gap
+// between a season's end and the daily cron that settles it, so nobody is
+// locked out of claiming by our own scheduling.
+const ARENA_VOUCHER_GRACE_SECONDS = 3 * 24 * 60 * 60;
+
+// A clamped voucher is never given less life than this. Bounds the escape to
+// about a day while guaranteeing a signed voucher is always claimable when it
+// is issued — a dead-on-arrival voucher would block a user's own principal.
+const ARENA_VOUCHER_MIN_SECONDS = 24 * 60 * 60;
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -228,6 +239,102 @@ async function readCourseCompletionFreeze(client, walletAddress, courseId) {
 }
 
 /**
+ * Tiers the arena stake costs this lock: 1 iff the most recent SETTLED season
+ * entry for (wallet, course, lock) was a FORFEIT, else 0.
+ *
+ * Reads arena.season_entries. This is the ONLY direction the dependency runs —
+ * the arena module never writes a lesson.* money table, which is what keeps
+ * tests/integration/api/arenaIsolation.test.mjs true.
+ *
+ * Fails SAFE: any error, missing table or absent row resolves to 0. A signing
+ * path that cannot read the arena must not invent a penalty.
+ */
+export async function readArenaPenaltyTiers(walletAddress, courseId, lockAddress, { log = null } = {}) {
+  let forfeits;
+  try {
+    // ANY outstanding forfeit, not the most recently settled entry. Reading
+    // "the newest settled row" let a player erase a forfeit for free by opting
+    // into the next season and playing nothing: the resulting zero-delta KEPT
+    // settled later and won. A forfeit is spent when the voucher carrying it is
+    // claimed, not when a later season happens to end.
+    const r = await query(
+      `select lock_start_ts as "lockStartTs"
+         from arena.season_entries
+        where wallet_address = $1 and course_id = $2 and lock_address = $3
+          and outcome = 'FORFEIT'
+        order by settled_at desc`,
+      [walletAddress, courseId, lockAddress],
+    );
+    forfeits = r.rows;
+  } catch {
+    // Unreadable arena — never invent a penalty.
+    return 0;
+  }
+  if (forfeits.length === 0) return 0;
+
+  // The lock PDA is [lock-v2, owner, course_id_hash], so lock_address is the
+  // same string for every lock this wallet has ever opened on this course. A
+  // forfeit recorded against a position that has since been closed and
+  // replaced must NOT follow the user into the new one, so the instance is
+  // identified by its start timestamp.
+  //
+  // Only reached when a forfeit exists, so the common path pays no RPC.
+  let current;
+  try {
+    current = await readLockV2AccountFresh(walletAddress, courseId);
+  } catch {
+    current = null;
+  }
+  if (!current || current.mismatch || typeof current.lockStartTs !== 'number') {
+    // Cannot prove this is the same position. Taking half of someone's yield
+    // on an unverified guess is the one direction this must never fail in.
+    log?.error?.(
+      { walletAddress, courseId, lockAddress },
+      'voucher.arena_penalty_unverifiable',
+    );
+    return 0;
+  }
+  return forfeits.some((f) => Number(f.lockStartTs) === Number(current.lockStartTs)) ? 1 : 0;
+}
+
+/**
+ * The expiry a voucher signed right now should carry.
+ *
+ * A voucher lives 90 days; a stake season lasts 30. Signing the full TTL while
+ * a season is still PENDING hands the player a bearer signature at the
+ * un-penalised tier that outlives the season deciding their tier — and the
+ * program cannot revoke a signature. Clamping to the season's end (plus a grace
+ * window so nobody is locked out by the cron's punctuality) bounds that escape
+ * to the season itself.
+ */
+export async function voucherExpiryFor(walletAddress, courseId) {
+  const full = Math.floor(Date.now() / 1000) + appConfig.voucherTtlSeconds;
+  try {
+    const r = await query(
+      `select extract(epoch from s.ends_at)::bigint as "endsAt"
+         from arena.season_entries e
+         join arena.seasons s on s.id = e.stake_season_id
+        where e.wallet_address = $1 and e.course_id = $2 and e.outcome = 'PENDING'
+        order by s.ends_at desc
+        limit 1`,
+      [walletAddress, courseId],
+    );
+    if (r.rowCount === 0) return full;
+
+    // Never below a floor. If the cron is late — or simply has not run since
+    // the season ended — clamping to the season would hand out a voucher that
+    // is already expired, locking a user out of their own principal over our
+    // scheduling. A short live window is the right trade: the read path
+    // re-signs at the settled tier as soon as the season resolves anyway.
+    const floor = Math.floor(Date.now() / 1000) + ARENA_VOUCHER_MIN_SECONDS;
+    const seasonEnd = Number(r.rows[0].endsAt) + ARENA_VOUCHER_GRACE_SECONDS;
+    return Math.max(Math.min(full, seasonEnd), Math.min(full, floor));
+  } catch {
+    return full;
+  }
+}
+
+/**
  * Issue a signed completion voucher for a fully-completed course. The client
  * embeds the returned Ed25519 message+signature in a precompile instruction
  * placed before claim_v2 in the same transaction; the program verifies the
@@ -274,7 +381,12 @@ export async function issueCourseCompletionVoucher(walletAddress, courseId) {
   );
   const lapseCount = Number(lapseRow.rows[0]?.lapseCount ?? 0);
 
-  const expiry = Math.floor(Date.now() / 1000) + appConfig.voucherTtlSeconds;
+  // The lock PDA is deterministic per (owner, courseIdHash), so it can be
+  // derived before signing and used to scope the arena lookup.
+  const lockAddress = deriveLockPdaServer(programId, walletAddress, courseId).toBase58();
+  const arenaPenaltyTiers = await readArenaPenaltyTiers(walletAddress, courseId, lockAddress);
+
+  const expiry = await voucherExpiryFor(walletAddress, courseId);
 
   const voucher = issueVoucher({
     programId,
@@ -282,6 +394,7 @@ export async function issueCourseCompletionVoucher(walletAddress, courseId) {
     owner: walletAddress,
     courseIdHash: courseIdHashBytes(courseId),
     lapseCount,
+    arenaPenaltyTiers,
     expiry,
   });
 
@@ -304,7 +417,58 @@ export async function issueCourseCompletionVoucher(walletAddress, courseId) {
     }
   }
 
-  return { courseId, lapseCount, ...voucher };
+  return { courseId, lapseCount, arenaPenaltyTiers, ...voucher };
+}
+
+/**
+ * Re-sign a voucher at a tier that was already decided, rather than at
+ * whatever the tier would be today.
+ *
+ * A voucher is signed at course completion with a 90-day TTL against a 30-day
+ * season. Between the two, arena_penalty_tiers can change. If a re-issue
+ * recomputed it, a user who asked twice would be handed two different bps for
+ * the same completed course — so every re-issue replays the stored value.
+ */
+export async function reissueStoredVoucher(walletAddress, courseId, stored) {
+  const programId = appConfig.vaultV2ProgramId;
+  const authoritySecretKey = appConfig.lockVaultWorkerPrivateKey;
+  if (!programId || !authoritySecretKey) {
+    throw new HttpError(
+      503,
+      'Voucher signing is not configured',
+      'VOUCHER_SIGNING_UNCONFIGURED',
+    );
+  }
+  const lapseCount = Number(stored.lapseCount) || 0;
+  const arenaPenaltyTiers = Number(stored.arenaPenaltyTiers) || 0;
+  const expiry = await voucherExpiryFor(walletAddress, courseId);
+  const voucher = issueVoucher({
+    programId,
+    authoritySecretKey,
+    owner: walletAddress,
+    courseIdHash: courseIdHashBytes(courseId),
+    lapseCount,
+    arenaPenaltyTiers,
+    expiry,
+  });
+
+  // The same fail-closed signer check the first issue makes (audit M11): a
+  // re-issue that does not match the on-chain vault authority is unclaimable,
+  // and persisting it would quietly replace a good stored voucher with a dead
+  // one. A null read (RPC hiccup) does not block — the on-chain check still
+  // guards the actual claim.
+  if (CLUSTER !== 'devnet') {
+    const onchainAuthority = await readVaultV2ConfigAuthority(programId);
+    if (onchainAuthority && onchainAuthority !== voucher.authorityPubkey) {
+      throw new HttpError(
+        503,
+        'Voucher signer does not match the on-chain vault authority',
+        'VOUCHER_AUTHORITY_MISMATCH',
+      );
+    }
+  }
+
+  return { courseId, lapseCount, arenaPenaltyTiers, ...voucher };
 }
 
 /**
@@ -317,12 +481,13 @@ export async function issueCourseCompletionVoucher(walletAddress, courseId) {
 export async function persistCompletionVoucher(walletAddress, courseId, voucher) {
   await query(
     `INSERT INTO lesson.completion_vouchers
-       (wallet_address, course_id, lock_address, lapse_count, bps, expiry,
-        authority_pubkey, message, signature, issued_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+       (wallet_address, course_id, lock_address, lapse_count, arena_penalty_tiers,
+        bps, expiry, authority_pubkey, message, signature, issued_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
      ON CONFLICT (wallet_address, course_id) DO UPDATE SET
        lock_address = excluded.lock_address,
        lapse_count = excluded.lapse_count,
+       arena_penalty_tiers = excluded.arena_penalty_tiers,
        bps = excluded.bps,
        expiry = excluded.expiry,
        authority_pubkey = excluded.authority_pubkey,
@@ -334,6 +499,7 @@ export async function persistCompletionVoucher(walletAddress, courseId, voucher)
       courseId,
       voucher.lock,
       voucher.lapseCount,
+      voucher.arenaPenaltyTiers ?? 0,
       voucher.bps,
       voucher.expiry,
       voucher.authorityPubkey,
@@ -350,6 +516,7 @@ function voucherRowToResponse(courseId, row) {
   return {
     courseId,
     lapseCount: Number(row.voucher_lapse_count),
+    arenaPenaltyTiers: Number(row.voucher_arena_penalty_tiers ?? 0),
     lock: row.lock_address,
     authorityPubkey: row.authority_pubkey,
     bps: Number(row.bps),
@@ -379,6 +546,7 @@ export async function getStoredCompletionVoucher(walletAddress, courseId, { log 
   const result = await query(
     `SELECT v.lock_address,
             v.lapse_count AS voucher_lapse_count,
+            coalesce(v.arena_penalty_tiers, 0) AS voucher_arena_penalty_tiers,
             v.bps,
             v.expiry,
             v.authority_pubkey,
@@ -405,9 +573,39 @@ export async function getStoredCompletionVoucher(walletAddress, courseId, { log 
   if (hasStoredVoucher) {
     const unexpired = Number(row.expiry) * 1000 > Date.now();
     if (unexpired) {
-      // (b) lapse_count is frozen at completion, so a stored-bps mismatch is
-      // by definition a bug — log loudly, serve the stored voucher unchanged.
-      const expectedBps = yieldBpsForLapses(Number(row.runtime_lapse_count));
+      // (b) A stake season can settle AFTER this voucher was signed: a learner
+      // who finishes mid-season is handed a voucher at the un-penalised tier
+      // while the season deciding their tier is still running. If the stored
+      // tier were final, the whole loser side of the Arena would be a no-op for
+      // anyone who is actually studying.
+      //
+      // So the resolved tier is re-checked here and the voucher re-signed if it
+      // has risen. The correction is ONE-DIRECTIONAL by construction — a
+      // forfeit is never lifted, only applied — so this can never be used to
+      // quietly cut a finished user's yield for any other reason.
+      const storedTiers = Number(row.voucher_arena_penalty_tiers ?? 0);
+      const resolvedTiers = await readArenaPenaltyTiers(
+        walletAddress, courseId, row.lock_address, { log },
+      );
+      if (resolvedTiers > storedTiers && voucherSigningConfigured()) {
+        log?.warn?.(
+          { walletAddress, courseId, storedTiers, resolvedTiers },
+          'voucher.arena_penalty_applied',
+        );
+        const voucher = await reissueStoredVoucher(walletAddress, courseId, {
+          lapseCount: Number(row.voucher_lapse_count),
+          arenaPenaltyTiers: resolvedTiers,
+        });
+        await persistCompletionVoucher(walletAddress, courseId, voucher);
+        return voucher;
+      }
+
+      // lapse_count is frozen at completion, so any REMAINING mismatch is by
+      // definition a bug — log loudly, serve the stored voucher unchanged.
+      const expectedBps = effectiveYieldBps({
+        lapseCount: Number(row.runtime_lapse_count),
+        arenaPenaltyTiers: storedTiers,
+      });
       if (Number(row.bps) !== expectedBps) {
         log?.error?.(
           {
@@ -421,9 +619,20 @@ export async function getStoredCompletionVoucher(walletAddress, courseId, { log 
       }
       return voucherRowToResponse(courseId, row);
     }
-    // (c) expired — re-issue at the (frozen) current tier.
+    // (c) expired — re-sign at the tier that was already decided. Recomputing
+    // here would change the bps out from under a user who simply waited: the
+    // voucher's 90-day TTL outlives a 30-day stake season.
     if (voucherSigningConfigured()) {
-      const voucher = await issueCourseCompletionVoucher(walletAddress, courseId);
+      const storedTiers = Number(row.voucher_arena_penalty_tiers ?? 0);
+      const resolvedTiers = await readArenaPenaltyTiers(
+        walletAddress, courseId, row.lock_address, { log },
+      );
+      const voucher = await reissueStoredVoucher(walletAddress, courseId, {
+        lapseCount: Number(row.voucher_lapse_count),
+        // Never below what was already captured, never below what has since
+        // settled: the tier only moves toward the one the user consented to.
+        arenaPenaltyTiers: Math.max(storedTiers, resolvedTiers),
+      });
       await persistCompletionVoucher(walletAddress, courseId, voucher);
       return voucher;
     }
@@ -2091,6 +2300,7 @@ export async function getUserEnrollments(walletAddress) {
         coalesce(ucrs.lapse_count, 0) AS "lapseCount",
         coalesce(ucrs.lapse_open, false) AS "lapseOpen",
         coalesce(ucrs.consecutive_lesson_days, 0) AS "consecutiveLessonDays",
+        ucrs.course_completed_at AS "courseCompletedAt",
         ucrs.last_completed_day::text AS "lastCompletedDay"
       FROM lesson.user_course_enrollments uce
       LEFT JOIN lesson.user_course_runtime_state ucrs
@@ -4189,7 +4399,7 @@ async function readMissConsequenceReceipt(client, walletAddress, courseId, missE
  *  (c) shields banked -> SHIELD_ABSORBED: shield burns, streak PAUSES,
  *      saver_count and current_yield_redirect_bps are NOT touched — a
  *      shielded miss is free;
- *      shields gone -> lapse: streak 0, redirect = 10000 - userYieldBps(lapse)
+ *      shields gone -> lapse: streak 0, redirect = 10000 - lapseRedirectBps(lapse)
  *      (5000 at lapse 1, 10000 at lapse 2+); consecutive dark days coalesce
  *      into one lapse via lapse_open (LAPSE_ALREADY_OPEN);
  *  (d) engine columns + streak + redirect + last_miss_day + the receipt all
@@ -4244,7 +4454,7 @@ async function applyMissConsequenceLocked(client, state, missDay, missEventId) {
     reason = 'SHIELD_ABSORBED';
   } else {
     reason = next.lapseOpen && state.lapseOpen ? 'LAPSE_ALREADY_OPEN' : 'LAPSE_APPLIED';
-    redirectBpsAfter = 10_000 - userYieldBps(next.lapseCount);
+    redirectBpsAfter = 10_000 - lapseRedirectBps(next.lapseCount);
   }
 
   // (d) persist engine columns + streak (+ redirect only past the shields) +

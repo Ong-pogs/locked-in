@@ -730,9 +730,10 @@ export default function ClaimPage() {
         <DustFootnote />
       </div>
 
-      {voucher && voucher.lapseCount > 0 && (
+      {voucher && forfeitPct > 0 && (
         <PenaltyBanner
           lapseCount={voucher.lapseCount}
+          arenaPenaltyTiers={voucher.arenaPenaltyTiers ?? 0}
           forfeitUi={
             totalYieldNum != null && forfeitPct > 0
               ? ((totalYieldNum * forfeitPct) / 100).toFixed(4)

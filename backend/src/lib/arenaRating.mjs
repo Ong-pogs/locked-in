@@ -1,8 +1,14 @@
 // Elo rating for the arena ladder. Pure — no database, no clock, no I/O.
 //
-// Rating buys nothing: it is not convertible into yield, shields, pot share or
-// principal. That is deliberate, and it is what makes the damper below a
-// sufficient anti-collusion measure rather than a partial one.
+// Rating used to buy nothing, and that was what made the damper below a
+// sufficient anti-collusion measure on its own. As of the stake seasons (0065)
+// it is no longer true: a player may stake one course lock on a season, and a
+// season finishing behind costs that lock a yield tier.
+//
+// The damper is therefore no longer the only control. A staked season is scored
+// on linked matches only, and the third meeting of a pair within one season
+// stops counting entirely — see lib/arenaSeason.mjs. Rating still buys no
+// shields, no pot share and no principal.
 
 export const ARENA_START_RATING = 1200;
 export const ARENA_BASE_K = 32;

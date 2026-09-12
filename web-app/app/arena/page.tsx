@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { T } from '../../components/theme';
 import { ArenaBackground } from './ArenaBackground';
+import { StakePanel } from './StakePanel';
 import { fetchWithAuth } from '../../services/api/httpClient';
 import {
   createChallenge, getLadder, getMyArena, enterQueue, pollQueue, leaveQueue,
@@ -104,7 +105,7 @@ export default function ArenaPage() {
 
   return (
     <ArenaBackground>
-      <div className="mx-auto w-full max-w-2xl px-4 py-8">
+      <div className="mx-auto w-full max-w-2xl px-4 pb-8 pt-20">
         {/* Backed rather than bare: the tavern art is at its busiest behind the
             header, and small muted copy straight on top of it was hard to read. */}
         <header
@@ -120,7 +121,8 @@ export default function ArenaPage() {
           </h1>
           <p className="mt-1 text-[12px]" style={{ color: T.textMutedStrong }}>
             Head-to-head recall. Seven questions, twenty seconds each, fastest correct wins.
-            Rating and XP only — nothing here touches your deposit, streak or shields.
+            Free to play for rating and XP. Stake a course and a losing season costs it one
+            yield tier — never your deposit, streak or shields.
           </p>
         </header>
 
@@ -144,6 +146,8 @@ export default function ArenaPage() {
               : 'Unranked — play your first match to join the ladder'}
           </div>
         </section>
+
+        <StakePanel />
 
         {/* Actions */}
         <section className="mb-6 grid gap-3 sm:grid-cols-2">

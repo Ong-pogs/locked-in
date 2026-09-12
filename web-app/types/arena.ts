@@ -98,3 +98,40 @@ export interface ArenaQueueState {
   /** True once the wait is long enough that a link challenge is the better bet. */
   suggestLink?: boolean;
 }
+
+export type ArenaStakeOutcome = 'PENDING' | 'KEPT' | 'FORFEIT' | 'VOID';
+
+export interface ArenaSeason {
+  id: number;
+  startsAt: string;
+  endsAt: string;
+  status: 'OPEN' | 'CLOSED' | 'SETTLED';
+}
+
+export interface ArenaStakeEntry {
+  stakeSeasonId: number;
+  courseId: string;
+  lockAddress: string;
+  optedInAt: string;
+  ratingAtStart: number;
+  ratingAtEnd: number | null;
+  outcome: ArenaStakeOutcome;
+  voidedReason: string | null;
+  settledAt: string | null;
+  startsAt: string;
+  endsAt: string;
+  seasonStatus: ArenaSeason['status'];
+  /** Summed rating delta over counted staked matches — this decides the season. */
+  stakedDelta: number;
+  matchesCounted: number;
+  /** Missed-day lapses on the staked course. A forfeit costs a tier ON TOP. */
+  lapseCount: number;
+  /** False once this entry's season has ended — the next one can be staked. */
+  isCurrentSeason: boolean;
+}
+
+export interface ArenaStakeResult {
+  season: ArenaSeason;
+  entry: ArenaStakeEntry;
+  created: boolean;
+}

@@ -22,7 +22,8 @@
     "support:inspect-v2-lock": "node scripts/inspect-v2-lock.mjs",
     "test:db:up": "docker compose -f docker-compose.test.yml up -d --wait",
     "test:db:down": "docker compose -f docker-compose.test.yml down -v",
-    "cron:arena-sweep": "node scripts/run-arena-sweep.mjs"
+    "cron:arena-sweep": "node scripts/run-arena-sweep.mjs",
+    "cron:arena-season": "node scripts/run-arena-season.mjs"
   },
   "dependencies": {
     "@fastify/cors": "^11.2.0",

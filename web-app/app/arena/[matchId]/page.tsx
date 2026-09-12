@@ -166,7 +166,7 @@ export default function ArenaMatchPage() {
 
   return (
     <ArenaBackground>
-      <div className="mx-auto w-full max-w-xl px-4 py-8">
+      <div className="mx-auto w-full max-w-xl px-4 pb-8 pt-20">
         {phase === 'loading' && (
           <div className="text-[12px]" style={{ color: T.textMuted }}>Loading match…</div>
         )}

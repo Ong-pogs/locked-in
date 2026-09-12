@@ -7,6 +7,9 @@ import type {
   ArenaProfile,
   ArenaQueueState,
   ArenaStartResponse,
+  ArenaSeason,
+  ArenaStakeEntry,
+  ArenaStakeResult,
 } from '../../../types/arena';
 
 export function createChallenge(token: string): Promise<ArenaCreatedMatch> {
@@ -76,4 +79,32 @@ export function pollQueue(token: string): Promise<ArenaQueueState> {
 // POST rather than DELETE: the shared httpClient only speaks GET/POST.
 export function leaveQueue(token: string): Promise<{ left: boolean }> {
   return httpRequest<{ left: boolean }>('/v1/arena/queue/leave', { method: 'POST', token });
+}
+
+// ---------- Stake seasons ----------
+
+/** The open season, or null between seasons. Public — no auth needed. */
+export function getSeason(): Promise<ArenaSeason | null> {
+  return httpRequest<ArenaSeason | null>('/v1/arena/season');
+}
+
+/** This wallet's most recent stake entry, or null if they have never staked. */
+export function getMyStake(token: string): Promise<ArenaStakeEntry | null> {
+  return httpRequest<ArenaStakeEntry | null>('/v1/arena/stake', { token });
+}
+
+/**
+ * Stake one course lock on the open season. Binding is immediate and there is
+ * no early exit, so the caller must confirm before calling this.
+ */
+export function stakeSeason(
+  token: string,
+  courseId: string,
+  consentVersion: string,
+): Promise<ArenaStakeResult> {
+  return httpRequest<ArenaStakeResult>('/v1/arena/stake', {
+    method: 'POST',
+    token,
+    body: { courseId, consentVersion },
+  });
 }
