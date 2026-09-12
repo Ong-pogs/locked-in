@@ -32,25 +32,40 @@ export async function getOpenSeason() {
  * sees a season that has fully closed rather than one ending mid-run.
  */
 export async function ensureOpenSeason(client) {
-  const open = await client.query(
-    `select id, starts_at as "startsAt", ends_at as "endsAt", status
-       from arena.seasons where status = 'OPEN' limit 1`,
-  );
-  if (open.rowCount > 0) return open.rows[0];
+  const readOpen = async () => {
+    const r = await client.query(
+      `select id, starts_at as "startsAt", ends_at as "endsAt", status
+         from arena.seasons where status = 'OPEN' limit 1`,
+    );
+    return r.rows[0] ?? null;
+  };
 
-  const inserted = await client.query(
-    `insert into arena.seasons (id, starts_at, ends_at, status)
-     values (
-       coalesce((select max(id) from arena.seasons), 0) + 1,
-       date_trunc('day', now() at time zone 'utc'),
-       date_trunc('day', now() at time zone 'utc')
-         + ($1::int * interval '1 day') + interval '1 second',
-       'OPEN'
-     )
-     returning id, starts_at as "startsAt", ends_at as "endsAt", status`,
-    [appConfig.arenaSeasonDays],
-  );
-  return inserted.rows[0];
+  const open = await readOpen();
+  if (open) return open;
+
+  try {
+    const inserted = await client.query(
+      `insert into arena.seasons (id, starts_at, ends_at, status)
+       values (
+         coalesce((select max(id) from arena.seasons), 0) + 1,
+         date_trunc('day', now() at time zone 'utc'),
+         date_trunc('day', now() at time zone 'utc')
+           + ($1::int * interval '1 day') + interval '1 second',
+         'OPEN'
+       )
+       returning id, starts_at as "startsAt", ends_at as "endsAt", status`,
+      [appConfig.arenaSeasonDays],
+    );
+    return inserted.rows[0];
+  } catch (err) {
+    // 23505: someone else opened a season (or claimed this id) between the read
+    // and the insert. arena_seasons_single_open_idx is what makes "exactly one
+    // OPEN season" true, so losing this race is a correct outcome, not an
+    // error — re-read and use theirs. Opening a season must never be the thing
+    // that fails a settlement run.
+    if (err?.code !== '23505') throw err;
+    return readOpen();
+  }
 }
 
 async function readEntry(stakeSeasonId, walletAddress, courseId) {

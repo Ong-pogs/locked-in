@@ -116,13 +116,22 @@ export async function runArenaSeasonSweep({ log = console } = {}) {
       );
 
       // 4. Open the next one so players are never between seasons.
-      const before = await client.query(
-        `select count(*)::int as n from arena.seasons where status = 'OPEN'`,
-      );
-      await client.query('begin');
-      await ensureOpenSeason(client);
-      await client.query('commit');
-      const opened = before.rows[0].n === 0 ? 1 : 0;
+      //
+      // No explicit transaction: the insert is atomic on its own, and
+      // ensureOpenSeason recovers from a lost race by re-reading — which it
+      // could not do inside a transaction the failed insert had aborted.
+      // Non-fatal either way: every entry above is already committed, and
+      // failing to open tomorrow's season must not discard today's settlement.
+      let opened = 0;
+      try {
+        const before = await client.query(
+          `select count(*)::int as n from arena.seasons where status = 'OPEN'`,
+        );
+        await ensureOpenSeason(client);
+        opened = before.rows[0].n === 0 ? 1 : 0;
+      } catch (err) {
+        log.error?.(`[arena-season] could not open the next season: ${err?.message ?? err}`);
+      }
 
       return { opened, closed, settled, failed, seasonsSettled: done.rowCount };
     } finally {
