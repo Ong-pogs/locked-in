@@ -1,11 +1,15 @@
-// Match settlement: rating, XP, and exactly-once semantics.
+// Match settlement: rating, XP, season linkage, and exactly-once semantics.
 //
 // The ONLY lesson.* tables this file may touch are user_xp and user_xp_events,
 // via lib/xp.mjs. Nothing here reads or writes principal, yield, shields,
-// lapses, streak, the pot, or vouchers.
+// lapses, streak, the pot, or vouchers — and that is still true with stake
+// seasons: this file records WHICH matches a season counts (arena.*), and the
+// voucher signer reads the settled outcome from there. The dependency never
+// runs the other way.
 import { applyElo, ARENA_START_RATING } from '../../lib/arenaRating.mjs';
 import { resolveMatch } from '../../lib/arenaScoring.mjs';
 import { awardXp, ensureUserXp } from '../../lib/xp.mjs';
+import { linkMatchForSeason } from './seasonRepository.mjs';
 
 const XP_WIN = 50;
 const XP_DRAW = 25;
@@ -25,15 +29,33 @@ async function ratingFor(client, wallet, season) {
   return r.rows[0]?.rating ?? ARENA_START_RATING;
 }
 
-// How many times these two have already settled a match in the last 24h. Feeds
-// the Elo damper so trading wins with one accomplice stops paying.
+// How many times these two have already settled a match inside the damper
+// window. Feeds the Elo damper so trading wins with one accomplice stops
+// paying.
+//
+// The window is 24h for unstaked play and the WHOLE OPEN SEASON when both are
+// staked. A staked season is decided by a summed delta, so a pair who reset the
+// damper every 24 hours could trade a season between themselves at full K.
 async function priorMeetings(client, a, b) {
+  const staked = await client.query(
+    `select count(distinct e.wallet_address)::int as n
+       from arena.season_entries e
+       join arena.seasons s on s.id = e.stake_season_id and s.status = 'OPEN'
+      where e.outcome = 'PENDING' and e.wallet_address = any($1::text[])`,
+    [[a, b]],
+  );
+  const bothStaked = staked.rows[0].n >= 2;
+
   const r = await client.query(
     `select count(*)::int as n from arena.matches
       where status = 'COMPLETE'
-        and resolved_at > now() - interval '24 hours'
+        and resolved_at > case when $3 then
+              coalesce(
+                (select starts_at from arena.seasons where status = 'OPEN' limit 1),
+                now() - interval '24 hours')
+            else now() - interval '24 hours' end
         and ((creator = $1 and opponent = $2) or (creator = $2 and opponent = $1))`,
-    [a, b],
+    [a, b, bothStaked],
   );
   return r.rows[0].n;
 }
@@ -119,6 +141,11 @@ export async function maybeSettleMatch(client, matchId) {
       [wallet, match.season, after, delta],
     );
   }
+
+  // Record which season this match belongs to, in the same transaction as the
+  // rating events it will later be summed with. Doing it here rather than in a
+  // sweep means a link can never disagree with a rating event.
+  await linkMatchForSeason(client, matchId, [a.walletAddress, b.walletAddress]);
 
   for (const [wallet, score] of [
     [a.walletAddress, scoreA],
