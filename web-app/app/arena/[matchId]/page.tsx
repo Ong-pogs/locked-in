@@ -24,6 +24,8 @@ export default function ArenaMatchPage() {
   const [remainingMs, setRemainingMs] = useState(20_000);
   const [message, setMessage] = useState<string | null>(null);
   const [ratingDelta, setRatingDelta] = useState<number | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [verdict, setVerdict] = useState<'pending' | 'correct' | 'wrong' | null>(null);
   const submitting = useRef(false);
   const myWallet = useUserStore((st) => st.walletAddress);
 
@@ -60,9 +62,23 @@ export default function ArenaMatchPage() {
   const submit = useCallback(async (questionId: string, optionId: string | null) => {
     if (submitting.current) return;
     submitting.current = true;
+
+    // Acknowledge the tap on the SAME frame. The server round-trip is ~2s
+    // (Render us-east talking to Supabase in Singapore), and with no immediate
+    // feedback that reads as "my click didn't register" — which is exactly what
+    // it looked like.
+    setSelected(optionId);
+    setVerdict('pending');
+
     try {
       const res = await fetchWithAuth((t) => answerQuestion(t, matchId, questionId, optionId));
+      setVerdict(res.isCorrect ? 'correct' : 'wrong');
       setAnswered(res.answered);
+
+      // Hold the right/wrong state briefly — a quiz that never tells you whether
+      // you were right is missing its whole feedback loop.
+      await new Promise((r) => setTimeout(r, 650));
+
       if (res.done) {
         setQuestion(null);
         setPhase('waiting');
@@ -71,7 +87,11 @@ export default function ArenaMatchPage() {
         setQuestion(res.question);
         setRemainingMs(res.question?.timeoutMs ?? 20_000);
       }
+      setSelected(null);
+      setVerdict(null);
     } catch {
+      setSelected(null);
+      setVerdict(null);
       setMessage('That answer did not register. Reload to continue.');
     } finally {
       submitting.current = false;
@@ -82,6 +102,7 @@ export default function ArenaMatchPage() {
   // elapsed time, so a laggy client simply scores a slower answer.
   useEffect(() => {
     if (phase !== 'playing' || !question) return undefined;
+    if (verdict) return undefined; // answered — stop the clock visually
     const startedAt = Date.now();
     const timer = setInterval(() => {
       const left = (question.timeoutMs ?? 20_000) - (Date.now() - startedAt);
@@ -92,7 +113,21 @@ export default function ArenaMatchPage() {
       }
     }, 100);
     return () => clearInterval(timer);
-  }, [phase, question, submit]);
+  }, [phase, question, submit, verdict]);
+
+  // Keyboard answering — a speed quiz you can only play with a mouse is
+  // slower than it needs to be, and the tiebreak is total time.
+  useEffect(() => {
+    if (phase !== 'playing' || !question || verdict !== null) return undefined;
+    const onKey = (e: KeyboardEvent) => {
+      const k = e.key.toLowerCase();
+      const idx = 'abc'.indexOf(k) >= 0 ? 'abc'.indexOf(k) : '123'.indexOf(k);
+      const opt = question.options[idx];
+      if (idx >= 0 && opt) { e.preventDefault(); submit(question.id, opt.id); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [phase, question, verdict, submit]);
 
   async function onStart() {
     try {
@@ -210,28 +245,69 @@ export default function ArenaMatchPage() {
             </div>
 
             <div className="grid gap-2">
-              {question.options.map((option, i) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => submit(question.id, option.id)}
-                  data-testid={`arena-option-${i}`}
-                  className="flex items-center gap-3 rounded-lg px-4 py-3 text-left text-[14px] transition-colors hover:brightness-125"
-                  style={{
-                    background: T.bgCardActive,
-                    border: `1px solid ${T.borderDormant}`,
-                    color: T.textPrimary,
-                  }}
-                >
-                  <span
-                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded font-pixel-mono text-[11px]"
-                    style={{ background: 'rgba(255,255,255,0.06)', color: T.textMuted }}
+              {question.options.map((option, i) => {
+                const isMine = selected === option.id;
+                const answering = verdict !== null;
+                // Colour only the option you actually picked. The key never
+                // reaches the client, so we cannot reveal the right answer —
+                // only whether yours was right.
+                const tone = isMine
+                  ? (verdict === 'correct' ? T.green : verdict === 'wrong' ? T.crimson : T.amber)
+                  : null;
+
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    disabled={answering}
+                    aria-busy={isMine && verdict === 'pending'}
+                    onClick={() => submit(question.id, option.id)}
+                    data-testid={`arena-option-${i}`}
+                    className="flex items-center gap-3 rounded-lg px-4 py-3 text-left text-[14px] transition-all duration-150 active:scale-[0.99] disabled:cursor-default"
+                    style={{
+                      background: isMine ? `${tone}1A` : T.bgCardActive,
+                      border: `1px solid ${tone ?? T.borderDormant}`,
+                      color: T.textPrimary,
+                      // Everything you didn't pick recedes, so the choice reads
+                      // instantly even before the server answers.
+                      opacity: answering && !isMine ? 0.35 : 1,
+                    }}
                   >
-                    {String.fromCharCode(65 + i)}
-                  </span>
-                  <span>{option.text}</span>
-                </button>
-              ))}
+                    <span
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded font-pixel-mono text-[11px]"
+                      style={{
+                        background: isMine ? tone as string : 'rgba(255,255,255,0.06)',
+                        color: isMine ? '#06060C' : T.textMuted,
+                      }}
+                    >
+                      {verdict === 'correct' && isMine ? '✓'
+                        : verdict === 'wrong' && isMine ? '✕'
+                        : String.fromCharCode(65 + i)}
+                    </span>
+                    <span className="flex-1">{option.text}</span>
+                    {isMine && verdict === 'pending' && (
+                      <span className="font-pixel-mono text-[10px]" style={{ color: T.amber }}>
+                        sending…
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* The 20s expiring used to submit silently. */}
+            {verdict !== null && selected === null && (
+              <div
+                className="mt-3 rounded-md px-3 py-2 font-pixel-mono text-[11px]"
+                style={{ background: 'rgba(255,68,102,0.10)', color: T.crimson }}
+                data-testid="arena-timeout"
+              >
+                Time&apos;s up — scored as incorrect.
+              </div>
+            )}
+
+            <div className="mt-3 font-pixel-mono text-[10px]" style={{ color: T.textMuted }}>
+              Tip: press A, B or C to answer.
             </div>
           </div>
         )}
