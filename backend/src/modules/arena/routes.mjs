@@ -1,7 +1,9 @@
-import { unauthorized } from '../../lib/errors.mjs';
+import { unauthorized, badRequest } from '../../lib/errors.mjs';
 import { secureEquals } from '../../lib/secureCompare.mjs';
 import { appConfig } from '../../config.mjs';
 import { runArenaSweep } from '../../lib/arenaSweep.mjs';
+import { runArenaSeasonSweep } from '../../lib/arenaSeasonSweep.mjs';
+import { optIntoSeason, getMyStake, getOpenSeason } from './seasonRepository.mjs';
 import { requireAccessAuth } from '../../plugins/auth.mjs';
 import { keyGenerator } from '../../plugins/rateKey.mjs';
 import {
@@ -103,8 +105,43 @@ export async function arenaRoutes(app) {
     { preHandler: requireAccessAuth },
     async (request) => getMyArena(request.auth.walletAddress),
   );
+  // ---------- Stake seasons ----------
+
+  app.get('/v1/arena/season', async () => getOpenSeason());
+
+  app.get(
+    '/v1/arena/stake',
+    { preHandler: requireAccessAuth },
+    async (request) => getMyStake(request.auth.walletAddress),
+  );
+
+  app.post(
+    '/v1/arena/stake',
+    {
+      preHandler: requireAccessAuth,
+      config: { rateLimit: { max: 10, timeWindow: '1 hour', keyGenerator } },
+    },
+    async (request, reply) => {
+      const courseId = String(request.body?.courseId ?? '').trim();
+      if (!courseId) throw badRequest('courseId is required', 'COURSE_ID_REQUIRED');
+      const consentVersion = String(request.body?.consentVersion ?? '').trim();
+      if (!consentVersion) {
+        throw badRequest('consentVersion is required', 'CONSENT_VERSION_REQUIRED');
+      }
+      const result = await optIntoSeason(
+        request.auth.walletAddress, courseId, consentVersion,
+      );
+      return reply.code(result.created ? 201 : 200).send(result);
+    },
+  );
+
   app.post('/v1/internal/arena/sweep', async (request) => {
     requireSchedulerAuth(request);
     return runArenaSweep({ log: request.log });
+  });
+
+  app.post('/v1/internal/arena/season', async (request) => {
+    requireSchedulerAuth(request);
+    return runArenaSeasonSweep({ log: request.log });
   });
 }

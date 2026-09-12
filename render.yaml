@@ -71,3 +71,28 @@ services:
         sync: false
       - key: ARENA_SWEEP_BASE_URL
         sync: false
+
+  # Arena stake seasons: closes an expired season, settles each entry, opens the
+  # next. Daily rather than every 15 minutes because a season boundary is a UTC
+  # day boundary, and at 00:35 UTC so the day has fully closed before this reads
+  # it (same reasoning as the lapse sweep). Advisory-locked on its own key, and
+  # each entry settles in its own transaction, so a retry is a no-op and an
+  # entry whose chain read fails simply stays PENDING for the next run.
+  #
+  # BOTH env vars below must be set on the service. They are sync:false, which
+  # means Render creates them EMPTY — the arena-sweep cron above failed every 15
+  # minutes on exactly this until SCHEDULER_SECRET was filled in by hand. Set
+  # them before the first scheduled run and confirm the log reads
+  # "[arena-season] opened=..." rather than "SCHEDULER_SECRET is required".
+  - type: cron
+    name: locked-in-arena-season
+    runtime: node
+    rootDir: backend
+    schedule: "35 0 * * *"
+    buildCommand: npm ci
+    startCommand: npm run cron:arena-season
+    envVars:
+      - key: SCHEDULER_SECRET
+        sync: false
+      - key: ARENA_SWEEP_BASE_URL
+        sync: false
