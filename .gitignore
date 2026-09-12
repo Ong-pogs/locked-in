@@ -68,3 +68,6 @@ web/dungeon/node_modules/
 claude-session.jsonl
 
 keys/
+
+# One-off marketing screenshots — kept locally, not part of the app.
+web-app/course-shots/
