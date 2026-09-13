@@ -62,7 +62,7 @@ export default function ArenaJoinPage() {
           style={{ color: T.amber }}
           data-testid="arena-invite-challenger"
         >
-          Arena duel
+          Spire duel
         </h1>
 
         <div
