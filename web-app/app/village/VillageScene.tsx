@@ -40,10 +40,10 @@ const BUILDINGS: Building[] = [
   // replay any lesson you've already passed. Practice attempts never touch
   // streak/flame/yield. (The clocktower is decorative again.)
   { id: 'forge', outline: '/images/village/outlines/outline-forge.png', route: '/practice', label: 'Practice Hall' },
-  // Clocktower → Clockwork Spire. It was decorative; of the unused buildings its
+  // Clocktower → The Arena. It was decorative; of the unused buildings its
   // art is the one that actually suits a timed duel (20s per question).
   // Purely a placement choice — move it to another mask if you prefer.
-  { id: 'clock', outline: '/images/village/outlines/outline-clock.png', route: '/spire', label: 'Clockwork Spire' },
+  { id: 'clock', outline: '/images/village/outlines/outline-clock.png', route: '/arena', label: 'The Arena' },
   // Shop (cottage), Inventory (awning stall), and Brewery (forge) hotspots
   // were removed in the v2 legacy-deletion phase 2 — their pages are now
   // redirect stubs to /dashboard and the buildings are decorative.

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { T } from '../../components/theme';
-import { SpireBackground } from './SpireBackground';
+import { ArenaBackground } from './ArenaBackground';
 import { StakePanel } from './StakePanel';
 import { fetchWithAuth } from '../../services/api/httpClient';
 import { ApiError } from '../../services/api/errors';
@@ -22,7 +22,7 @@ function shortWallet(address: string) {
   return `${address.slice(0, 4)}…${address.slice(-4)}`;
 }
 
-export default function SpirePage() {
+export default function ArenaPage() {
   const router = useRouter();
   const [ladder, setLadder] = useState<ArenaLadderRow[] | null>(null);
   const [profile, setProfile] = useState<ArenaProfile | null>(null);
@@ -61,7 +61,7 @@ export default function SpirePage() {
 
   // A stake can lapse between the panel loading and the button being pressed,
   // so the server's refusal gets its own sentence rather than "try again".
-  const NEEDS_STAKE = 'Stake a course above before entering the Spire.';
+  const NEEDS_STAKE = 'Stake a course above before entering the Arena.';
   const failureText = (err: unknown, fallback: string) =>
     err instanceof ApiError && err.code === 'ARENA_STAKE_REQUIRED' ? NEEDS_STAKE : fallback;
 
@@ -79,7 +79,7 @@ export default function SpirePage() {
   async function onCopy() {
     if (!joinCode) return;
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/spire/join/${joinCode}`);
+      await navigator.clipboard.writeText(`${window.location.origin}/arena/join/${joinCode}`);
       setCopied(true);
     } catch {
       // Clipboard can be blocked; the code is on screen to type either way.
@@ -119,7 +119,7 @@ export default function SpirePage() {
         // Both accepted — the match is live.
         stopPolling();
         setQueueing(false);
-        router.push(`/spire/${state.matchId}`);
+        router.push(`/arena/${state.matchId}`);
       } else if (!state.matched && !state.waiting) {
         // Dropped out of the queue entirely (declined, or someone else took
         // the offer). Stop pretending to search.
@@ -161,7 +161,7 @@ export default function SpirePage() {
         stopPolling();
         closeProposal();
         setQueueing(false);
-        router.push(`/spire/${proposal.matchId}`);
+        router.push(`/arena/${proposal.matchId}`);
       } else {
         setProposal((p) => (p ? { ...p, accepted: true } : p));
       }
@@ -214,7 +214,7 @@ export default function SpirePage() {
   }
 
   return (
-    <SpireBackground>
+    <ArenaBackground>
       <div className="mx-auto w-full max-w-2xl px-4 pb-8 pt-20">
         {/* Backed rather than bare: the tavern art is at its busiest behind the
             header, and small muted copy straight on top of it was hard to read. */}
@@ -227,7 +227,7 @@ export default function SpirePage() {
             style={{ color: T.amber }}
             data-testid="arena-title"
           >
-            Clockwork Spire
+            The Arena
           </h1>
           <p className="mt-1 text-[12px]" style={{ color: T.textMutedStrong }}>
             Head-to-head recall. Seven questions, twenty seconds each, fastest correct wins.
@@ -311,7 +311,7 @@ export default function SpirePage() {
             }}
             data-testid="arena-stake-required"
           >
-            The Spire only takes challengers with something on the line. Stake a course
+            The Arena only takes challengers with something on the line. Stake a course
             above to unlock both.
           </div>
         )}
@@ -462,6 +462,6 @@ export default function SpirePage() {
           </div>
         </section>
       </div>
-    </SpireBackground>
+    </ArenaBackground>
   );
 }

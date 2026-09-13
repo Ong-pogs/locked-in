@@ -89,10 +89,10 @@ async function readEntry(stakeSeasonId, walletAddress, courseId) {
 /**
  * The live stake this wallet is riding, or null.
  *
- * Entry to the Spire requires one: play is no longer free. Note what this
+ * Entry to the Arena requires one: play is no longer free. Note what this
  * makes true — if no season is OPEN, nobody can stake, so nobody can play.
  * The season cron opens the next season in the same run that settles the
- * last, so the gap is normally seconds; if that cron is failing, the Spire
+ * last, so the gap is normally seconds; if that cron is failing, the Arena
  * closes rather than quietly letting people in unstaked.
  */
 export async function activeStakeFor(walletAddress) {
@@ -114,7 +114,7 @@ export async function requireActiveStake(walletAddress) {
   if (stake) return stake;
   throw new HttpError(
     403,
-    'Stake a course before entering the Spire',
+    'Stake a course before entering the Arena',
     'ARENA_STAKE_REQUIRED',
   );
 }

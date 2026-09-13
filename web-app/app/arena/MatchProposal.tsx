@@ -32,7 +32,7 @@ export function MatchProposal({
 
   return (
     <section
-      data-testid="spire-proposal"
+      data-testid="arena-proposal"
       role="alertdialog"
       aria-live="assertive"
       aria-label="Opponent found"
@@ -51,7 +51,7 @@ export function MatchProposal({
           Opponent found
         </span>
         <span
-          data-testid="spire-proposal-seconds"
+          data-testid="arena-proposal-seconds"
           className="text-[20px] font-bold leading-none"
           style={{ color: urgent ? T.crimson : T.teal, fontVariantNumeric: 'tabular-nums' }}
         >
@@ -81,7 +81,7 @@ export function MatchProposal({
         <div className="mt-3 flex flex-wrap gap-2">
           <button
             type="button"
-            data-testid="spire-proposal-accept"
+            data-testid="arena-proposal-accept"
             onClick={onAccept}
             disabled={busy}
             className="flex-1 rounded-lg px-4 py-2.5 font-pixel text-[13px] transition-colors disabled:opacity-40"
@@ -95,7 +95,7 @@ export function MatchProposal({
           </button>
           <button
             type="button"
-            data-testid="spire-proposal-decline"
+            data-testid="arena-proposal-decline"
             onClick={onDecline}
             disabled={busy}
             className="flex-1 rounded-lg px-4 py-2.5 font-pixel text-[13px] transition-colors disabled:opacity-40"

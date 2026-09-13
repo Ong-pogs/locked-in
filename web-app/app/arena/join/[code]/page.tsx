@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { T } from '../../../../components/theme';
-import { SpireBackground } from '../../SpireBackground';
+import { ArenaBackground } from '../../ArenaBackground';
 import { fetchWithAuth } from '../../../../services/api/httpClient';
 import { joinByCode } from '../../../../services/api/arena/arenaApi';
 import { useUserStore } from '../../../../stores/userStore';
@@ -27,7 +27,7 @@ export default function ArenaJoinPage() {
     setError(null);
     try {
       const { matchId } = await fetchWithAuth((t) => joinByCode(t, code));
-      router.push(`/spire/${matchId}`);
+      router.push(`/arena/${matchId}`);
     } catch (err) {
       const message = (err as { code?: string })?.code;
       setNeedsStake(message === 'ARENA_STAKE_REQUIRED');
@@ -39,7 +39,7 @@ export default function ArenaJoinPage() {
             : message === 'ARENA_MATCH_NOT_FOUND'
               ? 'That challenge code does not exist or has expired.'
               : message === 'ARENA_STAKE_REQUIRED'
-                ? 'The Spire only takes challengers with something on the line.'
+                ? 'The Arena only takes challengers with something on the line.'
                 : 'Could not join this challenge.',
       );
       setJoining(false);
@@ -53,7 +53,7 @@ export default function ArenaJoinPage() {
   }, [walletAddress]);
 
   return (
-    <SpireBackground>
+    <ArenaBackground>
       <div className="mx-auto w-full max-w-md px-4 py-12 text-center">
         <div
           className="font-pixel-mono text-[10px] uppercase tracking-[2px]"
@@ -67,7 +67,7 @@ export default function ArenaJoinPage() {
           style={{ color: T.amber }}
           data-testid="arena-invite-challenger"
         >
-          Spire duel
+          Arena duel
         </h1>
 
         <div
@@ -97,7 +97,7 @@ export default function ArenaJoinPage() {
         {needsStake && (
           <button
             type="button"
-            onClick={() => router.push('/spire')}
+            onClick={() => router.push('/arena')}
             data-testid="arena-invite-stake"
             className="mt-4 rounded-lg px-5 py-2.5 font-pixel text-[13px]"
             style={{ background: T.bgCardActive, border: `1px solid ${T.borderAlive}`, color: T.amber }}
@@ -134,6 +134,6 @@ export default function ArenaJoinPage() {
           </div>
         )}
       </div>
-    </SpireBackground>
+    </ArenaBackground>
   );
 }

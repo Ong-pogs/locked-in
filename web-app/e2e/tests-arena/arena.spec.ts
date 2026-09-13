@@ -62,7 +62,7 @@ async function signIn(page: Page, who: { wallet: string; token: string }) {
 
 test('the arena hub renders for a signed-in player', async ({ page }) => {
   await signIn(page, STACK.alice);
-  await page.goto('/spire');
+  await page.goto('/arena');
   await expect(page.getByTestId('arena-title')).toBeVisible();
   await expect(page.getByTestId('arena-my-rating')).toBeVisible();
   await page.screenshot({ path: `${SHOTS}/01-hub.png`, fullPage: true });
@@ -76,7 +76,7 @@ test('two players complete a full 1v1 match', async ({ browser }) => {
   await signIn(a, STACK.alice);
   await signIn(b, STACK.bob);
 
-  await a.goto('/spire');
+  await a.goto('/arena');
   await a.getByTestId('arena-create-challenge').click();
   await expect(a.getByTestId('arena-join-code')).toBeVisible();
   const code = (await a.getByTestId('arena-join-code').innerText()).trim();
@@ -84,12 +84,12 @@ test('two players complete a full 1v1 match', async ({ browser }) => {
   await a.screenshot({ path: `${SHOTS}/02-challenge-created.png`, fullPage: true });
 
   // The invite landing must say something before asking anyone to sign in.
-  await b.goto(`/spire/join/${code}`);
+  await b.goto(`/arena/join/${code}`);
   await expect(b.getByTestId('arena-invite-challenger')).toBeVisible();
   await b.screenshot({ path: `${SHOTS}/03-invite-landing.png`, fullPage: true });
 
   // Signed-in visitors auto-join; wait for the match route.
-  await b.waitForURL(/\/spire\/[0-9a-f-]{36}$/, { timeout: 15_000 });
+  await b.waitForURL(/\/arena\/[0-9a-f-]{36}$/, { timeout: 15_000 });
 
   const matchUrl = b.url();
   await a.goto(matchUrl);
@@ -118,7 +118,7 @@ test('two players complete a full 1v1 match', async ({ browser }) => {
   await a.screenshot({ path: `${SHOTS}/06-result.png`, fullPage: true });
 
   // The ladder should now show both players.
-  await a.goto('/spire');
+  await a.goto('/arena');
   await expect(a.getByTestId('arena-ladder-row').first()).toBeVisible();
   await a.screenshot({ path: `${SHOTS}/07-ladder-populated.png`, fullPage: true });
 });
@@ -132,7 +132,7 @@ test('the answer key never reaches the browser', async ({ page }) => {
   });
 
   await signIn(page, STACK.alice);
-  await page.goto('/spire');
+  await page.goto('/arena');
   await page.getByTestId('arena-create-challenge').click();
   await expect(page.getByTestId('arena-join-code')).toBeVisible();
   await page.waitForTimeout(500);
@@ -150,7 +150,7 @@ test('the answer key never reaches the browser', async ({ page }) => {
 test('arena screens do not scroll horizontally at phone width', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page, STACK.alice);
-  for (const path of ['/spire', '/spire/join/ABCD2345']) {
+  for (const path of ['/arena', '/arena/join/ABCD2345']) {
     await page.goto(path);
     await page.waitForTimeout(400);
     const overflow = await page.evaluate(

@@ -204,7 +204,7 @@ describe('a real staked match decides a real season', () => {
     await openSeason();
     const auth = await getTestAuthHeaders(generateTestWallet());
 
-    // Every way into the Spire, not just the one the UI happens to use.
+    // Every way into the Arena, not just the one the UI happens to use.
     for (const url of ['/v1/arena/matches', '/v1/arena/queue']) {
       const res = await app.inject({ method: 'POST', url, headers: auth });
       expect(res.statusCode).toBe(403);

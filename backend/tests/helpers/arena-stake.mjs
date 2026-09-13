@@ -1,4 +1,4 @@
-// Entry to the Spire requires a live stake, so every test that plays a match
+// Entry to the Arena requires a live stake, so every test that plays a match
 // has to stake its players first.
 //
 // The entry is inserted directly rather than going through POST /v1/arena/stake
@@ -26,7 +26,7 @@ export async function openTestSeason(db) {
   );
 }
 
-/** Give this wallet a live stake so it may enter the Spire. */
+/** Give this wallet a live stake so it may enter the Arena. */
 export async function stakeForTest(db, wallet, courseId = 'test-kitchen') {
   await openTestSeason(db);
   await db.query(
@@ -46,7 +46,7 @@ export async function stakeAllForTest(db, wallets, courseId = 'test-kitchen') {
   return wallets;
 }
 
-/** A fresh wallet that already holds a live stake — ready to enter the Spire. */
+/** A fresh wallet that already holds a live stake — ready to enter the Arena. */
 export async function stakedWallet(db, courseId = 'test-kitchen') {
   const { generateTestWallet } = await import('./test-auth.mjs');
   return stakeForTest(db, generateTestWallet(), courseId);

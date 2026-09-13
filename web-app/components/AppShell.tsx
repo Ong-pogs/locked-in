@@ -52,7 +52,7 @@ function useFlowGuard(hydrated: boolean) {
 
     // The decision itself lives in lib/flowGuard.ts so it can be unit-tested;
     // see __tests__/lib/flowGuard.test.ts. Keeping it inline here is what let
-    // /arena and then /spire/[matchId] ship broken.
+    // /arena and then /arena/[matchId] ship broken.
     const target = flowGuardRedirect({
       pathname, walletAddress, isAuthenticated, phase, hasActiveLock,
     });
