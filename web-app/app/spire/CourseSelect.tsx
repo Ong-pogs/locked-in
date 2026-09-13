@@ -107,7 +107,7 @@ export function CourseSelect({
         <ul
           role="listbox"
           data-testid="arena-stake-course-list"
-          className="absolute z-30 mt-1 w-full overflow-hidden rounded-lg py-1"
+          className="absolute z-50 mt-1 w-full overflow-hidden rounded-lg py-1"
           style={{
             background: '#0E0E1C',
             border: `1px solid ${T.borderAlive}`,
