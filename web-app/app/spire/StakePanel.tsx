@@ -6,7 +6,11 @@ import { fetchWithAuth } from '../../services/api/httpClient';
 import { ApiError } from '../../services/api/errors';
 import { getSeason, getMyStake, stakeSeason } from '../../services/api/arena/arenaApi';
 import { getUserEnrollments } from '../../services/api/progress/progressApi';
+import { listCourses } from '../../services/api/content/contentApi';
+import { CourseSelect, type StakeableCourse } from './CourseSelect';
+import { YieldLadder } from './YieldLadder';
 import { describeStake, daysRemaining, type StakeTone } from '../../lib/arenaStake';
+import { combinedKeptBps } from '../../components/v2/PenaltyBanner';
 import type { ArenaSeason, ArenaStakeEntry } from '../../types/arena';
 
 // Versioned so a later change of terms is distinguishable from this one in
@@ -36,7 +40,7 @@ function messageFor(err: unknown): string {
 export function StakePanel() {
   const [season, setSeason] = useState<ArenaSeason | null>(null);
   const [stake, setStake] = useState<ArenaStakeEntry | null>(null);
-  const [courses, setCourses] = useState<string[]>([]);
+  const [courses, setCourses] = useState<StakeableCourse[]>([]);
   const [chosen, setChosen] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,20 +50,27 @@ export function StakePanel() {
   useEffect(() => {
     let live = true;
     (async () => {
-      const [s, k, e] = await Promise.all([
+      const [s, k, e, cat] = await Promise.all([
         getSeason().catch(() => null),
         fetchWithAuth((t) => getMyStake(t)).catch(() => null),
         fetchWithAuth((t) => getUserEnrollments(t)).catch(() => null),
+        listCourses().catch(() => []),
       ]);
       if (!live) return;
       setSeason(s);
       setStake(k);
-      // Only courses that can actually be staked. Offering a finished course
-      // just to reject it on submit is a worse experience than not listing it.
+      // Real titles, not course ids — the picker used to show the reader
+      // "blockchain-wallets". Finished courses are left out entirely: offering
+      // one just to reject it on submit is worse than not listing it.
+      const titleById = new Map(cat.map((c) => [c.id, c.title]));
       setCourses(
         (e?.enrollments ?? [])
           .filter((x) => !x.runtime?.courseCompletedAt)
-          .map((x) => x.courseId),
+          .map((x) => ({
+            id: x.courseId,
+            title: titleById.get(x.courseId) ?? x.courseId,
+            keptPct: combinedKeptBps(x.runtime?.lapseCount ?? 0, 0) / 100,
+          })),
       );
       setLoaded(true);
     })();
@@ -170,6 +181,12 @@ export function StakePanel() {
 
   // ---------- Not staked this season: last result, then the opt-in ----------
   const days = season ? daysRemaining(season.endsAt) : 0;
+  const chosenCourse = courses.find((c) => c.id === chosen) ?? null;
+  // keptPct is combinedKeptBps(lapses, 0)/100, so invert it back to the tier
+  // index the ladder needs: 100 -> 0 lapses, 50 -> 1, 0 -> 2.
+  const chosenLapses = chosenCourse
+    ? (chosenCourse.keptPct === 100 ? 0 : chosenCourse.keptPct === 50 ? 1 : 2)
+    : 0;
   const settled = settledStake ? describeStake(settledStake) : null;
 
   return (
@@ -212,48 +229,35 @@ export function StakePanel() {
         Stake a course
       </div>
 
-      <p className="mt-2 text-[12px] leading-relaxed" style={{ color: T.textMutedStrong }}>
-        Put one of your locked courses on this season. Finish level or ahead across your staked
-        matches and <strong style={{ color: T.green }}>nothing changes</strong>. Finish behind and
-        it gives up <strong style={{ color: T.crimson }}>one yield tier</strong> — all of its yield
-        down to half, or half down to none if you have already missed a day.{' '}
-        <strong style={{ color: T.textPrimary }}>Your deposit is never at risk either way.</strong>
+      <p className="mt-1.5 text-[12px]" style={{ color: T.textMutedStrong }}>
+        Put a locked course on the line for this season.
       </p>
 
-      <p className="mt-2 text-[11px] leading-relaxed" style={{ color: T.textMuted }}>
-        Yields here are small today — the difference is currently worth cents, not dollars.
-        {days > 0 ? ` ${days} ${days === 1 ? 'day' : 'days'} left in this season.` : ''} Once you
-        stake, it is bound for the whole season; there is no early exit.
-      </p>
-
-      <label
-        className="mt-3 block font-pixel-mono text-[9px] uppercase tracking-[1px]"
-        style={{ color: T.textMuted }}
-        htmlFor="arena-stake-course"
-      >
-        Course
-      </label>
-      <select
-        id="arena-stake-course"
-        data-testid="arena-stake-course"
-        className="mt-1 w-full rounded-md px-3 py-2 text-[12px]"
-        style={{
-          background: T.bgCardActive,
-          border: `1px solid ${T.borderDormant}`,
-          color: T.textPrimary,
-        }}
-        value={chosen}
-        onChange={(e) => { setChosen(e.target.value); setConfirming(false); setError(null); }}
-      >
-        <option value="">Choose a locked course…</option>
-        {courses.map((c) => <option key={c} value={c}>{c}</option>)}
-      </select>
+      <div className="mt-3">
+        <CourseSelect
+          courses={courses}
+          value={chosen}
+          onChange={(id) => { setChosen(id); setConfirming(false); setError(null); }}
+        />
+      </div>
 
       {courses.length === 0 && (
         <p className="mt-2 text-[11px]" style={{ color: T.textMuted }}>
           You have no locked courses yet. Lock one to stake a season.
         </p>
       )}
+
+      {/* The bet, in two numbers, read off the course actually selected. */}
+      {chosenCourse && (
+        <div className="mt-3">
+          <YieldLadder lapseCount={chosenLapses} />
+        </div>
+      )}
+
+      <p className="mt-2.5 text-[11px] leading-relaxed" style={{ color: T.textMuted }}>
+        {days > 0 ? `${days} ${days === 1 ? 'day' : 'days'} left · ` : ''}
+        no early exit once staked · worth cents today, not dollars
+      </p>
 
       {error && (
         <p className="mt-2 text-[12px]" style={{ color: T.crimson }} data-testid="arena-stake-error">
