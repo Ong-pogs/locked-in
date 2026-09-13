@@ -6,6 +6,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { createTestServer, closeTestServer } from '../../helpers/test-server.mjs';
 import { generateTestWallet, getTestAuthHeaders } from '../../helpers/test-auth.mjs';
+import { stakedWallet } from '../../helpers/arena-stake.mjs';
 import { acquireSuiteLock, releaseSuiteLock } from '../../helpers/suite-lock.mjs';
 
 let app;
@@ -35,8 +36,8 @@ async function seedBank() {
 
 /** Two fresh wallets paired through the queue. */
 async function pair() {
-  const a = generateTestWallet();
-  const b = generateTestWallet();
+  const a = await stakedWallet(db);
+  const b = await stakedWallet(db);
   const aH = await getTestAuthHeaders(a);
   const bH = await getTestAuthHeaders(b);
   const first = await enter(aH);

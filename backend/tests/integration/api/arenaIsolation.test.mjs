@@ -15,9 +15,12 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createTestServer, closeTestServer } from '../../helpers/test-server.mjs';
 import { generateTestWallet, getTestAuthHeaders } from '../../helpers/test-auth.mjs';
+import { stakedWallet } from '../../helpers/arena-stake.mjs';
+import { acquireSuiteLock, releaseSuiteLock } from '../../helpers/suite-lock.mjs';
 
 let app;
 let db;
+let suiteLock;
 
 // The only lesson.* tables the arena is permitted to touch.
 const ALLOWED = new Set(['user_xp', 'user_xp_events']);
@@ -56,8 +59,8 @@ async function keyFor(questionId) {
 
 /** Plays a complete match and returns the two wallets plus the match id. */
 async function playFullMatchBothSides() {
-  const alice = generateTestWallet();
-  const bob = generateTestWallet();
+  const alice = await stakedWallet(db);
+  const bob = await stakedWallet(db);
   const aAuth = await getTestAuthHeaders(alice);
   const bAuth = await getTestAuthHeaders(bob);
 
@@ -85,12 +88,16 @@ async function playFullMatchBothSides() {
 }
 
 beforeAll(async () => {
+  suiteLock = await acquireSuiteLock();
   app = await createTestServer();
   db = await import('../../../src/lib/db.mjs');
   await seedBank();
 });
 
-afterAll(async () => { await closeTestServer(app); });
+afterAll(async () => {
+  await closeTestServer(app);
+  await releaseSuiteLock(suiteLock);
+});
 
 describe('arena isolation contract', () => {
   it('creates NO row in any wallet-scoped money table for its players', async () => {

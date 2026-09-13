@@ -19,6 +19,8 @@ export default function ArenaJoinPage() {
   const walletAddress = useUserStore((s) => s.walletAddress);
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A refusal for want of a stake is the one error with somewhere to go.
+  const [needsStake, setNeedsStake] = useState(false);
 
   async function onAccept() {
     setJoining(true);
@@ -28,6 +30,7 @@ export default function ArenaJoinPage() {
       router.push(`/spire/${matchId}`);
     } catch (err) {
       const message = (err as { code?: string })?.code;
+      setNeedsStake(message === 'ARENA_STAKE_REQUIRED');
       setError(
         message === 'ARENA_SELF_JOIN'
           ? 'This is your own challenge — send the link to someone else.'
@@ -35,7 +38,9 @@ export default function ArenaJoinPage() {
             ? 'Someone already took this challenge.'
             : message === 'ARENA_MATCH_NOT_FOUND'
               ? 'That challenge code does not exist or has expired.'
-              : 'Could not join this challenge.',
+              : message === 'ARENA_STAKE_REQUIRED'
+                ? 'The Spire only takes challengers with something on the line.'
+                : 'Could not join this challenge.',
       );
       setJoining(false);
     }
@@ -79,14 +84,26 @@ export default function ArenaJoinPage() {
 
         <p className="mx-auto mt-5 max-w-sm text-[12px] leading-relaxed" style={{ color: T.textMuted }}>
           Seven questions on Solana, wallets and DeFi. Twenty seconds each.
-          Most correct wins; fastest breaks the tie. It costs nothing — the Spire
-          plays for rating and XP only, never for money.
+          Most correct wins; fastest breaks the tie. Both duellists stake a course:
+          a losing season costs it one yield tier — never your deposit.
         </p>
 
         {error && (
           <div className="mt-5 text-[12px]" style={{ color: T.crimson }} data-testid="arena-invite-error">
             {error}
           </div>
+        )}
+
+        {needsStake && (
+          <button
+            type="button"
+            onClick={() => router.push('/spire')}
+            data-testid="arena-invite-stake"
+            className="mt-4 rounded-lg px-5 py-2.5 font-pixel text-[13px]"
+            style={{ background: T.bgCardActive, border: `1px solid ${T.borderAlive}`, color: T.amber }}
+          >
+            Stake a course
+          </button>
         )}
 
         {walletAddress ? (

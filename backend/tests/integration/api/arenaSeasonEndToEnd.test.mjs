@@ -200,33 +200,62 @@ describe('a real staked match decides a real season', () => {
     expect(Buffer.from(winnerVoucher.message, 'base64').readUInt16LE(81)).toBe(10_000);
   });
 
-  it('does not link a match when only one side is staked', async () => {
+  it('turns an unstaked wallet away at the door', async () => {
     await openSeason();
+    const auth = await getTestAuthHeaders(generateTestWallet());
 
+    // Every way into the Spire, not just the one the UI happens to use.
+    for (const url of ['/v1/arena/matches', '/v1/arena/queue']) {
+      const res = await app.inject({ method: 'POST', url, headers: auth });
+      expect(res.statusCode).toBe(403);
+      expect(res.json().code).toBe('ARENA_STAKE_REQUIRED');
+    }
+
+    // Including someone else's invite link, which bypasses the lobby entirely.
     const staked = generateTestWallet();
-    const unstaked = generateTestWallet();
     __setLockV2FreshReadOverride(async (w, c) => ({
       mismatch: false, status: 'ACTIVE', principal: 10_000_000n,
       lockStartTs: 0, lockAddress: lockFor(w, c),
     }));
     await optIn(staked);
-
-    const sAuth = await getTestAuthHeaders(staked);
-    const uAuth = await getTestAuthHeaders(unstaked);
     const created = (await app.inject({
-      method: 'POST', url: '/v1/arena/matches', headers: uAuth })).json();
-    await app.inject({
-      method: 'POST', url: `/v1/arena/join/${created.joinCode}`, headers: sAuth });
-    await playAll(created.matchId, uAuth, 'correct');
-    await playAll(created.matchId, sAuth, 'wrong');
+      method: 'POST', url: '/v1/arena/matches',
+      headers: await getTestAuthHeaders(staked) })).json();
+    const joined = await app.inject({
+      method: 'POST', url: `/v1/arena/join/${created.joinCode}`, headers: auth });
+    expect(joined.statusCode).toBe(403);
+    expect(joined.json().code).toBe('ARENA_STAKE_REQUIRED');
+  });
 
-    // Farming someone with nothing at risk must not move a season.
+  it('does not count a match against someone who staked after seeing it', async () => {
+    await openSeason();
+
+    const early = generateTestWallet();
+    const late = generateTestWallet();
+    __setLockV2FreshReadOverride(async (w, c) => ({
+      mismatch: false, status: 'ACTIVE', principal: 10_000_000n,
+      lockStartTs: 0, lockAddress: lockFor(w, c),
+    }));
+    await optIn(early);
+
+    // `late` opens the invite, watches the match exist, and only then stakes.
+    const eAuth = await getTestAuthHeaders(early);
+    const created = (await app.inject({
+      method: 'POST', url: '/v1/arena/matches', headers: eAuth })).json();
+    await optIn(late);
+    const lAuth = await getTestAuthHeaders(late);
+    await app.inject({
+      method: 'POST', url: `/v1/arena/join/${created.joinCode}`, headers: lAuth });
+    await playAll(created.matchId, eAuth, 'correct');
+    await playAll(created.matchId, lAuth, 'wrong');
+
+    // Staking into a match already in flight must not move a season.
     const links = await db.query(
       `select 1 from arena.season_match_links where match_id = $1`, [created.matchId]);
     expect(links.rowCount).toBe(0);
 
     const live = (await app.inject({
-      method: 'GET', url: '/v1/arena/stake', headers: sAuth })).json();
+      method: 'GET', url: '/v1/arena/stake', headers: lAuth })).json();
     expect(live.stakedDelta).toBe(0);
     expect(live.matchesCounted).toBe(0);
   });

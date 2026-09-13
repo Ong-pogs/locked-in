@@ -27,7 +27,7 @@ const DESTS: Dest[] = [
   { id: 'tavern', route: '/community-pot', label: 'Community Pot', desc: 'Forfeited yield shared among active learners', icon: Coins, color: '#9945FF', gated: true },
   { id: 'practice', route: '/practice', label: 'Practice Hall', desc: 'Replay passed lessons — streak and yield untouched', icon: Swords, color: '#F0A878', gated: true },
   { id: 'notice', route: '/leaderboard', label: 'Leaderboard', desc: 'Top learners by streak and XP', icon: Trophy, color: '#2AE8D4', gated: true },
-  { id: 'spire', route: '/spire', label: 'Clockwork Spire', desc: '1v1 quiz duels — free to play, or stake a course for the season', icon: Zap, color: '#FF4466', gated: false },
+  { id: 'spire', route: '/spire', label: 'Clockwork Spire', desc: '1v1 quiz duels — stake a course to enter the season', icon: Zap, color: '#FF4466', gated: false },
 ];
 
 export function MobileHub() {

@@ -6,8 +6,12 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createTestServer, closeTestServer } from '../../helpers/test-server.mjs';
 import { generateTestWallet, getTestAuthHeaders } from '../../helpers/test-auth.mjs';
+import { stakedWallet } from '../../helpers/arena-stake.mjs';
+import { acquireSuiteLock, releaseSuiteLock } from '../../helpers/suite-lock.mjs';
 
 let app;
+let db;
+let suiteLock;
 let aliceAuth;
 let bobAuth;
 
@@ -32,10 +36,12 @@ async function seedBank() {
 }
 
 beforeAll(async () => {
+  suiteLock = await acquireSuiteLock();
   app = await createTestServer();
+  db = await import('../../../src/lib/db.mjs');
   await seedBank();
-  aliceAuth = await getTestAuthHeaders(generateTestWallet());
-  bobAuth = await getTestAuthHeaders(generateTestWallet());
+  aliceAuth = await getTestAuthHeaders(await stakedWallet(db));
+  bobAuth = await getTestAuthHeaders(await stakedWallet(db));
 });
 
 afterAll(async () => {
@@ -80,7 +86,7 @@ describe('arena match creation and joining', () => {
   });
 
   it('refuses a third player', async () => {
-    const carolAuth = await getTestAuthHeaders(generateTestWallet());
+    const carolAuth = await getTestAuthHeaders(await stakedWallet(db));
     const created = await createChallenge();
     await app.inject({ method: 'POST', url: `/v1/arena/join/${created.joinCode}`, headers: bobAuth });
     const res = await app.inject({
@@ -97,7 +103,7 @@ describe('arena match creation and joining', () => {
   });
 
   it('hides match state from a wallet that is not a participant', async () => {
-    const strangerAuth = await getTestAuthHeaders(generateTestWallet());
+    const strangerAuth = await getTestAuthHeaders(await stakedWallet(db));
     const created = await createChallenge();
     const res = await app.inject({
       method: 'GET', url: `/v1/arena/matches/${created.matchId}`, headers: strangerAuth,

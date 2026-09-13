@@ -2,9 +2,12 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createTestServer, closeTestServer } from '../../helpers/test-server.mjs';
 import { generateTestWallet, getTestAuthHeaders } from '../../helpers/test-auth.mjs';
+import { stakedWallet } from '../../helpers/arena-stake.mjs';
+import { acquireSuiteLock, releaseSuiteLock } from '../../helpers/suite-lock.mjs';
 
 let app;
 let db;
+let suiteLock;
 
 async function seedBank() {
   for (let i = 1; i <= 12; i++) {
@@ -54,8 +57,8 @@ async function playAll(matchId, headers, mode) {
 
 /** Creates a decided match: winner gets 7/7, loser 0/7. */
 async function decidedMatch() {
-  const winner = generateTestWallet();
-  const loser = generateTestWallet();
+  const winner = await stakedWallet(db);
+  const loser = await stakedWallet(db);
   const wAuth = await getTestAuthHeaders(winner);
   const lAuth = await getTestAuthHeaders(loser);
   const created = (await app.inject({ method: 'POST', url: '/v1/arena/matches', headers: wAuth })).json();
@@ -66,12 +69,16 @@ async function decidedMatch() {
 }
 
 beforeAll(async () => {
+  suiteLock = await acquireSuiteLock();
   app = await createTestServer();
   db = await import('../../../src/lib/db.mjs');
   await seedBank();
 });
 
-afterAll(async () => { await closeTestServer(app); });
+afterAll(async () => {
+  await closeTestServer(app);
+  await releaseSuiteLock(suiteLock);
+});
 
 describe('arena settlement', () => {
   it('writes exactly one rating event per player', async () => {
@@ -137,8 +144,8 @@ describe('arena settlement', () => {
   });
 
   it('VOIDs a double forfeit — no rating, no XP', async () => {
-    const alice = generateTestWallet();
-    const bob = generateTestWallet();
+    const alice = await stakedWallet(db);
+    const bob = await stakedWallet(db);
     const aAuth = await getTestAuthHeaders(alice);
     const bAuth = await getTestAuthHeaders(bob);
     const created = (await app.inject({ method: 'POST', url: '/v1/arena/matches', headers: aAuth })).json();

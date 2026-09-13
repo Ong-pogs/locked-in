@@ -9,6 +9,7 @@ import { query, getPool } from '../../lib/db.mjs';
 import { badRequest, notFound, conflict } from '../../lib/errors.mjs';
 import { ARENA_QUESTION_COUNT, ARENA_QUESTION_TIMEOUT_MS, clampElapsed } from '../../lib/arenaScoring.mjs';
 import { maybeSettleMatch } from './settle.mjs';
+import { requireActiveStake } from './seasonRepository.mjs';
 
 // Crockford-style: no I, O, 0 or 1, so a code read aloud or retyped from a
 // screenshot cannot silently resolve to a different match.
@@ -62,6 +63,8 @@ async function withTransaction(fn) {
 }
 
 export async function createLinkMatch(walletAddress) {
+  // Play is not free: entry requires a stake riding on the open season.
+  await requireActiveStake(walletAddress);
   return withTransaction(async (client) => {
     const questionIds = await drawQuestionIds(client, walletAddress);
     const inserted = await client.query(
@@ -81,6 +84,7 @@ export async function createLinkMatch(walletAddress) {
 }
 
 export async function joinMatchByCode(walletAddress, joinCode) {
+  await requireActiveStake(walletAddress);
   const code = String(joinCode ?? '').toUpperCase();
   return withTransaction(async (client) => {
     // `for update` so two people racing the same link cannot both become the
@@ -341,6 +345,7 @@ export const PROPOSAL_GRACE_SECONDS = 5;
 export const PROPOSAL_WINDOW_SECONDS = PROPOSAL_COUNTDOWN_SECONDS + PROPOSAL_GRACE_SECONDS;
 
 export async function enterQueue(walletAddress) {
+  await requireActiveStake(walletAddress);
   return withTransaction(async (client) => {
     // Claim the oldest waiting opponent. `skip locked` so two simultaneous
     // joiners cannot both claim the same person.

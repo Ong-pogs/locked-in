@@ -249,7 +249,7 @@ export function StakePanel({
       </div>
 
       <p className="mt-1.5 text-[12px]" style={{ color: T.textMutedStrong }}>
-        Put a locked course on the line for this season.
+        Required to enter. Put a locked course on the line for this season.
       </p>
 
       <div className="mt-3">
@@ -303,7 +303,7 @@ export function StakePanel({
       ) : (
         <div className="mt-3" data-testid="arena-stake-confirm">
           <p className="text-[12px] leading-relaxed" style={{ color: T.textPrimary }}>
-            Stake <strong style={{ color: T.amber }}>{chosen}</strong> for the whole season?
+            Stake <strong style={{ color: T.amber }}>{titleOf(chosen)}</strong> for the whole season?
             This cannot be undone.
           </p>
           <div className="mt-2 flex flex-wrap gap-2">

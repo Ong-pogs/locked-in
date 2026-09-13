@@ -7,9 +7,12 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createTestServer, closeTestServer } from '../../helpers/test-server.mjs';
 import { generateTestWallet, getTestAuthHeaders } from '../../helpers/test-auth.mjs';
+import { stakedWallet } from '../../helpers/arena-stake.mjs';
+import { acquireSuiteLock, releaseSuiteLock } from '../../helpers/suite-lock.mjs';
 
 let app;
 let db;
+let suiteLock;
 let aliceAuth;
 let bobAuth;
 
@@ -77,11 +80,12 @@ async function playAll(matchId, headers, mode = 'correct') {
 }
 
 beforeAll(async () => {
+  suiteLock = await acquireSuiteLock();
   app = await createTestServer();
   db = await import('../../../src/lib/db.mjs');
   await seedBank();
-  aliceAuth = await getTestAuthHeaders(generateTestWallet());
-  bobAuth = await getTestAuthHeaders(generateTestWallet());
+  aliceAuth = await getTestAuthHeaders(await stakedWallet(db));
+  bobAuth = await getTestAuthHeaders(await stakedWallet(db));
 });
 
 afterAll(async () => {

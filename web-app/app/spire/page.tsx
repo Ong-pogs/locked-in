@@ -6,6 +6,7 @@ import { T } from '../../components/theme';
 import { SpireBackground } from './SpireBackground';
 import { StakePanel } from './StakePanel';
 import { fetchWithAuth } from '../../services/api/httpClient';
+import { ApiError } from '../../services/api/errors';
 import {
   createChallenge, getLadder, getMyArena, enterQueue, pollQueue, leaveQueue,
   getProposal, acceptProposal, declineProposal, type ArenaProposal,
@@ -30,9 +31,10 @@ export default function SpirePage() {
   const [queueing, setQueueing] = useState(false);
   const [suggestLink, setSuggestLink] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Null unless a stake is riding on this season — decides whether a match
-  // here is free or counts against the player's yield.
-  const [liveStake, setLiveStake] = useState<ArenaStakeEntry | null>(null);
+  // undefined until the panel has looked: a player whose stake is still
+  // loading must not be told they have none, and must not be let through
+  // the door on the assumption that they have one.
+  const [liveStake, setLiveStake] = useState<ArenaStakeEntry | null | undefined>(undefined);
   // The pairing offer, if one is open. Held as a deadline rather than a
   // countdown so a backgrounded tab cannot show time that has already gone.
   const [proposal, setProposal] = useState<ArenaProposal | null>(null);
@@ -57,14 +59,20 @@ export default function SpirePage() {
     if (queueing) fetchWithAuth((t) => leaveQueue(t)).catch(() => {});
   }, [queueing, stopPolling]);
 
+  // A stake can lapse between the panel loading and the button being pressed,
+  // so the server's refusal gets its own sentence rather than "try again".
+  const NEEDS_STAKE = 'Stake a course above before entering the Spire.';
+  const failureText = (err: unknown, fallback: string) =>
+    err instanceof ApiError && err.code === 'ARENA_STAKE_REQUIRED' ? NEEDS_STAKE : fallback;
+
   async function onCreate() {
     setError(null);
     try {
       const match = await fetchWithAuth((t) => createChallenge(t));
       setJoinCode(match.joinCode);
       setCopied(false);
-    } catch {
-      setError('Could not create a challenge. Try again in a moment.');
+    } catch (err) {
+      setError(failureText(err, 'Could not create a challenge. Try again in a moment.'));
     }
   }
 
@@ -138,9 +146,9 @@ export default function SpirePage() {
         if (p) openProposal(p);
       }
       pollRef.current = setInterval(tick, 2000);
-    } catch {
+    } catch (err) {
       setQueueing(false);
-      setError('Could not join the queue.');
+      setError(failureText(err, 'Could not join the queue.'));
     }
   }
 
@@ -183,6 +191,11 @@ export default function SpirePage() {
     }
   }, [proposal, stopPolling, closeProposal]);
 
+  // The client gate is a courtesy — the server refuses all three entrances
+  // outright. Both exist: this one explains, that one enforces.
+  const stakeKnown = liveStake !== undefined;
+  const canPlay = Boolean(liveStake);
+
   const msLeft = useCountdown(deadlineAt);
 
   // Running out is a decline you did not have to click. Without this the offer
@@ -218,8 +231,8 @@ export default function SpirePage() {
           </h1>
           <p className="mt-1 text-[12px]" style={{ color: T.textMutedStrong }}>
             Head-to-head recall. Seven questions, twenty seconds each, fastest correct wins.
-            Free to play for rating and XP. Stake a course and a losing season costs it one
-            yield tier — never your deposit, streak or shields.
+            Stake a course to enter. A losing season costs that course one yield tier —
+            never your deposit, streak or shields.
           </p>
         </header>
 
@@ -262,8 +275,8 @@ export default function SpirePage() {
         )}
 
         {/* Actions. The header is load-bearing: these two buttons used to sit
-            here with nothing saying whether pressing one cost anything, so a
-            player could not tell free play from a staked match. */}
+            here with nothing saying what pressing one cost. Both are shut
+            until a stake is riding, so the badge has to say which it is. */}
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <span
             className="font-pixel-mono text-[10px] uppercase tracking-[1px]"
@@ -275,43 +288,78 @@ export default function SpirePage() {
             data-testid="arena-match-mode"
             className="rounded-full px-2.5 py-1 text-[10px] font-semibold"
             style={{
-              background: liveStake ? 'rgba(255,68,102,0.10)' : 'rgba(255,255,255,0.05)',
-              border: `1px solid ${liveStake ? 'rgba(255,68,102,0.35)' : T.borderDormant}`,
-              color: liveStake ? T.crimson : T.textMutedStrong,
+              background: canPlay ? 'rgba(255,68,102,0.10)' : 'rgba(255,255,255,0.05)',
+              border: `1px solid ${canPlay ? 'rgba(255,68,102,0.35)' : T.borderDormant}`,
+              color: canPlay ? T.crimson : T.textMutedStrong,
             }}
           >
-            {liveStake
-              ? 'Counts toward your stake'
-              : 'Free play · nothing at stake'}
+            {!stakeKnown
+              ? 'Checking your stake…'
+              : canPlay
+                ? 'Counts toward your stake'
+                : 'Stake a course to enter'}
           </span>
         </div>
+
+        {stakeKnown && !canPlay && (
+          <div
+            className="mb-3 rounded-lg p-3 text-[12px]"
+            style={{
+              background: 'rgba(212,160,74,0.06)',
+              border: `1px solid ${T.borderAlive}`,
+              color: T.textPrimary,
+            }}
+            data-testid="arena-stake-required"
+          >
+            The Spire only takes challengers with something on the line. Stake a course
+            above to unlock both.
+          </div>
+        )}
 
         <section className="mb-6 grid gap-3 sm:grid-cols-2">
           <button
             type="button"
             onClick={onCreate}
+            disabled={!canPlay}
             data-testid="arena-create-challenge"
-            className="rounded-lg px-4 py-3 text-left transition-colors"
-            style={{ background: T.bgCardActive, border: `1px solid ${T.borderAlive}`, color: T.textPrimary }}
+            className="rounded-lg px-4 py-3 text-left transition-colors disabled:cursor-not-allowed"
+            style={{
+              background: T.bgCardActive,
+              border: `1px solid ${canPlay ? T.borderAlive : T.borderDormant}`,
+              color: T.textPrimary,
+              opacity: canPlay ? 1 : 0.6,
+            }}
           >
             <span className="block font-pixel text-[13px]" style={{ color: T.amber }}>Challenge a friend</span>
             <span className="mt-1 block text-[11px]" style={{ color: T.textMuted }}>
-              Get a link. Whoever opens it plays your exact questions.
+              {canPlay
+                ? 'Get a link. Whoever opens it plays your exact questions.'
+                : 'Needs a staked course.'}
             </span>
           </button>
 
           <button
             type="button"
             onClick={queueing ? onCancelQueue : onFindOpponent}
+            disabled={!canPlay && !queueing}
             data-testid="arena-find-opponent"
-            className="rounded-lg px-4 py-3 text-left transition-colors"
-            style={{ background: T.bgCardActive, border: `1px solid ${T.borderDormant}`, color: T.textPrimary }}
+            className="rounded-lg px-4 py-3 text-left transition-colors disabled:cursor-not-allowed"
+            style={{
+              background: T.bgCardActive,
+              border: `1px solid ${T.borderDormant}`,
+              color: T.textPrimary,
+              opacity: canPlay || queueing ? 1 : 0.6,
+            }}
           >
             <span className="block font-pixel text-[13px]" style={{ color: T.teal }}>
               {queueing ? 'Searching… tap to cancel' : 'Find an opponent'}
             </span>
             <span className="mt-1 block text-[11px]" style={{ color: T.textMuted }}>
-              {queueing ? 'Looking for someone else in the queue.' : 'Pairs you with anyone else waiting.'}
+              {queueing
+                ? 'Looking for someone else in the queue.'
+                : canPlay
+                  ? 'Pairs you with anyone else waiting.'
+                  : 'Needs a staked course.'}
             </span>
           </button>
         </section>

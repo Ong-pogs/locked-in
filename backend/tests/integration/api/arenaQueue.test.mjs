@@ -2,6 +2,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createTestServer, closeTestServer } from '../../helpers/test-server.mjs';
 import { generateTestWallet, getTestAuthHeaders } from '../../helpers/test-auth.mjs';
+import { stakedWallet } from '../../helpers/arena-stake.mjs';
 import { acquireSuiteLock, releaseSuiteLock } from '../../helpers/suite-lock.mjs';
 
 let app;
@@ -39,7 +40,7 @@ afterAll(async () => {
 
 describe('arena open queue', () => {
   it('puts a lone player in the queue rather than matching them', async () => {
-    const auth = await getTestAuthHeaders(generateTestWallet());
+    const auth = await getTestAuthHeaders(await stakedWallet(db));
     const res = await app.inject({ method: 'POST', url: '/v1/arena/queue', headers: auth });
     expect(res.statusCode).toBe(200);
     const body = res.json();
@@ -52,8 +53,8 @@ describe('arena open queue', () => {
     // A pairing is an offer now, not a match both players are dropped into —
     // it only becomes ACTIVE once both accept. See arenaProposal.test.mjs for
     // the accept/decline/timeout rules.
-    const a = await getTestAuthHeaders(generateTestWallet());
-    const b = await getTestAuthHeaders(generateTestWallet());
+    const a = await getTestAuthHeaders(await stakedWallet(db));
+    const b = await getTestAuthHeaders(await stakedWallet(db));
     await app.inject({ method: 'POST', url: '/v1/arena/queue', headers: a });
     const res = await app.inject({ method: 'POST', url: '/v1/arena/queue', headers: b });
     const body = res.json();
@@ -85,7 +86,7 @@ describe('arena open queue', () => {
   });
 
   it('entering the queue twice is idempotent', async () => {
-    const auth = await getTestAuthHeaders(generateTestWallet());
+    const auth = await getTestAuthHeaders(await stakedWallet(db));
     await app.inject({ method: 'POST', url: '/v1/arena/queue', headers: auth });
     await app.inject({ method: 'POST', url: '/v1/arena/queue', headers: auth });
     const r = await db.query(`select count(*)::int as n from arena.queue`);
@@ -94,7 +95,7 @@ describe('arena open queue', () => {
   });
 
   it('suggests the link path once the wait passes the threshold', async () => {
-    const wallet = generateTestWallet();
+    const wallet = await stakedWallet(db);
     const auth = await getTestAuthHeaders(wallet);
     await app.inject({ method: 'POST', url: '/v1/arena/queue', headers: auth });
     // Backdate the wait rather than sleeping 30s in a test.
@@ -110,7 +111,7 @@ describe('arena open queue', () => {
 
 describe('arena expiry sweep', () => {
   it('closes an unclaimed link challenge without penalising the creator', async () => {
-    const auth = await getTestAuthHeaders(generateTestWallet());
+    const auth = await getTestAuthHeaders(await stakedWallet(db));
     const created = (await app.inject({ method: 'POST', url: '/v1/arena/matches', headers: auth })).json();
     await db.query(
       `update arena.matches set expires_at = now() - interval '1 minute' where id = $1`,
@@ -127,9 +128,9 @@ describe('arena expiry sweep', () => {
   });
 
   it('settles a one-sided match as a forfeit win', async () => {
-    const winner = generateTestWallet();
+    const winner = await stakedWallet(db);
     const wAuth = await getTestAuthHeaders(winner);
-    const lAuth = await getTestAuthHeaders(generateTestWallet());
+    const lAuth = await getTestAuthHeaders(await stakedWallet(db));
     const created = (await app.inject({ method: 'POST', url: '/v1/arena/matches', headers: wAuth })).json();
     await app.inject({ method: 'POST', url: `/v1/arena/join/${created.joinCode}`, headers: lAuth });
 
@@ -179,7 +180,7 @@ describe('arena ladder', () => {
   });
 
   it('gives an unplayed wallet a clean 1200 record rather than an error', async () => {
-    const auth = await getTestAuthHeaders(generateTestWallet());
+    const auth = await getTestAuthHeaders(await stakedWallet(db));
     const body = (await app.inject({ method: 'GET', url: '/v1/arena/me', headers: auth })).json();
     expect(body.rating).toBe(1200);
     expect(body.games).toBe(0);
