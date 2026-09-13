@@ -364,7 +364,7 @@ export default function ArenaMatchPage() {
                   style={{ borderTop: `1px solid ${T.borderDormant}` }}
                   data-testid="arena-result-row"
                 >
-                  <span className="font-pixel-mono text-[11px]" style={{ color: T.textPrimary }}>
+                  <span className="font-mono text-[11px]" style={{ color: T.textPrimary }}>
                     {p.walletAddress === myWallet
                       ? 'You'
                       : `${p.walletAddress.slice(0, 4)}…${p.walletAddress.slice(-4)}`}

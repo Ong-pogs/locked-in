@@ -442,13 +442,22 @@ export default function ArenaPage() {
                 className="flex items-center justify-between px-4 py-2"
                 style={{ borderTop: `1px solid ${T.borderDormant}` }}
               >
-                <span className="font-pixel-mono text-[11px]" style={{ color: T.textMuted }}>
+                <span
+                  className="font-mono text-[11px]"
+                  style={{ color: T.textMuted, fontVariantNumeric: 'tabular-nums' }}
+                >
                   #{row.rank}
                 </span>
-                <span className="flex-1 px-3 font-pixel-mono text-[11px]" style={{ color: T.textPrimary }}>
+                {/* Geist Mono, not Silkscreen: base58 is case-sensitive and
+                    Silkscreen has no lowercase glyphs, so "7Vt9" rendered as
+                    "7VT9" — a different address than the one it names. */}
+                <span className="flex-1 px-3 font-mono text-[11px]" style={{ color: T.textPrimary }}>
                   {shortWallet(row.walletAddress)}
                 </span>
-                <span className="font-pixel-mono text-[11px]" style={{ color: T.textMuted }}>
+                <span
+                  className="font-mono text-[11px]"
+                  style={{ color: T.textMuted, fontVariantNumeric: 'tabular-nums' }}
+                >
                   {row.wins}W {row.losses}L
                 </span>
                 <span
