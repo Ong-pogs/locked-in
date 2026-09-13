@@ -167,7 +167,7 @@ export function StakePanel() {
               Staked rating
             </dt>
             <dd
-              className="mt-0.5 font-pixel text-[14px]"
+              className="mt-0.5 text-[15px] font-bold"
               style={{ color: TONE_COLOR[d.tone], fontVariantNumeric: 'tabular-nums' }}
               data-testid="arena-stake-delta"
             >

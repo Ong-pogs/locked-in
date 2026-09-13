@@ -56,9 +56,12 @@ function Outcome({
       >
         {label}
       </div>
+      {/* Body face, deliberately not font-pixel: Pixelify Sans renders 5 as
+          something very close to S, so "50%" read as "S0%" on the one number
+          that tells a user what their money does. */}
       <div
-        className="mt-0.5 font-pixel text-[22px] leading-none"
-        style={{ color, fontVariantNumeric: 'tabular-nums' }}
+        className="mt-0.5 text-[24px] font-bold leading-none"
+        style={{ color, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em' }}
       >
         {pct}%
       </div>

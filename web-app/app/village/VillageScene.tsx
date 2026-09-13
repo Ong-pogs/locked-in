@@ -248,10 +248,10 @@ export default function VillageScene() {
                   }}
                 >
                   <span
-                    className="font-pixel font-bold uppercase"
+                    className="font-pixel font-bold"
                     style={{
                       fontSize: 16.5,
-                      letterSpacing: 2.3,
+                      letterSpacing: 1.6,
                       color: isHovered ? '#1A1000' : COZY_TEXT,
                       textShadow: isHovered ? 'none' : COZY_TEXT_SHADOW,
                       whiteSpace: 'nowrap',

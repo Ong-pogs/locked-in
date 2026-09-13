@@ -94,7 +94,7 @@ export function CourseSelect({
         </span>
         {selected && (
           <span
-            className="shrink-0 font-pixel-mono text-[10px]"
+            className="shrink-0 text-[11px] font-semibold"
             style={{ color: selected.keptPct === 100 ? T.green : T.rust }}
           >
             {selected.keptPct}% yield
@@ -136,7 +136,7 @@ export function CourseSelect({
                   />
                   <span className="min-w-0 flex-1 truncate text-[13px]">{c.title}</span>
                   <span
-                    className="shrink-0 font-pixel-mono text-[10px]"
+                    className="shrink-0 text-[11px] font-semibold"
                     style={{ color: c.keptPct === 100 ? T.green : T.rust }}
                   >
                     {c.keptPct}% yield
