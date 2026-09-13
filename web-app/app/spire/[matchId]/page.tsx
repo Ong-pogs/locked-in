@@ -7,16 +7,15 @@ import { SpireBackground } from '../SpireBackground';
 import { fetchWithAuth } from '../../../services/api/httpClient';
 import { answerQuestion, getMatch, getMyArena, startMatch } from '../../../services/api/arena/arenaApi';
 import { useUserStore } from '../../../stores/userStore';
+import { resolveMatchPhase, type MatchPhase } from '../../../lib/matchPhase';
 import type { ArenaMatchState, ArenaQuestion } from '../../../types/arena';
-
-type Phase = 'loading' | 'ready' | 'playing' | 'waiting' | 'resolved' | 'error';
 
 export default function ArenaMatchPage() {
   const params = useParams<{ matchId: string }>();
   const router = useRouter();
   const matchId = params?.matchId as string;
 
-  const [phase, setPhase] = useState<Phase>('loading');
+  const [phase, setPhase] = useState<MatchPhase>('loading');
   const [match, setMatch] = useState<ArenaMatchState | null>(null);
   const [question, setQuestion] = useState<ArenaQuestion | null>(null);
   const [answered, setAnswered] = useState(0);
@@ -34,16 +33,16 @@ export default function ArenaMatchPage() {
       const state = await fetchWithAuth((t) => getMatch(t, matchId));
       setMatch(state);
       setTotal(state.questionCount || 7);
-      if (state.resolved) setPhase('resolved');
-      else {
-        const me = state.players.find((p) => p.submittedAt);
-        setPhase(me && state.players.every((p) => p.submittedAt) ? 'resolved' : 'ready');
-      }
+      setPhase(resolveMatchPhase({
+        resolved: state.resolved,
+        players: state.players,
+        myWallet,
+      }));
     } catch {
       setPhase('error');
       setMessage('This match could not be loaded.');
     }
-  }, [matchId]);
+  }, [matchId, myWallet]);
 
   useEffect(() => { loadMatch(); }, [loadMatch]);
 
