@@ -5,7 +5,7 @@ import { T } from '../../components/theme';
 import { fetchWithAuth } from '../../services/api/httpClient';
 import { ApiError } from '../../services/api/errors';
 import { getSeason, getMyStake, stakeSeason } from '../../services/api/arena/arenaApi';
-import { getUserEnrollments } from '../../services/api/progress/progressApi';
+import { getUserEnrollments, getLockPosition } from '../../services/api/progress/progressApi';
 import { listCourses } from '../../services/api/content/contentApi';
 import { CourseSelect, type StakeableCourse } from './CourseSelect';
 import { YieldLadder } from './YieldLadder';
@@ -37,10 +37,16 @@ function messageFor(err: unknown): string {
   return 'Could not stake that course. Try again in a moment.';
 }
 
-export function StakePanel() {
+export function StakePanel({
+  onLiveStakeChange,
+}: {
+  /** Called with the live stake entry, or null when nothing is at stake. */
+  onLiveStakeChange?: (live: ArenaStakeEntry | null) => void;
+} = {}) {
   const [season, setSeason] = useState<ArenaSeason | null>(null);
   const [stake, setStake] = useState<ArenaStakeEntry | null>(null);
   const [courses, setCourses] = useState<StakeableCourse[]>([]);
+  const [titles, setTitles] = useState<Record<string, string>>({});
   const [chosen, setChosen] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,14 +65,28 @@ export function StakePanel() {
       if (!live) return;
       setSeason(s);
       setStake(k);
+      onLiveStakeChange?.(k && k.outcome === 'PENDING' && k.isCurrentSeason !== false ? k : null);
       // Real titles, not course ids — the picker used to show the reader
-      // "blockchain-wallets". Finished courses are left out entirely: offering
-      // one just to reject it on submit is worse than not listing it.
+      // "blockchain-wallets".
       const titleById = new Map(cat.map((c) => [c.id, c.title]));
+      setTitles(Object.fromEntries(titleById));
+
+      // Offer only what the server will actually accept. Enrollment is not
+      // enough: a course in practice mode has no principal locked, and a
+      // finished course has its tier frozen. Both used to appear in the list
+      // and fail on submit, which reads as the feature being broken rather
+      // than the course being ineligible. This asks the position endpoint the
+      // same question optIntoSeason asks the chain.
+      const candidates = (e?.enrollments ?? []).filter((x) => !x.runtime?.courseCompletedAt);
+      const positions = await Promise.all(candidates.map((x) =>
+        fetchWithAuth((t) => getLockPosition(x.courseId, t)).catch(() => null)));
+      if (!live) return;
+
       setCourses(
-        (e?.enrollments ?? [])
-          .filter((x) => !x.runtime?.courseCompletedAt)
-          .map((x) => ({
+        candidates
+          .map((x, i) => ({ x, pos: positions[i] }))
+          .filter(({ pos }) => pos?.status === 'ACTIVE')
+          .map(({ x }) => ({
             id: x.courseId,
             title: titleById.get(x.courseId) ?? x.courseId,
             keptPct: combinedKeptBps(x.runtime?.lapseCount ?? 0, 0) / 100,
@@ -90,13 +110,16 @@ export function StakePanel() {
       // of their standing.
       const fresh = await fetchWithAuth((t) => getMyStake(t));
       setStake(fresh);
+      onLiveStakeChange?.(fresh && fresh.outcome === 'PENDING' ? fresh : null);
       setConfirming(false);
     } catch (err) {
       setError(messageFor(err));
     } finally {
       setBusy(false);
     }
-  }, [chosen]);
+  }, [chosen, onLiveStakeChange]);
+
+  const titleOf = (id: string) => titles[id] ?? id;
 
   // Nothing to say until we know whether a season exists.
   if (!loaded || (!season && !stake)) return null;
@@ -156,7 +179,7 @@ export function StakePanel() {
               Staked course
             </dt>
             <dd className="mt-0.5 text-[12px] break-words" style={{ color: T.textPrimary }}>
-              {stake.courseId}
+              {titleOf(stake.courseId)}
             </dd>
           </div>
           <div>
@@ -213,7 +236,7 @@ export function StakePanel() {
           {settled.detail}
         </p>
         <p className="mt-1 text-[11px]" style={{ color: T.textMuted }}>
-          Staked {settledStake.courseId}.
+          Staked {titleOf(settledStake.courseId)}.
         </p>
       </section>
     )}
@@ -243,7 +266,8 @@ export function StakePanel() {
 
       {courses.length === 0 && (
         <p className="mt-2 text-[11px]" style={{ color: T.textMuted }}>
-          You have no locked courses yet. Lock one to stake a season.
+          Nothing to stake yet — you need a course with USDC still locked in it.
+          Practice-mode and finished courses cannot be staked.
         </p>
       )}
 

@@ -9,7 +9,7 @@ import { fetchWithAuth } from '../../services/api/httpClient';
 import {
   createChallenge, getLadder, getMyArena, enterQueue, pollQueue, leaveQueue,
 } from '../../services/api/arena/arenaApi';
-import type { ArenaLadderRow, ArenaProfile } from '../../types/arena';
+import type { ArenaLadderRow, ArenaProfile, ArenaStakeEntry } from '../../types/arena';
 
 function shortWallet(address: string) {
   return `${address.slice(0, 4)}…${address.slice(-4)}`;
@@ -24,6 +24,9 @@ export default function SpirePage() {
   const [queueing, setQueueing] = useState(false);
   const [suggestLink, setSuggestLink] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Null unless a stake is riding on this season — decides whether a match
+  // here is free or counts against the player's yield.
+  const [liveStake, setLiveStake] = useState<ArenaStakeEntry | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -136,7 +139,11 @@ export default function SpirePage() {
             <span className="font-pixel-mono text-[10px] uppercase tracking-[1px]" style={{ color: T.textMuted }}>
               Your rating
             </span>
-            <span className="font-pixel text-2xl" style={{ color: T.teal }} data-testid="arena-my-rating">
+            <span
+              className="text-2xl font-bold"
+              style={{ color: T.teal, fontVariantNumeric: 'tabular-nums' }}
+              data-testid="arena-my-rating"
+            >
               {profile?.rating ?? 1200}
             </span>
           </div>
@@ -147,9 +154,33 @@ export default function SpirePage() {
           </div>
         </section>
 
-        <StakePanel />
+        <StakePanel onLiveStakeChange={setLiveStake} />
 
-        {/* Actions */}
+        {/* Actions. The header is load-bearing: these two buttons used to sit
+            here with nothing saying whether pressing one cost anything, so a
+            player could not tell free play from a staked match. */}
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <span
+            className="font-pixel-mono text-[10px] uppercase tracking-[1px]"
+            style={{ color: T.textMuted }}
+          >
+            Play a match
+          </span>
+          <span
+            data-testid="arena-match-mode"
+            className="rounded-full px-2.5 py-1 text-[10px] font-semibold"
+            style={{
+              background: liveStake ? 'rgba(255,68,102,0.10)' : 'rgba(255,255,255,0.05)',
+              border: `1px solid ${liveStake ? 'rgba(255,68,102,0.35)' : T.borderDormant}`,
+              color: liveStake ? T.crimson : T.textMutedStrong,
+            }}
+          >
+            {liveStake
+              ? 'Counts toward your stake'
+              : 'Free play · nothing at stake'}
+          </span>
+        </div>
+
         <section className="mb-6 grid gap-3 sm:grid-cols-2">
           <button
             type="button"
@@ -267,7 +298,10 @@ export default function SpirePage() {
                 <span className="font-pixel-mono text-[11px]" style={{ color: T.textMuted }}>
                   {row.wins}W {row.losses}L
                 </span>
-                <span className="ml-3 font-pixel text-[13px]" style={{ color: T.teal }}>
+                <span
+                  className="ml-3 text-[14px] font-bold"
+                  style={{ color: T.teal, fontVariantNumeric: 'tabular-nums' }}
+                >
                   {row.rating}
                 </span>
               </div>
