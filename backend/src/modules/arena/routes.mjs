@@ -3,7 +3,9 @@ import { secureEquals } from '../../lib/secureCompare.mjs';
 import { appConfig } from '../../config.mjs';
 import { runArenaSweep } from '../../lib/arenaSweep.mjs';
 import { runArenaSeasonSweep } from '../../lib/arenaSeasonSweep.mjs';
-import { optIntoSeason, getMyStake, getOpenSeason } from './seasonRepository.mjs';
+import {
+  optIntoSeason, getMyStake, getOpenSeason, listStakeableCourses,
+} from './seasonRepository.mjs';
 import { requireAccessAuth } from '../../plugins/auth.mjs';
 import { keyGenerator } from '../../plugins/rateKey.mjs';
 import {
@@ -113,6 +115,14 @@ export async function arenaRoutes(app) {
     '/v1/arena/stake',
     { preHandler: requireAccessAuth },
     async (request) => getMyStake(request.auth.walletAddress),
+  );
+
+  // What the picker may offer. Served by the same check the opt-in gate runs,
+  // so the list can never promise a course the gate then refuses.
+  app.get(
+    '/v1/arena/stake/eligible',
+    { preHandler: requireAccessAuth },
+    async (request) => ({ courseIds: await listStakeableCourses(request.auth.walletAddress) }),
   );
 
   app.post(

@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { T } from '../../components/theme';
 import { fetchWithAuth } from '../../services/api/httpClient';
 import { ApiError } from '../../services/api/errors';
-import { getSeason, getMyStake, stakeSeason } from '../../services/api/arena/arenaApi';
-import { getUserEnrollments, getLockPosition } from '../../services/api/progress/progressApi';
+import { getSeason, getMyStake, stakeSeason, getStakeableCourses } from '../../services/api/arena/arenaApi';
+import { getUserEnrollments } from '../../services/api/progress/progressApi';
 import { listCourses } from '../../services/api/content/contentApi';
 import { CourseSelect, type StakeableCourse } from './CourseSelect';
 import { YieldLadder } from './YieldLadder';
@@ -56,12 +56,14 @@ export function StakePanel({
   useEffect(() => {
     let live = true;
     (async () => {
-      const [s, k, e, cat] = await Promise.all([
+      const [s, k, e, cat, elig] = await Promise.all([
         getSeason().catch(() => null),
         fetchWithAuth((t) => getMyStake(t)).catch(() => null),
         fetchWithAuth((t) => getUserEnrollments(t)).catch(() => null),
         listCourses().catch(() => []),
+        fetchWithAuth((t) => getStakeableCourses(t)).catch(() => ({ courseIds: [] })),
       ]);
+      const eligibleIds = elig?.courseIds ?? [];
       if (!live) return;
       setSeason(s);
       setStake(k);
@@ -71,26 +73,20 @@ export function StakePanel({
       const titleById = new Map(cat.map((c) => [c.id, c.title]));
       setTitles(Object.fromEntries(titleById));
 
-      // Offer only what the server will actually accept. Enrollment is not
-      // enough: a course in practice mode has no principal locked, and a
-      // finished course has its tier frozen. Both used to appear in the list
-      // and fail on submit, which reads as the feature being broken rather
-      // than the course being ineligible. This asks the position endpoint the
-      // same question optIntoSeason asks the chain.
-      const candidates = (e?.enrollments ?? []).filter((x) => !x.runtime?.courseCompletedAt);
-      const positions = await Promise.all(candidates.map((x) =>
-        fetchWithAuth((t) => getLockPosition(x.courseId, t)).catch(() => null)));
-      if (!live) return;
-
+      // The server decides what is stakeable, using the very same check the
+      // opt-in gate runs. Enrollment is not enough — a course in practice mode
+      // has no principal locked and a finished course has its tier frozen —
+      // and inferring it here from a second data source is how the list ends
+      // up promising something the gate then refuses.
+      const lapsesById = new Map(
+        (e?.enrollments ?? []).map((x) => [x.courseId, x.runtime?.lapseCount ?? 0]),
+      );
       setCourses(
-        candidates
-          .map((x, i) => ({ x, pos: positions[i] }))
-          .filter(({ pos }) => pos?.status === 'ACTIVE')
-          .map(({ x }) => ({
-            id: x.courseId,
-            title: titleById.get(x.courseId) ?? x.courseId,
-            keptPct: combinedKeptBps(x.runtime?.lapseCount ?? 0, 0) / 100,
-          })),
+        eligibleIds.map((id) => ({
+          id,
+          title: titleById.get(id) ?? id,
+          keptPct: combinedKeptBps(lapsesById.get(id) ?? 0, 0) / 100,
+        })),
       );
       setLoaded(true);
     })();

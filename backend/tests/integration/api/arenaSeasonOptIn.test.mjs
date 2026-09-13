@@ -248,3 +248,72 @@ describe('the season window, not the cron, decides what is live', () => {
     expect(res.json().code).toBe('ARENA_SEASON_CLOSED');
   });
 });
+
+describe('GET /v1/arena/stake/eligible', () => {
+  // The picker used to filter on the completion stamp, which is only a proxy:
+  // a course in practice mode has no principal locked and no completion stamp,
+  // so it was offered and then refused on submit. This endpoint runs the same
+  // check the gate runs, so the two cannot disagree.
+  const eligible = async (wallet) => {
+    const res = await app.inject({
+      method: 'GET', url: '/v1/arena/stake/eligible',
+      headers: await getTestAuthHeaders(wallet),
+    });
+    return res.json().courseIds;
+  };
+
+  async function enrol(wallet, courseId, { completed = false } = {}) {
+    await db.query(
+      `insert into lesson.user_course_enrollments (wallet_address, course_id)
+       values ($1,$2) on conflict do nothing`, [wallet, courseId]);
+    await db.query(
+      `insert into lesson.user_course_runtime_state
+         (wallet_address, course_id, fuel_cap, course_completed_at)
+       values ($1,$2,7,$3)
+       on conflict (wallet_address, course_id) do update set course_completed_at = $3`,
+      [wallet, courseId, completed ? new Date() : null]);
+  }
+
+  it('omits a course with no live lock, and lists one that has it', async () => {
+    const wallet = generateTestWallet();
+    await enrol(wallet, COURSE);
+    await enrol(wallet, 'swaps-and-dexs');
+    // Only the first course has a lock; the other is practice mode.
+    __setLockV2FreshReadOverride(async (_w, courseId) =>
+      (courseId === COURSE ? activeLock() : null));
+
+    expect(await eligible(wallet)).toEqual([COURSE]);
+  });
+
+  it('omits a completed course even while its lock is still ACTIVE', async () => {
+    // Completing does not close the lock — the tier is frozen, so a penalty
+    // could never reach it, which is why it must not be offered.
+    const wallet = generateTestWallet();
+    await enrol(wallet, COURSE, { completed: true });
+    __setLockV2FreshReadOverride(async () => activeLock());
+
+    expect(await eligible(wallet)).toEqual([]);
+  });
+
+  it('agrees with the gate: everything it lists can actually be staked', async () => {
+    const wallet = generateTestWallet();
+    await enrol(wallet, COURSE);
+    await enrol(wallet, 'swaps-and-dexs', { completed: true });
+    __setLockV2FreshReadOverride(async () => activeLock());
+
+    const ids = await eligible(wallet);
+    expect(ids).toEqual([COURSE]);
+    for (const id of ids) {
+      const res = await stake(wallet, { courseId: id, consentVersion: 'v1' });
+      expect(res.statusCode).toBe(201);
+    }
+  });
+
+  it('lists nothing when the chain cannot be read — never a false promise', async () => {
+    const wallet = generateTestWallet();
+    await enrol(wallet, COURSE);
+    __setLockV2FreshReadOverride(async () => { throw new Error('rpc down'); });
+
+    expect(await eligible(wallet)).toEqual([]);
+  });
+});

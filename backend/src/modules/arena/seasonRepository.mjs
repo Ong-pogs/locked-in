@@ -84,6 +84,100 @@ async function readEntry(stakeSeasonId, walletAddress, courseId) {
   return r.rows[0] ?? null;
 }
 
+
+/**
+ * Can this wallet stake this course RIGHT NOW?
+ *
+ * One function so the picker and the gate can never disagree. The dropdown
+ * used to filter on the completion stamp alone, which is only a proxy: a
+ * course in practice mode has no principal locked and no completion stamp, so
+ * it was offered and then refused on submit.
+ *
+ * Returns a reason rather than throwing, so a listing can skip a course while
+ * the opt-in path turns the same reason into the right status code.
+ */
+export async function courseStakeEligibility(walletAddress, courseId) {
+  // A course that is already complete, or already has a signed voucher, cannot
+  // be staked: its tier is frozen and a penalty could never reach it.
+  //
+  // Two separate reads, not one join. The completion freeze is the real gate;
+  // the voucher row is belt-and-braces for the rare completer whose freeze
+  // stamp never landed. lesson.completion_vouchers is allowed to be
+  // unavailable — every other path that touches it degrades to a warning
+  // rather than a 500 (voucher-autoissue ruling R11.7).
+  const frozen = await query(
+    `select 1 from lesson.user_course_runtime_state
+      where wallet_address = $1 and course_id = $2 and course_completed_at is not null
+      limit 1`,
+    [walletAddress, courseId],
+  );
+  let vouchered = false;
+  try {
+    const v = await query(
+      `select 1 from lesson.completion_vouchers
+        where wallet_address = $1 and course_id = $2 and signature is not null
+        limit 1`,
+      [walletAddress, courseId],
+    );
+    vouchered = v.rowCount > 0;
+  } catch {
+    vouchered = false;
+  }
+  if (frozen.rowCount > 0 || vouchered) {
+    return { eligible: false, reason: 'COURSE_SETTLED', lock: null };
+  }
+
+  // Eligibility is read from the CHAIN, not the database. Uncached and
+  // fail-closed: if we cannot prove a live lock, there is no stake.
+  //
+  // A read that THROWS is not the same as a read that says "no lock": one is
+  // our problem, the other is the user's.
+  let lock;
+  try {
+    lock = await readLockV2AccountFresh(walletAddress, courseId);
+  } catch {
+    return { eligible: false, reason: 'CHAIN_UNAVAILABLE', lock: null };
+  }
+  if (!lock || lock.mismatch || lock.status !== 'ACTIVE' || !(BigInt(lock.principal ?? 0n) > 0n)) {
+    return { eligible: false, reason: 'NO_LOCK', lock: null };
+  }
+  return { eligible: true, reason: null, lock };
+}
+
+function stakeEligibilityError(reason) {
+  if (reason === 'COURSE_SETTLED') {
+    return conflict(
+      'That course is already finished — its yield tier is locked in and cannot be staked',
+      'ARENA_STAKE_COURSE_SETTLED',
+    );
+  }
+  if (reason === 'CHAIN_UNAVAILABLE') {
+    return new HttpError(
+      503,
+      'Could not reach the chain to verify your lock. Try again in a moment.',
+      'ARENA_STAKE_CHAIN_UNAVAILABLE',
+    );
+  }
+  return badRequest('You need an active lock on that course to stake it', 'ARENA_STAKE_NO_LOCK');
+}
+
+/**
+ * The courses this wallet could stake today — the picker's source of truth,
+ * evaluated with the very same function the opt-in gate uses.
+ */
+export async function listStakeableCourses(walletAddress) {
+  const enrolled = await query(
+    `select course_id as "courseId" from lesson.user_course_enrollments
+      where wallet_address = $1`,
+    [walletAddress],
+  );
+  const checked = await Promise.all(enrolled.rows.map(async (r) => {
+    const { eligible } = await courseStakeEligibility(walletAddress, r.courseId);
+    return eligible ? r.courseId : null;
+  }));
+  return checked.filter(Boolean);
+}
+
 /**
  * Stake one course lock on the open season.
  *
@@ -117,66 +211,8 @@ export async function optIntoSeason(walletAddress, courseId, consentVersion) {
     );
   }
 
-  // A course that is already complete, or already has a signed voucher, cannot
-  // be staked: its tier is frozen and a penalty could never reach it. Refusing
-  // is the honest answer — silently accepting a stake that can never be
-  // collected would be worse than saying no.
-  //
-  // Two separate reads, not one join. The completion freeze is the real gate;
-  // the voucher row is belt-and-braces for the rare completer whose freeze
-  // stamp never landed. lesson.completion_vouchers is allowed to be
-  // unavailable — every other path that touches it degrades to a warning
-  // rather than a 500 (voucher-autoissue ruling R11.7), and opting in must not
-  // be the one request that breaks when it is.
-  const frozen = await query(
-    `select 1 from lesson.user_course_runtime_state
-      where wallet_address = $1 and course_id = $2 and course_completed_at is not null
-      limit 1`,
-    [walletAddress, courseId],
-  );
-  let vouchered = false;
-  try {
-    const v = await query(
-      `select 1 from lesson.completion_vouchers
-        where wallet_address = $1 and course_id = $2 and signature is not null
-        limit 1`,
-      [walletAddress, courseId],
-    );
-    vouchered = v.rowCount > 0;
-  } catch {
-    // Unreadable voucher store — the freeze check above still stands.
-    vouchered = false;
-  }
-  if (frozen.rowCount > 0 || vouchered) {
-    throw conflict(
-      'That course is already finished — its yield tier is locked in and cannot be staked',
-      'ARENA_STAKE_COURSE_SETTLED',
-    );
-  }
-
-  // Eligibility is read from the CHAIN, not the database. Uncached and
-  // fail-closed: if we cannot prove a live lock, there is no stake.
-  //
-  // A read that THROWS is not the same as a read that says "no lock": one is
-  // our problem, the other is the user's. Telling someone with a perfectly
-  // good position that they have no lock would send them to go and check it,
-  // so an unreachable RPC gets its own retryable code instead.
-  let lock;
-  try {
-    lock = await readLockV2AccountFresh(walletAddress, courseId);
-  } catch {
-    throw new HttpError(
-      503,
-      'Could not reach the chain to verify your lock. Try again in a moment.',
-      'ARENA_STAKE_CHAIN_UNAVAILABLE',
-    );
-  }
-  if (!lock || lock.mismatch || lock.status !== 'ACTIVE' || !(BigInt(lock.principal ?? 0n) > 0n)) {
-    throw badRequest(
-      'You need an active lock on that course to stake it',
-      'ARENA_STAKE_NO_LOCK',
-    );
-  }
+  const { eligible, reason, lock } = await courseStakeEligibility(walletAddress, courseId);
+  if (!eligible) throw stakeEligibilityError(reason);
 
   const rating = await query(
     `select rating from arena.ratings where wallet_address = $1 and season = 1`,

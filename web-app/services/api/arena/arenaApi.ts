@@ -108,3 +108,11 @@ export function stakeSeason(
     body: { courseId, consentVersion },
   });
 }
+
+/**
+ * Courses this wallet could stake right now. Served by the same check the
+ * opt-in gate runs, so the picker cannot offer something the gate refuses.
+ */
+export function getStakeableCourses(token: string): Promise<{ courseIds: string[] }> {
+  return httpRequest<{ courseIds: string[] }>('/v1/arena/stake/eligible', { token });
+}
