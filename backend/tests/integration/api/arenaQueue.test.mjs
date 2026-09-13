@@ -2,9 +2,11 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createTestServer, closeTestServer } from '../../helpers/test-server.mjs';
 import { generateTestWallet, getTestAuthHeaders } from '../../helpers/test-auth.mjs';
+import { acquireSuiteLock, releaseSuiteLock } from '../../helpers/suite-lock.mjs';
 
 let app;
 let db;
+let suiteLock;
 
 async function seedBank() {
   for (let i = 1; i <= 12; i++) {
@@ -23,13 +25,17 @@ async function seedBank() {
 }
 
 beforeAll(async () => {
+  suiteLock = await acquireSuiteLock();
   app = await createTestServer();
   db = await import('../../../src/lib/db.mjs');
   await seedBank();
   await db.query('delete from arena.queue');
 });
 
-afterAll(async () => { await closeTestServer(app); });
+afterAll(async () => {
+  await closeTestServer(app);
+  await releaseSuiteLock(suiteLock);
+});
 
 describe('arena open queue', () => {
   it('puts a lone player in the queue rather than matching them', async () => {
@@ -42,7 +48,10 @@ describe('arena open queue', () => {
     await app.inject({ method: 'DELETE', url: '/v1/arena/queue', headers: auth });
   });
 
-  it('pairs two queued players into one ACTIVE match', async () => {
+  it('pairs two queued players into a PROPOSED match', async () => {
+    // A pairing is an offer now, not a match both players are dropped into —
+    // it only becomes ACTIVE once both accept. See arenaProposal.test.mjs for
+    // the accept/decline/timeout rules.
     const a = await getTestAuthHeaders(generateTestWallet());
     const b = await getTestAuthHeaders(generateTestWallet());
     await app.inject({ method: 'POST', url: '/v1/arena/queue', headers: a });
@@ -50,13 +59,24 @@ describe('arena open queue', () => {
     const body = res.json();
     expect(body.matched).toBe(true);
     expect(body.matchId).toBeDefined();
+    expect(body.proposal).toBe(true);
 
     const state = (await app.inject({
       method: 'GET', url: `/v1/arena/matches/${body.matchId}`, headers: b,
     })).json();
-    expect(state.status).toBe('ACTIVE');
+    expect(state.status).toBe('PROPOSED');
     expect(state.origin).toBe('queue');
     expect(state.questionCount).toBe(7);
+
+    // And it becomes playable the moment both sides take it.
+    for (const h of [a, b]) {
+      await app.inject({
+        method: 'POST', url: `/v1/arena/proposal/${body.matchId}/accept`, headers: h });
+    }
+    const after = (await app.inject({
+      method: 'GET', url: `/v1/arena/matches/${body.matchId}`, headers: b,
+    })).json();
+    expect(after.status).toBe('ACTIVE');
   });
 
   it('empties the queue after a pairing', async () => {

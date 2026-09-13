@@ -23,7 +23,7 @@ export async function runArenaSweep({ log = console } = {}) {
     try {
       const due = await client.query(
         `select id from arena.matches
-          where status in ('OPEN', 'ACTIVE') and expires_at < now()
+          where status in ('PROPOSED', 'OPEN', 'ACTIVE') and expires_at < now()
           order by expires_at limit 500`,
       );
 

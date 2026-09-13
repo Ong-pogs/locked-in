@@ -12,6 +12,7 @@ import {
   createLinkMatch, joinMatchByCode, getMatchState,
   startAttempt, nextQuestion, submitAnswer,
   enterQueue, pollQueue, leaveQueue, getLadder, getMyArena,
+  getProposal, acceptProposal, declineProposal,
 } from './repository.mjs';
 
 // Same gate as the lapse sweep and pot cycle: a shared scheduler key, compared
@@ -98,6 +99,27 @@ export async function arenaRoutes(app) {
     '/v1/arena/queue',
     { preHandler: requireAccessAuth },
     async (request) => leaveQueue(request.auth.walletAddress),
+  );
+
+  // ---------- Queue proposals ----------
+  // A pairing is an offer with a countdown, not a match you are dropped into.
+
+  app.get(
+    '/v1/arena/proposal',
+    { preHandler: requireAccessAuth },
+    async (request) => getProposal(request.auth.walletAddress),
+  );
+
+  app.post(
+    '/v1/arena/proposal/:id/accept',
+    { preHandler: requireAccessAuth },
+    async (request) => acceptProposal(request.auth.walletAddress, request.params.id),
+  );
+
+  app.post(
+    '/v1/arena/proposal/:id/decline',
+    { preHandler: requireAccessAuth },
+    async (request) => declineProposal(request.auth.walletAddress, request.params.id),
   );
 
   app.get('/v1/arena/ladder', async (request) => getLadder(1, request.query?.limit));

@@ -14,6 +14,11 @@
 //      R11.7 "table absent" behaviour. While it is dropped, any other file that
 //      reads or writes a voucher sees a table that does not exist.
 //
+//   3. The queue files. arena.queue is one shared table with no per-test
+//      scoping available: enterQueue pairs you with whoever is waiting, so two
+//      files queueing players will pair them ACROSS files and each will see a
+//      match it did not create.
+//
 // A session-level Postgres advisory lock, held on a dedicated connection for
 // the lifetime of the file, makes those files queue instead of collide.
 //

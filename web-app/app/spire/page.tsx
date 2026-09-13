@@ -8,7 +8,13 @@ import { StakePanel } from './StakePanel';
 import { fetchWithAuth } from '../../services/api/httpClient';
 import {
   createChallenge, getLadder, getMyArena, enterQueue, pollQueue, leaveQueue,
+  getProposal, acceptProposal, declineProposal, type ArenaProposal,
 } from '../../services/api/arena/arenaApi';
+import { MatchProposal, useCountdown } from './MatchProposal';
+
+// Matches PROPOSAL_COUNTDOWN_MS on the server; the window it enforces is a
+// few seconds longer so a click already in flight still lands.
+const PROPOSAL_COUNTDOWN_MS = 10_000;
 import type { ArenaLadderRow, ArenaProfile, ArenaStakeEntry } from '../../types/arena';
 
 function shortWallet(address: string) {
@@ -27,6 +33,11 @@ export default function SpirePage() {
   // Null unless a stake is riding on this season — decides whether a match
   // here is free or counts against the player's yield.
   const [liveStake, setLiveStake] = useState<ArenaStakeEntry | null>(null);
+  // The pairing offer, if one is open. Held as a deadline rather than a
+  // countdown so a backgrounded tab cannot show time that has already gone.
+  const [proposal, setProposal] = useState<ArenaProposal | null>(null);
+  const [deadlineAt, setDeadlineAt] = useState<number | null>(null);
+  const [proposalBusy, setProposalBusy] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -68,6 +79,54 @@ export default function SpirePage() {
     }
   }
 
+  // Turn a paired response into an open offer rather than navigating into a
+  // match the other player may never turn up for.
+  const openProposal = useCallback((p: ArenaProposal) => {
+    setProposal(p);
+    setDeadlineAt(Date.now() + p.msLeft);
+  }, []);
+
+  const closeProposal = useCallback(() => {
+    setProposal(null);
+    setDeadlineAt(null);
+  }, []);
+
+  const tick = useCallback(async () => {
+    try {
+      // An open offer is the only thing worth asking about while it stands.
+      const p = await fetchWithAuth((t) => getProposal(t));
+      if (p) {
+        setProposal((prev) => {
+          // Re-anchor the deadline only when the offer changes, so the bar
+          // does not jitter on every poll.
+          if (!prev || prev.matchId !== p.matchId) setDeadlineAt(Date.now() + p.msLeft);
+          return p;
+        });
+        return;
+      }
+      closeProposal();
+
+      const state = await fetchWithAuth((t) => pollQueue(t));
+      if (state.matched && state.matchId && !state.proposal) {
+        // Both accepted — the match is live.
+        stopPolling();
+        setQueueing(false);
+        router.push(`/spire/${state.matchId}`);
+      } else if (!state.matched && !state.waiting) {
+        // Dropped out of the queue entirely (declined, or someone else took
+        // the offer). Stop pretending to search.
+        stopPolling();
+        setQueueing(false);
+      } else if (state.suggestLink) {
+        setSuggestLink(true);
+      }
+    } catch {
+      stopPolling();
+      setQueueing(false);
+      closeProposal();
+    }
+  }, [closeProposal, router, stopPolling]);
+
   async function onFindOpponent() {
     setError(null);
     setSuggestLink(false);
@@ -75,32 +134,67 @@ export default function SpirePage() {
     try {
       const first = await fetchWithAuth((t) => enterQueue(t));
       if (first.matched && first.matchId) {
-        router.push(`/spire/${first.matchId}`);
-        return;
+        const p = await fetchWithAuth((t) => getProposal(t));
+        if (p) openProposal(p);
       }
-      pollRef.current = setInterval(async () => {
-        try {
-          const state = await fetchWithAuth((t) => pollQueue(t));
-          if (state.matched && state.matchId) {
-            stopPolling();
-            setQueueing(false);
-            router.push(`/spire/${state.matchId}`);
-          } else if (state.suggestLink) {
-            setSuggestLink(true);
-          }
-        } catch {
-          stopPolling();
-          setQueueing(false);
-        }
-      }, 3000);
+      pollRef.current = setInterval(tick, 2000);
     } catch {
       setQueueing(false);
       setError('Could not join the queue.');
     }
   }
 
+  async function onAcceptProposal() {
+    if (!proposal) return;
+    setProposalBusy(true);
+    try {
+      const res = await fetchWithAuth((t) => acceptProposal(t, proposal.matchId));
+      if (res.ready) {
+        stopPolling();
+        closeProposal();
+        setQueueing(false);
+        router.push(`/spire/${proposal.matchId}`);
+      } else {
+        setProposal((p) => (p ? { ...p, accepted: true } : p));
+      }
+    } catch {
+      // The offer died under us — fall back to searching.
+      closeProposal();
+      setError('That match offer expired. Still searching…');
+    } finally {
+      setProposalBusy(false);
+    }
+  }
+
+  const onDeclineProposal = useCallback(async () => {
+    const current = proposal;
+    if (!current) return;
+    setProposalBusy(true);
+    stopPolling();
+    closeProposal();
+    setQueueing(false);
+    setSuggestLink(false);
+    try {
+      await fetchWithAuth((t) => declineProposal(t, current.matchId));
+    } catch {
+      // Declining is best-effort: the window closes on its own either way.
+    } finally {
+      setProposalBusy(false);
+    }
+  }, [proposal, stopPolling, closeProposal]);
+
+  const msLeft = useCountdown(deadlineAt);
+
+  // Running out is a decline you did not have to click. Without this the offer
+  // would sit on screen looking live while the server had already retired it.
+  useEffect(() => {
+    if (!proposal || deadlineAt == null || msLeft > 0) return;
+    onDeclineProposal();
+  }, [proposal, deadlineAt, msLeft, onDeclineProposal]);
+
   async function onCancelQueue() {
     stopPolling();
+    closeProposal();
     setQueueing(false);
     setSuggestLink(false);
     await fetchWithAuth((t) => leaveQueue(t)).catch(() => {});
@@ -155,6 +249,17 @@ export default function SpirePage() {
         </section>
 
         <StakePanel onLiveStakeChange={setLiveStake} />
+
+        {proposal && (
+          <MatchProposal
+            msLeft={msLeft}
+            totalMs={PROPOSAL_COUNTDOWN_MS}
+            accepted={proposal.accepted}
+            busy={proposalBusy}
+            onAccept={onAcceptProposal}
+            onDecline={onDeclineProposal}
+          />
+        )}
 
         {/* Actions. The header is load-bearing: these two buttons used to sit
             here with nothing saying whether pressing one cost anything, so a

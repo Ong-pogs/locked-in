@@ -116,3 +116,28 @@ export function stakeSeason(
 export function getStakeableCourses(token: string): Promise<{ courseIds: string[] }> {
   return httpRequest<{ courseIds: string[] }>('/v1/arena/stake/eligible', { token });
 }
+
+// ---------- Queue proposals ----------
+
+export interface ArenaProposal {
+  matchId: string;
+  msLeft: number;
+  accepted: boolean;
+  opponentAccepted: boolean;
+  opponent: string | null;
+}
+
+/** The offer currently in front of this wallet, or null. */
+export function getProposal(token: string): Promise<ArenaProposal | null> {
+  return httpRequest<ArenaProposal | null>('/v1/arena/proposal', { token });
+}
+
+export function acceptProposal(token: string, matchId: string): Promise<{ matchId: string; ready: boolean }> {
+  return httpRequest<{ matchId: string; ready: boolean }>(
+    `/v1/arena/proposal/${encodeURIComponent(matchId)}/accept`, { method: 'POST', token });
+}
+
+export function declineProposal(token: string, matchId: string): Promise<{ declined: boolean }> {
+  return httpRequest<{ declined: boolean }>(
+    `/v1/arena/proposal/${encodeURIComponent(matchId)}/decline`, { method: 'POST', token });
+}

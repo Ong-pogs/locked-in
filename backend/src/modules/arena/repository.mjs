@@ -333,6 +333,13 @@ export async function submitAnswer(walletAddress, matchId, questionId, chosenOpt
 // case, so the UI must say so rather than spin forever.
 export const QUEUE_SUGGEST_LINK_AFTER_MS = 30_000;
 
+// How long a paired player has to accept. Ten seconds is the countdown they
+// see; the server holds the offer open for a few seconds longer so a click
+// made at 9.9s is not rejected for arriving at 10.1s.
+export const PROPOSAL_COUNTDOWN_SECONDS = 10;
+export const PROPOSAL_GRACE_SECONDS = 5;
+export const PROPOSAL_WINDOW_SECONDS = PROPOSAL_COUNTDOWN_SECONDS + PROPOSAL_GRACE_SECONDS;
+
 export async function enterQueue(walletAddress) {
   return withTransaction(async (client) => {
     // Claim the oldest waiting opponent. `skip locked` so two simultaneous
@@ -359,24 +366,33 @@ export async function enterQueue(walletAddress) {
       [[walletAddress, other]]);
 
     const questionIds = await drawQuestionIds(client, other);
+    // PROPOSED, not ACTIVE: a pairing is an offer until both sides take it.
+    // expires_at carries the short answer window, so an unanswered proposal is
+    // cleaned up by the same sweep that closes abandoned matches.
     const inserted = await client.query(
       `insert into arena.matches
          (origin, status, creator, opponent, question_ids, expires_at)
-       values ('queue', 'ACTIVE', $1, $2, $3, now() + interval '24 hours')
+       values ('queue', 'PROPOSED', $1, $2, $3,
+               now() + ($4::int * interval '1 second'))
        returning id as "matchId"`,
-      [other, walletAddress, questionIds],
+      [other, walletAddress, questionIds, PROPOSAL_WINDOW_SECONDS],
     );
     const matchId = inserted.rows[0].matchId;
     await client.query(
       `insert into arena.match_players (match_id, wallet_address) values ($1, $2), ($1, $3)`,
       [matchId, other, walletAddress],
     );
-    return { matched: true, matchId };
+    return { matched: true, matchId, proposal: true };
   });
 }
 
 export async function pollQueue(walletAddress) {
-  // Paired already? The match will be ACTIVE with this wallet on it.
+  // An outstanding offer outranks everything else — the player is looking at
+  // a countdown and needs to know whether it is still theirs to take.
+  const proposal = await getProposal(walletAddress);
+  if (proposal) return { matched: true, matchId: proposal.matchId, proposal: true };
+
+  // Paired and accepted? The match will be ACTIVE with this wallet on it.
   const m = await query(
     `select id as "matchId" from arena.matches
       where origin = 'queue' and status = 'ACTIVE'
@@ -399,6 +415,141 @@ export async function pollQueue(walletAddress) {
     waitedMs,
     suggestLink: waitedMs >= QUEUE_SUGGEST_LINK_AFTER_MS,
   };
+}
+
+
+// ---------------------------------------------------------------------------
+// Queue proposals
+// ---------------------------------------------------------------------------
+
+/**
+ * Retire a proposal nobody completed, and put anyone who DID accept back in
+ * the queue. Caller owns the transaction.
+ *
+ * Whoever answered should not lose their place because the other side went
+ * quiet — that is the difference between a queue that feels fair and one that
+ * punishes you for being at your desk.
+ */
+async function expireProposal(client, matchId, { requeueAccepted = true } = {}) {
+  await client.query(
+    `update arena.matches set status = 'EXPIRED', resolved_at = now()
+      where id = $1 and status = 'PROPOSED'`,
+    [matchId],
+  );
+  if (!requeueAccepted) return;
+  await client.query(
+    `insert into arena.queue (wallet_address)
+     select wallet_address from arena.match_players
+      where match_id = $1 and accepted_at is not null
+     on conflict (wallet_address) do nothing`,
+    [matchId],
+  );
+}
+
+/**
+ * The offer currently in front of this wallet, or null.
+ *
+ * Expiry is resolved lazily here rather than waiting for the sweep: the sweep
+ * runs every 15 minutes and a proposal lives 15 seconds, so the polling client
+ * is the only thing that can retire one promptly.
+ */
+export async function getProposal(walletAddress) {
+  const r = await query(
+    `select m.id as "matchId", m.creator, m.opponent,
+            extract(epoch from (m.expires_at - now())) * 1000 as "rawMsLeft",
+            (select accepted_at from arena.match_players
+              where match_id = m.id and wallet_address = $1) as "mine",
+            (select count(*) from arena.match_players
+              where match_id = m.id and accepted_at is not null)::int as "acceptedCount"
+       from arena.matches m
+      where m.origin = 'queue' and m.status = 'PROPOSED'
+        and (m.creator = $1 or m.opponent = $1)
+      order by m.created_at desc limit 1`,
+    [walletAddress],
+  );
+  if (r.rowCount === 0) return null;
+  const p = r.rows[0];
+
+  if (Number(p.rawMsLeft) <= 0) {
+    await withTransaction((client) => expireProposal(client, p.matchId));
+    return null;
+  }
+  // What the player is shown counts down to the END of the countdown, not the
+  // end of the grace. Showing the grace would make the deadline a lie in the
+  // other direction — a bar that empties and then keeps accepting.
+  const shownMsLeft = Number(p.rawMsLeft) - PROPOSAL_GRACE_SECONDS * 1000;
+  return {
+    matchId: p.matchId,
+    msLeft: Math.max(0, Math.round(shownMsLeft)),
+    accepted: p.mine != null,
+    opponentAccepted: p.acceptedCount >= 2 || (p.mine == null && p.acceptedCount >= 1),
+    opponent: p.creator === walletAddress ? p.opponent : p.creator,
+  };
+}
+
+/**
+ * Take the offer. Once both sides have, the match becomes playable and gets
+ * the normal 24h window.
+ */
+export async function acceptProposal(walletAddress, matchId) {
+  return withTransaction(async (client) => {
+    const m = await client.query(
+      `select status, expires_at from arena.matches where id = $1 for update`,
+      [matchId],
+    );
+    if (m.rowCount === 0) throw notFound('Match not found', 'ARENA_MATCH_NOT_FOUND');
+    if (m.rows[0].status === 'ACTIVE') return { matchId, ready: true };
+    if (m.rows[0].status !== 'PROPOSED') {
+      throw conflict('That match offer has expired', 'ARENA_PROPOSAL_GONE');
+    }
+    if (new Date(m.rows[0].expires_at).getTime() <= Date.now()) {
+      await expireProposal(client, matchId);
+      throw conflict('That match offer has expired', 'ARENA_PROPOSAL_GONE');
+    }
+
+    const mine = await client.query(
+      `update arena.match_players set accepted_at = coalesce(accepted_at, now())
+        where match_id = $1 and wallet_address = $2
+      returning 1`,
+      [matchId, walletAddress],
+    );
+    if (mine.rowCount === 0) throw notFound('Match not found', 'ARENA_MATCH_NOT_FOUND');
+
+    const pending = await client.query(
+      `select count(*)::int as n from arena.match_players
+        where match_id = $1 and accepted_at is null`,
+      [matchId],
+    );
+    if (pending.rows[0].n > 0) return { matchId, ready: false };
+
+    await client.query(
+      `update arena.matches
+          set status = 'ACTIVE', expires_at = now() + interval '24 hours'
+        where id = $1 and status = 'PROPOSED'`,
+      [matchId],
+    );
+    return { matchId, ready: true };
+  });
+}
+
+/** Turn the offer down. The other player keeps their place in the queue. */
+export async function declineProposal(walletAddress, matchId) {
+  return withTransaction(async (client) => {
+    const m = await client.query(
+      `select status from arena.matches where id = $1 for update`, [matchId]);
+    if (m.rowCount === 0) throw notFound('Match not found', 'ARENA_MATCH_NOT_FOUND');
+    if (m.rows[0].status !== 'PROPOSED') return { declined: false };
+
+    // The decliner is deliberately NOT requeued — they asked to stop.
+    await client.query(
+      `update arena.match_players set accepted_at = null
+        where match_id = $1 and wallet_address = $2`,
+      [matchId, walletAddress],
+    );
+    await expireProposal(client, matchId);
+    await client.query(`delete from arena.queue where wallet_address = $1`, [walletAddress]);
+    return { declined: true };
+  });
 }
 
 export async function leaveQueue(walletAddress) {

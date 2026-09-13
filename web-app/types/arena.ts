@@ -97,6 +97,8 @@ export interface ArenaQueueState {
   waitedMs?: number;
   /** True once the wait is long enough that a link challenge is the better bet. */
   suggestLink?: boolean;
+  /** True while the pairing is still an unaccepted offer. */
+  proposal?: boolean;
 }
 
 export type ArenaStakeOutcome = 'PENDING' | 'KEPT' | 'FORFEIT' | 'VOID';
