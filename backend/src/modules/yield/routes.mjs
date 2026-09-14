@@ -49,8 +49,12 @@ export async function yieldRoutes(app) {
         info.kind === 'kamino_klend_reserve_v1'
           ? `kamino_klend_${info.kamino?.reserveSymbol?.toLowerCase() ?? 'usdc'}`
           : 'fixed_apy';
-      const effectiveApyBps =
-        apyBps != null ? apyBps : info.fixedApyBps ?? null;
+      // A simulated rate is not a rate. The fixed-APY profile exists so a
+      // devnet demo accrues something visible, NOT so the number it invents
+      // can be shown to someone as what their money earns — so when there is
+      // no live Kamino read this reports no APY and LiveApyChip renders
+      // nothing. Never publish a hardcoded APY as a real one.
+      const effectiveApyBps = apyBps;
 
       return reply.send({
         apyBps: effectiveApyBps,

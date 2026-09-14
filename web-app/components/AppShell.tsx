@@ -9,7 +9,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserStore } from '@/stores/userStore';
 import { useCourseStore } from '@/stores/courseStore';
 import { useFlameStore } from '@/stores/flameStore';
-import { useYieldStore } from '@/stores/yieldStore';
 import { useResurfaceStore } from '@/stores/resurfaceStore';
 import { getUserEnrollments } from '@/services/api/progress/progressApi';
 import { fetchWithAuth } from '@/services/api';
@@ -72,7 +71,6 @@ function useStoresHydrated(): boolean {
         useUserStore.persist.hasHydrated() &&
         useCourseStore.persist.hasHydrated() &&
         useFlameStore.persist.hasHydrated() &&
-        useYieldStore.persist.hasHydrated() &&
         useResurfaceStore.persist.hasHydrated()
       ) {
         setReady(true);
@@ -85,7 +83,6 @@ function useStoresHydrated(): boolean {
       useUserStore.persist.onFinishHydration(check),
       useCourseStore.persist.onFinishHydration(check),
       useFlameStore.persist.onFinishHydration(check),
-      useYieldStore.persist.onFinishHydration(check),
       useResurfaceStore.persist.onFinishHydration(check),
     ];
 

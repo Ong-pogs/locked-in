@@ -5,7 +5,6 @@ export * from './course';
 export * from './module';
 export * from './lesson';
 export * from './scene';
-export * from './yield';
 export * from './brew';
 export * from './courseState';
 export * from './resurface';
