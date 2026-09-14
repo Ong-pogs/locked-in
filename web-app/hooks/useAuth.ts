@@ -303,7 +303,8 @@ export function useAuth() {
   }, [privyReady, privyAuthenticated, walletAddress, disconnectUser]);
 
 
-  // Called by WalletConnect after user deliberately clicks sign-in
+  // Called by the village hub and the course list after the user deliberately
+  // clicks sign-in, so an auto-reconnect is never mistaken for an intent to log in.
   const markFreshLogin = useCallback(() => {
     authGuardRef.current = false;
     setFreshLogin(true);
