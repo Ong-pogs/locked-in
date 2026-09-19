@@ -7,235 +7,532 @@
  * transaction, submits a signature, changes data, or moves funds.
  */
 
-const DEFAULT_WEB = 'https://www.lockedin.quest';
-const DEFAULT_API = 'https://locked-in-backend-oetf.onrender.com';
-const EXPECTED_PROFILE = 'kamino_usdc_mainnet';
-const EXPECTED_PROGRAM = 'FAuFtXbTAT9SiJTghxdZ1ZD4ShgrdTk2EqgyPxfq2gZ6';
-const EXPECTED_USDC = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
-function option(name, fallback) {
-  const index = process.argv.indexOf(name);
-  return index >= 0 ? process.argv[index + 1] : fallback;
-}
+const productionConfig = JSON.parse(
+  readFileSync(new URL('../config/mainnet-production.json', import.meta.url), 'utf8'),
+);
 
-if (process.argv.includes('--help')) {
-  console.log(`Usage: node scripts/live-mainnet-canary.mjs [options]
+export const DEFAULT_WEB = productionConfig.webOrigin;
+export const DEFAULT_API = productionConfig.apiOrigin;
+const EXPECTED_PROFILE = productionConfig.yieldProfile;
+const EXPECTED_PROGRAM = productionConfig.programs.vaultV2;
+const EXPECTED_USDC = productionConfig.solana.usdcMint;
+const MAX_APY_AGE_MS = 5 * 60 * 1000;
+const MAX_APY_DIFFERENCE_BPS = 25;
+const HOSTILE_ORIGIN = 'https://cors-probe.invalid';
+const EXPECTED_PERMISSIONS_POLICY =
+  'camera=(), microphone=(), geolocation=(), browsing-topics=()';
+const PROHIBITED_PUBLIC_CLAIMS = [
+  'guaranteed',
+  'risk free',
+  'risk-free',
+  'every cent back',
+  'learn-to-earn',
+  'learn to earn',
+];
 
-Options:
-  --web <url>       Frontend origin (default: ${DEFAULT_WEB})
-  --api <url>       Backend origin (default: ${DEFAULT_API})
-  --timeout <ms>    Per-request timeout (default: 15000)
-  --json            Print a JSON report
+export function parseArgs(args) {
+  const parsed = {
+    webOrigin: DEFAULT_WEB,
+    apiOrigin: DEFAULT_API,
+    timeoutMs: 45_000,
+    jsonOutput: false,
+    help: false,
+  };
 
-Safety: this script performs GET requests only.`);
-  process.exit(0);
-}
-
-const webOrigin = new URL(option('--web', DEFAULT_WEB)).origin;
-const apiOrigin = new URL(option('--api', DEFAULT_API)).origin;
-const timeoutMs = Number(option('--timeout', '15000'));
-const jsonOutput = process.argv.includes('--json');
-
-if (!Number.isFinite(timeoutMs) || timeoutMs < 1000 || timeoutMs > 120_000) {
-  throw new Error('--timeout must be between 1000 and 120000 milliseconds');
-}
-
-const checks = [];
-
-function record(ok, name, detail = '') {
-  checks.push({ ok: Boolean(ok), name, detail });
-}
-
-function requireCheck(condition, name, detail = '') {
-  record(condition, name, detail);
-}
-
-async function get(path, { origin = webOrigin, redirect = 'follow', headers = {} } = {}) {
-  const url = new URL(path, origin);
-  const response = await fetch(url, {
-    method: 'GET',
-    redirect,
-    headers: {
-      'user-agent': 'locked-in-mainnet-canary/1.0',
-      ...headers,
-    },
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  return response;
-}
-
-async function json(path, options) {
-  const response = await get(path, options);
-  const text = await response.text();
-  let body = null;
-  try {
-    body = JSON.parse(text);
-  } catch {
-    record(false, `JSON ${path}`, `invalid JSON (${response.status})`);
-  }
-  requireCheck(response.ok, `GET ${path}`, `HTTP ${response.status}`);
-  return { response, body };
-}
-
-async function text(path, options) {
-  const response = await get(path, options);
-  const body = await response.text();
-  requireCheck(response.ok, `GET ${path}`, `HTTP ${response.status}`);
-  return { response, body };
-}
-
-async function checkWeb() {
-  const root = await get('/', { redirect: 'manual' });
-  const location = root.headers.get('location') ?? '';
-  const redirectPath = location ? new URL(location, webOrigin).pathname : '';
-  requireCheck(
-    [301, 302, 307, 308].includes(root.status) && redirectPath === '/village',
-    'root redirects to /village',
-    `HTTP ${root.status} ${location || '(no location)'}`,
-  );
-
-  const publicPages = ['/village', '/courses', '/arena', '/risk', '/terms', '/privacy', '/support'];
-  let village = null;
-  for (const path of publicPages) {
-    const result = await text(path);
-    const finalPath = new URL(result.response.url).pathname;
-    requireCheck(
-      finalPath === path,
-      `${path} does not redirect`,
-      finalPath === path ? finalPath : `${path} -> ${finalPath}`,
-    );
-    requireCheck(
-      result.response.headers.get('content-type')?.includes('text/html'),
-      `${path} is HTML`,
-      result.response.headers.get('content-type') ?? '(missing)',
-    );
-    if (path === '/village') village = result;
-  }
-
-  requireCheck(
-    village?.body.includes('Stop collecting courses. Finish one.'),
-    'Founding 100 narrative is deployed',
-  );
-  requireCheck(village?.body.includes('Join the Founding 100'), 'Founding 100 CTA is deployed');
-
-  if (village) {
-    const requiredHeaders = {
-      'x-content-type-options': 'nosniff',
-      'x-frame-options': 'DENY',
-      'referrer-policy': 'strict-origin-when-cross-origin',
-    };
-    for (const [header, expected] of Object.entries(requiredHeaders)) {
-      const actual = village.response.headers.get(header);
-      requireCheck(actual === expected, `security header ${header}`, actual ?? '(missing)');
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--json') {
+      parsed.jsonOutput = true;
+      continue;
     }
-    requireCheck(
-      Boolean(village.response.headers.get('permissions-policy')),
-      'security header permissions-policy',
-      village.response.headers.get('permissions-policy') ?? '(missing)',
-    );
+    if (arg === '--help') {
+      parsed.help = true;
+      continue;
+    }
+    if (arg === '--web' || arg === '--api' || arg === '--timeout') {
+      const value = args[index + 1];
+      if (!value || value.startsWith('--')) {
+        throw new Error(`${arg} requires a value`);
+      }
+      index += 1;
+      if (arg === '--web') parsed.webOrigin = value;
+      if (arg === '--api') parsed.apiOrigin = value;
+      if (arg === '--timeout') parsed.timeoutMs = Number(value);
+      continue;
+    }
+    throw new Error(`Unknown option: ${arg}`);
   }
 
-  const robots = await text('/robots.txt');
-  requireCheck(robots.body.includes('Sitemap:'), 'robots.txt advertises sitemap');
-
-  const sitemap = await text('/sitemap.xml');
-  requireCheck(sitemap.body.includes(`${webOrigin}/village`), 'sitemap includes /village');
-
-  const manifest = await get('/manifest.webmanifest');
-  requireCheck(manifest.ok, 'GET /manifest.webmanifest', `HTTP ${manifest.status}`);
+  return parsed;
 }
 
-async function checkApi() {
-  const health = await json('/health', {
-    origin: apiOrigin,
-    headers: { origin: webOrigin },
-  });
-  requireCheck(health.body?.ok === true, 'API health is ok');
-  requireCheck(health.body?.databaseConfigured === true, 'production database is configured');
-  requireCheck(
-    health.response.headers.get('access-control-allow-origin') === webOrigin,
-    'API CORS allows only the production origin for this request',
-    health.response.headers.get('access-control-allow-origin') ?? '(missing)',
-  );
-
-  const content = await json('/v1/content/version', { origin: apiOrigin });
-  requireCheck(
-    typeof content.body?.releaseId === 'string' && Boolean(Date.parse(content.body?.publishedAt)),
-    'published content release exists',
-    content.body?.releaseId ?? '(missing)',
-  );
-
-  const courses = await json('/v1/courses', { origin: apiOrigin });
-  requireCheck(
-    Array.isArray(courses.body) && courses.body.some((course) => Number(course.totalLessons) > 0),
-    'at least one published course has lessons',
-    `${Array.isArray(courses.body) ? courses.body.length : 0} course records`,
-  );
-
-  const apy = await json('/v1/yield/current-apy', { origin: apiOrigin });
-  requireCheck(
-    apy.body?.live === true && Number.isFinite(apy.body?.apyBps),
-    'yield APY is a live source',
-    `${apy.body?.apyBps ?? 'null'} bps from ${apy.body?.source ?? 'unknown'}`,
-  );
-
-  const strategy = await json('/v1/yield/strategy-info', { origin: apiOrigin });
-  requireCheck(
-    strategy.body?.profile === EXPECTED_PROFILE,
-    'mainnet Kamino profile is active',
-    strategy.body?.profile ?? '(missing)',
-  );
-  const rpcHost = strategy.body?.kamino?.rpcHost ?? '';
-  requireCheck(
-    typeof rpcHost === 'string' && !rpcHost.includes('?') && !/api[-_]?key/i.test(rpcHost),
-    'public strategy info strips RPC credentials',
-    rpcHost || '(missing)',
-  );
-
-  const season = await json('/v1/arena/season', { origin: apiOrigin });
-  requireCheck(
-    season.body === null || (Number.isInteger(season.body?.id) && typeof season.body?.status === 'string'),
-    'Arena season response is well formed',
-    season.body?.status ?? 'no open season',
-  );
-
-  const ladder = await json('/v1/arena/ladder?limit=1', { origin: apiOrigin });
-  requireCheck(Array.isArray(ladder.body), 'Arena ladder response is a list');
-}
-
-async function main() {
-  const startedAt = new Date().toISOString();
+function responseTarget(response) {
   try {
-    await checkWeb();
-    await checkApi();
-  } catch (error) {
-    record(false, 'canary completed', error instanceof Error ? error.message : String(error));
+    const url = new URL(response.url);
+    return `${url.origin}${url.pathname}${url.search}`;
+  } catch {
+    return '(invalid response URL)';
   }
+}
+
+export function isDirectResponse(response, requestedUrl) {
+  try {
+    const expected = new URL(requestedUrl);
+    const actual = new URL(response.url);
+    return (
+      response.redirected === false &&
+      actual.origin === expected.origin &&
+      actual.pathname === expected.pathname &&
+      actual.search === expected.search
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function isCredentialFreeRpcOrigin(value) {
+  if (typeof value !== 'string' || !URL.canParse(value)) return false;
+  const url = new URL(value);
+  return (
+    (url.protocol === 'http:' || url.protocol === 'https:') &&
+    !url.username &&
+    !url.password &&
+    !url.search &&
+    !url.hash &&
+    url.pathname === '/' &&
+    value === url.origin
+  );
+}
+
+function requestErrorDetail(error) {
+  if (error?.name === 'TimeoutError' || error?.name === 'AbortError') {
+    return 'request timed out';
+  }
+  return 'request failed';
+}
+
+export async function runCanary({
+  webOrigin = DEFAULT_WEB,
+  apiOrigin = DEFAULT_API,
+  timeoutMs = 45_000,
+  fetchImpl = globalThis.fetch,
+  now = Date.now,
+} = {}) {
+  const normalizedWebOrigin = new URL(webOrigin).origin;
+  const normalizedApiOrigin = new URL(apiOrigin).origin;
+
+  if (!Number.isFinite(timeoutMs) || timeoutMs < 1000 || timeoutMs > 120_000) {
+    throw new Error('--timeout must be between 1000 and 120000 milliseconds');
+  }
+  if (typeof fetchImpl !== 'function') throw new Error('fetch is required');
+
+  const checks = [];
+
+  function record(ok, name, detail = '') {
+    checks.push({ ok: Boolean(ok), name, detail });
+  }
+
+  function requireCheck(condition, name, detail = '') {
+    record(condition, name, detail);
+  }
+
+  async function probe(name, fn) {
+    try {
+      return await fn();
+    } catch (error) {
+      record(false, name, requestErrorDetail(error));
+      return null;
+    }
+  }
+
+  async function get(path, { origin = normalizedWebOrigin, redirect = 'follow', headers = {} } = {}) {
+    const url = new URL(path, origin);
+    const response = await fetchImpl(url, {
+      method: 'GET',
+      redirect,
+      headers: {
+        'user-agent': 'locked-in-mainnet-canary/1.0',
+        ...headers,
+      },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    return { response, requestedUrl: url };
+  }
+
+  async function readJson(path, options) {
+    const result = await get(path, options);
+    const text = await result.response.text();
+    let body = null;
+    try {
+      body = JSON.parse(text);
+    } catch {
+      record(false, `JSON ${path}`, `invalid JSON (${result.response.status})`);
+    }
+    requireCheck(result.response.ok, `GET ${path}`, `HTTP ${result.response.status}`);
+    requireCheck(
+      isDirectResponse(result.response, result.requestedUrl),
+      `${path} does not redirect`,
+      responseTarget(result.response),
+    );
+    return { ...result, body };
+  }
+
+  async function readText(path, options) {
+    const result = await get(path, options);
+    const body = await result.response.text();
+    requireCheck(result.response.ok, `GET ${path}`, `HTTP ${result.response.status}`);
+    requireCheck(
+      isDirectResponse(result.response, result.requestedUrl),
+      `${path} does not redirect`,
+      responseTarget(result.response),
+    );
+    return { ...result, body };
+  }
+
+  async function checkWeb() {
+    const publicPages = ['/village', '/courses', '/arena', '/risk', '/terms', '/privacy', '/support'];
+    const [root, pageResults, robots, sitemap, manifest, openGraph, runtimeConfig] = await Promise.all([
+      probe('GET /', () => get('/', { redirect: 'manual' })),
+      Promise.all(
+        publicPages.map((path) => probe(`GET ${path}`, () => readText(path))),
+      ),
+      probe('GET /robots.txt', () => readText('/robots.txt')),
+      probe('GET /sitemap.xml', () => readText('/sitemap.xml')),
+      probe('GET /manifest.webmanifest', () => get('/manifest.webmanifest')),
+      probe('GET /opengraph-image', () => get('/opengraph-image')),
+      probe('GET /api/runtime-config', () => readJson('/api/runtime-config')),
+    ]);
+
+    if (root) {
+      const location = root.response.headers.get('location') ?? '';
+      const redirectTarget = location && URL.canParse(location, normalizedWebOrigin)
+        ? new URL(location, normalizedWebOrigin)
+        : null;
+      requireCheck(
+        [301, 302, 307, 308].includes(root.response.status) &&
+          redirectTarget?.origin === normalizedWebOrigin &&
+          redirectTarget?.pathname === '/village',
+        'root redirects to /village',
+        `HTTP ${root.response.status} ${redirectTarget ? `${redirectTarget.origin}${redirectTarget.pathname}` : '(no location)'}`,
+      );
+    }
+
+    const pages = new Map(publicPages.map((path, index) => [path, pageResults[index]]));
+    for (const path of publicPages) {
+      const result = pages.get(path);
+      if (!result) continue;
+      requireCheck(
+        result.response.headers.get('content-type')?.includes('text/html'),
+        `${path} is HTML`,
+        result.response.headers.get('content-type') ?? '(missing)',
+      );
+    }
+
+    const village = pages.get('/village');
+    requireCheck(
+      village?.body.includes('Stop collecting courses. Finish one.'),
+      'Founding 100 narrative is deployed',
+    );
+    requireCheck(village?.body.includes('Join the Founding 100'), 'Founding 100 CTA is deployed');
+
+    // Courses and Arena render their route-specific copy after hydration. The
+    // status, direct-response, and HTML checks above are the reliable HTTP
+    // canary for those pages; hydrated content is covered by browser QA.
+    const stablePageCopy = {
+      '/support': 'Get help without giving up your keys.',
+    };
+    for (const [path, marker] of Object.entries(stablePageCopy)) {
+      requireCheck(
+        pages.get(path)?.body.includes(marker),
+        `${path} contains its expected content`,
+        marker,
+      );
+    }
+
+    const publicCopy = publicPages
+      .map((path) => pages.get(path)?.body ?? '')
+      .join('\n')
+      .toLowerCase();
+    for (const claim of PROHIBITED_PUBLIC_CLAIMS) {
+      requireCheck(
+        !publicCopy.includes(claim),
+        `public pages omit prohibited claim: ${claim}`,
+      );
+    }
+
+    for (const path of ['/risk', '/terms', '/privacy']) {
+      const body = pages.get(path)?.body ?? '';
+      requireCheck(
+        body.includes('DRAFT') && body.includes('PENDING LEGAL REVIEW'),
+        `${path} remains visibly marked as a legal draft`,
+      );
+    }
+
+    if (village) {
+      const requiredHeaders = {
+        'x-content-type-options': 'nosniff',
+        'x-frame-options': 'DENY',
+        'referrer-policy': 'strict-origin-when-cross-origin',
+        'permissions-policy': EXPECTED_PERMISSIONS_POLICY,
+      };
+      for (const [header, expected] of Object.entries(requiredHeaders)) {
+        const actual = village.response.headers.get(header);
+        requireCheck(actual === expected, `security header ${header}`, actual ?? '(missing)');
+      }
+      const hsts = village.response.headers.get('strict-transport-security') ?? '';
+      requireCheck(
+        /(?:^|;)\s*max-age=\d+/i.test(hsts),
+        'security header strict-transport-security',
+        hsts || '(missing)',
+      );
+    }
+
+    if (robots) {
+      requireCheck(robots.body.includes('Sitemap:'), 'robots.txt advertises sitemap');
+    }
+    if (sitemap) {
+      requireCheck(
+        sitemap.body.includes(`${DEFAULT_WEB}/village`),
+        'sitemap uses the canonical /village URL',
+      );
+    }
+
+    if (manifest) {
+      const contentType = manifest.response.headers.get('content-type') ?? '';
+      requireCheck(manifest.response.ok, 'GET /manifest.webmanifest', `HTTP ${manifest.response.status}`);
+      requireCheck(
+        isDirectResponse(manifest.response, manifest.requestedUrl),
+        '/manifest.webmanifest does not redirect',
+        responseTarget(manifest.response),
+      );
+      requireCheck(
+        contentType.includes('application/manifest+json') || contentType.includes('application/json'),
+        '/manifest.webmanifest has a manifest content type',
+        contentType || '(missing)',
+      );
+    }
+
+    if (openGraph) {
+      const contentType = openGraph.response.headers.get('content-type') ?? '';
+      requireCheck(openGraph.response.ok, 'GET /opengraph-image', `HTTP ${openGraph.response.status}`);
+      requireCheck(
+        isDirectResponse(openGraph.response, openGraph.requestedUrl),
+        '/opengraph-image does not redirect',
+        responseTarget(openGraph.response),
+      );
+      requireCheck(contentType.includes('image/'), '/opengraph-image is an image', contentType || '(missing)');
+    }
+
+    if (runtimeConfig) {
+      requireCheck(
+        runtimeConfig.body?.cluster === productionConfig.solana.cluster,
+        'frontend uses the mainnet cluster',
+        runtimeConfig.body?.cluster ?? '(missing)',
+      );
+      requireCheck(
+        runtimeConfig.body?.vaultV2ProgramId === EXPECTED_PROGRAM,
+        'frontend uses the expected v2 custody program',
+        runtimeConfig.body?.vaultV2ProgramId ?? '(missing)',
+      );
+      requireCheck(
+        runtimeConfig.body?.usdcMint === EXPECTED_USDC,
+        'frontend uses canonical mainnet USDC',
+        runtimeConfig.body?.usdcMint ?? '(missing)',
+      );
+    }
+  }
+
+  async function checkApi() {
+    // Warm a sleeping Render service before the independent batch. The same
+    // response is also the allowed-origin health probe, so this adds no write
+    // and no duplicate production request.
+    const health = await probe('GET /health', () => readJson('/health', {
+      origin: normalizedApiOrigin,
+      headers: { origin: normalizedWebOrigin },
+    }));
+
+    const [content, courses, apy, season, ladder, hostileHealth] = await Promise.all([
+      probe('GET /v1/content/version', () => readJson('/v1/content/version', { origin: normalizedApiOrigin })),
+      probe('GET /v1/courses', () => readJson('/v1/courses', { origin: normalizedApiOrigin })),
+      probe('GET /v1/yield/current-apy', () => readJson('/v1/yield/current-apy', { origin: normalizedApiOrigin })),
+      probe('GET /v1/arena/season', () => readJson('/v1/arena/season', { origin: normalizedApiOrigin })),
+      probe('GET /v1/arena/ladder?limit=1', () => readJson('/v1/arena/ladder?limit=1', { origin: normalizedApiOrigin })),
+      probe('GET /health with hostile Origin', () => readJson('/health', {
+        origin: normalizedApiOrigin,
+        headers: { origin: HOSTILE_ORIGIN },
+      })),
+    ]);
+
+    if (health) {
+      requireCheck(health.body?.ok === true, 'API health is ok');
+      requireCheck(health.body?.databaseConfigured === true, 'production database configuration is present');
+      requireCheck(
+        health.response.headers.get('access-control-allow-origin') === normalizedWebOrigin,
+        'API CORS allows the production web origin',
+        health.response.headers.get('access-control-allow-origin') ?? '(missing)',
+      );
+    }
+
+    if (hostileHealth) {
+      const allowedOrigin = hostileHealth.response.headers.get('access-control-allow-origin');
+      requireCheck(
+        allowedOrigin !== HOSTILE_ORIGIN && allowedOrigin !== '*',
+        'API CORS rejects an untrusted origin',
+        allowedOrigin ?? '(not allowed)',
+      );
+    }
+
+    if (content) {
+      requireCheck(
+        typeof content.body?.releaseId === 'string' && Boolean(Date.parse(content.body?.publishedAt)),
+        'published content release exists',
+        content.body?.releaseId ?? '(missing)',
+      );
+    }
+
+    if (courses) {
+      requireCheck(
+        Array.isArray(courses.body) && courses.body.some((course) => Number(course?.totalLessons) > 0),
+        'at least one published course has lessons',
+        `${Array.isArray(courses.body) ? courses.body.length : 0} course records`,
+      );
+    }
+
+    if (apy) {
+      requireCheck(
+        apy.body?.live === true && Number.isFinite(apy.body?.apyBps),
+        'yield APY is a live source',
+        `${apy.body?.apyBps ?? 'null'} bps from ${apy.body?.source ?? 'unknown'}`,
+      );
+    }
+
+    if (season) {
+      requireCheck(
+        season.body === null || (Number.isInteger(season.body?.id) && typeof season.body?.status === 'string'),
+        'Arena season response is well formed',
+        season.body?.status ?? 'no open season',
+      );
+    }
+    if (ladder) {
+      requireCheck(Array.isArray(ladder.body), 'Arena ladder response is a list');
+    }
+
+    // Fetch strategy state after current-apy so a healthy live read has just
+    // refreshed the cache timestamp that this observability endpoint exposes.
+    const strategy = await probe(
+      'GET /v1/yield/strategy-info',
+      () => readJson('/v1/yield/strategy-info', { origin: normalizedApiOrigin }),
+    );
+    if (!strategy) return;
+
+    requireCheck(
+      strategy.body?.profile === EXPECTED_PROFILE,
+      'mainnet Kamino profile is active',
+      strategy.body?.profile ?? '(missing)',
+    );
+    requireCheck(
+      strategy.body?.custody?.programId === EXPECTED_PROGRAM,
+      'backend uses the expected v2 custody program',
+      strategy.body?.custody?.programId ?? '(missing)',
+    );
+    requireCheck(
+      strategy.body?.custody?.usdcMint === EXPECTED_USDC,
+      'backend uses canonical mainnet USDC',
+      strategy.body?.custody?.usdcMint ?? '(missing)',
+    );
+    const rpcHost = strategy.body?.kamino?.rpcHost ?? '';
+    requireCheck(
+      isCredentialFreeRpcOrigin(rpcHost),
+      'public strategy info exposes only the RPC origin',
+      rpcHost ? '(configured)' : '(missing)',
+    );
+
+    const fetchedAt = Date.parse(strategy.body?.kamino?.lastFetchedAt ?? '');
+    const apyAgeMs = now() - fetchedAt;
+    requireCheck(
+      Number.isFinite(fetchedAt) && apyAgeMs >= -60_000 && apyAgeMs <= MAX_APY_AGE_MS,
+      'Kamino APY read completed recently',
+      Number.isFinite(fetchedAt) ? `${Math.round(apyAgeMs / 1000)}s old` : '(missing)',
+    );
+    if (apy && Number.isFinite(apy.body?.apyBps)) {
+      requireCheck(
+        Number.isFinite(strategy.body?.kamino?.lastApyBps) &&
+          Math.abs(strategy.body.kamino.lastApyBps - apy.body.apyBps) <= MAX_APY_DIFFERENCE_BPS,
+        'strategy APY is consistent with the live public quote',
+        `${strategy.body?.kamino?.lastApyBps ?? 'null'} vs ${apy.body.apyBps} bps`,
+      );
+    }
+  }
+
+  const startedAt = new Date(now()).toISOString();
+  await Promise.all([checkWeb(), checkApi()]);
 
   const failed = checks.filter((check) => !check.ok);
-  const report = {
+  return {
     startedAt,
-    webOrigin,
-    apiOrigin,
-    expectedProgram: EXPECTED_PROGRAM,
-    expectedUsdcMint: EXPECTED_USDC,
+    webOrigin: normalizedWebOrigin,
+    apiOrigin: normalizedApiOrigin,
+    expectedMainnet: {
+      program: EXPECTED_PROGRAM,
+      usdcMint: EXPECTED_USDC,
+      yieldProfile: EXPECTED_PROFILE,
+    },
     passed: checks.length - failed.length,
     failed: failed.length,
     checks,
   };
-
-  if (jsonOutput) {
-    console.log(JSON.stringify(report, null, 2));
-  } else {
-    console.log(`Locked In read-only mainnet canary\nweb: ${webOrigin}\napi: ${apiOrigin}\n`);
-    for (const check of checks) {
-      const detail = check.detail ? ` - ${check.detail}` : '';
-      console.log(`${check.ok ? 'PASS' : 'FAIL'} ${check.name}${detail}`);
-    }
-    console.log(`\n${report.passed} passed, ${report.failed} failed`);
-  }
-
-  if (failed.length > 0) process.exitCode = 1;
 }
 
-await main();
+export function printReport(report, { jsonOutput = false } = {}) {
+  if (jsonOutput) {
+    console.log(JSON.stringify(report, null, 2));
+    return;
+  }
+
+  console.log(`Locked In read-only mainnet canary\nweb: ${report.webOrigin}\napi: ${report.apiOrigin}\n`);
+  for (const check of report.checks) {
+    const detail = check.detail ? ` - ${check.detail}` : '';
+    console.log(`${check.ok ? 'PASS' : 'FAIL'} ${check.name}${detail}`);
+  }
+  console.log(`\n${report.passed} passed, ${report.failed} failed`);
+}
+
+async function main(args = process.argv.slice(2)) {
+  const options = parseArgs(args);
+  if (options.help) {
+    console.log(`Usage: node scripts/live-mainnet-canary.mjs [options]
+
+Options:
+  --web <url>       Frontend origin (default: ${DEFAULT_WEB})
+  --api <url>       Backend origin (default: ${DEFAULT_API})
+  --timeout <ms>    Per-request timeout (default: 45000)
+  --json            Print a JSON report
+
+Safety: this script performs GET requests only.`);
+    return;
+  }
+
+  const report = await runCanary({
+    webOrigin: options.webOrigin,
+    apiOrigin: options.apiOrigin,
+    timeoutMs: options.timeoutMs,
+  });
+  printReport(report, { jsonOutput: options.jsonOutput });
+  if (report.failed > 0) process.exitCode = 1;
+}
+
+const invokedDirectly = process.argv[1]
+  ? import.meta.url === pathToFileURL(resolve(process.argv[1])).href
+  : false;
+if (invokedDirectly) {
+  try {
+    await main();
+  } catch (error) {
+    console.error(`Canary configuration error: ${error instanceof Error ? error.message : 'unknown error'}`);
+    process.exitCode = 2;
+  }
+}

@@ -4,6 +4,7 @@ param(
   [switch]$Live,
   [switch]$FullBackend,
   [switch]$RequireRust,
+  [switch]$SkipRust,
   [string]$BackendEnv,
   [string]$FrontendEnv
 )
@@ -14,6 +15,18 @@ $ErrorActionPreference = 'Stop'
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $WebRoot = Join-Path $RepoRoot 'web-app'
 $BackendRoot = Join-Path $RepoRoot 'backend'
+$MainnetConfigPath = Join-Path (Join-Path $RepoRoot 'config') 'mainnet-production.json'
+$NpmCommand = if ([System.Environment]::OSVersion.Platform -eq 'Win32NT') { 'npm.cmd' } else { 'npm' }
+$SkippedChecks = [System.Collections.Generic.List[string]]::new()
+
+if ($RequireRust -and $SkipRust) {
+  throw 'Choose either -RequireRust or -SkipRust, not both.'
+}
+
+if (-not (Test-Path -LiteralPath $MainnetConfigPath -PathType Leaf)) {
+  throw "Mainnet production config not found: $MainnetConfigPath"
+}
+$MainnetConfig = Get-Content -LiteralPath $MainnetConfigPath -Raw | ConvertFrom-Json
 
 function Invoke-NativeStep {
   param(
@@ -59,53 +72,62 @@ Write-Host "Repository: $RepoRoot"
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
   throw 'Node.js is required.'
 }
-if (-not (Get-Command npm.cmd -ErrorAction SilentlyContinue)) {
-  throw 'npm.cmd is required.'
+if (-not (Get-Command $NpmCommand -ErrorAction SilentlyContinue)) {
+  throw 'npm is required.'
 }
 
 if ($Install) {
-  Invoke-NativeStep 'Install web dependencies from lockfile' $WebRoot { npm.cmd ci --no-audit }
-  Invoke-NativeStep 'Install backend dependencies from lockfile' $BackendRoot { npm.cmd ci --no-audit }
+  Invoke-NativeStep 'Install web dependencies from lockfile' $WebRoot { & $NpmCommand ci --no-audit }
+  Invoke-NativeStep 'Install backend dependencies from lockfile' $BackendRoot { & $NpmCommand ci --no-audit }
 }
 
-Invoke-NativeStep 'Web lint' $WebRoot { npm.cmd run lint }
-Invoke-NativeStep 'Web typecheck' $WebRoot { npm.cmd run typecheck }
-Invoke-NativeStep 'Web unit tests' $WebRoot { npm.cmd test }
+Invoke-NativeStep 'Web lint' $WebRoot { & $NpmCommand run lint }
+Invoke-NativeStep 'Web typecheck' $WebRoot { & $NpmCommand run typecheck }
+Invoke-NativeStep 'Web unit tests' $WebRoot { & $NpmCommand test }
 
 $buildEnvironment = @{
-  'NEXT_PUBLIC_API_URL' = 'https://locked-in-backend-oetf.onrender.com'
-  'NEXT_PUBLIC_DUNGEON_URL' = 'https://dungeon-vert.vercel.app'
-  'NEXT_PUBLIC_PRIVY_APP_ID' = 'cmncshird026v0cl5n6yqq8z0'
-  'NEXT_PUBLIC_SOLANA_CLUSTER' = 'mainnet-beta'
-  'NEXT_PUBLIC_SOLANA_RPC_URL' = 'https://api.mainnet-beta.solana.com'
-  'NEXT_PUBLIC_SOLANA_WS_URL' = 'wss://api.mainnet-beta.solana.com'
-  'NEXT_PUBLIC_LOCK_VAULT_PROGRAM_ID' = '3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav'
-  'NEXT_PUBLIC_VAULT_V2_PROGRAM_ID' = 'FAuFtXbTAT9SiJTghxdZ1ZD4ShgrdTk2EqgyPxfq2gZ6'
-  'NEXT_PUBLIC_LOCK_VAULT_USDC_MINT' = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+  'NEXT_PUBLIC_API_URL' = $MainnetConfig.apiOrigin
+  'NEXT_PUBLIC_DUNGEON_URL' = $MainnetConfig.dungeonOrigin
+  'NEXT_PUBLIC_PRIVY_APP_ID' = $MainnetConfig.privyAppId
+  'NEXT_PUBLIC_SOLANA_CLUSTER' = $MainnetConfig.solana.cluster
+  # These public endpoints make the build deterministic without storing the
+  # browser-restricted provider URL used by Vercel in tracked files.
+  'NEXT_PUBLIC_SOLANA_RPC_URL' = $MainnetConfig.solana.buildRpcUrl
+  'NEXT_PUBLIC_SOLANA_WS_URL' = $MainnetConfig.solana.buildWsUrl
+  'NEXT_PUBLIC_LOCK_VAULT_PROGRAM_ID' = $MainnetConfig.programs.legacyVault
+  'NEXT_PUBLIC_VAULT_V2_PROGRAM_ID' = $MainnetConfig.programs.vaultV2
+  'NEXT_PUBLIC_LOCK_VAULT_USDC_MINT' = $MainnetConfig.solana.usdcMint
+  'NEXT_PUBLIC_KAMINO_SCOPE_PRICES' = $MainnetConfig.solana.kaminoScopePrices
+  'NEXT_PUBLIC_SITE_URL' = $MainnetConfig.webOrigin
 }
 $previousEnvironment = Set-TemporaryEnvironment $buildEnvironment
 try {
-  Invoke-NativeStep 'Mainnet production build' $WebRoot { npm.cmd run build }
+  Invoke-NativeStep 'Mainnet-configured production build (non-secret RPC)' $WebRoot { & $NpmCommand run build }
 } finally {
   Restore-Environment $previousEnvironment
 }
 
-Invoke-NativeStep 'Backend syntax check' $BackendRoot { npm.cmd run check }
+Invoke-NativeStep 'Backend syntax check' $BackendRoot { & $NpmCommand run check }
 if ($FullBackend) {
   Write-Host 'Full backend tests expect the configured Postgres test service.' -ForegroundColor Yellow
-  Invoke-NativeStep 'Backend unit tests (including migration tests)' $BackendRoot { npm.cmd run test:unit }
+  Invoke-NativeStep 'Backend unit tests (including migration tests)' $BackendRoot { & $NpmCommand run test:unit }
 } else {
-  Invoke-NativeStep 'Backend portable unit tests' $BackendRoot { npm.cmd run test:unit:portable }
+  Invoke-NativeStep 'Backend portable unit tests' $BackendRoot { & $NpmCommand run test:unit:portable }
   Write-Host 'SKIP Postgres migration tests (use -FullBackend or rely on CI).' -ForegroundColor Yellow
+  $SkippedChecks.Add('Postgres migration tests')
 }
 
 $cargo = Get-Command cargo -ErrorAction SilentlyContinue
-if ($cargo) {
+if ($SkipRust) {
+  Write-Host 'SKIP Rust workspace tests (-SkipRust; CI remains authoritative).' -ForegroundColor Yellow
+  $SkippedChecks.Add('Rust workspace tests')
+} elseif ($cargo) {
   Invoke-NativeStep 'Rust workspace tests' $RepoRoot { cargo test --workspace }
 } elseif ($RequireRust) {
   throw 'Rust/cargo is required by -RequireRust but is not installed.'
 } else {
   Write-Host 'SKIP Rust workspace tests (cargo not installed; CI remains authoritative).' -ForegroundColor Yellow
+  $SkippedChecks.Add('Rust workspace tests')
 }
 
 $hasBackendEnv = -not [string]::IsNullOrWhiteSpace($BackendEnv)
@@ -121,12 +143,22 @@ if ($hasBackendEnv -and $hasFrontendEnv) {
       --backend-env $resolvedBackendEnv `
       --frontend-env $resolvedFrontendEnv
   }
+} else {
+  Write-Host 'SKIP filled-env/database/on-chain preflight (no explicit env files supplied).' -ForegroundColor Yellow
+  $SkippedChecks.Add('filled-env/database/on-chain preflight')
 }
 
 if ($Live) {
   Invoke-NativeStep 'Read-only deployed mainnet canary' $RepoRoot {
     node scripts/live-mainnet-canary.mjs
   }
+} else {
+  Write-Host 'SKIP deployed mainnet canary (add -Live).' -ForegroundColor Yellow
+  $SkippedChecks.Add('deployed mainnet canary')
 }
 
-Write-Host "`nLaunch gate passed." -ForegroundColor Green
+if ($SkippedChecks.Count -gt 0) {
+  Write-Host "`nLocal launch gate passed with $($SkippedChecks.Count) explicit skip(s): $($SkippedChecks -join '; ')." -ForegroundColor Green
+} else {
+  Write-Host "`nComplete launch gate passed." -ForegroundColor Green
+}

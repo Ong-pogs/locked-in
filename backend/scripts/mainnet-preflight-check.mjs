@@ -24,9 +24,13 @@ import { getAssociatedTokenAddressSync } from '@solana/spl-token';
 import bs58x from 'bs58';
 const bs58 = bs58x.decode ? bs58x : bs58x.default;
 
-const MAINNET_USDC = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+const productionConfig = JSON.parse(
+  readFileSync(new URL('../../config/mainnet-production.json', import.meta.url), 'utf8'),
+);
+const MAINNET_USDC = productionConfig.solana.usdcMint;
 const KLEND = 'KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD';
-const MAINNET_PROGRAM = 'FAuFtXbTAT9SiJTghxdZ1ZD4ShgrdTk2EqgyPxfq2gZ6';
+const MAINNET_PROGRAM = productionConfig.programs.vaultV2;
+const MAINNET_YIELD_PROFILE = productionConfig.yieldProfile;
 const CONFIG_SEED = Buffer.from('vault-v2b');
 const POT_SEED = Buffer.from('pot-protocol');
 const BPF_LOADER = new PublicKey('BPFLoaderUpgradeab1e11111111111111111111111');
@@ -70,12 +74,7 @@ const isBase58Pubkey = (v) => {
 };
 const safeRpcLabel = (value) => {
   if (!value) return '(unset)';
-  try {
-    const url = new URL(value);
-    return `${url.protocol}//${url.host}`;
-  } catch {
-    return '(configured; non-URL format)';
-  }
+  return URL.canParse(value) ? new URL(value).origin : '(configured; non-URL format)';
 };
 
 // ── cluster classification (mirrors bootGuards.detectCluster: fail-closed) ──
@@ -122,7 +121,7 @@ async function main() {
   const profile = be.YIELD_STRATEGY_PROFILE ?? '';
   if (isMainnet && be.VAULT_V2_PROGRAM_ID) {
     if (be.YIELD_STRATEGY_ENABLED !== 'true') FAIL('guard(b): YIELD_STRATEGY_ENABLED must be true on mainnet');
-    else if (profile !== 'kamino_usdc_mainnet') FAIL('guard(b): yield profile not kamino_usdc_mainnet', `got '${profile}'`);
+    else if (profile !== MAINNET_YIELD_PROFILE) FAIL(`guard(b): yield profile not ${MAINNET_YIELD_PROFILE}`, `got '${profile}'`);
     else PASS('guard(b): real Kamino yield profile enabled');
   } else SKIP('guard(b): mainnet yield profile', 'devnet');
   if (isMainnet && be.DEV_TOOLS_ENABLED === 'true') FAIL('DEV_TOOLS_ENABLED is true on mainnet', 'the dev force-complete endpoint would be open');
