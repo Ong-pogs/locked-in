@@ -105,7 +105,7 @@ describe('flow guard — existing behaviour is unchanged', () => {
   });
 
   it('still lets a logged-out reader see the public legal pages', () => {
-    for (const p of ['/terms', '/privacy', '/risk', '/village', '/courses']) {
+    for (const p of ['/terms', '/privacy', '/risk', '/support', '/village', '/courses']) {
       expect(flowGuardRedirect({
         pathname: p, walletAddress: null, isAuthenticated: false,
         phase: 'auth', hasActiveLock: false,
