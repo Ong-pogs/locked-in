@@ -42,12 +42,21 @@ interface Props {
   claimEnabled: boolean; // hasVaultV2Config() — passed down so the card stays pure
 }
 
-// Ticking yield line: pure function of Date.now() (rAF-driven) so Playwright's
-// clock API freezes it; static under prefers-reduced-motion.
+const DISPLAY_YIELD_APY = 0.05;
+const MILLISECONDS_PER_YEAR = 365 * 24 * 60 * 60 * 1000;
+const YIELD_TICK_INTERVAL_MS = 60_000;
+
+// Ticking yield line: pure function of Date.now() so Playwright's clock API
+// freezes it. One update per minute is comfortably inside the visible
+// 4-decimal precision for capped-beta positions without rerendering the whole
+// card every animation frame.
 function useTickingYield(position: LockPositionResponse | null): string | null {
   // Store only the clock. The displayed value is derived from current position
   // data, so stale yield cannot outlive an invalid position.
-  const [now, setNow] = useState(() => Date.now());
+  // Zero makes the server and first client render deterministic: both show the
+  // API-provided base yield until the post-hydration clock starts.
+  const [now, setNow] = useState(0);
+  const [reducedMotion, setReducedMotion] = useState(false);
   const live = Number(position?.liveValueUi);
   const principal = Number(position?.principalUi);
   const valid = Boolean(
@@ -56,36 +65,42 @@ function useTickingYield(position: LockPositionResponse | null): string | null {
       Number.isFinite(live) &&
       Number.isFinite(principal),
   );
+  useEffect(() => {
+    const media = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    if (!media) return undefined;
+
+    const syncPreference = () => setReducedMotion(media.matches);
+    const frame = window.requestAnimationFrame(syncPreference);
+    media.addEventListener?.('change', syncPreference);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      media.removeEventListener?.('change', syncPreference);
+    };
+  }, []);
 
   useEffect(() => {
-    const reduced =
-      typeof window !== 'undefined' &&
-      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    if (!valid || reduced) return undefined;
+    if (!valid || reducedMotion) return undefined;
 
-    let frame: number | null = null;
-    const loop = () => {
-      setNow(Date.now());
-      frame = requestAnimationFrame(loop);
-    };
-    frame = requestAnimationFrame(loop);
+    const tick = () => setNow(Date.now());
+    const frame = window.requestAnimationFrame(tick);
+    const interval = window.setInterval(tick, YIELD_TICK_INTERVAL_MS);
     return () => {
-      if (frame != null) cancelAnimationFrame(frame);
+      window.cancelAnimationFrame(frame);
+      window.clearInterval(interval);
     };
-  }, [valid, position]);
+  }, [valid, reducedMotion]);
 
   if (!valid || !position) return null;
 
   const baseYield = Math.max(0, live - principal);
   const parsedAsOf = Date.parse(position.asOf);
   const asOfMs = Number.isFinite(parsedAsOf) ? parsedAsOf : now;
-  const perMs = (live * 0.05) / (365 * 24 * 3600 * 1000);
-  const reduced =
-    typeof window !== 'undefined' &&
-    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  // This cosmetic interpolation is resynchronized from every API response; it
+  // is not used for balances, claims, or any money-moving calculation.
+  const perMs = (live * DISPLAY_YIELD_APY) / MILLISECONDS_PER_YEAR;
 
   return (
-    baseYield + (reduced ? 0 : Math.max(0, now - asOfMs) * perMs)
+    baseYield + (reducedMotion ? 0 : Math.max(0, now - asOfMs) * perMs)
   ).toFixed(4);
 }
 

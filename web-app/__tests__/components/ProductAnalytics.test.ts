@@ -27,4 +27,19 @@ describe('scrubAnalyticsEvent', () => {
   it('drops malformed URLs', () => {
     expect(scrubAnalyticsEvent({ type: 'event', url: 'https://%' })).toBeNull();
   });
+
+  it('scrubs UUID match IDs without collapsing named Arena pages', () => {
+    expect(
+      scrubAnalyticsEvent({
+        type: 'pageview',
+        url: 'https://www.lockedin.quest/arena/123e4567-e89b-12d3-a456-426614174000',
+      })?.url,
+    ).toBe('https://www.lockedin.quest/arena/:matchId');
+    expect(
+      scrubAnalyticsEvent({
+        type: 'pageview',
+        url: 'https://www.lockedin.quest/arena/leaderboard',
+      })?.url,
+    ).toBe('https://www.lockedin.quest/arena/leaderboard');
+  });
 });

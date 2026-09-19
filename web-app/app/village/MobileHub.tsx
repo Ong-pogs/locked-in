@@ -67,12 +67,21 @@ export function MobileHub() {
           style={{ background: `linear-gradient(180deg, rgba(6,6,12,0.15) 0%, rgba(6,6,12,0.55) 55%, ${T.bg} 100%)` }}
         />
         <div className="absolute bottom-3 left-5 right-5 flex items-end justify-between">
-          <p
-            className="font-pixel text-2xl tracking-wide"
-            style={{ color: COZY_TEXT, textShadow: COZY_TEXT_SHADOW }}
-          >
-            The Village
-          </p>
+          {isAuthenticated ? (
+            <h1
+              className="font-pixel text-2xl tracking-wide"
+              style={{ color: COZY_TEXT, textShadow: COZY_TEXT_SHADOW }}
+            >
+              The Village
+            </h1>
+          ) : (
+            <p
+              className="font-pixel text-2xl tracking-wide"
+              style={{ color: COZY_TEXT, textShadow: COZY_TEXT_SHADOW }}
+            >
+              The Village
+            </p>
+          )}
           {!isAuthenticated && (
             <button
               onClick={promptConnect}

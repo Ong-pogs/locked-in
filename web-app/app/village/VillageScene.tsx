@@ -111,6 +111,7 @@ export default function VillageScene() {
         backgroundColor: '#0E1B29',
       }}
     >
+      {isAuthenticated && <h1 className="sr-only">The Village</h1>}
       {/*
         Desktop: aspect-ratio fit (letterbox/pillarbox to 16:9 of art).
         Mobile: image fills viewport HEIGHT (~16:9 = wider than the phone),

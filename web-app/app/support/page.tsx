@@ -35,7 +35,7 @@ export default function SupportPage() {
           <h2 className="font-pixel text-lg" style={{ color: '#FFD580' }}>Before reporting a problem</h2>
           <ol className="mt-3 list-decimal space-y-2 pl-5" style={body}>
             <li>Do not retry a deposit or claim blindly if a transaction is still pending.</li>
-            <li>Check the transaction in a Solana explorer and record its public signature.</li>
+            <li>Check the transaction in a Solana explorer and keep its public signature available.</li>
             <li>Note the page, approximate time, wallet type, and the exact message shown.</li>
             <li>Read the risk disclosure before moving more funds.</li>
           </ol>
@@ -45,7 +45,9 @@ export default function SupportPage() {
           <h2 className="font-pixel text-lg" style={{ color: '#2AE8D4' }}>Report it</h2>
           <p className="mt-3" style={body}>
             Use the repository issue tracker for non-sensitive product bugs. For a security issue,
-            use the repository Security area and do not publish exploit details or wallet secrets.
+            use the private vulnerability form. A public issue is visible to everyone: do not put
+            an email address, wallet address, transaction signature, invite code, or exploit detail
+            in it. Start with the page, approximate time, and exact error message only.
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
             <a
@@ -58,13 +60,13 @@ export default function SupportPage() {
               Open a support issue
             </a>
             <a
-              href="https://github.com/Ong-pogs/locked-in/security"
+              href="https://github.com/Ong-pogs/locked-in/security/advisories/new"
               target="_blank"
               rel="noreferrer"
               className="rounded-lg border px-4 py-3 font-pixel-mono text-xs font-bold uppercase tracking-[1px]"
               style={{ color: '#F0A878', borderColor: 'rgba(240,168,120,0.45)' }}
             >
-              Security area
+              Report privately
             </a>
           </div>
         </section>

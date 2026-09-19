@@ -4,15 +4,18 @@ import { Analytics, type BeforeSendEvent } from '@vercel/analytics/next';
 
 const PRIVATE_PATHS: Array<[RegExp, string]> = [
   [/^\/arena\/join\/[^/]+/, '/arena/join/:code'],
-  [/^\/arena\/[^/]+/, '/arena/:matchId'],
+  [
+    /^\/arena\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?=\/|$)/i,
+    '/arena/:matchId',
+  ],
   [/^\/lessons\/[^/]+/, '/lessons/:lessonId'],
   [/^\/claim\/[^/]+/, '/claim/:courseId'],
 ];
 
 /**
- * Keep acquisition analytics useful without collecting app identifiers.
- * Vercel receives the route shape, never query values, invite codes, match IDs,
- * lesson IDs, course IDs, wallet addresses, or fragments.
+ * Scrub identifiers from the page URL handled by Vercel's beforeSend hook.
+ * Custom event properties are separate from this hook and must remain limited
+ * to fixed, non-user values such as CTA placement.
  */
 export function scrubAnalyticsEvent(event: BeforeSendEvent): BeforeSendEvent | null {
   try {

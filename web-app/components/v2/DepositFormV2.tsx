@@ -176,7 +176,7 @@ export function DepositFormV2({
       >
         Lapses cost yield, never principal. Go dark after your shields are spent and you forfeit 50%
         of your yield on the first lapse, 100% on the second — it goes to the community pot. Your
-        principal is never taken as a penalty, but it is not guaranteed: it sits in Kamino, a
+        principal is never taken as a penalty, but it can lose value: it sits in Kamino, a
         third-party protocol, so a Kamino loss, a USDC depeg or a Solana failure can return you less
         than you put in. This is unaudited beta software.
       </p>
