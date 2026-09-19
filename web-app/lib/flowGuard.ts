@@ -28,6 +28,7 @@ export interface FlowGuardInput {
 // the flow guard redirects a logged-out reader away from a page the edge just
 // allowed.
 export const PUBLIC_ROUTES = [
+  '/opengraph-image',
   '/courses',
   '/village',
   '/dashboard',

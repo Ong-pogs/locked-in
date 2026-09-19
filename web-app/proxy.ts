@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 const PUBLIC_ROUTES = [
   '/',
   '/manifest.webmanifest',
+  '/opengraph-image',
   '/village',
   // '/menu' is an internal design-QA index (it links every production page
   // and documents internal routing) — deliberately NOT public.
