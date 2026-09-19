@@ -190,8 +190,8 @@ describe('yieldStrategy', () => {
   describe('getYieldStrategyInfo', () => {
     it('exposes the public custody program and mint for deployment verification', () => {
       expect(getYieldStrategyInfo().custody).toEqual({
-        programId: process.env.VAULT_V2_PROGRAM_ID,
-        usdcMint: process.env.LOCK_VAULT_USDC_MINT,
+        programId: 'EUABEbHUjiUn9NijapRJT2MVqQ5nSdqH3gSzTxyGucsN',
+        usdcMint: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
       });
     });
   });

@@ -18,6 +18,8 @@ not claims about Vercel's browser-restricted production RPC provider.
 | Solana cluster | `mainnet-beta` |
 | Vault v2 program | `FAuFtXbTAT9SiJTghxdZ1ZD4ShgrdTk2EqgyPxfq2gZ6` |
 | USDC mint | `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` |
+| Beta lock range | `$10-$50 USDC` |
+| Aggregate live TVL cap | `$1,000 USDC` |
 | Yield profile | `kamino_usdc_mainnet` |
 | Main branch | `master` |
 
@@ -62,6 +64,8 @@ Filled env files are local secrets and must never be committed.
 
 - Mainnet beta copy must disclose variable yield, the aggregate cap, unaudited
   software, and smart-contract/Kamino/USDC/Solana risks.
+- Founding 100 describes the first member cohort. It does not promise 100
+  simultaneous deposits; joining does not reserve space under the live TVL cap.
 - Legal pages are drafts pending qualified review.
 - No launch check should call `backend/scripts/prod-v2-smoke.mjs`; that script
   performs funded devnet transactions despite its historical name.

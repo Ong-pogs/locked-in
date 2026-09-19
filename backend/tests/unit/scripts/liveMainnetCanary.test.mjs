@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_WEB,
+  hasRequiredPermissionsPolicy,
+  hasStrongHsts,
   isCredentialFreeRpcOrigin,
   isDirectResponse,
   parseArgs,
@@ -27,7 +29,9 @@ function response(url, { status = 200, headers = {}, body = '', redirected = fal
 function createSuccessfulFetch({
   rpcHost = 'https://rpc.example.com',
   frontendProgram = 'FAuFtXbTAT9SiJTghxdZ1ZD4ShgrdTk2EqgyPxfq2gZ6',
+  frontendRevision = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   includeNarrative = true,
+  seasonStatus = 200,
 } = {}) {
   let active = 0;
   let maxActive = 0;
@@ -65,6 +69,8 @@ function createSuccessfulFetch({
             cluster: 'mainnet-beta',
             vaultV2ProgramId: frontendProgram,
             usdcMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+            globalTvlCapUsdc: 1000,
+            buildRevision: frontendRevision,
           },
         });
       }
@@ -73,7 +79,7 @@ function createSuccessfulFetch({
         ? 'DRAFT - PENDING LEGAL REVIEW'
         : '';
       const village = route === '/village' && includeNarrative
-        ? 'Stop collecting courses. Finish one. Join the Founding 100'
+        ? 'Stop collecting courses. Finish one. Join the Founding 100 <meta property="og:image" content="image.png">'
         : '';
       // Client-rendered routes return a shell in raw HTML; only assert copy
       // that the production server actually renders before hydration.
@@ -137,7 +143,11 @@ function createSuccessfulFetch({
       });
     }
     if (route === '/v1/arena/season') {
-      return response(url.href, { headers: apiHeaders, body: null });
+      return response(url.href, {
+        status: seasonStatus,
+        headers: apiHeaders,
+        body: seasonStatus === 204 ? '' : null,
+      });
     }
     if (route === '/v1/arena/ladder?limit=1') {
       return response(url.href, { headers: apiHeaders, body: [] });
@@ -154,8 +164,15 @@ function createSuccessfulFetch({
 
 describe('mainnet canary guards', () => {
   it('parses options without accepting missing or unknown values', () => {
-    expect(parseArgs(['--web', WEB, '--json'])).toMatchObject({
+    expect(parseArgs([
+      '--web',
+      WEB,
+      '--expected-revision',
+      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      '--json',
+    ])).toMatchObject({
       webOrigin: WEB,
+      expectedRevision: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       jsonOutput: true,
     });
     expect(() => parseArgs(['--web', '--json'])).toThrow('--web requires a value');
@@ -180,6 +197,15 @@ describe('mainnet canary guards', () => {
     expect(isCredentialFreeRpcOrigin('file:///rpc-token')).toBe(false);
   });
 
+  it('requires durable HSTS while allowing extra permissions directives', () => {
+    expect(hasStrongHsts('max-age=0')).toBe(false);
+    expect(hasStrongHsts('max-age=31536000; includeSubDomains')).toBe(true);
+    expect(hasRequiredPermissionsPolicy(
+      'microphone=(), camera=(), geolocation=(), browsing-topics=(), payment=()',
+    )).toBe(true);
+    expect(hasRequiredPermissionsPolicy('camera=(), microphone=()')).toBe(false);
+  });
+
   it('runs independent probes concurrently and uses GET only', async () => {
     const mock = createSuccessfulFetch();
     const report = await runCanary({
@@ -192,6 +218,18 @@ describe('mainnet canary guards', () => {
     expect(report.failed).toBe(0);
     expect(mock.getMaxActive()).toBeGreaterThan(1);
     expect(new Set(mock.methods)).toEqual(new Set(['GET']));
+  });
+
+  it('accepts an empty 204 Arena season response as no open season', async () => {
+    const mock = createSuccessfulFetch({ seasonStatus: 204 });
+    const report = await runCanary({
+      webOrigin: WEB,
+      apiOrigin: API,
+      fetchImpl: mock.fetchImpl,
+      now: () => NOW,
+    });
+
+    expect(report.failed).toBe(0);
   });
 
   it('fails a path-bearing RPC label without echoing the path token', async () => {
@@ -224,11 +262,18 @@ describe('mainnet canary guards', () => {
       options: { frontendProgram: 'wrong-program' },
       check: 'frontend uses the expected v2 custody program',
     },
-  ])('fails closed for $name', async ({ options, check }) => {
+    {
+      name: 'wrong deployed revision',
+      options: { frontendRevision: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' },
+      expectedRevision: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      check: 'frontend serves the expected commit',
+    },
+  ])('fails closed for $name', async ({ options, expectedRevision, check }) => {
     const mock = createSuccessfulFetch(options);
     const report = await runCanary({
       webOrigin: WEB,
       apiOrigin: API,
+      expectedRevision,
       fetchImpl: mock.fetchImpl,
       now: () => NOW,
     });

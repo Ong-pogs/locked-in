@@ -14,7 +14,7 @@ env:
 
 jobs:
   launch-harness:
-    name: Mainnet-shaped launch harness
+    name: Portable launch harness (explicit skips)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -22,6 +22,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            web-app/package-lock.json
+            backend/package-lock.json
 
       - name: Run non-live launch gate
         shell: pwsh

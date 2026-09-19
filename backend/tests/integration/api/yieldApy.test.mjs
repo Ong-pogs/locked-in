@@ -69,8 +69,8 @@ describe('GET /v1/yield/strategy-info', () => {
   it('reports the public custody configuration used by the backend', async () => {
     const res = await app.inject({ method: 'GET', url: '/v1/yield/strategy-info' });
     expect(res.json().custody).toEqual({
-      programId: process.env.VAULT_V2_PROGRAM_ID,
-      usdcMint: process.env.LOCK_VAULT_USDC_MINT,
+      programId: 'EUABEbHUjiUn9NijapRJT2MVqQ5nSdqH3gSzTxyGucsN',
+      usdcMint: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
     });
   });
 });

@@ -7,9 +7,9 @@
  * transaction, submits a signature, changes data, or moves funds.
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 const productionConfig = JSON.parse(
   readFileSync(new URL('../config/mainnet-production.json', import.meta.url), 'utf8'),
@@ -20,11 +20,17 @@ export const DEFAULT_API = productionConfig.apiOrigin;
 const EXPECTED_PROFILE = productionConfig.yieldProfile;
 const EXPECTED_PROGRAM = productionConfig.programs.vaultV2;
 const EXPECTED_USDC = productionConfig.solana.usdcMint;
+const EXPECTED_GLOBAL_TVL_CAP_USDC = productionConfig.beta.globalTvlCapUsdc;
 const MAX_APY_AGE_MS = 5 * 60 * 1000;
 const MAX_APY_DIFFERENCE_BPS = 25;
+const MIN_HSTS_MAX_AGE_SECONDS = 31_536_000;
 const HOSTILE_ORIGIN = 'https://cors-probe.invalid';
-const EXPECTED_PERMISSIONS_POLICY =
-  'camera=(), microphone=(), geolocation=(), browsing-topics=()';
+const REQUIRED_PERMISSIONS_POLICY = [
+  'camera=()',
+  'microphone=()',
+  'geolocation=()',
+  'browsing-topics=()',
+];
 const PROHIBITED_PUBLIC_CLAIMS = [
   'guaranteed',
   'risk free',
@@ -39,6 +45,7 @@ export function parseArgs(args) {
     webOrigin: DEFAULT_WEB,
     apiOrigin: DEFAULT_API,
     timeoutMs: 45_000,
+    expectedRevision: process.env.LOCKED_IN_EXPECTED_REVISION?.trim() || null,
     jsonOutput: false,
     help: false,
   };
@@ -53,7 +60,12 @@ export function parseArgs(args) {
       parsed.help = true;
       continue;
     }
-    if (arg === '--web' || arg === '--api' || arg === '--timeout') {
+    if (
+      arg === '--web' ||
+      arg === '--api' ||
+      arg === '--timeout' ||
+      arg === '--expected-revision'
+    ) {
       const value = args[index + 1];
       if (!value || value.startsWith('--')) {
         throw new Error(`${arg} requires a value`);
@@ -62,6 +74,7 @@ export function parseArgs(args) {
       if (arg === '--web') parsed.webOrigin = value;
       if (arg === '--api') parsed.apiOrigin = value;
       if (arg === '--timeout') parsed.timeoutMs = Number(value);
+      if (arg === '--expected-revision') parsed.expectedRevision = value;
       continue;
     }
     throw new Error(`Unknown option: ${arg}`);
@@ -108,6 +121,25 @@ export function isCredentialFreeRpcOrigin(value) {
   );
 }
 
+export function hasStrongHsts(value) {
+  if (typeof value !== 'string') return false;
+  const directive = value
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => /^max-age=/i.test(part));
+  if (!directive) return false;
+  const seconds = Number(directive.slice(directive.indexOf('=') + 1));
+  return Number.isInteger(seconds) && seconds >= MIN_HSTS_MAX_AGE_SECONDS;
+}
+
+export function hasRequiredPermissionsPolicy(value) {
+  if (typeof value !== 'string') return false;
+  const directives = new Set(
+    value.split(',').map((part) => part.trim().toLowerCase()).filter(Boolean),
+  );
+  return REQUIRED_PERMISSIONS_POLICY.every((directive) => directives.has(directive));
+}
+
 function requestErrorDetail(error) {
   if (error?.name === 'TimeoutError' || error?.name === 'AbortError') {
     return 'request timed out';
@@ -119,6 +151,7 @@ export async function runCanary({
   webOrigin = DEFAULT_WEB,
   apiOrigin = DEFAULT_API,
   timeoutMs = 45_000,
+  expectedRevision = null,
   fetchImpl = globalThis.fetch,
   now = Date.now,
 } = {}) {
@@ -127,6 +160,9 @@ export async function runCanary({
 
   if (!Number.isFinite(timeoutMs) || timeoutMs < 1000 || timeoutMs > 120_000) {
     throw new Error('--timeout must be between 1000 and 120000 milliseconds');
+  }
+  if (expectedRevision != null && !/^[0-9a-f]{40}$/i.test(expectedRevision)) {
+    throw new Error('--expected-revision must be a full 40-character commit SHA');
   }
   if (typeof fetchImpl !== 'function') throw new Error('fetch is required');
 
@@ -167,10 +203,12 @@ export async function runCanary({
     const result = await get(path, options);
     const text = await result.response.text();
     let body = null;
-    try {
-      body = JSON.parse(text);
-    } catch {
-      record(false, `JSON ${path}`, `invalid JSON (${result.response.status})`);
+    if (result.response.status !== 204 || text.trim() !== '') {
+      try {
+        body = JSON.parse(text);
+      } catch {
+        record(false, `JSON ${path}`, `invalid JSON (${result.response.status})`);
+      }
     }
     requireCheck(result.response.ok, `GET ${path}`, `HTTP ${result.response.status}`);
     requireCheck(
@@ -238,6 +276,10 @@ export async function runCanary({
       'Founding 100 narrative is deployed',
     );
     requireCheck(village?.body.includes('Join the Founding 100'), 'Founding 100 CTA is deployed');
+    requireCheck(
+      village?.body.includes('property="og:image"'),
+      'village publishes Open Graph image metadata',
+    );
 
     // Courses and Arena render their route-specific copy after hydration. The
     // status, direct-response, and HTML checks above are the reliable HTTP
@@ -277,15 +319,20 @@ export async function runCanary({
         'x-content-type-options': 'nosniff',
         'x-frame-options': 'DENY',
         'referrer-policy': 'strict-origin-when-cross-origin',
-        'permissions-policy': EXPECTED_PERMISSIONS_POLICY,
       };
       for (const [header, expected] of Object.entries(requiredHeaders)) {
         const actual = village.response.headers.get(header);
         requireCheck(actual === expected, `security header ${header}`, actual ?? '(missing)');
       }
+      const permissionsPolicy = village.response.headers.get('permissions-policy') ?? '';
+      requireCheck(
+        hasRequiredPermissionsPolicy(permissionsPolicy),
+        'security header permissions-policy',
+        permissionsPolicy || '(missing)',
+      );
       const hsts = village.response.headers.get('strict-transport-security') ?? '';
       requireCheck(
-        /(?:^|;)\s*max-age=\d+/i.test(hsts),
+        hasStrongHsts(hsts),
         'security header strict-transport-security',
         hsts || '(missing)',
       );
@@ -343,6 +390,24 @@ export async function runCanary({
         'frontend uses canonical mainnet USDC',
         runtimeConfig.body?.usdcMint ?? '(missing)',
       );
+      requireCheck(
+        runtimeConfig.body?.globalTvlCapUsdc === EXPECTED_GLOBAL_TVL_CAP_USDC,
+        'frontend displays the expected beta TVL cap',
+        `${runtimeConfig.body?.globalTvlCapUsdc ?? '(missing)'} USDC`,
+      );
+      const buildRevision = runtimeConfig.body?.buildRevision;
+      requireCheck(
+        typeof buildRevision === 'string' && /^[0-9a-f]{40}$/i.test(buildRevision),
+        'frontend build revision is exposed',
+        buildRevision ?? '(missing)',
+      );
+      if (expectedRevision) {
+        requireCheck(
+          buildRevision === expectedRevision,
+          'frontend serves the expected commit',
+          buildRevision ?? '(missing)',
+        );
+      }
     }
   }
 
@@ -480,6 +545,8 @@ export async function runCanary({
       program: EXPECTED_PROGRAM,
       usdcMint: EXPECTED_USDC,
       yieldProfile: EXPECTED_PROFILE,
+      globalTvlCapUsdc: EXPECTED_GLOBAL_TVL_CAP_USDC,
+      revision: expectedRevision,
     },
     passed: checks.length - failed.length,
     failed: failed.length,
@@ -510,6 +577,7 @@ Options:
   --web <url>       Frontend origin (default: ${DEFAULT_WEB})
   --api <url>       Backend origin (default: ${DEFAULT_API})
   --timeout <ms>    Per-request timeout (default: 45000)
+  --expected-revision <sha>  Require the deployed frontend commit
   --json            Print a JSON report
 
 Safety: this script performs GET requests only.`);
@@ -520,13 +588,14 @@ Safety: this script performs GET requests only.`);
     webOrigin: options.webOrigin,
     apiOrigin: options.apiOrigin,
     timeoutMs: options.timeoutMs,
+    expectedRevision: options.expectedRevision,
   });
   printReport(report, { jsonOutput: options.jsonOutput });
   if (report.failed > 0) process.exitCode = 1;
 }
 
 const invokedDirectly = process.argv[1]
-  ? import.meta.url === pathToFileURL(resolve(process.argv[1])).href
+  ? realpathSync(fileURLToPath(import.meta.url)) === realpathSync(resolve(process.argv[1]))
   : false;
 if (invokedDirectly) {
   try {

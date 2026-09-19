@@ -31,6 +31,7 @@ const MAINNET_USDC = productionConfig.solana.usdcMint;
 const KLEND = 'KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD';
 const MAINNET_PROGRAM = productionConfig.programs.vaultV2;
 const MAINNET_YIELD_PROFILE = productionConfig.yieldProfile;
+const MAINNET_BETA_CAPS = productionConfig.beta;
 const CONFIG_SEED = Buffer.from('vault-v2b');
 const POT_SEED = Buffer.from('pot-protocol');
 const BPF_LOADER = new PublicKey('BPFLoaderUpgradeab1e11111111111111111111111');
@@ -194,6 +195,19 @@ async function main() {
       // caps sanity for the capped beta
       if (min > 0 && max >= min && cap >= max) PASS('caps sane', `min $${min} max $${max} cap $${cap}`);
       else WARN('caps look off', `min $${min} max $${max} cap $${cap}`);
+      if (
+        isMainnet &&
+        min === MAINNET_BETA_CAPS.minimumLockUsdc &&
+        max === MAINNET_BETA_CAPS.maximumLockUsdc &&
+        cap === MAINNET_BETA_CAPS.globalTvlCapUsdc
+      ) {
+        PASS('on-chain beta caps match production config');
+      } else if (isMainnet) {
+        FAIL(
+          'on-chain beta caps differ from production config',
+          `on-chain ${min}/${max}/${cap} vs expected ${MAINNET_BETA_CAPS.minimumLockUsdc}/${MAINNET_BETA_CAPS.maximumLockUsdc}/${MAINNET_BETA_CAPS.globalTvlCapUsdc}`,
+        );
+      }
       // pot vault must be the pot PDA's USDC ATA
       const [potPda] = PublicKey.findProgramAddressSync([POT_SEED], programId);
       const expectedPotVault = getAssociatedTokenAddressSync(new PublicKey(usdcMint), potPda, true).toBase58();

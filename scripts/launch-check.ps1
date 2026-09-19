@@ -83,6 +83,7 @@ if ($Install) {
 
 Invoke-NativeStep 'Web lint' $WebRoot { & $NpmCommand run lint }
 Invoke-NativeStep 'Web typecheck' $WebRoot { & $NpmCommand run typecheck }
+Invoke-NativeStep 'Public copy policy' $WebRoot { & $NpmCommand run check:public-copy }
 Invoke-NativeStep 'Web unit tests' $WebRoot { & $NpmCommand test }
 
 $buildEnvironment = @{
@@ -98,6 +99,7 @@ $buildEnvironment = @{
   'NEXT_PUBLIC_VAULT_V2_PROGRAM_ID' = $MainnetConfig.programs.vaultV2
   'NEXT_PUBLIC_LOCK_VAULT_USDC_MINT' = $MainnetConfig.solana.usdcMint
   'NEXT_PUBLIC_KAMINO_SCOPE_PRICES' = $MainnetConfig.solana.kaminoScopePrices
+  'NEXT_PUBLIC_GLOBAL_TVL_CAP_USDC' = $MainnetConfig.beta.globalTvlCapUsdc
   'NEXT_PUBLIC_SITE_URL' = $MainnetConfig.webOrigin
 }
 $previousEnvironment = Set-TemporaryEnvironment $buildEnvironment
@@ -106,6 +108,7 @@ try {
 } finally {
   Restore-Environment $previousEnvironment
 }
+Write-Host 'NOTE web-app/.next is a mainnet-configured build artifact; do not use it for transaction testing.' -ForegroundColor Yellow
 
 Invoke-NativeStep 'Backend syntax check' $BackendRoot { & $NpmCommand run check }
 if ($FullBackend) {

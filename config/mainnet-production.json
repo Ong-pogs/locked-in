@@ -15,5 +15,10 @@
     "legacyVault": "3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav",
     "vaultV2": "FAuFtXbTAT9SiJTghxdZ1ZD4ShgrdTk2EqgyPxfq2gZ6"
   },
+  "beta": {
+    "minimumLockUsdc": 10,
+    "maximumLockUsdc": 50,
+    "globalTvlCapUsdc": 1000
+  },
   "yieldProfile": "kamino_usdc_mainnet"
 }

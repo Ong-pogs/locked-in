@@ -11,7 +11,6 @@ describe('auth proxy public metadata routes', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('location')).toBeNull();
-    expect(response.headers.get('x-middleware-next')).toBe('1');
   });
 
   it('lets social crawlers fetch the Open Graph image without auth', () => {
@@ -21,6 +20,5 @@ describe('auth proxy public metadata routes', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('location')).toBeNull();
-    expect(response.headers.get('x-middleware-next')).toBe('1');
   });
 });

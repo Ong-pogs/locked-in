@@ -25,4 +25,7 @@ jobs:
           node-version: '24'
 
       - name: Run GET-only production canary
-        run: node scripts/live-mainnet-canary.mjs --timeout 45000
+        run: >-
+          node scripts/live-mainnet-canary.mjs
+          --timeout 45000
+          --expected-revision "${{ github.sha }}"
