@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CozyCard, COZY_TEXT, COZY_TEXT_SHADOW } from '@/components/cozy';
 import { T } from '@/components/theme';
 import { FlameGauge } from './FlameGauge';
 import { ShieldPips } from './ShieldPips';
 import { PenaltyBanner, combinedKeptBps } from './PenaltyBanner';
-import { deriveFlameState, yieldKeptBps } from '@/services/flame/deriveFlameState';
+import { deriveFlameState } from '@/services/flame/deriveFlameState';
 import { CLUSTER } from '@/services/solana/connection';
 import { useUserStore } from '@/stores';
 import { devCompleteCourse } from '@/services/api/progress/progressApi';
@@ -45,50 +45,48 @@ interface Props {
 // Ticking yield line: pure function of Date.now() (rAF-driven) so Playwright's
 // clock API freezes it; static under prefers-reduced-motion.
 function useTickingYield(position: LockPositionResponse | null): string | null {
-  const [display, setDisplay] = useState<string | null>(null);
-  const frame = useRef<number | null>(null);
+  // Store only the clock. The displayed value is derived from current position
+  // data, so stale yield cannot outlive an invalid position.
+  const [now, setNow] = useState(() => Date.now());
+  const live = Number(position?.liveValueUi);
+  const principal = Number(position?.principalUi);
+  const valid = Boolean(
+    position?.liveValueUi &&
+      position?.principalUi &&
+      Number.isFinite(live) &&
+      Number.isFinite(principal),
+  );
 
   useEffect(() => {
-    if (!position?.liveValueUi || !position?.principalUi) {
-      setDisplay(null);
-      return;
-    }
-    const live = Number(position.liveValueUi);
-    const principal = Number(position.principalUi);
-    if (!Number.isFinite(live) || !Number.isFinite(principal)) {
-      setDisplay(null);
-      return;
-    }
-    const baseYield = Math.max(0, live - principal);
-    // Guard asOf like the amounts — a malformed timestamp would make compute()
-    // return "NaN" and leak into the yield line + penalty forfeit amount.
-    const parsedAsOf = Date.parse(position.asOf);
-    const asOfMs = Number.isFinite(parsedAsOf) ? parsedAsOf : Date.now();
-    // ~5% APY drift between 60s polls — cosmetic accrual, resynced every poll.
-    const perMs = (live * 0.05) / (365 * 24 * 3600 * 1000);
-
     const reduced =
       typeof window !== 'undefined' &&
       window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (!valid || reduced) return undefined;
 
-    const compute = () =>
-      (baseYield + Math.max(0, Date.now() - asOfMs) * perMs).toFixed(4);
-
-    if (reduced) {
-      setDisplay(baseYield.toFixed(4));
-      return;
-    }
+    let frame: number | null = null;
     const loop = () => {
-      setDisplay(compute());
-      frame.current = requestAnimationFrame(loop);
+      setNow(Date.now());
+      frame = requestAnimationFrame(loop);
     };
-    frame.current = requestAnimationFrame(loop);
+    frame = requestAnimationFrame(loop);
     return () => {
-      if (frame.current != null) cancelAnimationFrame(frame.current);
+      if (frame != null) cancelAnimationFrame(frame);
     };
-  }, [position]);
+  }, [valid, position]);
 
-  return display;
+  if (!valid || !position) return null;
+
+  const baseYield = Math.max(0, live - principal);
+  const parsedAsOf = Date.parse(position.asOf);
+  const asOfMs = Number.isFinite(parsedAsOf) ? parsedAsOf : now;
+  const perMs = (live * 0.05) / (365 * 24 * 3600 * 1000);
+  const reduced =
+    typeof window !== 'undefined' &&
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+  return (
+    baseYield + (reduced ? 0 : Math.max(0, now - asOfMs) * perMs)
+  ).toFixed(4);
 }
 
 function countdownTo(iso: string | null, now: number): string | null {
@@ -114,7 +112,6 @@ export function PositionCard({ data, position, positionError, onRetryPosition, c
       window.location.reload();
     } catch (e) {
       setDevBusy(false);
-      // eslint-disable-next-line no-alert
       alert(`Dev complete failed: ${e instanceof Error ? e.message : e}`);
     }
   };

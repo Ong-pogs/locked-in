@@ -91,7 +91,7 @@ export function StakePanel({
       setLoaded(true);
     })();
     return () => { live = false; };
-  }, []);
+  }, [onLiveStakeChange]);
 
   const onStake = useCallback(async () => {
     if (!chosen) return;
