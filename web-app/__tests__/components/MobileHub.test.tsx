@@ -28,20 +28,20 @@ describe('MobileHub', () => {
     authState.isAuthenticated = false;
   });
 
-  it('uses the Founding 100 promise as the only level-one heading', () => {
+  it('leaves the page-level heading to the village route', () => {
     render(<MobileHub />);
 
-    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Stop collecting courses. Finish one.' }),
+      screen.getByRole('heading', { level: 2, name: 'Stop collecting courses. Finish one.' }),
     ).toBeInTheDocument();
   });
 
-  it('keeps one level-one heading after sign-in when the acquisition hero is hidden', () => {
+  it('does not add a competing level-one heading after sign-in', () => {
     authState.isAuthenticated = true;
     render(<MobileHub />);
 
-    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
-    expect(screen.getByRole('heading', { level: 1, name: 'The Village' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
+    expect(screen.getByText('The Village')).toBeInTheDocument();
   });
 });

@@ -47,9 +47,9 @@ const MILLISECONDS_PER_YEAR = 365 * 24 * 60 * 60 * 1000;
 const YIELD_TICK_INTERVAL_MS = 60_000;
 
 // Ticking yield line: pure function of Date.now() so Playwright's clock API
-// freezes it. One update per minute is comfortably inside the visible
-// 4-decimal precision for capped-beta positions without rerendering the whole
-// card every animation frame.
+// freezes it. One update per minute avoids rerendering the whole card every
+// animation frame; the displayed fourth decimal changes less often at beta
+// position sizes, but the interval also resynchronizes promptly after wake.
 function useTickingYield(position: LockPositionResponse | null): string | null {
   // Store only the clock. The displayed value is derived from current position
   // data, so stale yield cannot outlive an invalid position.
@@ -70,10 +70,11 @@ function useTickingYield(position: LockPositionResponse | null): string | null {
     if (!media) return undefined;
 
     const syncPreference = () => setReducedMotion(media.matches);
-    const frame = window.requestAnimationFrame(syncPreference);
+    // Effects run after hydration, so this synchronous read cannot create a
+    // server/client mismatch and still works when a background tab gets no rAF.
+    syncPreference();
     media.addEventListener?.('change', syncPreference);
     return () => {
-      window.cancelAnimationFrame(frame);
       media.removeEventListener?.('change', syncPreference);
     };
   }, []);

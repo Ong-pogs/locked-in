@@ -3,11 +3,12 @@
 import Link from 'next/link';
 import { track } from '@vercel/analytics';
 import { ArrowRight, ShieldCheck } from 'lucide-react';
+import { BETA_GLOBAL_TVL_CAP_USDC } from '@/lib/betaConfig';
 
 type Variant = 'desktop' | 'mobile';
 
 const trustLine =
-  'Mainnet capped beta · Variable yield · $1,000 TVL cap · Unaudited software';
+  `Mainnet capped beta · Variable yield · $${BETA_GLOBAL_TVL_CAP_USDC.toLocaleString('en-US')} live deposit capacity · Unaudited software`;
 
 export function Founding100Hero({ variant }: { variant: Variant }) {
   const desktop = variant === 'desktop';
@@ -50,13 +51,13 @@ export function Founding100Hero({ variant }: { variant: Variant }) {
           >
             Founding 100 · Mainnet beta
           </p>
-          <h1
+          <h2
             id={`founding-100-${variant}`}
             className="mt-2 font-pixel text-[clamp(22px,3vw,34px)] font-bold leading-[1.05]"
             style={{ color: '#FFD580', textShadow: '0 2px 12px rgba(0,0,0,0.72)' }}
           >
             Stop collecting courses. Finish one.
-          </h1>
+          </h2>
           <p
             className="mt-2 max-w-[560px] text-[13px] leading-[1.55]"
             style={{ color: 'rgba(255,255,255,0.76)' }}
@@ -72,8 +73,8 @@ export function Founding100Hero({ variant }: { variant: Variant }) {
           >
             <ShieldCheck className="mt-0.5 shrink-0" size={13} color="#F0A878" aria-hidden />
             <span>
-              {trustLine}. Funds remain exposed to smart-contract, Kamino,
-              USDC, and Solana risks.
+              {trustLine}. Joining does not reserve deposit capacity. Funds remain
+              exposed to smart-contract, Kamino, USDC, and Solana risks.
             </span>
           </div>
         </div>
