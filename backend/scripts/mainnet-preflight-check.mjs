@@ -68,6 +68,15 @@ function pubkeyOfSecret(bs58secret) {
 const isBase58Pubkey = (v) => {
   try { new PublicKey(v); return true; } catch { return false; }
 };
+const safeRpcLabel = (value) => {
+  if (!value) return '(unset)';
+  try {
+    const url = new URL(value);
+    return `${url.protocol}//${url.host}`;
+  } catch {
+    return '(configured; non-URL format)';
+  }
+};
 
 // ── cluster classification (mirrors bootGuards.detectCluster: fail-closed) ──
 const rpc = be.SOLANA_RPC_URL ?? '';
@@ -84,7 +93,8 @@ async function main() {
   console.log(`\n=== Locked In — mainnet pre-flight ===`);
   console.log(`backend env : ${backendEnvPath ?? '(process env)'}`);
   console.log(`frontend env: ${frontendEnvPath ?? '(process env)'}`);
-  console.log(`RPC         : ${rpc || '(unset)'}`);
+  // Never echo paid RPC query strings, embedded credentials, or path tokens.
+  console.log(`RPC host    : ${safeRpcLabel(rpc)}`);
   console.log(`cluster     : ${cluster}${isMainnet ? '' : ' — mainnet-only checks will SKIP'}\n`);
 
   // 1. Required backend env present + well-formed.

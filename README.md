@@ -1,10 +1,16 @@
 # Locked In
 
 > [!IMPORTANT]
-> The current public test build is a PWA web app that connects to a backend hosted on Render and uses Solana devnet program/mint configuration.
-> This is a QA/testing setup, not a production release.
-> Because the current Render deployment may cold-start after inactivity, the first backend-auth or content request can occasionally be slow or need a retry.
-> Deposit, unlock, and reward flows in this build should be treated as devnet test flows.
+> Locked In is live as a capped beta on Solana mainnet. Start with
+> [`docs/launch/MAINNET_SOURCE_OF_TRUTH.md`](docs/launch/MAINNET_SOURCE_OF_TRUTH.md)
+> for current URLs, program IDs, safe verification commands, and known launch
+> constraints. Older sections in this README retain historical product context
+> and may still describe removed devnet mechanics.
+
+**Current positioning:** Stop collecting courses. Finish one. Locked In lets a
+learner place $10-$50 USDC behind a course and use variable yield as the
+consequence layer for consistency. It is unaudited mainnet beta software with
+smart-contract, Kamino, USDC, and Solana risks.
 
 Locked In is a Solana-native learning product built around a simple bet on human behavior:
 

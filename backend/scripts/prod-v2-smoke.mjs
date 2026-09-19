@@ -1,4 +1,8 @@
-// Live PROD smoke test of the v2 backend path, driven by a real funded devnet
+// DANGER: MUTATING DEVNET FIXTURE. This is NOT a production/mainnet canary.
+// It creates an on-chain deposit with a funded wallet. Never call it from the
+// launch harness, CI health checks, or production monitoring.
+//
+// Historical live-backend smoke test of the v2 path, driven by a real funded devnet
 // wallet + real wallet-signature auth (no browser/Privy needed). Proves the
 // deployed enroll/eligibility/position/voucher endpoints work end-to-end
 // against devnet RPC from Render, so a browser failure is isolated to the UI.

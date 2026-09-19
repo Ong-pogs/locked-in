@@ -1,5 +1,11 @@
 # Locked In — Deployment Handoff
 
+> [!CAUTION]
+> Historical document. Its devnet-only warning is no longer current: production
+> is live on mainnet. Do not deploy from this file. Use
+> [`docs/launch/MAINNET_SOURCE_OF_TRUTH.md`](docs/launch/MAINNET_SOURCE_OF_TRUTH.md)
+> and the maintained templates under `scripts/deploy/`.
+
 > Handoff doc for deploying **Locked In** (Vercel frontend + Render backend/cron/DB).
 > Written for a teammate (or their coding agent) with Vercel + Render access.
 > **Secret values are NOT in this file** — they will be sent to you privately. This file

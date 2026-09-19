@@ -10,29 +10,24 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: '20'
+  NODE_VERSION: '24'
 
 jobs:
   lint-typecheck:
     name: Lint & Typecheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache node_modules
-        uses: actions/cache@v4
-        with:
-          path: web-app/node_modules
-          key: node-modules-web-${{ runner.os }}-${{ hashFiles('web-app/package-lock.json') }}
-          restore-keys: node-modules-web-${{ runner.os }}-
+          cache: npm
+          cache-dependency-path: web-app/package-lock.json
 
       - name: Install dependencies
         working-directory: web-app
-        run: npm install --prefer-offline --no-audit
+        run: npm ci --prefer-offline --no-audit
 
       - name: Lint
         working-directory: web-app
@@ -46,7 +41,7 @@ jobs:
     name: Rust Program Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -85,22 +80,17 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache node_modules
-        uses: actions/cache@v4
-        with:
-          path: backend/node_modules
-          key: node-modules-backend-${{ runner.os }}-${{ hashFiles('backend/package-lock.json') }}
-          restore-keys: node-modules-backend-${{ runner.os }}-
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
 
       - name: Install dependencies
         working-directory: backend
-        run: npm install --prefer-offline --no-audit
+        run: npm ci --prefer-offline --no-audit
 
       # Single executor rule (ruling R22): ONLY scripts/migrate.mjs may apply
       # sql/ files — the tracker records what ran and catches drift.
@@ -145,22 +135,17 @@ jobs:
     needs: lint-typecheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache node_modules
-        uses: actions/cache@v4
-        with:
-          path: web-app/node_modules
-          key: node-modules-web-${{ runner.os }}-${{ hashFiles('web-app/package-lock.json') }}
-          restore-keys: node-modules-web-${{ runner.os }}-
+          cache: npm
+          cache-dependency-path: web-app/package-lock.json
 
       - name: Install dependencies
         working-directory: web-app
-        run: npm install --prefer-offline --no-audit
+        run: npm ci --prefer-offline --no-audit
 
       - name: Run Vitest
         working-directory: web-app
@@ -187,22 +172,17 @@ jobs:
       matrix:
         project: [desktop-chrome, mobile-iphone]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache node_modules
-        uses: actions/cache@v4
-        with:
-          path: web-app/node_modules
-          key: node-modules-web-${{ runner.os }}-${{ hashFiles('web-app/package-lock.json') }}
-          restore-keys: node-modules-web-${{ runner.os }}-
+          cache: npm
+          cache-dependency-path: web-app/package-lock.json
 
       - name: Install dependencies
         working-directory: web-app
-        run: npm install --prefer-offline --no-audit
+        run: npm ci --prefer-offline --no-audit
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4

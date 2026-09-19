@@ -1,0 +1,28 @@
+name: Mainnet Read-Only Canary
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mainnet-read-only-canary
+  cancel-in-progress: true
+
+jobs:
+  canary:
+    name: Production web and API
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Run GET-only production canary
+        run: node scripts/live-mainnet-canary.mjs --timeout 45000
