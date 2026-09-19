@@ -76,7 +76,7 @@ export function MobileHub() {
           {!isAuthenticated && (
             <button
               onClick={promptConnect}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border font-pixel-mono text-[11px] uppercase tracking-[1px] min-h-[40px]"
+              className="flex min-h-11 items-center gap-1.5 rounded-lg border px-3 py-2 font-pixel-mono text-[11px] uppercase tracking-[1px]"
               style={{ borderColor: 'rgba(255,213,128,0.5)', backgroundColor: 'rgba(255,213,128,0.14)', color: COZY_TEXT }}
             >
               <Wallet size={13} /> Connect
