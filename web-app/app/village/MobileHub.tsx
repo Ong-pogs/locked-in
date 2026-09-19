@@ -6,6 +6,7 @@ import { BookOpen, Coins, Trophy, LayoutDashboard, ChevronRight, Wallet, Swords,
 import { useAuth } from '@/hooks/useAuth';
 import { CozyCard, COZY_TEXT, COZY_TEXT_SHADOW } from '@/components/cozy';
 import { T } from '@/components/theme';
+import { Founding100Hero } from '@/components/Founding100Hero';
 
 // Mobile-native hub — a phone shouldn't pan a 16:9 painting sideways. The art
 // becomes a header banner; the destinations become big tappable cards. Desktop
@@ -86,6 +87,7 @@ export function MobileHub() {
 
       {/* Destination cards */}
       <div className="px-4 pb-10 -mt-2 flex flex-col gap-3">
+        {!isAuthenticated && <Founding100Hero variant="mobile" />}
         {DESTS.map((d) => {
           const locked = d.gated && !isAuthenticated;
           const Icon = d.icon;

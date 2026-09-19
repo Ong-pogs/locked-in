@@ -19,6 +19,7 @@ const PUBLIC_ROUTES = [
   '/terms',
   '/privacy',
   '/risk',
+  '/support',
   // The Arena ladder is a shop window: a logged-out visitor should be able to
   // see who is winning before being asked to sign up.
   '/arena',

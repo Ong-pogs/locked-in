@@ -5,6 +5,7 @@ import { Providers } from './providers';
 import { SerwistProvider } from './serwist';
 import { AppShell } from '@/components/AppShell';
 import { AnimatedSplash } from '@/components/AnimatedSplash';
+import { ProductAnalytics } from '@/components/ProductAnalytics';
 import './globals.css';
 
 const geistSans = Geist({
@@ -32,7 +33,8 @@ const silkscreen = Silkscreen({
 });
 
 const APP_NAME = 'Locked-In';
-const APP_DESCRIPTION = 'Learn Solana. Lock deposits. Stay consistent.';
+const APP_DESCRIPTION =
+  'Stop collecting courses. Finish one. Put $10-$50 USDC behind a course in a capped mainnet beta.';
 
 export const metadata: Metadata = {
   applicationName: APP_NAME,
@@ -57,13 +59,11 @@ export const metadata: Metadata = {
     title: APP_NAME,
     description: APP_DESCRIPTION,
     url: '/',
-    images: [{ url: '/icons/icon-512.png', width: 512, height: 512, alt: APP_NAME }],
   },
   twitter: {
     card: 'summary_large_image',
     title: APP_NAME,
     description: APP_DESCRIPTION,
-    images: ['/icons/icon-512.png'],
   },
 };
 
@@ -86,6 +86,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
             </AppShell>
           </Providers>
         </SerwistProvider>
+        <ProductAnalytics />
       </body>
     </html>
   );
