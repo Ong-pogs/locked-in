@@ -30,7 +30,7 @@ const STEPS: Step[] = [
     kind: 'building',
     target: 'academy',
     title: 'Academy',
-    body: 'Lock USDC on a course to begin. Complete a lesson each day to keep your flame lit — your stake earns real yield while it burns. Finish the course and claim your principal plus all the yield back.',
+    body: 'Lock $10-$50 USDC on a course. Complete a lesson each day to keep your flame lit. Your position may earn variable yield through Kamino while it remains exposed to smart-contract, USDC, and Solana risks. Finish the course to unlock your position and any yield you kept.',
   },
   {
     kind: 'building',
