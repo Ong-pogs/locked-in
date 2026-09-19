@@ -39,6 +39,7 @@ export const PUBLIC_ROUTES = [
   '/terms',
   '/privacy',
   '/risk',
+  '/support',
   '/arena',
 ];
 
