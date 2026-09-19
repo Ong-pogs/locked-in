@@ -1,3 +1,5 @@
+import { PUBLIC_APP_ROUTES } from './publicRoutes';
+
 /**
  * Flow-guard routing decision, extracted from AppShell so it can be tested.
  *
@@ -27,22 +29,7 @@ export interface FlowGuardInput {
 // Pages a new user can browse without a wallet. Must agree with proxy.ts, or
 // the flow guard redirects a logged-out reader away from a page the edge just
 // allowed.
-export const PUBLIC_ROUTES = [
-  '/opengraph-image',
-  '/courses',
-  '/village',
-  '/dashboard',
-  '/shop',
-  '/alchemy',
-  '/community-pot',
-  '/inventory',
-  '/leaderboard',
-  '/terms',
-  '/privacy',
-  '/risk',
-  '/support',
-  '/arena',
-];
+export const PUBLIC_ROUTES = PUBLIC_APP_ROUTES;
 
 export const ONBOARDING_ROUTES = ['/courses', '/onboarding/deposit', '/onboarding/tutorial'];
 

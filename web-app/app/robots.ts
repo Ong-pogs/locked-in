@@ -1,4 +1,5 @@
 import type { MetadataRoute } from 'next';
+import { SITE_ORIGIN } from '@/lib/site';
 
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -15,7 +16,7 @@ export default function robots(): MetadataRoute.Robots {
         '/practice',
       ],
     },
-    sitemap: 'https://www.lockedin.quest/sitemap.xml',
-    host: 'https://www.lockedin.quest',
+    sitemap: `${SITE_ORIGIN}/sitemap.xml`,
+    host: SITE_ORIGIN,
   };
 }

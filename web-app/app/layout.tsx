@@ -6,6 +6,7 @@ import { SerwistProvider } from './serwist';
 import { AppShell } from '@/components/AppShell';
 import { AnimatedSplash } from '@/components/AnimatedSplash';
 import { ProductAnalytics } from '@/components/ProductAnalytics';
+import { SITE_ORIGIN } from '@/lib/site';
 import './globals.css';
 
 const geistSans = Geist({
@@ -52,7 +53,7 @@ export const metadata: Metadata = {
     telephone: false,
   },
   // Sharing any link previously produced no preview card at all.
-  metadataBase: new URL('https://www.lockedin.quest'),
+  metadataBase: new URL(SITE_ORIGIN),
   openGraph: {
     type: 'website',
     siteName: APP_NAME,
