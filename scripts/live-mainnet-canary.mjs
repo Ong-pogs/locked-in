@@ -98,6 +98,12 @@ async function checkWeb() {
   let village = null;
   for (const path of publicPages) {
     const result = await text(path);
+    const finalPath = new URL(result.response.url).pathname;
+    requireCheck(
+      finalPath === path,
+      `${path} does not redirect`,
+      finalPath === path ? finalPath : `${path} -> ${finalPath}`,
+    );
     requireCheck(
       result.response.headers.get('content-type')?.includes('text/html'),
       `${path} is HTML`,
