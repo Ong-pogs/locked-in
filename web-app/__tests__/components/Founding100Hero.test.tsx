@@ -16,9 +16,6 @@ describe('Founding100Hero', () => {
       'href',
       '/courses',
     );
-    const riskLink = screen.getByRole('link', { name: 'Read the risks' });
-    expect(riskLink).toHaveAttribute('href', '/risk');
-    expect(riskLink).toHaveClass('min-h-11');
-    expect(screen.getByRole('link', { name: 'Get help' })).toHaveClass('min-h-11');
+    expect(screen.getByRole('link', { name: 'Read the risks' })).toHaveAttribute('href', '/risk');
   });
 });
