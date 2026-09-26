@@ -1,8 +1,10 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { Founding100Hero } from '@/components/Founding100Hero';
 
-vi.mock('@vercel/analytics', () => ({ track: vi.fn() }));
+const track = vi.hoisted(() => vi.fn());
+
+vi.mock('@vercel/analytics', () => ({ track }));
 
 describe('Founding100Hero', () => {
   it('states the commitment clearly and routes the CTA to the catalog', () => {
@@ -18,5 +20,15 @@ describe('Founding100Hero', () => {
       '/courses',
     );
     expect(screen.getByRole('link', { name: 'Read the risks' })).toHaveAttribute('href', '/risk');
+  });
+
+  it('records only the fixed CTA placement when a visitor joins', () => {
+    render(<Founding100Hero variant="desktop" />);
+
+    const cta = screen.getByRole('link', { name: /Join the Founding 100/ });
+    cta.addEventListener('click', (event) => event.preventDefault(), { once: true });
+    fireEvent.click(cta);
+
+    expect(track).toHaveBeenCalledWith('founding_100_cta', { placement: 'desktop' });
   });
 });

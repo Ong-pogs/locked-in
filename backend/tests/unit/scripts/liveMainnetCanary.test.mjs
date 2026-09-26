@@ -31,6 +31,8 @@ function createSuccessfulFetch({
   frontendProgram = 'FAuFtXbTAT9SiJTghxdZ1ZD4ShgrdTk2EqgyPxfq2gZ6',
   frontendRevision = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   includeNarrative = true,
+  includeLegalDraft = true,
+  publicCopyAppend = '',
   seasonStatus = 200,
 } = {}) {
   let active = 0;
@@ -75,7 +77,7 @@ function createSuccessfulFetch({
         });
       }
 
-      const legal = ['/risk', '/terms', '/privacy'].includes(route)
+      const legal = includeLegalDraft && ['/risk', '/terms', '/privacy'].includes(route)
         ? 'DRAFT - PENDING LEGAL REVIEW'
         : '';
       const village = route === '/village' && includeNarrative
@@ -95,7 +97,7 @@ function createSuccessfulFetch({
           'permissions-policy': 'camera=(), microphone=(), geolocation=(), browsing-topics=()',
           'strict-transport-security': 'max-age=63072000',
         },
-        body: `${legal}${village}${stableCopy}`,
+        body: `${legal}${village}${stableCopy}${publicCopyAppend}`,
       });
     }
 
@@ -177,6 +179,16 @@ describe('mainnet canary guards', () => {
     });
     expect(() => parseArgs(['--web', '--json'])).toThrow('--web requires a value');
     expect(() => parseArgs(['--unknown'])).toThrow('Unknown option');
+  });
+
+  it('fails closed on unsafe timeout, revision, and fetch configuration', async () => {
+    await expect(runCanary({ timeoutMs: 999 })).rejects.toThrow(
+      '--timeout must be between 1000 and 120000 milliseconds',
+    );
+    await expect(runCanary({ expectedRevision: 'short-sha' })).rejects.toThrow(
+      '--expected-revision must be a full 40-character commit SHA',
+    );
+    await expect(runCanary({ fetchImpl: null })).rejects.toThrow('fetch is required');
   });
 
   it('rejects followed and cross-origin responses', () => {
@@ -280,5 +292,31 @@ describe('mainnet canary guards', () => {
 
     expect(report.checks).toContainEqual(expect.objectContaining({ ok: false, name: check }));
     expect(report.failed).toBeGreaterThan(0);
+  });
+
+  it('rejects prohibited public promises and missing legal-draft warnings', async () => {
+    const copyMock = createSuccessfulFetch({ publicCopyAppend: 'This return is guaranteed.' });
+    const copyReport = await runCanary({
+      webOrigin: WEB,
+      apiOrigin: API,
+      fetchImpl: copyMock.fetchImpl,
+      now: () => NOW,
+    });
+    expect(copyReport.checks).toContainEqual(expect.objectContaining({
+      ok: false,
+      name: 'public pages omit prohibited claim: guaranteed',
+    }));
+
+    const legalMock = createSuccessfulFetch({ includeLegalDraft: false });
+    const legalReport = await runCanary({
+      webOrigin: WEB,
+      apiOrigin: API,
+      fetchImpl: legalMock.fetchImpl,
+      now: () => NOW,
+    });
+    expect(legalReport.checks).toContainEqual(expect.objectContaining({
+      ok: false,
+      name: '/risk remains visibly marked as a legal draft',
+    }));
   });
 });
