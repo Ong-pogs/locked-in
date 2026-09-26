@@ -203,9 +203,13 @@ describe('mainnet canary guards', () => {
   });
 
   it('accepts only a bare HTTP RPC origin', () => {
+    const credentialedRpc = new URL('https://rpc.example.com');
+    credentialedRpc.username = 'user';
+    credentialedRpc.password = 'pass';
+
     expect(isCredentialFreeRpcOrigin('https://rpc.example.com')).toBe(true);
     expect(isCredentialFreeRpcOrigin('https://rpc.example.com/provider-token')).toBe(false);
-    expect(isCredentialFreeRpcOrigin('https://user:pass@rpc.example.com')).toBe(false);
+    expect(isCredentialFreeRpcOrigin(credentialedRpc.toString())).toBe(false);
     expect(isCredentialFreeRpcOrigin('file:///rpc-token')).toBe(false);
   });
 

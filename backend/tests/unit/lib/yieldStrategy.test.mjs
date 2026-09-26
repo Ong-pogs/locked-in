@@ -175,8 +175,14 @@ describe('yieldStrategy', () => {
     });
 
     it('removes credentials from userinfo, path, query, and fragment', () => {
+      const credentialedRpc = new URL(
+        'https://rpc.example.com/provider-token?api-key=secret#debug',
+      );
+      credentialedRpc.username = 'user';
+      credentialedRpc.password = 'password';
+
       expect(
-        sanitizeRpcUrl('https://user:password@rpc.example.com/provider-token?api-key=secret#debug'),
+        sanitizeRpcUrl(credentialedRpc.toString()),
       ).toBe('https://rpc.example.com');
     });
 
