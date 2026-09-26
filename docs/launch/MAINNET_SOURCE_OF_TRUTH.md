@@ -26,6 +26,25 @@ not claims about Vercel's browser-restricted production RPC provider.
 The deployed frontend bundle, the public API, the Vercel production deployment,
 and on-chain reads are runtime evidence. Update this file when any value changes.
 
+## Public launch surface
+
+The signed-out acquisition and trust surface consists of `/village`,
+`/courses`, `/arena`, `/risk`, `/terms`, `/privacy`, and `/support`. Search and
+sharing metadata are served from `/robots.txt`, `/sitemap.xml`,
+`/manifest.webmanifest`, and `/opengraph-image`.
+
+`GET /api/runtime-config` exposes only non-secret build values already present
+in the browser bundle: `cluster`, `vaultV2ProgramId`, `usdcMint`,
+`globalTvlCapUsdc`, and `buildRevision`. The production canary uses this route
+to detect a build made for the wrong cluster, program, mint, cap, or commit.
+`NEXT_PUBLIC_GLOBAL_TVL_CAP_USDC` controls the displayed cap, and
+`NEXT_PUBLIC_SITE_URL` controls canonical sitemap and robots URLs; the launch
+gate injects both from `config/mainnet-production.json`.
+
+Vercel Analytics records coarse page and Founding 100 CTA activity. URLs are
+scrubbed of queries, fragments, invite codes, match IDs, lesson IDs, course IDs,
+credentials, and malformed values before they are sent.
+
 ## Safe verification
 
 Run the complete local gate:

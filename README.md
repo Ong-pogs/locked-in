@@ -169,7 +169,12 @@ Solana gives the project:
 
 This repo is not just a concept write-up. The core structure already exists.
 
-### 1. On-chain program
+### 1. Historical v4/devnet on-chain program
+
+Production custody uses the vault v2 program listed in
+[`docs/launch/MAINNET_SOURCE_OF_TRUTH.md`](docs/launch/MAINNET_SOURCE_OF_TRUTH.md).
+The details below describe the earlier v4/devnet architecture retained in this
+repository for development context.
 
 There is a single Anchor program in the repo, `locked_in` (program ID `3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav`, deployed on devnet). It contains two modules separated only by PDA seeds:
 
@@ -212,6 +217,10 @@ The backend already contains the core runtime layer for the product:
 
 The Next.js app (`web-app/`) already includes the main user-facing surfaces:
 
+- Founding 100 entry and course-catalog acquisition flow
+- public risk, terms, privacy, and support pages
+- public sitemap, robots, social-preview, and runtime-configuration surfaces
+- privacy-scrubbed page and CTA analytics
 - wallet connection
 - onboarding
 - course selection
@@ -236,11 +245,18 @@ The Next.js app (`web-app/`) already includes the main user-facing surfaces:
 
 ## Technical Docs
 
-This README is meant to explain the concept, the product logic, and what exists so far.
+This README explains the concept and retains historical product context. For
+current production configuration and safe verification, use the
+[`mainnet source of truth`](docs/launch/MAINNET_SOURCE_OF_TRUTH.md). The
+[`Founding 100 launch design`](docs/plans/2026-09-19-founding-100-launch-design.md)
+records the current acquisition and disclosure decisions.
 
-For the engineering source of truth, start with the architecture overview at [`docs/00-technical-architecture.md`](/Users/marcus/Projects/locked-in/docs/00-technical-architecture.md), then the current v4 specs: [`docs/08-timer-yield-product.md`](/Users/marcus/Projects/locked-in/docs/08-timer-yield-product.md), [`docs/04-tokenomics.md`](/Users/marcus/Projects/locked-in/docs/04-tokenomics.md), and [`docs/05-yield-calculator.md`](/Users/marcus/Projects/locked-in/docs/05-yield-calculator.md). Where the architecture overview and the v4 specs differ, the v4 specs describe the current state.
-
-If the README and technical docs ever differ, the technical docs should win.
+The older [`architecture overview`](docs/00-technical-architecture.md),
+[`timer/yield spec`](docs/08-timer-yield-product.md),
+[`tokenomics spec`](docs/04-tokenomics.md), and
+[`yield calculator`](docs/05-yield-calculator.md) describe earlier v4/devnet
+mechanics. If they conflict with the mainnet source of truth or deployed
+runtime evidence, the mainnet source of truth and deployed systems win.
 
 ## Local Dev
 
