@@ -124,7 +124,7 @@ Legend:
 | `YIELD_KAMINO_RPC_URL` | Helius mainnet RPC endpoint for Kamino reserve querying | 🔒 | Private Helius server endpoint |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated list of allowed frontend origins | 🌐 | `https://lockedin.quest,https://www.lockedin.quest,https://locked-in-test-env.vercel.app` |
 | `VAULT_V2_PROGRAM_ID` | Mainnet v2 vault program ID | 🌐 | `FAuFtXbTAT9SiJTghxdZ1ZD4ShgrdTk2EqgyPxfq2gZ6` |
-| `LOCK_VAULT_PROGRAM_ID` | Legacy v1 lock vault program ID. v2 flows use `VAULT_V2_PROGRAM_ID`, but legacy readers (including the leaderboard) still use this one | 🌐 | Currently the devnet ID `3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav` (see Known Gaps) |
+| `LOCK_VAULT_PROGRAM_ID` | Legacy v1 lock vault program ID. v2 flows (including the leaderboard) use `VAULT_V2_PROGRAM_ID`; only the legacy v1 path reads this one | 🌐 | Currently the devnet ID `3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav` |
 | `COMMUNITY_POT_PROGRAM_ID` | Mainnet community pot program ID | 🌐 | `FAuFtXbTAT9SiJTghxdZ1ZD4ShgrdTk2EqgyPxfq2gZ6` |
 | `LOCK_VAULT_USDC_MINT` | Mainnet USDC token mint | 🌐 | `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` |
 | `LOCK_VAULT_WORKER_PRIVATE_KEY` | Keypair for voucher signing and onboarding gas drips | 🔒 | Base58 private key (must hold SOL balance) |
@@ -236,8 +236,7 @@ After deploying changes, verify the system following these steps:
 2. **Database Backups:** Supabase runs on the Free plan, which does not include automated scheduled backups.
 3. **Pot Distributions:** Monthly community pot payouts are initiated by a single hot worker key; the on-chain program does not independently verify recipient addresses.
 4. **Force-Return Crank:** The permissionless force-return rescue script (`backend/scripts/force-return-crank.mjs`) is implemented but not yet scheduled as a recurring Render cron.
-5. **Leaderboard ignores v2 locks:** `computeLeaderboardRows` (backend `modules/progress/repository.mjs`) reads locks with the legacy v1 reader (`readLockAccountSnapshot`), so mainnet v2 locks show 0 active courses and 0 USDC locked. Ranking by streak still works.
-6. **Documentation Hierarchy:** Numbered specification files in `docs/` (00 to 10) predate v2 architecture. The current codebase, `README.md`, and `HANDOFF.md` represent the authoritative source of truth.
+5. **Documentation Hierarchy:** Numbered specification files in `docs/` (00 to 10) predate v2 architecture. The current codebase, `README.md`, and `HANDOFF.md` represent the authoritative source of truth.
 
 ---
 

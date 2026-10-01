@@ -34,6 +34,7 @@ import { applyLessonDay, applyMissDay, lapseRedirectBps } from '../../lib/shield
 import { autoMissEventId } from '../../lib/missEvents.mjs';
 import {
   deriveLockPdaServer,
+  hasPositionConfig,
   primeLockPositionCache,
   readLockV2AccountFresh,
   readVaultV2ConfigAuthority,
@@ -4005,6 +4006,7 @@ async function computeLeaderboardRows() {
   const latestClosedRows =
     latestClosedWindowId != null ? await readDistributionSnapshotRows(latestClosedWindowId) : [];
 
+  const useV2Positions = hasPositionConfig();
   const entries = [];
   for (const row of runtimeWallets.rows) {
     const wallet = row.wallet_address;
@@ -4031,9 +4033,20 @@ async function computeLeaderboardRows() {
 
     for (const course of courseIdsResult.rows) {
       try {
-        const snapshot = await readLockAccountSnapshot(wallet, course.courseId);
-        if (snapshot.status !== 0) {
-          continue;
+        let principalAmount;
+        if (useV2Positions) {
+          // v2 locks use different PDAs, so legacy reads cannot establish custody.
+          const position = await readLockV2AccountFresh(wallet, course.courseId);
+          if (!position || position.mismatch || position.status !== 'ACTIVE') {
+            continue;
+          }
+          principalAmount = position.principal;
+        } else {
+          const snapshot = await readLockAccountSnapshot(wallet, course.courseId);
+          if (snapshot.status !== 0) {
+            continue;
+          }
+          principalAmount = snapshot.principalAmount;
         }
 
         const currentStreak = Number(course.currentStreak ?? 0);
@@ -4042,7 +4055,7 @@ async function computeLeaderboardRows() {
           activeCourseCount += 1;
         }
 
-        lockedPrincipal += BigInt(snapshot.principalAmount ?? 0);
+        lockedPrincipal += BigInt(principalAmount ?? 0);
         const completionDate = course.lastCompletedDay ?? null;
         if (completionDate && (!recentActivityDate || completionDate > recentActivityDate)) {
           recentActivityDate = completionDate;
