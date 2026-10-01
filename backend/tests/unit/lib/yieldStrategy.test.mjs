@@ -3,6 +3,8 @@ import {
   computeQuotedYieldFromApy,
   deriveHarvestBucketTimestamp,
   createFixedApyStrategyAdapter,
+  getYieldStrategyInfo,
+  sanitizeRpcUrl,
 } from '../../../src/lib/yieldStrategy.mjs';
 
 describe('yieldStrategy', () => {
@@ -162,6 +164,41 @@ describe('yieldStrategy', () => {
       });
 
       expect(result.grossYieldAmount).toBe('0');
+    });
+  });
+
+  describe('sanitizeRpcUrl', () => {
+    it('keeps only the RPC origin', () => {
+      expect(sanitizeRpcUrl('https://rpc.example.com:8899/')).toBe(
+        'https://rpc.example.com:8899',
+      );
+    });
+
+    it('removes credentials from userinfo, path, query, and fragment', () => {
+      const credentialedRpc = new URL(
+        'https://rpc.example.com/provider-token?api-key=secret#debug',
+      );
+      credentialedRpc.username = 'user';
+      credentialedRpc.password = 'password';
+
+      expect(
+        sanitizeRpcUrl(credentialedRpc.toString()),
+      ).toBe('https://rpc.example.com');
+    });
+
+    it('rejects invalid and non-HTTP URLs', () => {
+      expect(sanitizeRpcUrl('not a URL?api-key=secret')).toBeNull();
+      expect(sanitizeRpcUrl('file:///tmp/rpc-token')).toBeNull();
+      expect(sanitizeRpcUrl(null)).toBeNull();
+    });
+  });
+
+  describe('getYieldStrategyInfo', () => {
+    it('exposes the public custody program and mint for deployment verification', () => {
+      expect(getYieldStrategyInfo().custody).toEqual({
+        programId: 'EUABEbHUjiUn9NijapRJT2MVqQ5nSdqH3gSzTxyGucsN',
+        usdcMint: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
+      });
     });
   });
 });

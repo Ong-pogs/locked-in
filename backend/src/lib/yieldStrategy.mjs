@@ -170,6 +170,10 @@ export async function readKaminoSupplyApyBpsSafe() {
 export function getYieldStrategyInfo() {
   const usingKamino = appConfig.yieldStrategyKind === 'kamino_klend_reserve_v1';
   return {
+    custody: {
+      programId: appConfig.vaultV2ProgramId ?? null,
+      usdcMint: appConfig.lockVaultUsdcMint ?? null,
+    },
     profile: appConfig.yieldStrategyProfile ?? null,
     kind: appConfig.yieldStrategyKind,
     harvestIntervalSeconds: appConfig.yieldHarvestIntervalSeconds,
@@ -178,7 +182,8 @@ export function getYieldStrategyInfo() {
       : null,
     kamino: usingKamino
       ? {
-          // Strip any query string (Helius API keys live in ?api-key=).
+          // Expose only the origin. RPC credentials can live in query strings,
+          // URL userinfo, or provider-specific path segments.
           rpcHost: sanitizeRpcUrl(appConfig.yieldKaminoRpcUrl),
           marketAddress: getKaminoMarketAddressValue(),
           reserveSymbol: appConfig.yieldKaminoReserveSymbol,
@@ -189,13 +194,14 @@ export function getYieldStrategyInfo() {
   };
 }
 
-function sanitizeRpcUrl(url) {
+export function sanitizeRpcUrl(url) {
   if (!url) return null;
   try {
     const u = new URL(url);
-    return `${u.protocol}//${u.host}${u.pathname.length > 1 ? u.pathname : ''}`;
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    return u.origin;
   } catch {
-    return url.split('?')[0] || null;
+    return null;
   }
 }
 

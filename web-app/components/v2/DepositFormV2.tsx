@@ -8,6 +8,7 @@ import { fetchWithAuth } from '@/services/api';
 import { httpRequest } from '@/services/api/httpClient';
 import { readFundingBreadcrumb } from '@/services/onramp/fundingBreadcrumb';
 import type { V2ActionPhase } from '@/services/solana/v2Actions';
+import { BETA_GLOBAL_TVL_CAP_USDC } from '@/lib/betaConfig';
 
 // v2 deposit (spec §5): $10–50, NO duration picker — the lock releases on
 // course completion, not on a timer. Capacity meter shows the beta TVL cap.
@@ -41,7 +42,6 @@ function writeConsent(accepted: boolean): void {
 
 const MIN_UI = 10;
 const MAX_UI = 50;
-const GLOBAL_CAP_UI = 1_000;
 const PRESETS = [10, 25, 50];
 
 interface Props {
@@ -124,7 +124,7 @@ export function DepositFormV2({
     return null;
   }, [amount, numericAmount, walletBalanceUi]);
 
-  const capacityPct = Math.min(100, (currentTvlUi / GLOBAL_CAP_UI) * 100);
+  const capacityPct = Math.min(100, (currentTvlUi / BETA_GLOBAL_TVL_CAP_USDC) * 100);
 
   // Fiat-onramp shortfall. Non-null ONLY when: the amount itself is valid
   // (format + $10-50 bounds), the balance is KNOWN (null = RPC unknown —
@@ -143,7 +143,8 @@ export function DepositFormV2({
   }, [onAddFunds, amount, numericAmount, walletBalanceUi]);
 
   // Never sell USDC for a lock the chain will reject on the beta TVL cap.
-  const capacityShort = usdcDeficit != null && numericAmount > GLOBAL_CAP_UI - currentTvlUi;
+  const capacityShort =
+    usdcDeficit != null && numericAmount > BETA_GLOBAL_TVL_CAP_USDC - currentTvlUi;
 
   const handleAddFundsTap = () => {
     if (usdcDeficit == null) return;
@@ -176,7 +177,7 @@ export function DepositFormV2({
       >
         Lapses cost yield, never principal. Go dark after your shields are spent and you forfeit 50%
         of your yield on the first lapse, 100% on the second — it goes to the community pot. Your
-        principal is never taken as a penalty, but it is not guaranteed: it sits in Kamino, a
+        principal is never taken as a penalty, but it can lose value: it sits in Kamino, a
         third-party protocol, so a Kamino loss, a USDC depeg or a Solana failure can return you less
         than you put in. This is unaudited beta software.
       </p>
@@ -245,7 +246,7 @@ export function DepositFormV2({
             Beta capacity
           </span>
           <span className="font-pixel-mono text-[10px]" style={{ color: COZY_TEXT, opacity: 0.8 }}>
-            ${currentTvlUi.toLocaleString()} / ${GLOBAL_CAP_UI.toLocaleString()} locked
+            ${currentTvlUi.toLocaleString()} / ${BETA_GLOBAL_TVL_CAP_USDC.toLocaleString()} locked
           </span>
         </div>
         <div className="h-1.5 rounded-[3px] overflow-hidden" style={{ backgroundColor: 'rgba(255,255,255,0.08)' }}>

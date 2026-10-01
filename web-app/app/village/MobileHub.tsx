@@ -6,6 +6,7 @@ import { BookOpen, Coins, Trophy, LayoutDashboard, ChevronRight, Wallet, Swords,
 import { useAuth } from '@/hooks/useAuth';
 import { CozyCard, COZY_TEXT, COZY_TEXT_SHADOW } from '@/components/cozy';
 import { T } from '@/components/theme';
+import { Founding100Hero } from '@/components/Founding100Hero';
 
 // Mobile-native hub — a phone shouldn't pan a 16:9 painting sideways. The art
 // becomes a header banner; the destinations become big tappable cards. Desktop
@@ -66,16 +67,16 @@ export function MobileHub() {
           style={{ background: `linear-gradient(180deg, rgba(6,6,12,0.15) 0%, rgba(6,6,12,0.55) 55%, ${T.bg} 100%)` }}
         />
         <div className="absolute bottom-3 left-5 right-5 flex items-end justify-between">
-          <h1
+          <p
             className="font-pixel text-2xl tracking-wide"
             style={{ color: COZY_TEXT, textShadow: COZY_TEXT_SHADOW }}
           >
             The Village
-          </h1>
+          </p>
           {!isAuthenticated && (
             <button
               onClick={promptConnect}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border font-pixel-mono text-[11px] uppercase tracking-[1px] min-h-[40px]"
+              className="flex min-h-11 items-center gap-1.5 rounded-lg border px-3 py-2 font-pixel-mono text-[11px] uppercase tracking-[1px]"
               style={{ borderColor: 'rgba(255,213,128,0.5)', backgroundColor: 'rgba(255,213,128,0.14)', color: COZY_TEXT }}
             >
               <Wallet size={13} /> Connect
@@ -86,6 +87,7 @@ export function MobileHub() {
 
       {/* Destination cards */}
       <div className="px-4 pb-10 -mt-2 flex flex-col gap-3">
+        {!isAuthenticated && <Founding100Hero variant="mobile" />}
         {DESTS.map((d) => {
           const locked = d.gated && !isAuthenticated;
           const Icon = d.icon;

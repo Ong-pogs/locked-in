@@ -24,9 +24,14 @@ import { getAssociatedTokenAddressSync } from '@solana/spl-token';
 import bs58x from 'bs58';
 const bs58 = bs58x.decode ? bs58x : bs58x.default;
 
-const MAINNET_USDC = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+const productionConfig = JSON.parse(
+  readFileSync(new URL('../../config/mainnet-production.json', import.meta.url), 'utf8'),
+);
+const MAINNET_USDC = productionConfig.solana.usdcMint;
 const KLEND = 'KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD';
-const MAINNET_PROGRAM = 'FAuFtXbTAT9SiJTghxdZ1ZD4ShgrdTk2EqgyPxfq2gZ6';
+const MAINNET_PROGRAM = productionConfig.programs.vaultV2;
+const MAINNET_YIELD_PROFILE = productionConfig.yieldProfile;
+const MAINNET_BETA_CAPS = productionConfig.beta;
 const CONFIG_SEED = Buffer.from('vault-v2b');
 const POT_SEED = Buffer.from('pot-protocol');
 const BPF_LOADER = new PublicKey('BPFLoaderUpgradeab1e11111111111111111111111');
@@ -68,6 +73,10 @@ function pubkeyOfSecret(bs58secret) {
 const isBase58Pubkey = (v) => {
   try { new PublicKey(v); return true; } catch { return false; }
 };
+const safeRpcLabel = (value) => {
+  if (!value) return '(unset)';
+  return URL.canParse(value) ? new URL(value).origin : '(configured; non-URL format)';
+};
 
 // ── cluster classification (mirrors bootGuards.detectCluster: fail-closed) ──
 const rpc = be.SOLANA_RPC_URL ?? '';
@@ -84,7 +93,8 @@ async function main() {
   console.log(`\n=== Locked In — mainnet pre-flight ===`);
   console.log(`backend env : ${backendEnvPath ?? '(process env)'}`);
   console.log(`frontend env: ${frontendEnvPath ?? '(process env)'}`);
-  console.log(`RPC         : ${rpc || '(unset)'}`);
+  // Never echo paid RPC query strings, embedded credentials, or path tokens.
+  console.log(`RPC host    : ${safeRpcLabel(rpc)}`);
   console.log(`cluster     : ${cluster}${isMainnet ? '' : ' — mainnet-only checks will SKIP'}\n`);
 
   // 1. Required backend env present + well-formed.
@@ -112,7 +122,7 @@ async function main() {
   const profile = be.YIELD_STRATEGY_PROFILE ?? '';
   if (isMainnet && be.VAULT_V2_PROGRAM_ID) {
     if (be.YIELD_STRATEGY_ENABLED !== 'true') FAIL('guard(b): YIELD_STRATEGY_ENABLED must be true on mainnet');
-    else if (profile !== 'kamino_usdc_mainnet') FAIL('guard(b): yield profile not kamino_usdc_mainnet', `got '${profile}'`);
+    else if (profile !== MAINNET_YIELD_PROFILE) FAIL(`guard(b): yield profile not ${MAINNET_YIELD_PROFILE}`, `got '${profile}'`);
     else PASS('guard(b): real Kamino yield profile enabled');
   } else SKIP('guard(b): mainnet yield profile', 'devnet');
   if (isMainnet && be.DEV_TOOLS_ENABLED === 'true') FAIL('DEV_TOOLS_ENABLED is true on mainnet', 'the dev force-complete endpoint would be open');
@@ -185,6 +195,19 @@ async function main() {
       // caps sanity for the capped beta
       if (min > 0 && max >= min && cap >= max) PASS('caps sane', `min $${min} max $${max} cap $${cap}`);
       else WARN('caps look off', `min $${min} max $${max} cap $${cap}`);
+      if (
+        isMainnet &&
+        min === MAINNET_BETA_CAPS.minimumLockUsdc &&
+        max === MAINNET_BETA_CAPS.maximumLockUsdc &&
+        cap === MAINNET_BETA_CAPS.globalTvlCapUsdc
+      ) {
+        PASS('on-chain beta caps match production config');
+      } else if (isMainnet) {
+        FAIL(
+          'on-chain beta caps differ from production config',
+          `on-chain ${min}/${max}/${cap} vs expected ${MAINNET_BETA_CAPS.minimumLockUsdc}/${MAINNET_BETA_CAPS.maximumLockUsdc}/${MAINNET_BETA_CAPS.globalTvlCapUsdc}`,
+        );
+      }
       // pot vault must be the pot PDA's USDC ATA
       const [potPda] = PublicKey.findProgramAddressSync([POT_SEED], programId);
       const expectedPotVault = getAssociatedTokenAddressSync(new PublicKey(usdcMint), potPda, true).toBase58();

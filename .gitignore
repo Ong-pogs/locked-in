@@ -71,3 +71,5 @@ keys/
 
 # One-off marketing screenshots — kept locally, not part of the app.
 web-app/course-shots/
+# Generated local Arena E2E identities/tokens.
+web-app/e2e/.arena-stackinfo.json

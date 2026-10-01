@@ -71,7 +71,7 @@ export default function RiskPage() {
           Only lock what you can afford to lose entirely.
         </p>
 
-        <h2 style={h2}>Your principal is not guaranteed</h2>
+        <h2 style={h2}>Your principal can lose value</h2>
         <p style={body}>
           We never take principal as a penalty — lapse penalties touch yield only. That is a
           promise about our rules, not about the value of your deposit. Your USDC is supplied to
@@ -108,7 +108,7 @@ export default function RiskPage() {
           damage, not to eliminate it.
         </p>
 
-        <h2 style={h2}>Yield is not guaranteed</h2>
+        <h2 style={h2}>Yield is variable</h2>
         <p style={body}>
           Yield comes from Kamino market rates, which float and can be near zero. Any yield figure
           shown in the app is an estimate based on current rates, not a promise. Over a short course

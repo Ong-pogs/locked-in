@@ -41,10 +41,9 @@ export function LiveApyChip({
         : data.source;
   const sourceLabel = `${sourceDesc} · ${clusterSuffix}`;
   // Real-money product: a bare headline % reads as a promise. Kamino's rate
-  // floats with market supply/demand and yield is never guaranteed, so both
-  // branches carry an explicit qualifier (the simulated branch already flags
-  // "Simulated APY" above, but still isn't a guarantee).
-  const qualifier = data.live ? 'Variable rate · not guaranteed' : 'Simulated · not guaranteed';
+  // floats with market supply/demand, so both branches carry an explicit
+  // qualifier without framing the displayed rate as a promise.
+  const qualifier = data.live ? 'Variable rate · can change' : 'Simulated estimate · can change';
 
   return (
     <CozyCard className="flex items-center gap-3" style={{ padding: 14 }}>

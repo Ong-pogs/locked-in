@@ -11,6 +11,7 @@
 
 Locked In is live on Solana mainnet with real USDC (v2).
 
+- **Launch source of truth:** [docs/launch/MAINNET_SOURCE_OF_TRUTH.md](docs/launch/MAINNET_SOURCE_OF_TRUTH.md) (canonical config in config/mainnet-production.json and the read-only launch harness).
 - **Frontend URLs:** `https://lockedin.quest` (redirects to `https://www.lockedin.quest`), `https://www.lockedin.quest`, and `https://locked-in-test-env.vercel.app`
 - **Backend API:** `https://locked-in-backend-oetf.onrender.com`
 - **Mainnet Program ID:** `FAuFtXbTAT9SiJTghxdZ1ZD4ShgrdTk2EqgyPxfq2gZ6` (merged vault v2 custody and community pot)

@@ -14,6 +14,7 @@ import { MobileHub } from './MobileHub';
 export default function VillagePage() {
   return (
     <>
+      <h1 className="sr-only">Stop collecting courses. Finish one.</h1>
       <div className="hidden md:block">
         <VillageScene />
       </div>

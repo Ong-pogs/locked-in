@@ -7,6 +7,7 @@ import { useLogin } from '@privy-io/react-auth';
 import { useAuth } from '@/hooks/useAuth';
 import boundsData from '@/public/images/village/masks/bounds.json';
 import { VillageTour } from './VillageTour';
+import { Founding100Hero } from '@/components/Founding100Hero';
 
 // Source asset is 1024x576 — keep ratio for letterboxing.
 const ART_WIDTH = 1024;
@@ -328,6 +329,8 @@ export default function VillageScene() {
       {/* First-time walkthrough — auto-shows once, then never again
           (persisted in localStorage). Includes a Skip button + an X. */}
       <VillageTour bounds={BOUNDS} />
+
+      {!isAuthenticated && <Founding100Hero variant="desktop" />}
 
       {/* Top-left: logo + wordmark — clicking goes back */}
       <button

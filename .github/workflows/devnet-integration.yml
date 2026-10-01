@@ -15,11 +15,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -74,11 +74,11 @@ jobs:
       DEVNET_USER_KEYPAIR: ${{ secrets.DEVNET_USER_KEYPAIR }}
       DEVNET_AUTHORITY_KEYPAIR: ${{ secrets.DEVNET_AUTHORITY_KEYPAIR }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '24'
 
       # Scheduled runs skip quietly when the keypair secrets are not set; a
       # manual dispatch without them fails loudly instead of green-skipping.

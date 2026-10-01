@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CozyCard, COZY_TEXT, COZY_TEXT_SHADOW } from '@/components/cozy';
 import { T } from '@/components/theme';
 import { FlameGauge } from './FlameGauge';
 import { ShieldPips } from './ShieldPips';
 import { PenaltyBanner, combinedKeptBps } from './PenaltyBanner';
-import { deriveFlameState, yieldKeptBps } from '@/services/flame/deriveFlameState';
+import { deriveFlameState } from '@/services/flame/deriveFlameState';
 import { CLUSTER } from '@/services/solana/connection';
 import { useUserStore } from '@/stores';
 import { devCompleteCourse } from '@/services/api/progress/progressApi';
@@ -50,58 +50,69 @@ export function yieldPerMs(liveValue: number, apyPct: number | null | undefined)
   return (liveValue * (apyPct / 100)) / (365 * 24 * 3600 * 1000);
 }
 
-// Ticking yield line: pure function of Date.now() (rAF-driven) so Playwright's
-// clock API freezes it; static under prefers-reduced-motion.
+const YIELD_TICK_INTERVAL_MS = 60_000;
+
+// Ticking yield line: pure function of Date.now() so Playwright's clock API
+// freezes it. One update per minute avoids rerendering the whole card every
+// animation frame; the displayed fourth decimal changes less often at beta
+// position sizes, but the interval also resynchronizes promptly after wake.
 function useTickingYield(
   position: LockPositionResponse | null,
   apyPct: number | null | undefined,
 ): string | null {
-  const [display, setDisplay] = useState<string | null>(null);
-  const frame = useRef<number | null>(null);
+  // Store only the clock. The displayed value is derived from current position
+  // data, so stale yield cannot outlive an invalid position.
+  // Zero makes the server and first client render deterministic: both show the
+  // API-provided base yield until the post-hydration clock starts.
+  const [now, setNow] = useState(0);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const live = Number(position?.liveValueUi);
+  const principal = Number(position?.principalUi);
+  const valid = Boolean(
+    position?.liveValueUi &&
+      position?.principalUi &&
+      Number.isFinite(live) &&
+      Number.isFinite(principal),
+  );
+  useEffect(() => {
+    const media = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    if (!media) return undefined;
+
+    const syncPreference = () => setReducedMotion(media.matches);
+    // Effects run after hydration, so this synchronous read cannot create a
+    // server/client mismatch and still works when a background tab gets no rAF.
+    syncPreference();
+    media.addEventListener?.('change', syncPreference);
+    return () => {
+      media.removeEventListener?.('change', syncPreference);
+    };
+  }, []);
 
   useEffect(() => {
-    if (!position?.liveValueUi || !position?.principalUi) {
-      setDisplay(null);
-      return;
-    }
-    const live = Number(position.liveValueUi);
-    const principal = Number(position.principalUi);
-    if (!Number.isFinite(live) || !Number.isFinite(principal)) {
-      setDisplay(null);
-      return;
-    }
-    const baseYield = Math.max(0, live - principal);
-    // Guard asOf like the amounts — a malformed timestamp would make compute()
-    // return "NaN" and leak into the yield line + penalty forfeit amount.
-    const parsedAsOf = Date.parse(position.asOf);
-    const asOfMs = Number.isFinite(parsedAsOf) ? parsedAsOf : Date.now();
-    // Drift between 60s polls at the live APY (no fake 5% rate). If the APY is
-    // unknown the rate is 0 and the line shows the static base yield.
-    // Cosmetic accrual, resynced every poll.
-    const perMs = yieldPerMs(live, apyPct);
+    if (!valid || reducedMotion) return undefined;
 
-    const reduced =
-      typeof window !== 'undefined' &&
-      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-
-    const compute = () =>
-      (baseYield + Math.max(0, Date.now() - asOfMs) * perMs).toFixed(4);
-
-    if (reduced) {
-      setDisplay(baseYield.toFixed(4));
-      return;
-    }
-    const loop = () => {
-      setDisplay(compute());
-      frame.current = requestAnimationFrame(loop);
-    };
-    frame.current = requestAnimationFrame(loop);
+    const tick = () => setNow(Date.now());
+    const frame = window.requestAnimationFrame(tick);
+    const interval = window.setInterval(tick, YIELD_TICK_INTERVAL_MS);
     return () => {
-      if (frame.current != null) cancelAnimationFrame(frame.current);
+      window.cancelAnimationFrame(frame);
+      window.clearInterval(interval);
     };
-  }, [position, apyPct]);
+  }, [valid, reducedMotion]);
 
-  return display;
+  if (!valid || !position) return null;
+
+  const baseYield = Math.max(0, live - principal);
+  const parsedAsOf = Date.parse(position.asOf);
+  const asOfMs = Number.isFinite(parsedAsOf) ? parsedAsOf : now;
+  // This cosmetic interpolation is resynchronized from every API response; it
+  // is not used for balances, claims, or any money-moving calculation.
+  // Unknown or invalid APY keeps the API-provided base yield static.
+  const perMs = yieldPerMs(live, apyPct);
+
+  return (
+    baseYield + (reducedMotion ? 0 : Math.max(0, now - asOfMs) * perMs)
+  ).toFixed(4);
 }
 
 function countdownTo(iso: string | null, now: number): string | null {
@@ -127,7 +138,6 @@ export function PositionCard({ data, position, positionError, onRetryPosition, c
       window.location.reload();
     } catch (e) {
       setDevBusy(false);
-      // eslint-disable-next-line no-alert
       alert(`Dev complete failed: ${e instanceof Error ? e.message : e}`);
     }
   };

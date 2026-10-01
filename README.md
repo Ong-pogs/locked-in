@@ -6,6 +6,7 @@
 > The smart contract has not undergone a third-party security audit.
 > Locked principal sits in Kamino lending reserves, so deposits carry smart contract and protocol risk. The deposit screen warns users of these risks.
 > A devnet deployment remains available for testing.
+> Release checks, canonical config and safe verification commands: [docs/launch/MAINNET_SOURCE_OF_TRUTH.md](docs/launch/MAINNET_SOURCE_OF_TRUTH.md).
 
 Locked In is a Solana-native learning product built around a simple bet on human behavior:
 

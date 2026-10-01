@@ -4,14 +4,16 @@
 // human can play a match. Every screenshot this produces is meant to be
 // opened and looked at — a green run with a blank page is not a pass.
 import { test, expect, type Page } from '@playwright/test';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
-const STACK = JSON.parse(
-  readFileSync(
-    'C:/Users/ongee/AppData/Local/Temp/claude/C--Project-LockedIn/4ed87fa6-9361-4830-b6b1-1a832a851dc2/scratchpad/pgtest/stackinfo.json',
-    'utf8',
-  ),
-);
+const stackPath = process.env.ARENA_STACKINFO ?? resolve(process.cwd(), 'e2e/.arena-stackinfo.json');
+if (!existsSync(stackPath)) {
+  throw new Error(
+    `Arena test credentials not found at ${stackPath}. Set ARENA_STACKINFO to the generated stackinfo.json path.`,
+  );
+}
+const STACK = JSON.parse(readFileSync(stackPath, 'utf8'));
 
 const SHOTS = 'test-results-arena';
 

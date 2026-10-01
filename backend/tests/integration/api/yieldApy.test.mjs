@@ -65,4 +65,12 @@ describe('GET /v1/yield/strategy-info', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().fixedApyBps).toBeGreaterThan(0);
   });
+
+  it('reports the public custody configuration used by the backend', async () => {
+    const res = await app.inject({ method: 'GET', url: '/v1/yield/strategy-info' });
+    expect(res.json().custody).toEqual({
+      programId: 'EUABEbHUjiUn9NijapRJT2MVqQ5nSdqH3gSzTxyGucsN',
+      usdcMint: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
+    });
+  });
 });

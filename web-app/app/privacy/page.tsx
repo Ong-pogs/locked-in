@@ -100,6 +100,13 @@ export default function PrivacyPage() {
           <strong style={{ color: 'rgba(255,255,255,0.9)' }}>Technical logs.</strong> Ordinary
           server request logs, including IP address, used for debugging and abuse prevention.
         </p>
+        <p style={body}>
+          <strong style={{ color: 'rgba(255,255,255,0.9)' }}>Product analytics.</strong> We use
+          Vercel Web Analytics to measure page visits and fixed acquisition events. Before a page
+          URL is sent through the analytics hook, the app removes query values, fragments, invite
+          codes, match IDs, lesson IDs and course IDs. Do not put personal or wallet information in
+          product feedback fields or public issue reports.
+        </p>
 
         <h2 style={h2}>What we do not collect</h2>
         <p style={body}>
@@ -115,9 +122,9 @@ export default function PrivacyPage() {
 
         <h2 style={h2}>Who it is shared with</h2>
         <p style={body}>
-          Privy (authentication and embedded wallets), our hosting and database providers, and
-          Solana RPC providers who see the transactions we submit on your behalf. Kamino is
-          interacted with on-chain only — we send no personal data to it.
+          Privy (authentication and embedded wallets), Vercel (hosting and product analytics), our
+          database provider, and Solana RPC providers who see the transactions we submit on your
+          behalf. Kamino is interacted with on-chain only — we send no personal data to it.
         </p>
 
         <h2 style={h2}>Public by nature</h2>

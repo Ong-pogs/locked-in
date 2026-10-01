@@ -1,0 +1,24 @@
+{
+  "lastVerified": "2026-09-20",
+  "webOrigin": "https://www.lockedin.quest",
+  "apiOrigin": "https://locked-in-backend-oetf.onrender.com",
+  "dungeonOrigin": "https://dungeon-vert.vercel.app",
+  "privyAppId": "cmncshird026v0cl5n6yqq8z0",
+  "solana": {
+    "cluster": "mainnet-beta",
+    "buildRpcUrl": "https://api.mainnet-beta.solana.com",
+    "buildWsUrl": "wss://api.mainnet-beta.solana.com",
+    "usdcMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    "kaminoScopePrices": "3t4JZcueEzTbVP6kLxXrL3VpWx45jDer4eqysweBchNH"
+  },
+  "programs": {
+    "legacyVault": "3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav",
+    "vaultV2": "FAuFtXbTAT9SiJTghxdZ1ZD4ShgrdTk2EqgyPxfq2gZ6"
+  },
+  "beta": {
+    "minimumLockUsdc": 10,
+    "maximumLockUsdc": 50,
+    "globalTvlCapUsdc": 1000
+  },
+  "yieldProfile": "kamino_usdc_mainnet"
+}

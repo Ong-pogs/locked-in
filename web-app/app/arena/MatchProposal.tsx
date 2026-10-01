@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { T } from '../../components/theme';
 
 /**
@@ -122,13 +122,11 @@ export function MatchProposal({
  */
 export function useCountdown(deadlineAt: number | null) {
   const [now, setNow] = useState(() => Date.now());
-  const raf = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (deadlineAt == null) return undefined;
-    setNow(Date.now());
-    raf.current = setInterval(() => setNow(Date.now()), 100);
-    return () => { if (raf.current) clearInterval(raf.current); };
+    const interval = setInterval(() => setNow(Date.now()), 100);
+    return () => clearInterval(interval);
   }, [deadlineAt]);
 
   if (deadlineAt == null) return 0;
