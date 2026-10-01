@@ -1,63 +1,28 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { Activity } from 'lucide-react';
 import { CozyCard } from '@/components/cozy';
 import { T } from '@/components/theme';
-import { getLessonApiBaseUrl } from '@/services/api/config';
+import type { YieldApyResponse } from '@/hooks/useCurrentApy';
 import { CLUSTER } from '@/services/solana/connection';
 
 const AMBER = '#FFD580';
 const TEAL = '#2AE8D4';
 const TEXT_SHADOW = '0 1px 2px rgba(0,0,0,0.85)';
 
-interface YieldApyResponse {
-  apyBps: number | null;
-  apyPct: number | null;
-  source: string;
-  fetchedAt: string | null;
-  live: boolean;
-}
-
 /**
- * Polls the backend's /v1/yield/current-apy endpoint and renders a small
- * status pill. Refreshes every 60s. When the backend is running on the
- * kamino_klend_reserve_v1 strategy, "live" is true and we surface the real
+ * Renders a small status pill from the polled /v1/yield/current-apy data
+ * (fetched once by useCurrentApy and passed in). When the backend is running on
+ * the kamino_klend_reserve_v1 strategy, "live" is true and we surface the real
  * Kamino USDC reserve APY. Otherwise we show the fixed-APY simulation tag.
- *
- * No auth required — the endpoint is rate-limited per IP server-side.
  */
-export function LiveApyChip() {
-  const [data, setData] = useState<YieldApyResponse | null>(null);
-  const [hadError, setHadError] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const fetchApy = async () => {
-      try {
-        const baseUrl = getLessonApiBaseUrl();
-        if (!baseUrl) return;
-        const resp = await fetch(`${baseUrl}/v1/yield/current-apy`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const json = (await resp.json()) as YieldApyResponse;
-        if (!cancelled) {
-          setData(json);
-          setHadError(false);
-        }
-      } catch {
-        if (!cancelled) setHadError(true);
-      }
-    };
-
-    void fetchApy();
-    const interval = setInterval(fetchApy, 60_000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, []);
-
+export function LiveApyChip({
+  data,
+  hadError,
+}: {
+  data: YieldApyResponse | null;
+  hadError: boolean;
+}) {
   if (hadError && !data) return null;
   if (!data || data.apyPct == null) return null;
 

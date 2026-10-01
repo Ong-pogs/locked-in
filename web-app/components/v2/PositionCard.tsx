@@ -40,17 +40,26 @@ interface Props {
   positionError?: boolean; // the last position fetch failed
   onRetryPosition?: () => void;
   claimEnabled: boolean; // hasVaultV2Config() — passed down so the card stays pure
+  apyPct?: number | null; // live APY in percent from /v1/yield/current-apy, null while unknown
 }
 
-const DISPLAY_YIELD_APY = 0.05;
-const MILLISECONDS_PER_YEAR = 365 * 24 * 60 * 60 * 1000;
+// Yield accrued per ms at the live APY. 0 when the APY is unknown/invalid, so
+// we never animate a made-up rate.
+export function yieldPerMs(liveValue: number, apyPct: number | null | undefined): number {
+  if (apyPct == null || !Number.isFinite(apyPct) || apyPct <= 0) return 0;
+  return (liveValue * (apyPct / 100)) / (365 * 24 * 3600 * 1000);
+}
+
 const YIELD_TICK_INTERVAL_MS = 60_000;
 
 // Ticking yield line: pure function of Date.now() so Playwright's clock API
 // freezes it. One update per minute avoids rerendering the whole card every
 // animation frame; the displayed fourth decimal changes less often at beta
 // position sizes, but the interval also resynchronizes promptly after wake.
-function useTickingYield(position: LockPositionResponse | null): string | null {
+function useTickingYield(
+  position: LockPositionResponse | null,
+  apyPct: number | null | undefined,
+): string | null {
   // Store only the clock. The displayed value is derived from current position
   // data, so stale yield cannot outlive an invalid position.
   // Zero makes the server and first client render deterministic: both show the
@@ -98,7 +107,8 @@ function useTickingYield(position: LockPositionResponse | null): string | null {
   const asOfMs = Number.isFinite(parsedAsOf) ? parsedAsOf : now;
   // This cosmetic interpolation is resynchronized from every API response; it
   // is not used for balances, claims, or any money-moving calculation.
-  const perMs = (live * DISPLAY_YIELD_APY) / MILLISECONDS_PER_YEAR;
+  // Unknown or invalid APY keeps the API-provided base yield static.
+  const perMs = yieldPerMs(live, apyPct);
 
   return (
     baseYield + (reducedMotion ? 0 : Math.max(0, now - asOfMs) * perMs)
@@ -114,7 +124,7 @@ function countdownTo(iso: string | null, now: number): string | null {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
-export function PositionCard({ data, position, positionError, onRetryPosition, claimEnabled }: Props) {
+export function PositionCard({ data, position, positionError, onRetryPosition, claimEnabled, apyPct }: Props) {
   const router = useRouter();
   const authToken = useUserStore((s) => s.authToken);
   const [devBusy, setDevBusy] = useState(false);
@@ -132,7 +142,7 @@ export function PositionCard({ data, position, positionError, onRetryPosition, c
     }
   };
   const flame = deriveFlameState(data);
-  const tickingYield = useTickingYield(position);
+  const tickingYield = useTickingYield(position, apyPct);
 
   // Countdown refreshes every 30s (Date.now-driven — clock-fakeable).
   const [now, setNow] = useState(() => Date.now());
