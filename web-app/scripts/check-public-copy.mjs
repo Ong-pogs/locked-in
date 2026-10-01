@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
+import { realpathSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { dirname, extname, join, relative, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -87,9 +88,18 @@ export async function scanPublicSource() {
   return findings;
 }
 
-const invokedDirectly = process.argv[1]
-  ? import.meta.url === pathToFileURL(resolve(process.argv[1])).href
-  : false;
+function isInvokedDirectly() {
+  if (!process.argv[1]) return false;
+  try {
+    // Resolve symlinks before comparing so aliased entrypoints still run.
+    return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(resolve(process.argv[1]));
+  } catch {
+    // A missing invocation path is not a direct entrypoint.
+    return false;
+  }
+}
+
+const invokedDirectly = isInvokedDirectly();
 
 if (invokedDirectly) {
   const findings = await scanPublicSource();
