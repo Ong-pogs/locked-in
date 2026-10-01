@@ -55,5 +55,6 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  // Vercel Analytics posts without auth, so its ingestion routes must bypass the guard.
+  matcher: ['/((?!_next/static|_next/image|_vercel|favicon.ico).*)'],
 };
