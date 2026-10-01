@@ -11,8 +11,8 @@
 - Post things with real substance, not generic motivation.
 - Use X to drive signups for the Founding 100 launch ([PR #3](https://github.com/Ong-pogs/locked-in/pull/3)).
 
-Rough estimate: about 8 weeks at 15 minutes a day. A strong launch with Superteam MY reposts
-could make it faster. This is a guess, not a promise.
+Rough estimate: about 8 weeks or more, at 3 posts a week plus 15 minutes a day of replies. A strong
+launch with Superteam MY reposts could make it faster. This is a guess, not a promise.
 
 ## Starting point (2026-09-29)
 
@@ -42,7 +42,8 @@ What we found:
 | Question | Decision |
 |---|---|
 | Who is the account for? | Solana learners |
-| Time per day | 15 minutes |
+| Posting pace | 3 posts a week: Monday, Wednesday, Friday |
+| Time per day | 15 minutes of replies |
 | App status | Live on mainnet (capped beta) |
 | Approach | Founding 100 campaign, with posts drafted in a weekly batch |
 | Does Ong post too? | Yes, from his own account, using drafts we give him |
@@ -69,17 +70,15 @@ What we found:
 
 ## Weekly content (brand account)
 
-Every Sunday, draft 7 posts in one batch and schedule them in X.
+Every Sunday, draft 3 posts in one batch and schedule them in X for Monday, Wednesday and Friday.
 
 | Day | Type | Why |
 |---|---|---|
 | Mon | Solana in one post | One concept, explained simply. People save these. |
-| Tue | Build in public | A real decision, bug, or number from the repo |
-| Wed | Why stakes work | Why courses get abandoned, and how commitment helps |
-| Thu | Solana in one post | Same as Monday |
-| Fri | Founding 100 update | Before launch: teaser or "reply 'in'". After launch: spots filled and shoutouts |
-| Sat | Question or poll | Starts conversations and gets replies |
-| Sun | Weekly recap | What shipped this week |
+| Wed | Build in public, or why stakes work (alternate weeks) | A real decision, bug, or number from the repo. Or why courses get abandoned, and how commitment helps |
+| Fri | Founding 100 update and weekly recap | Before launch: teaser or "reply 'in'". After launch: spots filled, shoutouts, and what shipped this week |
+
+No separate question or poll day. End a Monday or Wednesday post with a question instead, to get replies.
 
 ### Sample posts
 
@@ -98,14 +97,15 @@ Build in public (Ong confirms the facts):
 > We removed it. Now you only see the real rate, even when it's less exciting.
 > Building with real money means boring honesty wins.
 
-Question:
+Question (as a Monday or Wednesday post, or as the closing line of one):
 
 > What Solana concept took you the longest to get?
 > For us it was accounts. "Everything is an account" took a week to sink in.
 
 ## Daily routine (15 minutes)
 
-- **2 min:** Check the scheduled post went out. Answer anyone who replied.
+- **2 min:** On Monday, Wednesday and Friday, check the scheduled post went out. Every day, answer
+  anyone who replied.
 - **10 min:** Write 5 to 8 real replies. Use an X List of Solana builders and Superteam accounts,
   and search for people posting "learning Solana" or "day 1 of Rust". Each reply adds a tip or a
   question. No "great post!" and no links.
@@ -119,20 +119,22 @@ and signups at the same time.
 ### Stage 1: Warm-up (starts now)
 
 - Brand account: the weekly content and the daily routine.
-- Ong: 3 posts a week (see Ong's playbook).
-- Once a week, post: "Founding 100 is coming. Reply 'in' and we'll DM you the day it opens."
+- Ong: 3 posts a week, ideally on the same Monday, Wednesday and Friday, so he can quote the brand
+  post (see Ong's playbook).
+- Each Friday post: "Founding 100 is coming. Reply 'in' and we'll DM you the day it opens."
   Keep a list of everyone who replies.
 - Every follower gained now will see the launch thread later.
 
 ### Stage 2: Launch kit (when PR #3 merges)
 
-Launch date: when Marcus and Ong agree PR #3 is ready to merge. Pick a date 3 days out.
+Launch date: when Marcus and Ong agree PR #3 is ready to merge. Launch on a Monday, Wednesday or
+Friday so the thread takes that day's slot, for example a Friday teaser and a Monday launch.
 
-1. **3 days before:** teaser post, for example "How many unfinished Solana courses are in your
+1. **The slot before launch day:** teaser post, for example "How many unfinished Solana courses are in your
    bookmarks?"
 2. **Launch day:** post the thread below and pin it. Ong quote-posts it with a personal line.
    Ask Superteam MY to repost. DM everyone on the "in" list.
-3. **Days 2 to 7:** one post a day. Spots filled, a 30-second demo video of the flame and
+3. **The next 3 slots (Mon, Wed, Fri):** spots filled, a 30-second demo video of the flame and
    shields, and the first learner shoutouts.
 
 Launch thread draft (Ong confirms post 3 matches how mainnet works):
