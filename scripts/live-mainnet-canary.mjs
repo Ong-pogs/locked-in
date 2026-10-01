@@ -275,7 +275,11 @@ export async function runCanary({
       village?.body.includes('Stop collecting courses. Finish one.'),
       'Founding 100 narrative is deployed',
     );
-    requireCheck(village?.body.includes('Join the Founding 100'), 'Founding 100 CTA is deployed');
+    // No server-HTML check for the "Join the Founding 100" CTA: AppShell holds
+    // rendering until persisted stores rehydrate in the browser, so the hero is
+    // never in the HTTP response and that check always failed on production
+    // (verified 2026-10-02: CTA renders after hydration on desktop and mobile).
+    // The CTA is covered by the web E2E suites, like Courses and Arena below.
     requireCheck(
       village?.body.includes('property="og:image"'),
       'village publishes Open Graph image metadata',

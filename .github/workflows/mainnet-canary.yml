@@ -2,6 +2,11 @@ name: Mainnet Read-Only Canary
 
 on:
   workflow_dispatch:
+    inputs:
+      expected_revision:
+        description: 'Optional full commit SHA the frontend must serve (empty skips the commit check)'
+        required: false
+        default: ''
   schedule:
     - cron: '17 * * * *'
 
@@ -24,8 +29,12 @@ jobs:
         with:
           node-version: '24'
 
+      # Scheduled runs do not pin a commit: github.sha is the latest master,
+      # which Vercel may still be building, so pinning it raised false alarms.
+      # A manual run can pass expected_revision to check a specific deploy.
       - name: Run GET-only production canary
+        env:
+          LOCKED_IN_EXPECTED_REVISION: ${{ github.event.inputs.expected_revision }}
         run: >-
           node scripts/live-mainnet-canary.mjs
           --timeout 45000
-          --expected-revision "${{ github.sha }}"
