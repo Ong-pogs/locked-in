@@ -42,7 +42,9 @@ const STEPS: Step[] = [
     kind: 'building',
     target: 'notice',
     title: 'Leaderboard',
-    body: 'Top learners by streak and XP. The notice board posts the rankings.',
+    // Ranking is streak first, then locked principal (no XP), per
+    // computeLeaderboardRows in backend progress/repository.mjs.
+    body: 'Top learners by streak. The notice board posts the rankings.',
   },
   {
     kind: 'topbar',

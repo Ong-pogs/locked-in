@@ -12,8 +12,9 @@ then verify anything operational against the deployed app and API.
 - Mainnet USDC: `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`
 - Production yield profile: `kamino_usdc_mainnet`
 
-`README.md`, `HANDOFF.md`, `CLAUDE.md`, and older files under `docs/` contain
-historical devnet plans. A contradiction with the source-of-truth file is a
+`README.md` and `HANDOFF.md` describe the current deployment. The numbered
+specs under `docs/` (00 to 10), `CLAUDE.md`, and older plans contain historical
+devnet material. A contradiction with the source-of-truth file is a
 stale-doc bug, not evidence that production returned to devnet.
 
 ## Money-moving boundary

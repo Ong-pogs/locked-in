@@ -18,6 +18,7 @@ import { MusicVolumeControl } from '@/components/MusicVolumeControl';
 import { useCourseStore, useUserStore } from '@/stores';
 import { getUserXp } from '@/services/api/progress/progressApi';
 import { LiveApyChip } from '@/components/LiveApyChip';
+import { useCurrentApy } from '@/hooks/useCurrentApy';
 
 /* ──────────────────────────────────────────────────────────────────────
    Constants
@@ -836,6 +837,7 @@ function DisconnectFooter({ onDisconnect }: { onDisconnect: () => void }) {
 
 export function LegacyDashboard() {
   const router = useRouter();
+  const apy = useCurrentApy();
 
   // ── User store ──
   const displayName = useUserStore((s) => s.displayName) ?? 'Adventurer';
@@ -1100,7 +1102,7 @@ export function LegacyDashboard() {
 
         {/* Live yield rate pill (sourced from /v1/yield/current-apy) */}
         <div className="mb-5">
-          <LiveApyChip />
+          <LiveApyChip data={apy.data} hadError={apy.hadError} />
         </div>
 
         {/* 4. Flame management */}

@@ -3,7 +3,9 @@
 Last verified: 2026-09-20 (Asia/Kuala_Lumpur).
 
 This is the first document to consult for the currently deployed product.
-Older Markdown may describe historical devnet architecture and launch blockers.
+`README.md` and `HANDOFF.md` are current. The numbered specs under `docs/` (00
+to 10) and older plans are historical material that may describe devnet
+architecture and launch blockers.
 The machine-readable companion used by launch tooling is
 [`config/mainnet-production.json`](../../config/mainnet-production.json).
 Its `buildRpcUrl` and `buildWsUrl` fields are non-secret build-check endpoints,

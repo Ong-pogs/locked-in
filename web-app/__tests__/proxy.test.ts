@@ -1,8 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { NextRequest } from 'next/server';
 
-import { proxy } from '../proxy';
+import { config, proxy } from '../proxy';
 import { PUBLIC_APP_ROUTES } from '@/lib/publicRoutes';
+
+describe('auth proxy matcher', () => {
+  it('bypasses Vercel Analytics while keeping protected pages covered', () => {
+    const matcher = new RegExp(`^${config.matcher[0]}$`);
+
+    expect(matcher.test('/_vercel/insights/view')).toBe(false);
+    expect(matcher.test('/dashboard')).toBe(true);
+  });
+});
 
 describe('auth proxy public metadata routes', () => {
   it('lets the canary read public runtime configuration without auth', () => {

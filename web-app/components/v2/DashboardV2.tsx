@@ -8,6 +8,7 @@ import { HubButton } from '@/components/HubButton';
 import { LiveApyChip } from '@/components/LiveApyChip';
 import { useCourseStore, useUserStore } from '@/stores';
 import { useAuth } from '@/hooks/useAuth';
+import { useCurrentApy } from '@/hooks/useCurrentApy';
 import { getLockPosition, getUserXp } from '@/services/api/progress/progressApi';
 import { fetchWithAuth } from '@/services/api';
 import { retryPendingEnrolls } from '@/services/enroll/pendingEnroll';
@@ -32,6 +33,8 @@ const POSITION_POLL_MS = 60_000;
 
 export function DashboardV2() {
   const router = useRouter();
+  // One APY poller shared by the chip and the PositionCard yield ticker.
+  const apy = useCurrentApy();
   const { disconnect } = useAuth();
   const authToken = useUserStore((s) => s.authToken);
   const walletAddress = useUserStore((s) => s.walletAddress);
@@ -250,7 +253,7 @@ export function DashboardV2() {
             Dashboard
           </h1>
           <div className="min-w-0 shrink">
-            <LiveApyChip />
+            <LiveApyChip data={apy.data} hadError={apy.hadError} />
           </div>
         </div>
 
@@ -385,6 +388,7 @@ export function DashboardV2() {
                         positionError={Boolean(positionErrors[card.courseId])}
                         onRetryPosition={() => setRetryTick((t) => t + 1)}
                         claimEnabled={claimEnabled}
+                        apyPct={apy.data?.apyPct ?? null}
                       />
                     ))
                   ) : (
