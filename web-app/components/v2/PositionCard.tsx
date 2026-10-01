@@ -40,11 +40,22 @@ interface Props {
   positionError?: boolean; // the last position fetch failed
   onRetryPosition?: () => void;
   claimEnabled: boolean; // hasVaultV2Config() — passed down so the card stays pure
+  apyPct?: number | null; // live APY in percent from /v1/yield/current-apy, null while unknown
+}
+
+// Yield accrued per ms at the live APY. 0 when the APY is unknown/invalid, so
+// we never animate a made-up rate.
+export function yieldPerMs(liveValue: number, apyPct: number | null | undefined): number {
+  if (apyPct == null || !Number.isFinite(apyPct) || apyPct <= 0) return 0;
+  return (liveValue * (apyPct / 100)) / (365 * 24 * 3600 * 1000);
 }
 
 // Ticking yield line: pure function of Date.now() (rAF-driven) so Playwright's
 // clock API freezes it; static under prefers-reduced-motion.
-function useTickingYield(position: LockPositionResponse | null): string | null {
+function useTickingYield(
+  position: LockPositionResponse | null,
+  apyPct: number | null | undefined,
+): string | null {
   const [display, setDisplay] = useState<string | null>(null);
   const frame = useRef<number | null>(null);
 
@@ -64,8 +75,10 @@ function useTickingYield(position: LockPositionResponse | null): string | null {
     // return "NaN" and leak into the yield line + penalty forfeit amount.
     const parsedAsOf = Date.parse(position.asOf);
     const asOfMs = Number.isFinite(parsedAsOf) ? parsedAsOf : Date.now();
-    // ~5% APY drift between 60s polls — cosmetic accrual, resynced every poll.
-    const perMs = (live * 0.05) / (365 * 24 * 3600 * 1000);
+    // Drift between 60s polls at the live APY (no fake 5% rate). If the APY is
+    // unknown the rate is 0 and the line shows the static base yield.
+    // Cosmetic accrual, resynced every poll.
+    const perMs = yieldPerMs(live, apyPct);
 
     const reduced =
       typeof window !== 'undefined' &&
@@ -86,7 +99,7 @@ function useTickingYield(position: LockPositionResponse | null): string | null {
     return () => {
       if (frame.current != null) cancelAnimationFrame(frame.current);
     };
-  }, [position]);
+  }, [position, apyPct]);
 
   return display;
 }
@@ -100,7 +113,7 @@ function countdownTo(iso: string | null, now: number): string | null {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
-export function PositionCard({ data, position, positionError, onRetryPosition, claimEnabled }: Props) {
+export function PositionCard({ data, position, positionError, onRetryPosition, claimEnabled, apyPct }: Props) {
   const router = useRouter();
   const authToken = useUserStore((s) => s.authToken);
   const [devBusy, setDevBusy] = useState(false);
@@ -119,7 +132,7 @@ export function PositionCard({ data, position, positionError, onRetryPosition, c
     }
   };
   const flame = deriveFlameState(data);
-  const tickingYield = useTickingYield(position);
+  const tickingYield = useTickingYield(position, apyPct);
 
   // Countdown refreshes every 30s (Date.now-driven — clock-fakeable).
   const [now, setNow] = useState(() => Date.now());
