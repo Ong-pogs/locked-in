@@ -46,7 +46,7 @@ What we found:
 | Time per day | 15 minutes of replies |
 | App status | Live on mainnet (capped beta) |
 | Approach | Founding 100 campaign, with posts drafted in a weekly batch |
-| Does Ong post too? | Yes, from his own account, using drafts we give him |
+| Founder account? | Marcus posts from his own account too (see Founder playbook) |
 | Learner shoutouts? | Yes, with each learner's OK |
 
 ## Copy rules (both accounts, every post)
@@ -57,7 +57,7 @@ What we found:
 3. Use the site's words: "Founding 100", "shields", "Stop collecting courses. Finish one."
 4. Any post about locking USDC mentions the capped beta or points to the risks page.
 5. Never show a learner's dollar amounts or wallet address.
-6. Ong checks the facts in build-in-public posts before they go out.
+6. Check the facts in build-in-public posts against the code or live app before they go out.
 
 ## Profile
 
@@ -91,7 +91,7 @@ Solana in one post:
 > Nobody can sign for it except the program.
 > That's how a vault holds USDC without a person holding the keys.
 
-Build in public (Ong confirms the facts):
+Build in public (check the facts first):
 
 > We had a placeholder 8% APY on screen. Users would read it as a promise.
 > We removed it. Now you only see the real rate, even when it's less exciting.
@@ -119,25 +119,25 @@ and signups at the same time.
 ### Stage 1: Warm-up (starts now)
 
 - Brand account: the weekly content and the daily routine.
-- Ong: 3 posts a week, ideally on the same Monday, Wednesday and Friday, so he can quote the brand
-  post (see Ong's playbook).
+- Marcus (founder account): 3 posts a week on the same Monday, Wednesday and Friday, so they can
+  quote the brand post (see Founder playbook).
 - Each Friday post: "Founding 100 is coming. Reply 'in' and we'll DM you the day it opens."
   Keep a list of everyone who replies.
 - Every follower gained now will see the launch thread later.
 
 ### Stage 2: Launch kit (when PR #3 merges)
 
-Launch date: when Marcus and Ong agree PR #3 is ready to merge. Launch on a Monday, Wednesday or
+Launch date: when Marcus decides PR #3 is ready to merge. Launch on a Monday, Wednesday or
 Friday so the thread takes that day's slot, for example a Friday teaser and a Monday launch.
 
 1. **The slot before launch day:** teaser post, for example "How many unfinished Solana courses are in your
    bookmarks?"
-2. **Launch day:** post the thread below and pin it. Ong quote-posts it with a personal line.
+2. **Launch day:** post the thread below and pin it. Marcus quote-posts it from his own account with a personal line.
    Ask Superteam MY to repost. DM everyone on the "in" list.
 3. **The next 3 slots (Mon, Wed, Fri):** spots filled, a 30-second demo video of the flame and
    shields, and the first learner shoutouts.
 
-Launch thread draft (Ong confirms post 3 matches how mainnet works):
+Launch thread draft (check post 3 matches how mainnet works):
 
 > 1/ Most people don't need another Solana course. They need to finish one.
 > Today we're opening LockedIn to 100 founding learners. 🧵
@@ -161,32 +161,32 @@ the disclosures on the site.
 
 Keep the weekly rhythm. The Friday post becomes the Founding 100 counter plus learner shoutouts.
 
-## Ong's playbook
+## Founder playbook (Marcus)
 
-**Role:** The brand account says what LockedIn is. Ong says why he built it and how.
+**Role:** The brand account says what LockedIn is. Marcus says why it exists and how it's built.
 Founder posts feel human and usually grow faster than brand posts.
 
-**Routine:** 3 posts a week, plus quote-posts of the brand's big posts. Marcus sends drafts in
-the Sunday batch. Ong rewrites them in his own voice and posts.
+**Routine:** 3 posts a week, plus quote-posts of the brand's big posts. Draft them in the same
+Sunday batch as the brand posts, in your own voice.
 
 **Post types:**
 
-- **Origin story:** why he built LockedIn. Only Ong can write the true details.
+- **Origin story:** why LockedIn exists. Write the true details yourself.
 - **Technical deep dives:** these land better from a person than from a brand.
 
   > Our Solana program cost ~15 SOL to deploy.
-  > I merged our programs into one and switched to a release build.
+  > We merged our programs into one and switched to a release build.
   > Now it's ~2.5 SOL. Count how many programs you actually need.
 
-- **Honest founder moments** (Ong adds the real reason):
+- **Honest founder moments** (add the real reason):
 
-  > I renamed our Arena to "Clockwork Spire."
-  > Less than a day later, I renamed it back.
+  > We renamed our Arena to "Clockwork Spire."
+  > Less than a day later, we renamed it back.
   > Naming things is still the hardest problem in software.
 
 - **Launch day:** a personal "why this matters to me" quote-post of the launch thread.
 
-**His one rule:** the copy rules above apply to his account too.
+**One rule:** the copy rules above apply to the founder account too.
 
 ## Learner shoutouts
 
@@ -222,8 +222,8 @@ If growth stalls for 2 weeks, check which post types got the most replies and do
 
 ## Open items
 
-- [ ] Marcus and Ong agree on when to merge PR #3.
-- [ ] Ong confirms launch thread post 3 matches mainnet.
-- [ ] Ong fills in true details for the origin story and the "Clockwork Spire" post.
+- [ ] Marcus picks the launch day and merges PR #3.
+- [ ] Check launch thread post 3 matches mainnet.
+- [ ] Marcus fills in true details for the origin story and the "Clockwork Spire" post.
 - [ ] Set up the X List of Solana accounts for daily replies.
 - [ ] Update the X name and bio.
