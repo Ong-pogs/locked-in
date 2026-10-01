@@ -1,10 +1,11 @@
 # Locked In
 
 > [!IMPORTANT]
-> The current public test build is a PWA web app that connects to a backend hosted on Render and uses Solana devnet program/mint configuration.
-> This is a QA/testing setup, not a production release.
-> Because the current Render deployment may cold-start after inactivity, the first backend-auth or content request can occasionally be slow or need a retry.
-> Deposit, unlock, and reward flows in this build should be treated as devnet test flows.
+> `lockedin.quest` is live on Solana mainnet with real USDC (v2).
+> Small caps are enforced on-chain: 10 to 50 USDC per lock, 1,000 USDC global TVL cap, and 0 platform fee.
+> The smart contract has not undergone a third-party security audit.
+> Locked principal sits in Kamino lending reserves, so deposits carry smart contract and protocol risk. The deposit screen warns users of these risks.
+> A devnet deployment remains available for testing.
 
 Locked In is a Solana-native learning product built around a simple bet on human behavior:
 
@@ -34,17 +35,17 @@ Locked In combines three systems into one product:
 2. Habit-building gamification
 3. Transparent on-chain yield logic
 
-The user locks USDC for a course.
+The user locks 10 to 50 USDC for a course.
 
-That principal is not meant to be arbitrarily taken away. The pressure comes from the yield generated on top of the locked capital:
+Principal is not slashed or taken away arbitrarily. It is deposited into Kamino lending reserves to earn real yield.
 
-- stay consistent and keep the system alive
-- earn Fuel
-- feed the fire to power the Brewer
-- earn Ichor to spend in the in-game shop
-- keep more of the yield you generated
+The pressure comes from the yield generated on top of the locked capital:
 
-If you lapse, the product does not slash your principal. Instead, it redirects your yield to a community pot that rewards users who stayed consistent.
+- stay consistent with daily lessons
+- protect your streak
+- keep 100% of the yield you generated
+
+If you lapse repeatedly, the product redirects your yield to a community pot that rewards learners who stayed consistent.
 
 That makes the system high-pressure without being recklessly punitive.
 
@@ -62,179 +63,167 @@ A normal streak counter is nice. Yield that you could have kept is harder to ign
 
 Locking capital creates friction against quitting.
 
-The user has already made a deliberate decision: "I am doing this for the next 30, 60, or 90 days." That changes the psychology of the product from casual browsing to active commitment.
+The user makes a deliberate decision to complete a course. The lock lasts until the course is completed, turning casual browsing into an active commitment.
 
-### 3. Gamification works better when it is tied to real consequence
+### 3. Gamification works better when tied to real consequence
 
-Fuel, the Brewer, Ichor, and the dungeon layer make the system legible and satisfying. The game layer is not decoration. It turns abstract financial logic into something users can feel and understand every day.
+Yield routing turns abstract financial logic into something users understand every day. It provides tangible feedback for daily discipline.
 
 ### 4. Pressure should escalate gradually, not instantly
 
-Locked In does not jump straight from "missed one day" to "everything is gone."
+Locked In does not jump straight from a single missed day to total loss.
 
-It uses a stepped consequence model that touches yield routing only — never your principal and never your lock duration:
+It uses a stepped consequence model that touches yield routing only, never your principal and never your lock duration:
 
-- a missed day consumes one streak saver and bumps the yield-redirect tier up a notch
-- once all savers are used, a further missed day resets the streak and the redirect stays at its cap
-- if the fire goes out, that period's yield routes fully to the community pot until you feed it again
+- streak shields absorb missed days first
+- if all shields are exhausted, the 1st lapse redirects 50% of generated yield to the community pot
+- a 2nd lapse redirects 100% of generated yield to the community pot
 
-That gives users chances to recover while still preserving stakes. Missed days penalize yield only — they never extend the lock.
+That gives users opportunities to recover while preserving meaningful stakes. Missed days penalize yield routing only. They never extend the lock.
 
 ### 5. Social reinforcement matters
 
 Forfeited yield does not disappear into a void. It flows into a community pot.
 
-That creates a strong social and economic loop: users who stay disciplined benefit from the inconsistency of users who do not.
+That creates a strong social loop: users who stay disciplined benefit from the inconsistency of users who do not.
 
 ## How Locked In Works
 
-### Step 1: Lock in
+### Step 1: Sign in
 
-The user connects a Solana wallet, chooses a course, and locks USDC for the course duration. The vault is pure USDC principal custody; the full principal is returned at resurface.
+Sign in with Privy using a Google account or a Solana wallet. The backend verifies the Privy session and issues its own JWT.
 
-### Step 2: Earn Fuel through verified learning
+### Step 2: Choose a course and lock USDC
 
-All mechanics fire from day 1. Lessons are verified, and verified completion credits Fuel.
+Select a course and lock between 10 and 50 USDC. The deposit flow executes two on-chain transactions:
 
-Fuel is not a token in a wallet. It is an internal off-chain counter tied to the user's course lock, earned `+1` per lesson up to a cap.
+1. `open_lock_v2`: initializes the lock account and collateral token account.
+2. `lock_funds_v2`: deposits the USDC into Kamino lending reserves and issues collateral shares to the lock.
 
-### Step 3: Feed the fire and power the Brewer
+There is no fixed time duration. The lock remains active until the course is completed.
 
-Fuel feeds "the fire" in the Brewer. Feeding consumes `1` fuel and extends the fire timer by `+24h`.
+### Step 3: Complete daily lessons
 
-While the fire is lit, the yield you generate routes to your wallet. While it is out, that yield routes to the community pot. The fire is the consequence layer made visible — more satisfying than watching tiny stablecoin decimals slowly move.
+Work through interactive daily lessons. Answers are verified server-side by the backend.
 
-### Step 4: Earn and spend Ichor
+### Step 4: Protect your streak with shields
 
-Each lesson completion also awards a random `20-50` Ichor.
+Each lock starts with 3 streak shields. Shields refill on active lesson days. If you miss a day, a shield is burned and your streak is paused without penalty.
 
-Ichor is a pure in-game shop currency — an off-chain counter, not a token and not redeemable for USDC. You spend it in the shop, for example to buy a Streak Saver.
+### Step 5: Lapse consequences
 
-### Step 5: Protect your streak
+If you miss a day with zero shields remaining, a lapse occurs:
 
-The user has streak savers. Missing a day does not immediately destroy everything, but it does hurt: a missed day consumes one saver and bumps the yield-redirect tier up.
+- 1st lapse: 50% of the lock's yield is routed to the community pot.
+- 2nd lapse: 100% of the lock's yield is routed to the community pot.
 
-- 0 savers used: `0%` yield redirected (all to your wallet)
-- 1 saver used: `10%` yield redirected
-- 2 savers used: `15%` yield redirected
-- 3 savers used: `20%` yield redirected
-- no savers left and a day missed: streak resets, redirect stays at the `20%` cap
+A nightly lapse-sweep cron runs at 00:30 UTC to evaluate the previous day for all active locks.
 
-Savers are restored by buying one in the shop with Ichor, which also steps the redirect tier back down. Consequences touch yield routing only — never the principal, never the lock duration.
+### Step 6: Complete the course and claim
 
-### Step 6: Resurface
+When all lessons in the course are completed, the backend signs an Ed25519 completion voucher carrying your final yield tier.
 
-When the lock period ends, the user resurfaces.
+You submit the `claim_v2` transaction:
 
-Their principal comes back.
-What changes is how much yield they preserved, how much Ichor they accumulated to spend in the shop, and whether they finished the course with momentum or regret.
+- the program redeems collateral shares from Kamino
+- your principal is returned to your wallet (less tiny rounding dust, or less if Kamino ever suffers a loss, since the owner absorbs any shortfall)
+- generated yield is split between you, the community pot, and the fee vault based on your yield tier
 
-## The Dungeon Model
+Claiming is the exit path. There is no separate unlock step.
 
-Locked In uses one core metaphor so the system stays intuitive.
+### Safety valve
+
+If a lock is abandoned, anyone can call `force_return_v2` after 180 days from lock creation. The principal returns to the owner, and all accumulated yield routes to the community pot.
+
+## Glossary
 
 | Concept | Meaning |
 | --- | --- |
-| Fuel | Energy earned from verified learning, `+1` per lesson |
-| Fire | The 24h-per-fuel timer that gates whether yield routes to you or the pot |
-| Brewer | The engine that keeps the fire lit and routes yield while it burns |
-| Ichor | In-game shop currency earned per lesson; spent in the shop, not redeemable for USDC |
-| Savers | Streak protection that lowers the yield-redirect tier |
-| Community pot | Yield redirected from inconsistent users to consistent ones |
-| Resurface | End-of-lock exit where the principal returns |
-
-Important implementation note:
-
-In the current repo, `Fuel` and `Ichor` are off-chain counters, not SPL tokens. There is no on-chain Ichor and no Ichor-to-USDC redemption.
+| Lock | Escrowed USDC principal deposited into Kamino for the duration of a course |
+| Course | A structured curriculum of interactive lessons on Web3 and Solana topics |
+| Streak | Consecutive days with verified lesson completions |
+| Streak Shields | 3 shields that absorb missed days and refill on active study days |
+| Lapse | A missed day after all shields are exhausted (1st lapse forfeits 50% yield, 2nd forfeits 100%) |
+| Voucher and Claim | Server-signed Ed25519 voucher and on-chain transaction that redeems Kamino shares, returns principal, and splits yield |
+| Community Pot | Monthly reward pool funded by forfeited yield, distributed to active learners with positive streaks |
+| Arena | 1v1 asynchronous quiz duels (7 questions, 20s each, Elo rating starting at 1200, XP rewards) |
+| Season Stake | Staking an active course lock on a 30-day Arena season; negative rating change drops one yield tier |
 
 ## Why Solana
 
-Locked In only makes sense if the financial layer can feel native to the product.
+Locked In relies on high-speed, low-cost financial infrastructure:
 
-Solana gives the project:
+- low transaction fees for user operations
+- fast transaction finality
+- seamless onboarding via Privy and embedded wallets
+- native USDC stablecoin liquidity
+- composability with Kamino lending reserves
 
-- low-cost state changes
-- fast user transactions
-- practical wallet-based onboarding
-- stablecoin-native rails
-- a realistic path to transparent yield accounting
-
-## What We Have Built So Far
-
-This repo is not just a concept write-up. The core structure already exists.
+## What We Have Built
 
 ### 1. On-chain program
 
-There is a single Anchor program in the repo, `locked_in` (program ID `3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav`, deployed on devnet). It contains two modules separated only by PDA seeds:
+The Anchor program `locked_in` handles custody, Kamino integration, and community pot accounting:
 
-- `vault` (seed `vault-protocol`)
-- `pot` (seed `pot-protocol`)
+- Mainnet Program ID: `FAuFtXbTAT9SiJTghxdZ1ZD4ShgrdTk2EqgyPxfq2gZ6` (merged vault v2 and community pot)
+- Mainnet USDC: `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`
+- Real Kamino Lending Program: `KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD`
+- Devnet v2 Vault Program ID: `EUABEbHUjiUn9NijapRJT2MVqQ5nSdqH3gSzTxyGucsN`
+- Devnet Pot / v1 Program ID: `3RC9XkPZNSgXksp9Fb7J4LE7cQNYUUQdxkaaQnz6kBav`
+- Devnet USDC: `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU` (with mock Kamino reserve)
 
-The earlier separate programs are gone: `yield_splitter` was fully removed, and `lock_vault` and `community_pot` were merged into this one program. Folding everything into one program plus a release build cut the default deploy cost from roughly `15.27` SOL to about `2.51` SOL.
+### 2. Backend services
 
-The `vault` module is custody-only:
+A Fastify API server hosted on Render (`https://locked-in-backend-oetf.onrender.com`):
 
-- escrows principal (USDC)
-- clock-gated unlock with a full-principal assertion
-- PDA-signed payout at resurface
-- `unlock_funds` enforces mint binding (`InvalidMint`)
+- Privy authentication session exchange for JWT tokens
+- Course catalog delivery and lesson progress tracking
+- Server-side answer validation (with optional hybrid OpenAI evaluation)
+- Nightly lapse sweep evaluating streaks and shield deductions
+- Monthly community pot accounting and distribution transactions
+- Arena matchmaking queue, invite challenge creation, and 30-day season sweeps
+- Ed25519 voucher signing for course completion claims
+- Gas stipend service: disburses a one-time 0.005 SOL stipend to onboarding wallets (capped at 200 wallets)
 
-The on-chain `LockAccount` is `130` bytes with `8` fields: `owner`, `course_id_hash`, `stable_mint`, `principal_amount`, `lock_start_ts`, `lock_end_ts`, `status`, `bump`.
+### 3. Web application
 
-The `pot` module handles redirected-yield accounting:
+A Progressive Web App built with Next.js 16 (`web-app/`):
 
-- redirect recording
-- distribution window creation and closing
-- recipient settlement
+- Privy onboarding and wallet connection
+- Course catalog and interactive lesson player
+- v2 deposit modal (`open_lock_v2` and `lock_funds_v2`)
+- v2 dashboard with position card, live APY chip, flame gauge, shield pips, and penalty banners
+- 1v1 Arena duels (matchmaking queue, direct links, 7-question timed matches, ladder, and season staking)
+- Practice mode for completed lessons
+- Community pot overview and distribution history
+- Global leaderboard ranked by streak and locked amount
+- Claim page with voucher redemption and yield summary
+- Legacy routes (`/alchemy`, `/shop`, `/inventory`) redirect to `/dashboard`
 
-Removed from chain in v4: Ichor counters, `redeem_ichor` / `IchorRedeemed`, the fuel-to-Ichor conversion, and the on-chain course policy. None of these are on-chain anymore — Fuel, Ichor, savers, and yield routing all live off-chain in the backend.
+### 4. Documentation site
 
-### 2. Backend logic
-
-The backend already contains the core runtime layer for the product:
-
-- lesson catalog and content delivery
-- wallet challenge / verify / refresh auth
-- lesson start and submit flows
-- answer validation
-- verified completion events
-- Fuel, fire-timer, saver, Ichor, and yield-redirect state
-- relay and harvest workers that publish to the on-chain program
-- community pot accounting and a materialized leaderboard snapshot worker
-
-### 3. App structure
-
-The Next.js app (`web-app/`) already includes the main user-facing surfaces:
-
-- wallet connection
-- onboarding
-- course selection
-- deposit flow
-- dungeon home
-- lesson flow
-- streak status
-- alchemy / brewing
-- leaderboard
-- community pot views
-- Ichor shop
-- profile and resurface history
+A Nextra-based documentation portal located in `docs-site/`, targeting `docs.lockedin.quest`.
 
 ## Repo Structure
 
-- `web-app/` - Next.js app
-- `backend/` - API, workers, SQL migrations, runtime logic
-- `programs/` - the `locked_in` Anchor program
-- `programs-tests/` - program test suites
-- `docs/` - technical architecture and detailed specs
-- `scripts/` - local utilities, cluster profiles, and inspection scripts
+- `web-app/`: Next.js 16 PWA frontend
+- `backend/`: Fastify API server, SQL migrations, background cron workers
+- `docs-site/`: Nextra documentation portal targeting `docs.lockedin.quest`
+- `programs/`: Anchor smart contracts (`locked_in` v2 vault and pot, `mock_reserve`)
+- `programs-tests/`: Anchor program integration test suites
+- `docs/`: Technical specifications, architectural rulings, and runbooks
+- `scripts/`: Local dev utilities and cluster inspection scripts
 
 ## Technical Docs
 
-This README is meant to explain the concept, the product logic, and what exists so far.
+For deeper technical context, refer to the documentation in `docs/`:
 
-For the engineering source of truth, start with the architecture overview at [`docs/00-technical-architecture.md`](/Users/marcus/Projects/locked-in/docs/00-technical-architecture.md), then the current v4 specs: [`docs/08-timer-yield-product.md`](/Users/marcus/Projects/locked-in/docs/08-timer-yield-product.md), [`docs/04-tokenomics.md`](/Users/marcus/Projects/locked-in/docs/04-tokenomics.md), and [`docs/05-yield-calculator.md`](/Users/marcus/Projects/locked-in/docs/05-yield-calculator.md). Where the architecture overview and the v4 specs differ, the v4 specs describe the current state.
+- Architecture overview: [`docs/00-technical-architecture.md`](docs/00-technical-architecture.md)
+- Mainnet deploy runbook: [`docs/mainnet-deploy-runbook.md`](docs/mainnet-deploy-runbook.md)
+- Mainnet emergency runbook: [`docs/mainnet-emergency-runbook.md`](docs/mainnet-emergency-runbook.md)
+- Mainnet readiness checklist: [`docs/mainnet-readiness-checklist.md`](docs/mainnet-readiness-checklist.md)
 
-If the README and technical docs ever differ, the technical docs should win.
+Note: Specifications numbered 00 through 10 predate v2. Where older specs differ from current behavior, the codebase, `README.md`, and `HANDOFF.md` represent the source of truth.
 
 ## Local Dev
 
@@ -253,6 +242,13 @@ cd backend
 npm install
 cp .env.example .env
 npm run dev
+```
+
+Run database migrations:
+
+```bash
+cd backend
+npm run migrate
 ```
 
 Programs:
