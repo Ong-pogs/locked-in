@@ -63,8 +63,8 @@ Locked In is live on Solana mainnet with real USDC (v2).
 | Component | Platform | Tech | Deployment & Notes |
 |---|---|---|---|
 | **web-app** | **Vercel** (`locked-in-test-env`) | Next.js 16 PWA | Deploys automatically on push to `master` |
-| **backend** | **Render** (`locked-in-backend`) | Fastify (Node >= 20) | Deploys automatically on push to `master`. Health: `GET /health` |
-| **cron jobs** (5) | **Render** (Blueprint) | Node scripts | Defined in `render.yaml`, auto-deploy from `master` |
+| **backend** | **Render** (`locked-in-backend`) | Fastify (Node >= 20) | Auto-deploys from `master` when files under `backend/` change. Health: `GET /health` |
+| **cron jobs** (5) | **Render** (Blueprint) | Node scripts | Defined in `render.yaml`, auto-deploy from `master` when files under `backend/` change |
 | **database** | **Supabase** (Postgres 17) | Postgres via `pg` | Schemas: `lesson`, `lesson_auth`, `arena`. Plain connection string |
 | **docs-site** | **Vercel** (project `docs-site`) | Nextra | Live at `docs.lockedin.quest`. Not linked to Git, so it does not auto-deploy on push |
 
@@ -73,10 +73,10 @@ Locked In is live on Solana mainnet with real USDC (v2).
 ## 4. Deployment Workflow
 
 ### Automatic Deployments
-- Pushing commits to the **`master`** branch automatically triggers builds and deployments across:
-  1. Vercel frontend (`web-app`)
-  2. Render backend web service (`locked-in-backend`)
-  3. All 5 Render cron jobs (`render.yaml`)
+- Pushing commits to the **`master`** branch automatically triggers:
+  1. Vercel frontend (`web-app`): rebuilds on every push.
+  2. Render backend web service (`locked-in-backend`) and all 5 Render cron jobs: their root directory is `backend/`, so Render only redeploys them when a pushed commit changes files under `backend/`. A web-only or docs-only push leaves them on the previous commit.
+- To redeploy a Render service without a backend change (for example after editing its env vars), trigger a manual deploy in the Render dashboard.
 
 ### Database Migrations
 - Migration files are located in `backend/sql/*.sql` (ordered numerically, latest `0066_arena_match_proposals.sql`).
