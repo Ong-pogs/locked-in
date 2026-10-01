@@ -132,8 +132,8 @@ Launch date: when Marcus and Ong agree PR #3 is ready to merge. Pick a date 3 da
    bookmarks?"
 2. **Launch day:** post the thread below and pin it. Ong quote-posts it with a personal line.
    Ask Superteam MY to repost. DM everyone on the "in" list.
-3. **Days 2 to 7:** one post a day. Spots filled, a 30-second demo video of the fire and the
-   Brewer, and the first learner shoutouts.
+3. **Days 2 to 7:** one post a day. Spots filled, a 30-second demo video of the flame and
+   shields, and the first learner shoutouts.
 
 Launch thread draft (Ong confirms post 3 matches how mainnet works):
 
