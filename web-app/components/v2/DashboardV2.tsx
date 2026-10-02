@@ -35,7 +35,7 @@ export function DashboardV2() {
   const router = useRouter();
   // One APY poller shared by the chip and the PositionCard yield ticker.
   const apy = useCurrentApy();
-  const { disconnect } = useAuth();
+  const { disconnect, isAuthenticated } = useAuth();
   const authToken = useUserStore((s) => s.authToken);
   const walletAddress = useUserStore((s) => s.walletAddress);
   const displayName = useUserStore((s) => s.displayName);
@@ -421,32 +421,40 @@ export function DashboardV2() {
           longestStreak={longestStreak}
         />
 
-        {/* Footer disconnect — subtle muted-red bordered button so users can
-            actually find logout (was previously only on the legacy dashboard). */}
-        <div className="pt-6">
-          <button
-            type="button"
-            data-testid="v2-disconnect"
-            onClick={handleDisconnect}
-            className="w-full min-h-[44px] px-6 py-3 rounded-lg border font-pixel text-sm uppercase tracking-[2px] font-bold transition-colors cursor-pointer"
-            style={{
-              backgroundColor: 'rgba(255,68,102,0.08)',
-              borderColor: 'rgba(255,68,102,0.35)',
-              color: 'rgba(255,68,102,0.80)',
-              textShadow: '0 1px 2px rgba(0,0,0,0.7)',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = T.crimson;
-              e.currentTarget.style.borderColor = 'rgba(255,68,102,0.6)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = 'rgba(255,68,102,0.80)';
-              e.currentTarget.style.borderColor = 'rgba(255,68,102,0.35)';
-            }}
-          >
-            Disconnect Wallet
-          </button>
-        </div>
+        {/* Footer disconnect: muted-red bordered button so users can
+            actually find logout (was previously only on the legacy dashboard).
+            It sits straight on the painted art, so it uses the HubButton's solid
+            glass under the red tint (a bare 8% tint was unreadable). Only shown
+            when signed in: /dashboard is a public route. */}
+        {isAuthenticated && (
+          <div className="pt-6">
+            <button
+              type="button"
+              data-testid="v2-disconnect"
+              onClick={handleDisconnect}
+              className="w-full min-h-[44px] px-6 py-3 rounded-lg border font-pixel text-sm uppercase tracking-[2px] font-bold transition-colors cursor-pointer"
+              style={{
+                backgroundColor: 'rgba(14,14,28,0.82)',
+                backgroundImage: 'linear-gradient(rgba(255,68,102,0.12), rgba(255,68,102,0.12))',
+                borderColor: 'rgba(255,68,102,0.45)',
+                color: T.crimson,
+                textShadow: '0 1px 2px rgba(0,0,0,0.7)',
+                backdropFilter: 'blur(10px)',
+                WebkitBackdropFilter: 'blur(10px)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = 'rgba(255,68,102,0.75)';
+                e.currentTarget.style.backgroundImage = 'linear-gradient(rgba(255,68,102,0.22), rgba(255,68,102,0.22))';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = 'rgba(255,68,102,0.45)';
+                e.currentTarget.style.backgroundImage = 'linear-gradient(rgba(255,68,102,0.12), rgba(255,68,102,0.12))';
+              }}
+            >
+              Disconnect Wallet
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Flame, Sparkles } from 'lucide-react';
 import { CozyCard, CozySectionLabel, COZY_TEXT, COZY_TEXT_SHADOW } from '@/components/cozy';
 import { T } from '@/components/theme';
@@ -232,6 +232,16 @@ export function ActivityHeatmap({
           (new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() - startTime) / dayMs,
         )
       : -1;
+  // Open the grid on recent weeks instead of January: phones only fit a few months,
+  // so scroll today's column (or the year's end, for past years) into view.
+  // Geometry: a 32px day-label gutter, then 14px per week column (12px cell + 2px gap).
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const focusCol = todayIdx >= 0 ? Math.floor((firstWeekday + todayIdx) / 7) : cols - 1;
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollLeft = Math.max(0, 32 + (focusCol + 3) * 14 - el.clientWidth);
+  }, [year, focusCol]);
   // Month of each column's first real day → label Jan at column 0 + on each change.
   const columnMonth = Array.from({ length: cols }, (_, c) => {
     const dayIdx = Math.min(totalDays - 1, Math.max(0, c * 7 - firstWeekday));
@@ -272,7 +282,7 @@ export function ActivityHeatmap({
           {totalActive} active days · {longestRun}d best run · {longestStreak}d longest streak
         </p>
       </div>
-      <div className="overflow-x-auto pb-1">
+      <div ref={scrollRef} className="overflow-x-auto pb-1">
         <div className="inline-block" style={{ minWidth: cols * 13 + 32 }}>
           <div className="flex items-end mb-1 ml-8" style={{ height: 12 }}>
             {Array.from({ length: cols }).map((_, c) => {

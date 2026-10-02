@@ -183,7 +183,7 @@ export function RecallQuestion({ question, lessonTitle, onComplete, checkAnswer 
             onChange={(e) => setTextAnswer(e.target.value)}
             placeholder="Type your answer…"
             rows={3}
-            className="w-full px-4 py-3 rounded-xl border font-pixel-mono outline-none resize-none"
+            className="w-full px-4 py-3 rounded-xl border font-pixel-mono resize-none"
             style={{
               backgroundColor: 'rgba(0,0,0,0.35)',
               borderColor: textAnswer.trim().length > 0 ? AMBER : COZY_BORDER,
