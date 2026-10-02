@@ -96,3 +96,83 @@ describe('AnimatedSplash', () => {
     expect(screen.getByTestId('splash-children')).toBeInTheDocument();
   });
 });
+
+// Off-main-thread path: the canvas goes to a worker, which draws and reports back.
+describe('AnimatedSplash worker path', () => {
+  class FakeWorker {
+    static last: FakeWorker | null = null;
+    messages: Array<{ type: string; canvas?: unknown }> = [];
+    onmessage: ((e: MessageEvent) => void) | null = null;
+    onerror: (() => void) | null = null;
+    terminated = false;
+    constructor() {
+      FakeWorker.last = this;
+    }
+    postMessage(message: { type: string }) {
+      this.messages.push(message);
+    }
+    terminate() {
+      this.terminated = true;
+    }
+    // Lets a test answer as if it were the worker.
+    reply(data: unknown) {
+      act(() => this.onmessage?.({ data } as MessageEvent));
+    }
+  }
+  const offscreen = { fake: 'offscreen' };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    sessionStorage.clear();
+    stubReducedMotion(false);
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+    vi.stubGlobal('Worker', FakeWorker);
+    Object.defineProperty(HTMLCanvasElement.prototype, 'transferControlToOffscreen', {
+      configurable: true,
+      value: vi.fn(() => offscreen),
+    });
+    FakeWorker.last = null;
+  });
+
+  afterEach(() => {
+    delete (HTMLCanvasElement.prototype as { transferControlToOffscreen?: unknown }).transferControlToOffscreen;
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('hands the canvas to a worker instead of drawing on the main thread', () => {
+    renderSplash();
+
+    const worker = FakeWorker.last;
+    expect(worker).not.toBeNull();
+    expect(worker?.messages[0]).toMatchObject({ type: 'start', canvas: offscreen });
+  });
+
+  it('removes the overlay when the worker reports the animation is done', () => {
+    const { unmount } = renderSplash();
+    const worker = FakeWorker.last!;
+
+    worker.reply({ type: 'ready' });
+    expect(screen.getByTestId('animated-splash')).toHaveStyle({ background: 'transparent' });
+
+    worker.reply({ type: 'done' });
+    expect(screen.queryByTestId('animated-splash')).not.toBeInTheDocument();
+    expect(worker.terminated).toBe(true);
+    unmount();
+  });
+
+  it('falls back to the main thread if the worker fails to start', () => {
+    renderSplash();
+    const worker = FakeWorker.last!;
+
+    act(() => worker.onerror?.());
+    expect(worker.terminated).toBe(true);
+    expect(screen.getByTestId('animated-splash')).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(3200);
+    });
+    expect(screen.queryByTestId('animated-splash')).not.toBeInTheDocument();
+  });
+});
