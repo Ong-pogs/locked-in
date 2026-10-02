@@ -349,7 +349,7 @@ export default function VillageScene() {
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/images/logo.png"
+          src="/images/logo.svg" // pixel crest logo, SVG stays crisp at 28px
           alt="Locked In"
           draggable={false}
           className="select-none"

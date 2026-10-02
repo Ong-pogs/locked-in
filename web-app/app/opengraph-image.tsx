@@ -1,10 +1,15 @@
 import { ImageResponse } from 'next/og';
+import { join } from 'node:path';
+import { readFile } from 'node:fs/promises';
 
 export const alt = 'Locked In - Stop collecting courses. Finish one.';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
-export default function OpenGraphImage() {
+export default async function OpenGraphImage() {
+  // Pixel crest logo, read from disk at build time (process.cwd() is the web-app root).
+  const logo = await readFile(join(process.cwd(), 'public/images/logo.png'), 'base64');
+
   return new ImageResponse(
     (
       <div
@@ -22,21 +27,7 @@ export default function OpenGraphImage() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-          <div
-            style={{
-              width: 54,
-              height: 54,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: '2px solid #FFD580',
-              borderRadius: 14,
-              color: '#FFD580',
-              fontSize: 28,
-            }}
-          >
-            L
-          </div>
+          <img src={`data:image/png;base64,${logo}`} width={64} height={64} alt="" />
           <div style={{ color: '#FFD580', fontSize: 25, letterSpacing: 5 }}>LOCKED IN</div>
         </div>
 
