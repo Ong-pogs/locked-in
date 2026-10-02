@@ -3,6 +3,8 @@ import {
   walletLabel,
   toPublicLadderRows,
   withoutLeaderboardAddresses,
+  toPublicMatchPlayers,
+  toPublicPotRecipients,
 } from '../../../src/lib/publicIdentity.mjs';
 
 // Address-like 44-character strings (the shape of real Solana wallets).
@@ -81,5 +83,69 @@ describe('withoutLeaderboardAddresses', () => {
 
   it('handles an empty board', () => {
     expect(withoutLeaderboardAddresses({ currentUser: null, entries: [] })).toEqual({ currentUser: null, entries: [] });
+  });
+});
+
+describe('toPublicMatchPlayers', () => {
+  // In a queue match the opponent is a stranger, so their address must not be
+  // sent even to the other participant.
+  const players = [
+    { walletAddress: ALICE, startedAt: null, submittedAt: '2026-10-02T00:00:00Z', correctCount: 5 },
+    { walletAddress: BOB, startedAt: null, submittedAt: null },
+  ];
+
+  it('labels both players, flags the viewer, and sends no address', () => {
+    const out = toPublicMatchPlayers(players, ALICE);
+    expect(out.map((p) => p.walletLabel)).toEqual(['7Vt9…GDL6', '9xQe…VFin']);
+    expect(out.map((p) => p.isMe)).toEqual([true, false]);
+    for (const p of out) expect(p).not.toHaveProperty('walletAddress');
+    expect(containsAddress(out, ALICE)).toBe(false);
+    expect(containsAddress(out, BOB)).toBe(false);
+  });
+
+  it('keeps the score fields unchanged', () => {
+    expect(toPublicMatchPlayers(players, BOB)[0]).toMatchObject({
+      submittedAt: '2026-10-02T00:00:00Z',
+      correctCount: 5,
+    });
+  });
+});
+
+describe('toPublicPotRecipients', () => {
+  const recipients = [
+    {
+      walletAddress: ALICE,
+      courseId: 'defi-basics',
+      payoutAmountUi: '1.20',
+      transactionSignature: 'sigAlice',
+      lastError: `failed for ${ALICE}`,
+    },
+    {
+      walletAddress: BOB,
+      courseId: 'wallets-101',
+      payoutAmountUi: '0.80',
+      transactionSignature: 'sigBob',
+      lastError: null,
+    },
+  ];
+
+  it('sends no full address for anyone, including the viewer', () => {
+    const out = toPublicPotRecipients(recipients, BOB);
+    for (const r of out) expect(r).not.toHaveProperty('walletAddress');
+    expect(containsAddress(out, ALICE)).toBe(false);
+    expect(containsAddress(out, BOB)).toBe(false);
+    expect(out.map((r) => r.displayIdentity)).toEqual(['7Vt9…GDL6', '9xQe…VFin']);
+  });
+
+  it('keeps payout signature and error only on the viewer row', () => {
+    // A signature or a raw send error names the recipient on a block explorer.
+    const [alice, bob] = toPublicPotRecipients(recipients, BOB);
+    expect(alice).toMatchObject({ isCurrentUser: false, transactionSignature: null, lastError: null });
+    expect(bob).toMatchObject({ isCurrentUser: true, transactionSignature: 'sigBob' });
+  });
+
+  it('keeps the payout data for everyone', () => {
+    const [alice] = toPublicPotRecipients(recipients, null);
+    expect(alice).toMatchObject({ courseId: 'defi-basics', payoutAmountUi: '1.20', isCurrentUser: false });
   });
 });
