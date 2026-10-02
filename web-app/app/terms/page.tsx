@@ -23,7 +23,6 @@ const eyebrow: React.CSSProperties = {
   marginBottom: 10,
 };
 const h1: React.CSSProperties = {
-  fontFamily: 'var(--font-pixel), Georgia, serif',
   fontSize: 26,
   fontWeight: 700,
   color: '#FFD580',
@@ -31,7 +30,6 @@ const h1: React.CSSProperties = {
   marginBottom: 16,
 };
 const h2: React.CSSProperties = {
-  fontFamily: 'var(--font-pixel), Georgia, serif',
   fontSize: 16,
   fontWeight: 700,
   color: '#FFD580',
@@ -71,7 +69,7 @@ export default function TermsPage() {
     <div style={page}>
       <div style={wrap}>
         <p style={eyebrow}>Locked In</p>
-        <h1 style={h1}>Terms of Service</h1>
+        <h1 className="font-pixel" style={h1}>Terms of Service</h1>
 
         <p style={draft}>
           DRAFT — PENDING LEGAL REVIEW. This document has not been reviewed or approved by a
@@ -86,14 +84,14 @@ export default function TermsPage() {
           the assumption that a support desk or a legal counterparty exists.
         </p>
 
-        <h2 style={h2}>1. What Locked In does</h2>
+        <h2 className="font-pixel" style={h2}>1. What Locked In does</h2>
         <p style={body}>
           You lock USDC against a course. While the lock is open, the USDC is supplied to Kamino, a
           third-party lending protocol on Solana, where it may earn yield. When you complete the
           course, you can claim your principal back together with whatever yield you have kept.
         </p>
 
-        <h2 style={h2}>2. Custody</h2>
+        <h2 className="font-pixel" style={h2}>2. Custody</h2>
         <p style={body}>
           Locked In does not hold your funds in a company bank account. Your USDC is held by an
           on-chain Solana program under a lock account tied to your wallet. We operate the program
@@ -102,14 +100,14 @@ export default function TermsPage() {
           an error in our backend can affect your funds.
         </p>
 
-        <h2 style={h2}>3. Beta limits</h2>
+        <h2 className="font-pixel" style={h2}>3. Beta limits</h2>
         <p style={body}>
           During the capped beta, a single lock is between $10 and $50 USDC, and total value locked
           across all users is capped at $1,000. These caps exist to limit how much anyone can lose
           while the software is young.
         </p>
 
-        <h2 style={h2}>4. Lapse penalties</h2>
+        <h2 className="font-pixel" style={h2}>4. Lapse penalties</h2>
         <p style={body}>
           If you stop learning and your shields are spent, you forfeit yield — 50% of your yield on
           the first lapse and 100% on the second. Forfeited yield goes to a community pot that is
@@ -117,7 +115,7 @@ export default function TermsPage() {
           never take your principal as a penalty.
         </p>
 
-        <h2 style={h2}>5. Getting your money out</h2>
+        <h2 className="font-pixel" style={h2}>5. Getting your money out</h2>
         <p style={body}>
           The normal exit is completing the course and claiming. As a fallback, 180 days after a
           lock starts, the lock becomes force-returnable and anyone — including you — can trigger
@@ -128,7 +126,7 @@ export default function TermsPage() {
           it costs you all of your yield.
         </p>
 
-        <h2 style={h2}>6. No guarantee of yield, no guarantee of principal</h2>
+        <h2 className="font-pixel" style={h2}>6. No guarantee of yield, no guarantee of principal</h2>
         <p style={body}>
           Yield depends entirely on Kamino market rates and may be zero. Principal is exposed to
           Kamino protocol risk, USDC issuer risk and Solana network risk. See the{' '}
@@ -138,27 +136,27 @@ export default function TermsPage() {
           for the specific ways you can lose money.
         </p>
 
-        <h2 style={h2}>7. Unaudited beta software</h2>
+        <h2 className="font-pixel" style={h2}>7. Unaudited beta software</h2>
         <p style={body}>
           The on-chain programs have not completed a third-party security audit. The software is
           provided &ldquo;as is&rdquo;, without warranties of any kind. Do not lock money you cannot
           afford to lose.
         </p>
 
-        <h2 style={h2}>8. Your responsibilities</h2>
+        <h2 className="font-pixel" style={h2}>8. Your responsibilities</h2>
         <p style={body}>
           You are responsible for the security of your wallet, for any taxes arising from yield you
           receive, and for confirming that using this service is lawful where you live. You must be
           old enough to enter a contract in your jurisdiction.
         </p>
 
-        <h2 style={h2}>9. Changes to these terms</h2>
+        <h2 className="font-pixel" style={h2}>9. Changes to these terms</h2>
         <p style={body}>
           We may update these terms. Material changes bump the terms version, and you will be asked
           to accept again before your next lock.
         </p>
 
-        <h2 style={h2}>10. Who operates this, and how to reach us</h2>
+        <h2 className="font-pixel" style={h2}>10. Who operates this, and how to reach us</h2>
         <p style={body}>
           Locked In is operated by the project team during an unincorporated beta. There is
           currently no published legal entity, registered address or contact address, and therefore

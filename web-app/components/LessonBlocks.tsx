@@ -254,6 +254,7 @@ function AnalogyBox({ block }: { block: LessonBlock }) {
       }}
     >
       <div
+        className="font-pixel-mono"
         style={{
           fontSize: 11,
           fontWeight: 700,
@@ -325,6 +326,7 @@ function FlowSteps({ block }: { block: LessonBlock }) {
               </div>
               <div>
                 <div
+                  className="font-pixel"
                   style={{
                     fontSize: 15,
                     fontWeight: 700,
@@ -334,7 +336,7 @@ function FlowSteps({ block }: { block: LessonBlock }) {
                 >
                   {renderInline(step.title)}
                 </div>
-                <div style={{ fontSize: 14, lineHeight: 1.6, color: 'rgba(255,255,255,0.5)' }}>
+                <div style={{ fontSize: 14, lineHeight: 1.6, color: T.textMutedStrong }}>
                   {renderInline(step.desc)}
                 </div>
               </div>
@@ -386,10 +388,13 @@ function ConceptList({ block }: { block: LessonBlock }) {
               {item.icon}
             </div>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: T.textPrimary, marginBottom: 3 }}>
+              <div
+                className="font-pixel"
+                style={{ fontSize: 15, fontWeight: 700, color: T.textPrimary, marginBottom: 3 }}
+              >
                 {item.name}
               </div>
-              <div style={{ fontSize: 14, lineHeight: 1.6, color: 'rgba(255,255,255,0.5)' }}>
+              <div style={{ fontSize: 14, lineHeight: 1.6, color: T.textMutedStrong }}>
                 {renderInline(item.desc)}
               </div>
             </div>
@@ -423,14 +428,14 @@ function ComparisonTable({ block }: { block: LessonBlock }) {
           {headers.map((h, idx) => (
             <th
               key={idx}
+              className="font-pixel-mono"
               style={{
                 textAlign: 'left',
                 padding: '10px 14px',
-                fontFamily: 'monospace',
                 fontSize: 10,
                 textTransform: 'uppercase',
                 letterSpacing: 1.5,
-                color: 'rgba(255,255,255,0.35)',
+                color: T.textMutedStrong,
                 borderBottom: '1px solid rgba(255,255,255,0.08)',
                 background: 'rgba(255,255,255,0.02)',
                 fontWeight: 400,
@@ -494,7 +499,10 @@ function ChainCards({ block }: { block: LessonBlock }) {
               padding: '18px 22px',
             }}
           >
-            <div style={{ fontSize: 18, fontWeight: 700, color: theme.color, marginBottom: 2 }}>
+            <div
+              className="font-pixel"
+              style={{ fontSize: 18, fontWeight: 700, color: theme.color, marginBottom: 2 }}
+            >
               {chain.name}
             </div>
             <div
@@ -502,7 +510,7 @@ function ChainCards({ block }: { block: LessonBlock }) {
                 fontSize: 13,
                 textTransform: 'uppercase',
                 letterSpacing: 1.5,
-                color: 'rgba(255,255,255,0.35)',
+                color: T.textMutedStrong,
                 marginBottom: 10,
               }}
             >
@@ -523,7 +531,7 @@ function ChainCards({ block }: { block: LessonBlock }) {
                       borderRadius: 6,
                       background: 'rgba(255,255,255,0.04)',
                       border: '1px solid rgba(255,255,255,0.06)',
-                      color: 'rgba(255,255,255,0.55)',
+                      color: T.textMutedStrong,
                     }}
                   >
                     {stat}
@@ -553,8 +561,8 @@ function ScamCard({ block }: { block: LessonBlock }) {
     >
       {/* SCAM #N label */}
       <div
+        className="font-pixel-mono"
         style={{
-          fontFamily: 'monospace',
           fontSize: 11,
           color: T.crimson,
           fontWeight: 700,
@@ -565,7 +573,10 @@ function ScamCard({ block }: { block: LessonBlock }) {
       </div>
 
       {/* Title */}
-      <div style={{ fontSize: 16, fontWeight: 700, color: T.textPrimary, marginBottom: 6 }}>
+      <div
+        className="font-pixel"
+        style={{ fontSize: 16, fontWeight: 700, color: T.textPrimary, marginBottom: 6 }}
+      >
         {block.title ?? ''}
       </div>
 
@@ -598,7 +609,7 @@ function ScamCard({ block }: { block: LessonBlock }) {
               {'\u26A0'}
             </div>
             {/* Sender name */}
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.5)' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: T.textMutedStrong }}>
               {block.exampleSender}
             </span>
             {/* Scam badge */}
@@ -628,7 +639,7 @@ function ScamCard({ block }: { block: LessonBlock }) {
           style={{
             fontSize: 13,
             fontStyle: 'italic',
-            color: 'rgba(255,255,255,0.4)',
+            color: T.textMutedStrong,
             background: 'rgba(255,68,102,0.04)',
             borderRadius: 8,
             padding: '10px 14px',
@@ -711,6 +722,7 @@ function TakeawayBox({ block }: { block: LessonBlock }) {
       }}
     >
       <div
+        className="font-pixel-mono"
         style={{
           fontSize: 11,
           fontWeight: 700,
@@ -761,12 +773,12 @@ function KVGrid({ block }: { block: LessonBlock }) {
           }}
         >
           <div
+            className="font-pixel-mono"
             style={{
-              fontFamily: 'monospace',
               fontSize: 9,
               textTransform: 'uppercase',
               letterSpacing: 1.5,
-              color: 'rgba(255,255,255,0.3)',
+              color: T.textMutedStrong,
               marginBottom: 4,
             }}
           >
@@ -782,7 +794,7 @@ function KVGrid({ block }: { block: LessonBlock }) {
             {item.value}
           </div>
           {item.desc && (
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', marginTop: 4 }}>
+            <div style={{ fontSize: 12, color: T.textMutedStrong, marginTop: 4 }}>
               {item.desc}
             </div>
           )}
@@ -825,8 +837,8 @@ function CodeBlock({ block }: { block: LessonBlock }) {
           />
         </svg>
         <span
+          className="font-pixel-mono"
           style={{
-            fontFamily: 'monospace',
             fontSize: 9,
             textTransform: 'uppercase',
             letterSpacing: 1.5,
@@ -877,7 +889,7 @@ function ImageBlock({ block }: { block: LessonBlock }) {
             textAlign: 'center',
             fontSize: 12,
             marginTop: 8,
-            color: T.textMuted,
+            color: T.textMutedStrong,
           }}
         >
           {block.caption}
@@ -918,6 +930,7 @@ function DefaultCallout({ block }: { block: LessonBlock }) {
     >
       {title && (
         <div
+          className="font-pixel-mono"
           style={{
             fontSize: 11,
             fontWeight: 700,

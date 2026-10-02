@@ -135,9 +135,8 @@ export default function CommunityPotPage() {
         <div className="pt-20" />
 
         <h1
-          className="text-3xl font-bold tracking-wide mb-1"
+          className="text-3xl font-bold tracking-wide mb-1 font-pixel"
           style={{
-            fontFamily: 'var(--font-pixel), Georgia, serif',
             color: AMBER,
             textShadow: '0 1px 2px rgba(0,0,0,0.85)',
           }}
@@ -478,9 +477,8 @@ export default function CommunityPotPage() {
         {/* How Distribution Works */}
         <CozyCard className="mt-6" style={{ padding: 24 }}>
           <p
-            className="text-sm font-semibold mb-2"
+            className="text-sm font-semibold mb-2 font-pixel"
             style={{
-              fontFamily: 'var(--font-pixel), Georgia, serif',
               color: T.textMutedStrong,
             }}
           >

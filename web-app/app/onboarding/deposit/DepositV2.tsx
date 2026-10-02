@@ -190,7 +190,7 @@ export function DepositV2() {
     <Suspense
       fallback={
         <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: T.bg }}>
-          <p className="font-pixel-mono text-sm" style={{ color: T.textSecondary }}>
+          <p className="font-pixel-mono text-sm" style={{ color: T.textMutedStrong }}>
             Loading...
           </p>
         </div>
@@ -639,7 +639,7 @@ function DepositV2Content() {
                 <p
                   data-testid="v2-deposit-error-detail"
                   className="font-pixel-mono text-[10px] mt-3 break-words"
-                  style={{ color: T.textMuted ?? T.textSecondary }}
+                  style={{ color: T.textMutedStrong, textShadow: COZY_TEXT_SHADOW }}
                 >
                   Details for support: {errorDetail}
                 </p>

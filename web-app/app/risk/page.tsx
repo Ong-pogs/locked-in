@@ -21,7 +21,6 @@ const eyebrow: React.CSSProperties = {
   marginBottom: 10,
 };
 const h1: React.CSSProperties = {
-  fontFamily: 'var(--font-pixel), Georgia, serif',
   fontSize: 26,
   fontWeight: 700,
   color: '#FFD580',
@@ -29,7 +28,6 @@ const h1: React.CSSProperties = {
   marginBottom: 16,
 };
 const h2: React.CSSProperties = {
-  fontFamily: 'var(--font-pixel), Georgia, serif',
   fontSize: 16,
   fontWeight: 700,
   color: '#FFD580',
@@ -69,7 +67,7 @@ export default function RiskPage() {
     <div style={page}>
       <div style={wrap}>
         <p style={eyebrow}>Locked In</p>
-        <h1 style={h1}>Risk Disclosure</h1>
+        <h1 className="font-pixel" style={h1}>Risk Disclosure</h1>
 
         <p style={draft}>
           DRAFT — PENDING LEGAL REVIEW. Not reviewed or approved by a lawyer. Read it anyway: it is
@@ -81,7 +79,7 @@ export default function RiskPage() {
           Only lock what you can afford to lose entirely.
         </p>
 
-        <h2 style={h2}>Your principal can lose value</h2>
+        <h2 className="font-pixel" style={h2}>Your principal can lose value</h2>
         <p style={body}>
           We never take principal as a penalty — lapse penalties touch yield only. That is a
           promise about our rules, not about the value of your deposit. Your USDC is supplied to
@@ -90,27 +88,27 @@ export default function RiskPage() {
           and not by us.
         </p>
 
-        <h2 style={h2}>Kamino protocol risk</h2>
+        <h2 className="font-pixel" style={h2}>Kamino protocol risk</h2>
         <p style={body}>
           Kamino is a third party we do not control. A smart-contract exploit, a bad-debt event, a
           liquidation cascade or a socialized loss in the lending market can reduce the value of the
           position holding your deposit. Kamino illiquidity can also delay withdrawal.
         </p>
 
-        <h2 style={h2}>USDC risk</h2>
+        <h2 className="font-pixel" style={h2}>USDC risk</h2>
         <p style={body}>
           USDC is issued by a third party. It can lose its peg to the US dollar, be frozen at the
           issuer&rsquo;s discretion, or be affected by the issuer&rsquo;s own solvency and banking
           arrangements.
         </p>
 
-        <h2 style={h2}>Solana network risk</h2>
+        <h2 className="font-pixel" style={h2}>Solana network risk</h2>
         <p style={body}>
           Solana can halt, congest or fork. During such an event you may be unable to deposit,
           claim or exit at the moment you want to.
         </p>
 
-        <h2 style={h2}>Unaudited beta software</h2>
+        <h2 className="font-pixel" style={h2}>Unaudited beta software</h2>
         <p style={body}>
           Our on-chain programs have not completed a third-party security audit. A bug in our code
           could lock, misdirect or lose funds. Our operational keys sign settlement; a compromise of
@@ -118,14 +116,14 @@ export default function RiskPage() {
           damage, not to eliminate it.
         </p>
 
-        <h2 style={h2}>Yield is variable</h2>
+        <h2 className="font-pixel" style={h2}>Yield is variable</h2>
         <p style={body}>
           Yield comes from Kamino market rates, which float and can be near zero. Any yield figure
           shown in the app is an estimate based on current rates, not a promise. Over a short course
           the yield on a $10–$50 deposit is small in absolute terms.
         </p>
 
-        <h2 style={h2}>You can forfeit yield</h2>
+        <h2 className="font-pixel" style={h2}>You can forfeit yield</h2>
         <p style={body}>
           If you lapse after your shields are spent, you forfeit 50% of your yield on the first
           lapse and 100% on the second. Forfeited yield goes to a community pot that is
@@ -139,7 +137,7 @@ export default function RiskPage() {
           day. See &ldquo;Exit timing&rdquo; below.
         </p>
 
-        <h2 style={h2}>Exit timing</h2>
+        <h2 className="font-pixel" style={h2}>Exit timing</h2>
         <p style={body}>
           Your deposit is not freely withdrawable on demand. The normal exit is completing the
           course. The fallback is the 180-day force return, which anyone can trigger once a lock is
@@ -149,7 +147,7 @@ export default function RiskPage() {
           unavailable for that long.
         </p>
 
-        <h2 style={h2}>Tax and legal</h2>
+        <h2 className="font-pixel" style={h2}>Tax and legal</h2>
         <p style={body}>
           Yield you receive may be taxable where you live. We do not provide tax, legal or
           investment advice, and nothing in the app is a recommendation to deposit.
