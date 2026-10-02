@@ -6,9 +6,25 @@ export const alt = 'Locked In - Stop collecting courses. Finish one.';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
+// The app's own fonts (see app/layout.tsx), as static TTFs because ImageResponse
+// only reads ttf/otf/woff. Licenses (SIL OFL) sit next to them in assets/fonts.
+const FONT_FILES = [
+  { name: 'Pixelify Sans', file: 'PixelifySans-Bold.ttf', weight: 700 }, // headline, like the hero
+  { name: 'Silkscreen', file: 'Silkscreen-Regular.ttf', weight: 400 }, // small caps labels
+  { name: 'Geist', file: 'Geist-Regular.ttf', weight: 400 }, // body copy
+] as const;
+
 export default async function OpenGraphImage() {
-  // Pixel crest logo, read from disk at build time (process.cwd() is the web-app root).
+  // Pixel crest logo and fonts, read from disk at build time (process.cwd() is the web-app root).
   const logo = await readFile(join(process.cwd(), 'public/images/logo.png'), 'base64');
+  const fonts = await Promise.all(
+    FONT_FILES.map(async ({ name, file, weight }) => ({
+      name,
+      weight,
+      style: 'normal' as const,
+      data: await readFile(join(process.cwd(), 'assets/fonts', file)),
+    })),
+  );
 
   return new ImageResponse(
     (
@@ -23,7 +39,7 @@ export default async function OpenGraphImage() {
           color: '#E8DED0',
           background:
             'radial-gradient(circle at 82% 18%, rgba(153,69,255,0.38), transparent 32%), radial-gradient(circle at 18% 85%, rgba(42,232,212,0.18), transparent 34%), linear-gradient(135deg, #07101a, #120e20 58%, #2a1717)',
-          fontFamily: 'monospace',
+          fontFamily: 'Silkscreen', // labels default to the app's pixel caps font
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
@@ -40,15 +56,15 @@ export default async function OpenGraphImage() {
               marginTop: 22,
               maxWidth: 980,
               color: '#FFD580',
-              fontFamily: 'serif',
+              fontFamily: 'Pixelify Sans',
               fontSize: 78,
-              fontWeight: 800,
-              lineHeight: 0.98,
+              fontWeight: 700,
+              lineHeight: 1.05,
             }}
           >
             Stop collecting courses. Finish one.
           </div>
-          <div style={{ marginTop: 28, fontSize: 26, color: 'rgba(255,255,255,0.72)' }}>
+          <div style={{ marginTop: 28, fontFamily: 'Geist', fontSize: 26, color: 'rgba(255,255,255,0.72)' }}>
             Put $10-$50 USDC behind the course you keep saying you will finish.
           </div>
         </div>
@@ -59,6 +75,6 @@ export default async function OpenGraphImage() {
         </div>
       </div>
     ),
-    size,
+    { ...size, fonts },
   );
 }
