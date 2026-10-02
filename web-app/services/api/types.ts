@@ -485,7 +485,8 @@ export type LeaderboardSource = 'materialized' | 'live';
 
 export interface LeaderboardEntry {
   rank: number;
-  walletAddress: string;
+  /** @deprecated Older API responses only: the server no longer sends other players' addresses. */
+  walletAddress?: string;
   displayIdentity: string;
   streakLength: number;
   streakStatus: LeaderboardEntryStatus;

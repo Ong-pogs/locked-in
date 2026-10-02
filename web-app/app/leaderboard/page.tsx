@@ -179,7 +179,7 @@ export default function LeaderboardPage() {
                 <SectionHeader muted>The Pursuers</SectionHeader>
                 <CozyCard style={{ padding: 0, overflow: 'hidden' }} className="mb-5">
                   {rest.map((entry, i) => (
-                    <PursuerRow key={entry.walletAddress} entry={entry} alt={i % 2 === 0} />
+                    <PursuerRow key={`${entry.rank}-${entry.displayIdentity}-${i}`} entry={entry} alt={i % 2 === 0} />
                   ))}
                 </CozyCard>
               </>

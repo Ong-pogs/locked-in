@@ -62,7 +62,12 @@ export interface ArenaAnswerResponse {
 }
 
 export interface ArenaLadderRow {
-  walletAddress: string;
+  /** Display label made by the server, e.g. "7Vt9…GDL6". Full addresses are never sent. */
+  walletLabel?: string;
+  /** True only on the signed-in viewer's own row (the server compares, not the browser). */
+  isMe?: boolean;
+  /** @deprecated Older API responses only; kept so the page works during the rollout. */
+  walletAddress?: string;
   rating: number;
   games: number;
   wins: number;
