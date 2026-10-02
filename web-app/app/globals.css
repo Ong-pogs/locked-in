@@ -26,6 +26,33 @@ body {
   color: var(--foreground);
 }
 
+/* Dark UI everywhere: native scrollbars, checkboxes, number spinners and sliders
+ * follow the dark theme instead of the browser's light defaults. */
+:root {
+  color-scheme: dark;
+  /* Thin amber thumb on a dark track (Chrome 121+, Firefox). Inherited, so it
+   * covers every scroll area, e.g. the dashboard activity heatmap. */
+  scrollbar-color: rgba(255, 213, 128, 0.45) rgba(14, 14, 28, 0.6);
+}
+* {
+  scrollbar-width: thin; /* class rules like VillageScene's hidden bar still win */
+}
+
+/* Registered so CozyCard's glass alpha can ease on hover instead of snapping
+ * (an unregistered custom property cannot be transitioned). */
+@property --cozy-bg-alpha {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0.28;
+}
+
+/* One keyboard focus style for every control. :where() keeps it at zero
+ * specificity, so components with their own focus ring keep theirs. */
+:where(a, button, input, textarea, select, summary, [role='button'], [tabindex]):focus-visible {
+  outline: 2px solid #FFD580;
+  outline-offset: 2px;
+}
+
 /* Cozy pixel-art utility classes — pair with Pixelify Sans + Silkscreen
  * imported in app/layout.tsx. Use on cozified pages. */
 .font-pixel {

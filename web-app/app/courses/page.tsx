@@ -21,6 +21,12 @@ import { HubButton } from '@/components/HubButton';
 // ── Constants ─────────────────────────────────────────────────────────────
 const AMBER = '#FFD580';
 
+// Card hover: lift + solidify the CozyCard glass (alpha var, registered in globals.css
+// so it eases). Uses box-shadow, not a drop-shadow filter or opacity: an ancestor
+// filter/opacity switches off the card's backdrop blur, which made it flash see-through.
+const CARD_HOVER =
+  'rounded-[10px] transition-[translate,box-shadow,--cozy-bg-alpha] duration-150 hover:-translate-y-0.5 hover:[--cozy-bg-alpha:0.72] hover:shadow-[0_14px_30px_rgba(0,0,0,0.55)]';
+
 // Internal/test courses hidden from the product surface.
 const HIDDEN_COURSE_IDS = new Set<string>(['test-kitchen']);
 
@@ -148,13 +154,13 @@ function CourseCard({
 
   return (
     <div
-      className={`group w-full text-left transition-all duration-150 will-change-transform ${
+      className={`group w-full text-left ${
         isComingSoon
           ? 'opacity-40 pointer-events-none'
           : // On hover: SOLIDIFY the panel (raise the CozyCard bg alpha var so the
             // dungeon art stops showing through) + a small lift. Do NOT brighten —
             // that washed the semi-transparent card out and made text unreadable.
-            'cursor-pointer hover:scale-[1.01] hover:-translate-y-0.5 hover:[--cozy-bg-alpha:0.72] hover:drop-shadow-[0_14px_30px_rgba(0,0,0,0.55)]'
+            `cursor-pointer ${CARD_HOVER}`
       }`}
       onClick={isComingSoon ? undefined : onSelect}
       role={isComingSoon ? undefined : 'button'}
@@ -301,7 +307,7 @@ function ActiveCourseCard({
     <button
       type="button"
       onClick={onPress}
-      className="w-full text-left transition-opacity hover:opacity-[0.85] cursor-pointer"
+      className={`w-full text-left cursor-pointer ${CARD_HOVER}`}
     >
       <CozyCard style={{ borderColor: `${T.violet}35` }}>
         <CornerMarks />

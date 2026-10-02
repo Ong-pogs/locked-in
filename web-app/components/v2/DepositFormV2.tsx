@@ -224,7 +224,7 @@ export function DepositFormV2({
             backgroundColor: 'rgba(14,14,28,0.6)',
             borderColor: validationError ? 'rgba(255,68,102,0.5)' : T.borderDormant,
             color: COZY_TEXT,
-            outline: 'none',
+            // No inline outline:none: the global :focus-visible ring in globals.css shows focus.
           }}
           aria-label="Deposit amount in USDC"
         />
