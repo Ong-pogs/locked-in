@@ -230,6 +230,9 @@ describe('arena play', () => {
       method: 'GET', url: `/v1/arena/matches/${matchId}`, headers,
     })).json();
     const check = (body) => {
+      // A real match state first, or the absence checks could pass on an error body.
+      expect(body.matchId).toBe(matchId);
+      expect(body.players).toHaveLength(2);
       expect(body).not.toHaveProperty('creator');
       expect(body).not.toHaveProperty('opponent');
       expect(JSON.stringify(body)).not.toContain(aliceWallet);

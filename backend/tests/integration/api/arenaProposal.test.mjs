@@ -93,9 +93,14 @@ describe('a queue pairing is proposed, not started', () => {
   it('never names the other wallet in the offer', async () => {
     // The offer is shown before anyone accepts; sending the opponent's address
     // would let a player queue and decline just to collect wallets.
-    const { a, b, aH, bH } = await pair();
+    const { a, b, aH, bH, matchId } = await pair();
     for (const h of [aH, bH]) {
-      const p = (await proposal(h)).json();
+      const res = await proposal(h);
+      // A real offer first, or an error body would pass the absence checks.
+      expect(res.statusCode).toBe(200);
+      const p = res.json();
+      expect(p.matchId).toBe(matchId);
+      expect(p.msLeft).toBeGreaterThan(0);
       expect(p).not.toHaveProperty('opponent');
       expect(JSON.stringify(p)).not.toContain(a);
       expect(JSON.stringify(p)).not.toContain(b);

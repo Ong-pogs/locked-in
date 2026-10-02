@@ -61,11 +61,14 @@ describe('community pot window detail', () => {
   });
 
   it('keeps payout signature and error only on the viewer row', async () => {
-    const body = (await app.inject({
+    const res = await app.inject({
       method: 'GET',
       url: `/v1/progress/community-pot/windows/${WINDOW_ID}`,
       headers: await getTestAuthHeaders(viewer),
-    })).json();
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.recipients).toHaveLength(2);
     const mine = body.recipients.find((r) => r.isCurrentUser);
     const theirs = body.recipients.find((r) => !r.isCurrentUser);
     expect(mine).toMatchObject({ transactionSignature: 'sig-viewer', payoutAmount: '400' });
@@ -74,11 +77,15 @@ describe('community pot window detail', () => {
   });
 
   it('shows a non-recipient no signatures at all', async () => {
-    const body = (await app.inject({
+    const res = await app.inject({
       method: 'GET',
       url: `/v1/progress/community-pot/windows/${WINDOW_ID}`,
       headers: await getTestAuthHeaders(generateTestWallet()),
-    })).json();
+    });
+    // Both seeded rows must be present, or the every() below passes vacuously.
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.recipients).toHaveLength(2);
     expect(body.userEntry).toBeNull();
     expect(body.recipients.every((r) => r.transactionSignature === null)).toBe(true);
     expect(JSON.stringify(body)).not.toContain(other);
