@@ -363,6 +363,10 @@ export interface Scene {
   setWord(word: Sprite | null): void;
   /** Draw the frame for wall-clock time `now` (ms). Returns false once the animation is over. */
   frame(now: number): boolean;
+  /** Current animation time (ms), so a hand-off can continue from the same moment. */
+  time(): number;
+  /** Jump to animation time `t` (ms); the next frame starts counting from there. */
+  seek(t: number): void;
 }
 
 export function createScene(canvas: Canvas2D, make: MakeCanvas): Scene | null {
@@ -397,6 +401,13 @@ export function createScene(canvas: Canvas2D, make: MakeCanvas): Scene | null {
       last = now;
       draw(ctx, crest, word, sprites, L, t, dpr);
       return t < L.end;
+    },
+    time() {
+      return t;
+    },
+    seek(next) {
+      t = next;
+      last = -1;
     },
   };
 }
