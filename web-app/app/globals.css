@@ -29,12 +29,16 @@ body {
 /* Cozy pixel-art utility classes — pair with Pixelify Sans + Silkscreen
  * imported in app/layout.tsx. Use on cozified pages. */
 .font-pixel {
-  font-family: var(--font-pixel), Georgia, serif;
+  /* Digits come from --font-pixel-digits (Silkscreen 0-9 only, see layout.tsx):
+   * Pixelify's own 5 reads as S. Every other glyph falls through to Pixelify. */
+  font-family: var(--font-pixel-digits), var(--font-pixel), Georgia, serif;
   /* Pixelify Sans ships a broken "fi" ligature glyph — "finance" renders as
    * "Anance". Kill ligatures for this face only. */
   font-feature-settings: 'liga' 0, 'dlig' 0;
   font-variant-ligatures: none;
 }
 .font-pixel-mono {
-  font-family: var(--font-pixel-mono), ui-monospace, monospace;
+  /* "%" comes from --font-pixel-pct (Tiny5 "%" only, see layout.tsx): bold
+   * Silkscreen's own "%" reads as "Z". Every other glyph is Silkscreen. */
+  font-family: var(--font-pixel-pct), var(--font-pixel-mono), ui-monospace, monospace;
 }

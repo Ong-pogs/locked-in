@@ -30,6 +30,11 @@ export default function GlobalError({
 
   return (
     <html lang="en">
+      {/* This file replaces the root layout, so it brings its own title:
+          without one the tab went blank on a crash. */}
+      <head>
+        <title>Something broke · Locked-In</title>
+      </head>
       <body
         style={{
           margin: 0,
@@ -43,14 +48,14 @@ export default function GlobalError({
           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
         }}
       >
-        <div style={{ maxWidth: 420, textAlign: 'center' }}>
-          <p style={{ fontSize: 18, fontWeight: 700, margin: '0 0 12px' }}>Something broke</p>
+        <main style={{ maxWidth: 420, textAlign: 'center' }}>
+          <h1 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 12px' }}>Something broke</h1>
           <p style={{ fontSize: 13, lineHeight: 1.6, opacity: 0.85, margin: '0 0 20px' }}>
             The app hit an error it could not recover from. Your funds are untouched — nothing
             on-chain happens without a wallet signature.
           </p>
           {error.digest && (
-            <p style={{ fontSize: 11, opacity: 0.6, margin: '0 0 20px' }}>
+            <p style={{ fontSize: 11, opacity: 0.75, margin: '0 0 20px' }}>
               Reference: {error.digest}
             </p>
           )}
@@ -73,7 +78,7 @@ export default function GlobalError({
           >
             Try again
           </button>
-        </div>
+        </main>
       </body>
     </html>
   );

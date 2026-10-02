@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { Geist, Geist_Mono, Pixelify_Sans, Silkscreen } from 'next/font/google';
+import localFont from 'next/font/local';
 import { Providers } from './providers';
 import { SerwistProvider } from './serwist';
 import { AppShell } from '@/components/AppShell';
@@ -33,6 +34,38 @@ const silkscreen = Silkscreen({
   variable: '--font-pixel-mono',
   subsets: ['latin'],
   weight: ['400', '700'],
+});
+
+// Digits for Pixelify text. Pixelify Sans draws "5" like "S" (and, in bold,
+// "2" like "8", so "$20" read as "$80"). This face holds only Silkscreen's
+// digits (subset files, about 3 KB each) and unicode-range limits it to 0-9,
+// so .font-pixel keeps Pixelify letters with unambiguous numbers.
+// size-adjust 90% matches the digits to Pixelify's cap height.
+const pixelDigits = localFont({
+  variable: '--font-pixel-digits',
+  src: [
+    { path: '../assets/fonts/SilkscreenDigits-Regular.woff2', weight: '400' },
+    { path: '../assets/fonts/SilkscreenDigits-Bold.woff2', weight: '700' },
+  ],
+  declarations: [
+    { prop: 'unicode-range', value: 'U+0030-0039' },
+    { prop: 'size-adjust', value: '90%' },
+  ],
+  // No metric fallback: this face only ever covers digits inside Pixelify text.
+  adjustFontFallback: false,
+});
+
+// "%" for Silkscreen text. Bold Silkscreen draws "%" like "Z" ("100%" read as
+// "100Z" on the claim and yield screens). This face holds only Tiny5's "%"
+// (about 2 KB), sized to Silkscreen's digits; one face covers every weight.
+const pixelPercent = localFont({
+  variable: '--font-pixel-pct',
+  src: [{ path: '../assets/fonts/Tiny5Percent.woff2', weight: '100 900' }],
+  declarations: [
+    { prop: 'unicode-range', value: 'U+0025' },
+    { prop: 'size-adjust', value: '115%' },
+  ],
+  adjustFontFallback: false,
 });
 
 const APP_NAME = 'Locked-In';
@@ -79,7 +112,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${pixelifySans.variable} ${silkscreen.variable} h-full antialiased dark`}
+      className={`${geistSans.variable} ${geistMono.variable} ${pixelifySans.variable} ${pixelDigits.variable} ${silkscreen.variable} ${pixelPercent.variable} h-full antialiased dark`}
     >
       <body className="min-h-full flex flex-col">
         <SerwistProvider swUrl="/serwist/sw.js">

@@ -170,18 +170,20 @@ export function CozyButton({
  * Pixel-font section label in amber. Replaces the old gray monospace
  * SectionLabel on cozy pages.
  */
-export function CozySectionLabel({ children }: { children: ReactNode }) {
+// `as="h2"` when the label introduces a list of h3 cards (keeps heading order
+// h1 > h2 > h3 for screen readers); the look is identical either way.
+export function CozySectionLabel({ children, as: Tag = 'p' }: { children: ReactNode; as?: 'p' | 'h2' }) {
   return (
-    <p
+    <Tag
       className="text-[13px] font-bold uppercase tracking-[2px] mb-2.5 mt-1"
       style={{
-        fontFamily: 'var(--font-pixel-mono), monospace',
+        fontFamily: 'var(--font-pixel-pct), var(--font-pixel-mono), monospace',
         color: COZY_TEXT,
         textShadow: COZY_TEXT_SHADOW,
         opacity: 0.85,
       }}
     >
       {children}
-    </p>
+    </Tag>
   );
 }

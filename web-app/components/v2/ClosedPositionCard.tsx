@@ -31,12 +31,12 @@ export function ClosedPositionCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h3
+          <h2
             className="font-pixel text-lg leading-tight truncate"
             style={{ color: COZY_TEXT, textShadow: COZY_TEXT_SHADOW }}
           >
             {title}
-          </h3>
+          </h2>
           {receipt?.receivedUi ? (
             <p className="font-pixel-mono text-[12px] mt-1.5" style={{ color: T.textMutedStrong }}>
               Paid out <span style={{ color: GREEN }}>${receipt.receivedUi}</span> to your wallet
@@ -68,9 +68,10 @@ export function ClosedPositionCard({
       </div>
 
       {receipt?.signature && (
+        // Signatures are case-sensitive base58: monospace, never caps-only Silkscreen.
         <p
-          className="font-pixel-mono text-[10px] mt-2 truncate"
-          style={{ color: T.textMuted }}
+          className="font-mono text-[10px] mt-2 truncate"
+          style={{ color: T.textMutedStrong }}
           title={receipt.signature}
         >
           tx: {receipt.signature}

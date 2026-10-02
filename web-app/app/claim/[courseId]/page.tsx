@@ -606,7 +606,8 @@ export default function ClaimPage() {
         </p>
         {pendingSignature && (
           <p
-            className="font-pixel-mono text-[10px] break-all mb-4"
+            // Case-sensitive base58: monospace, never caps-only Silkscreen.
+            className="font-mono text-[10px] break-all mb-4"
             style={MUTED_STRONG}
             title="Transaction signature"
           >
@@ -689,7 +690,8 @@ export default function ClaimPage() {
           <DustFootnote />
         </div>
         <p
-          className="font-pixel-mono text-[10px] break-all"
+          // Case-sensitive base58: monospace, never caps-only Silkscreen.
+          className="font-mono text-[10px] break-all"
           style={MUTED_STRONG}
           title="Transaction signature"
         >
@@ -789,8 +791,10 @@ function BreakdownRow({
   highlight?: boolean;
 }) {
   return (
+    // gap-3: label and value used to touch ("POT50%") whenever both just fit
+    // on one line; text-right keeps a wrapped value flush with the edge.
     <div
-      className="flex items-center justify-between rounded-lg border px-3 py-2.5"
+      className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5"
       style={{
         backgroundColor: highlight ? 'rgba(62,230,138,0.08)' : 'rgba(255,255,255,0.03)',
         borderColor: highlight ? 'rgba(62,230,138,0.35)' : T.borderDormant,
@@ -800,7 +804,7 @@ function BreakdownRow({
         {label}
       </span>
       <span
-        className="font-pixel-mono text-[13px] font-bold"
+        className="font-pixel-mono text-[13px] font-bold text-right"
         style={{ color: highlight ? '#3EE68A' : COZY_TEXT, textShadow: COZY_TEXT_SHADOW }}
       >
         {value}

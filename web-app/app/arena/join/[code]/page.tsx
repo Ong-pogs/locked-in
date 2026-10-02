@@ -77,7 +77,9 @@ export default function ArenaJoinPage() {
           <div className="font-pixel-mono text-[10px] uppercase tracking-[1px]" style={{ color: T.textMuted }}>
             Challenge code
           </div>
-          <div className="mt-1 font-pixel text-2xl tracking-[3px]" style={{ color: T.amber }}>
+          {/* Same face as the hub's code (arena/page.tsx): the code alphabet has
+              both S and 5, so it must not be set in a pixel face. */}
+          <div className="mt-1 font-mono text-2xl font-bold tracking-[3px]" style={{ color: T.amber }}>
             {code}
           </div>
         </div>

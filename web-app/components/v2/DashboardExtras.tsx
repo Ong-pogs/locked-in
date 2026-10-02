@@ -97,7 +97,9 @@ export function XpHero({
             <p className="text-xl font-bold font-pixel leading-tight truncate" style={{ color: AMBER, textShadow: SHADOW }}>
               {displayName}
             </p>
-            <p className="font-pixel-mono text-[11px] uppercase tracking-[1.5px] truncate" style={{ color: T.textMutedStrong }}>
+            {/* Monospace, not caps-only Silkscreen or uppercase: base58 is
+                case-sensitive, so capitals showed a different address. */}
+            <p className="font-mono text-[11px] tracking-[0.5px] truncate" style={{ color: T.textMutedStrong }}>
               {truncatedWallet}
             </p>
           </div>
@@ -282,7 +284,15 @@ export function ActivityHeatmap({
           {totalActive} active days · {longestRun}d best run · {longestStreak}d longest streak
         </p>
       </div>
-      <div ref={scrollRef} className="overflow-x-auto pb-1">
+      {/* Scrolls sideways on phones, so keyboard users need to be able to
+          focus it (axe: scrollable-region-focusable). */}
+      <div
+        ref={scrollRef}
+        className="overflow-x-auto pb-1"
+        tabIndex={0}
+        role="region"
+        aria-label="Learning activity by day"
+      >
         <div className="inline-block" style={{ minWidth: cols * 13 + 32 }}>
           <div className="flex items-end mb-1 ml-8" style={{ height: 12 }}>
             {Array.from({ length: cols }).map((_, c) => {

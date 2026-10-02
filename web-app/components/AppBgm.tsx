@@ -16,13 +16,20 @@ import {
  *
  * Browsers usually block audible autoplay until the first user gesture, so
  * this tries immediately and then falls back to the first pointer/key event.
+ *
+ * The track (3-4 MB) is not preloaded: it only downloads once playback is
+ * actually allowed, and never while the player has music muted (volume 0).
  */
 export function AppBgm() {
   const pathname = usePathname();
   const { src, volumeScale } = getAppBgmTrack(pathname);
 
   useEffect(() => {
-    const bgm = new Audio(src);
+    // preload is set before src so the browser never starts a speculative
+    // download; play() fetches the track when it is really needed.
+    const bgm = new Audio();
+    bgm.preload = 'none';
+    bgm.src = src;
     bgm.loop = true;
     bgm.volume = getScaledAppBgmVolume(readStoredAppBgmVolume(), volumeScale);
 
@@ -36,6 +43,8 @@ export function AppBgm() {
           ? clampAppBgmVolume(eventVolume)
           : readStoredAppBgmVolume();
       bgm.volume = getScaledAppBgmVolume(baseVolume, volumeScale);
+      // Unmuting a never-started player starts it (it was skipped while muted).
+      if (bgm.volume > 0 && bgm.paused) void tryPlay();
     };
 
     const removeGestureFallback = () => {
@@ -44,6 +53,8 @@ export function AppBgm() {
     };
 
     const tryPlay = async () => {
+      // Muted: do not play, so the track is not downloaded at all.
+      if (bgm.volume === 0) return;
       try {
         await bgm.play();
         removeGestureFallback();

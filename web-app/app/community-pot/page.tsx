@@ -453,7 +453,10 @@ export default function CommunityPotPage() {
                         {w.userTransactionSignature && (
                           <>
                             {' · tx '}
-                            {w.userTransactionSignature.slice(0, 12)}...
+                            {/* Case-sensitive base58: monospace inside the Silkscreen line. */}
+                            <span className="font-mono">
+                              {w.userTransactionSignature.slice(0, 12)}...
+                            </span>
                           </>
                         )}
                       </p>
