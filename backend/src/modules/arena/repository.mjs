@@ -9,6 +9,7 @@ import { query, getPool } from '../../lib/db.mjs';
 import { badRequest, notFound, conflict } from '../../lib/errors.mjs';
 import { ARENA_QUESTION_COUNT, ARENA_QUESTION_TIMEOUT_MS, clampElapsed } from '../../lib/arenaScoring.mjs';
 import { maybeSettleMatch } from './settle.mjs';
+import { toPublicLadderRows } from '../../lib/publicIdentity.mjs';
 import { requireActiveStake } from './seasonRepository.mjs';
 
 // Crockford-style: no I, O, 0 or 1, so a code read aloud or retyped from a
@@ -566,7 +567,10 @@ export async function leaveQueue(walletAddress) {
 // Ladder
 // ---------------------------------------------------------------------------
 
-export async function getLadder(season = 1, limit = 100) {
+// Public endpoint: rows carry a display label and an isMe flag, never the full
+// wallet address (see lib/publicIdentity.mjs). viewerWallet is the signed-in
+// caller's address when there is one.
+export async function getLadder(season = 1, limit = 100, viewerWallet = null) {
   const capped = Math.min(Math.max(Number(limit) || 100, 1), 100);
   const r = await query(
     `select wallet_address as "walletAddress", rating, games, wins, losses, draws,
@@ -577,7 +581,7 @@ export async function getLadder(season = 1, limit = 100) {
       limit $2`,
     [season, capped],
   );
-  return r.rows;
+  return toPublicLadderRows(r.rows, viewerWallet);
 }
 
 export async function getMyArena(walletAddress, season = 1) {

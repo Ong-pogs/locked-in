@@ -6,7 +6,7 @@ import { runArenaSeasonSweep } from '../../lib/arenaSeasonSweep.mjs';
 import {
   optIntoSeason, getMyStake, getOpenSeason, listStakeableCourses,
 } from './seasonRepository.mjs';
-import { requireAccessAuth } from '../../plugins/auth.mjs';
+import { optionalAccessAuth, requireAccessAuth } from '../../plugins/auth.mjs';
 import { keyGenerator } from '../../plugins/rateKey.mjs';
 import {
   createLinkMatch, joinMatchByCode, getMatchState,
@@ -122,7 +122,13 @@ export async function arenaRoutes(app) {
     async (request) => declineProposal(request.auth.walletAddress, request.params.id),
   );
 
-  app.get('/v1/arena/ladder', async (request) => getLadder(1, request.query?.limit));
+  // Public, but a valid token (optional) lets the server flag the caller's own row.
+  // Rows never carry full wallet addresses, signed in or not.
+  app.get(
+    '/v1/arena/ladder',
+    { preHandler: optionalAccessAuth },
+    async (request) => getLadder(1, request.query?.limit, request.auth?.walletAddress ?? null),
+  );
 
   app.get(
     '/v1/arena/me',

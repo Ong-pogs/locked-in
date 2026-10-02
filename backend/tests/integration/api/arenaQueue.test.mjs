@@ -179,6 +179,49 @@ describe('arena ladder', () => {
     expect(rows.length).toBeLessThanOrEqual(100);
   });
 
+  // Privacy: the ladder is public, so it must never carry full wallet addresses,
+  // only a server-made label, plus isMe for the signed-in caller's own row.
+  it('never sends full wallet addresses, signed out or signed in', async () => {
+    const wallet = generateTestWallet();
+    // Top rating so the row is inside the default 100-row page.
+    await db.query(
+      `insert into arena.ratings (wallet_address, season, rating, games, wins, losses, draws)
+       values ($1, 1, 9999, 3, 3, 0, 0)`,
+      [wallet],
+    );
+    try {
+      const anon = await app.inject({ method: 'GET', url: '/v1/arena/ladder' });
+      expect(anon.statusCode).toBe(200);
+      expect(anon.body).not.toContain(wallet);
+      const anonRow = anon.json().find((r) => r.rating === 9999);
+      expect(anonRow).toMatchObject({
+        walletLabel: `${wallet.slice(0, 4)}…${wallet.slice(-4)}`,
+        isMe: false,
+      });
+      expect(anonRow).not.toHaveProperty('walletAddress');
+
+      const headers = await getTestAuthHeaders(wallet);
+      const mine = await app.inject({ method: 'GET', url: '/v1/arena/ladder', headers });
+      expect(mine.statusCode).toBe(200);
+      expect(mine.body).not.toContain(wallet);
+      const rows = mine.json();
+      expect(rows.find((r) => r.rating === 9999)?.isMe).toBe(true);
+      expect(rows.filter((r) => r.isMe)).toHaveLength(1);
+    } finally {
+      await db.query('delete from arena.ratings where wallet_address = $1', [wallet]);
+    }
+  });
+
+  it('serves a caller with a bad token as an anonymous visitor', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/arena/ladder',
+      headers: { authorization: 'Bearer not-a-real-token' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().every((r) => r.isMe === false)).toBe(true);
+  });
+
   it('gives an unplayed wallet a clean 1200 record rather than an error', async () => {
     const auth = await getTestAuthHeaders(await stakedWallet(db));
     const body = (await app.inject({ method: 'GET', url: '/v1/arena/me', headers: auth })).json();

@@ -131,6 +131,12 @@ describe('progress routes - with authentication', () => {
     });
 
     expect(response.statusCode).not.toBe(401);
+    // Privacy: any signed-in user can call this, so no wallet addresses in the rows.
+    if (response.statusCode === 200) {
+      const body = response.json();
+      for (const entry of body.entries ?? []) expect(entry).not.toHaveProperty('walletAddress');
+      expect(body.currentUser ?? {}).not.toHaveProperty('walletAddress');
+    }
   }, 90_000);
 
   it('GET /v1/progress/enrollments returns data with valid auth', async () => {

@@ -5,6 +5,7 @@ import { autoMissEventId } from '../../lib/missEvents.mjs';
 import { secureEquals } from '../../lib/secureCompare.mjs';
 import { appConfig } from '../../config.mjs';
 import { requireAccessAuth } from '../../plugins/auth.mjs';
+import { withoutLeaderboardAddresses } from '../../lib/publicIdentity.mjs';
 import { keyGenerator } from '../../plugins/rateKey.mjs';
 import {
   getUserXp,
@@ -420,7 +421,11 @@ export async function progressRoutes(app) {
         Number.isFinite(Number(request.query?.pageSize)) && Number(request.query?.pageSize) > 0
           ? Number(request.query?.pageSize)
           : 10;
-      return getLeaderboardSnapshot(request.auth.walletAddress, page, pageSize);
+      // Any signed-in user can call this, so strip other players' wallet
+      // addresses; displayIdentity (already shortened) and isCurrentUser drive the UI.
+      return withoutLeaderboardAddresses(
+        await getLeaderboardSnapshot(request.auth.walletAddress, page, pageSize),
+      );
     },
   );
 
