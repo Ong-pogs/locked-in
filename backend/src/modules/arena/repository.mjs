@@ -9,7 +9,7 @@ import { query, getPool } from '../../lib/db.mjs';
 import { badRequest, notFound, conflict } from '../../lib/errors.mjs';
 import { ARENA_QUESTION_COUNT, ARENA_QUESTION_TIMEOUT_MS, clampElapsed } from '../../lib/arenaScoring.mjs';
 import { maybeSettleMatch } from './settle.mjs';
-import { toPublicLadderRows } from '../../lib/publicIdentity.mjs';
+import { toPublicLadderRows, toPublicMatchPlayers } from '../../lib/publicIdentity.mjs';
 import { requireActiveStake } from './seasonRepository.mjs';
 
 // Crockford-style: no I, O, 0 or 1, so a code read aloud or retyped from a
@@ -150,14 +150,18 @@ export async function getMatchState(walletAddress, matchId) {
   // Scores stay hidden until the match resolves, so a player cannot peek at
   // the opponent's result and decide whether it is worth playing.
   const resolved = match.status === 'COMPLETE' || match.status === 'EXPIRED';
+  // creator/opponent are only needed for the participant check above. They and
+  // the player rows would hand each player the other's full wallet (a stranger,
+  // in queue matches), so players go out as a label plus isMe instead.
+  const { creator: _creator, opponent: _opponent, ...publicMatch } = match;
   return {
-    ...match,
+    ...publicMatch,
     resolved,
-    players: players.rows.map((p) => (resolved ? p : {
+    players: toPublicMatchPlayers(players.rows.map((p) => (resolved ? p : {
       walletAddress: p.walletAddress,
       startedAt: p.startedAt,
       submittedAt: p.submittedAt,
-    })),
+    })), walletAddress),
   };
 }
 
@@ -461,7 +465,7 @@ async function expireProposal(client, matchId, { requeueAccepted = true } = {}) 
  */
 export async function getProposal(walletAddress) {
   const r = await query(
-    `select m.id as "matchId", m.creator, m.opponent,
+    `select m.id as "matchId",
             extract(epoch from (m.expires_at - now())) * 1000 as "rawMsLeft",
             (select accepted_at from arena.match_players
               where match_id = m.id and wallet_address = $1) as "mine",
@@ -489,7 +493,8 @@ export async function getProposal(walletAddress) {
     msLeft: Math.max(0, Math.round(shownMsLeft)),
     accepted: p.mine != null,
     opponentAccepted: p.acceptedCount >= 2 || (p.mine == null && p.acceptedCount >= 1),
-    opponent: p.creator === walletAddress ? p.opponent : p.creator,
+    // No `opponent` here: the offer is shown before anyone accepts, so sending
+    // the other wallet let a player queue and decline just to collect addresses.
   };
 }
 

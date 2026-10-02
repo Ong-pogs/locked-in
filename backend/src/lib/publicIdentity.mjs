@@ -1,5 +1,6 @@
 /**
- * Wallet privacy for responses that list OTHER players (arena ladder, leaderboard).
+ * Wallet privacy for responses that list OTHER players (arena ladder and matches,
+ * leaderboard, community pot recipients).
  *
  * Full wallet addresses must never be sent in those lists: even when the UI only
  * shows a shortened address, the browser's Network tab would expose the full one.
@@ -27,6 +28,31 @@ export function toPublicLadderRows(rows, viewerWallet = null) {
     walletLabel: walletLabel(walletAddress),
     isMe: Boolean(viewerWallet) && walletAddress === viewerWallet,
   }));
+}
+
+/**
+ * Arena match players: same shape as the ladder (a label plus `isMe`). The
+ * other participant is often a stranger from the queue, so even a player in
+ * the match never gets their opponent's full address.
+ */
+export const toPublicMatchPlayers = toPublicLadderRows;
+
+/**
+ * Community pot recipients: a label instead of the address for everyone. The
+ * payout signature and raw send error are kept only on the viewer's own row,
+ * because either one names the recipient's wallet on a block explorer.
+ */
+export function toPublicPotRecipients(rows, viewerWallet = null) {
+  return rows.map(({ walletAddress, transactionSignature, lastError, ...rest }) => {
+    const isCurrentUser = Boolean(viewerWallet) && walletAddress === viewerWallet;
+    return {
+      ...rest,
+      displayIdentity: walletLabel(walletAddress),
+      transactionSignature: isCurrentUser ? transactionSignature ?? null : null,
+      lastError: isCurrentUser ? lastError ?? null : null,
+      isCurrentUser,
+    };
+  });
 }
 
 /**

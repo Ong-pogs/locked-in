@@ -32,6 +32,7 @@ import {
 import { issueVoucher, effectiveYieldBps } from '../../lib/claimVoucher.mjs';
 import { applyLessonDay, applyMissDay, lapseRedirectBps } from '../../lib/shieldLapseEngine.mjs';
 import { autoMissEventId } from '../../lib/missEvents.mjs';
+import { toPublicPotRecipients } from '../../lib/publicIdentity.mjs';
 import {
   deriveLockPdaServer,
   hasPositionConfig,
@@ -3938,9 +3939,10 @@ export async function getCommunityPotWindowDetail(walletAddress, windowId) {
   const distributedAmount = BigInt(distributionWindow?.distributedAmount ?? 0);
   const remainingAmount = totalRedirectedAmount - distributedAmount;
 
-  const recipients = recipientRows.map((row) => ({
+  // Any signed-in wallet can read any window, so recipients go out labelled:
+  // no full addresses, and other people's payout signatures are dropped.
+  const recipients = toPublicPotRecipients(recipientRows.map((row) => ({
     walletAddress: row.walletAddress,
-    displayIdentity: truncateWalletAddress(row.walletAddress),
     courseId: row.courseId,
     currentStreak: Number(row.currentStreak),
     principalAmount: String(row.principalAmount),
@@ -3952,8 +3954,7 @@ export async function getCommunityPotWindowDetail(walletAddress, windowId) {
     distributedAt: row.distributedAt ?? null,
     transactionSignature: row.distributionTransactionSignature ?? null,
     lastError: row.distributionLastError ?? null,
-    isCurrentUser: row.walletAddress === walletAddress,
-  }));
+  })), walletAddress);
 
   const userEntry = recipients.find((row) => row.isCurrentUser) ?? null;
 

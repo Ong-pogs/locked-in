@@ -15,6 +15,8 @@ let db;
 let suiteLock;
 let aliceAuth;
 let bobAuth;
+let aliceWallet;
+let bobWallet;
 
 async function seedBank() {
   const { query } = await import('../../../src/lib/db.mjs');
@@ -84,8 +86,10 @@ beforeAll(async () => {
   app = await createTestServer();
   db = await import('../../../src/lib/db.mjs');
   await seedBank();
-  aliceAuth = await getTestAuthHeaders(await stakedWallet(db));
-  bobAuth = await getTestAuthHeaders(await stakedWallet(db));
+  aliceWallet = await stakedWallet(db);
+  bobWallet = await stakedWallet(db);
+  aliceAuth = await getTestAuthHeaders(aliceWallet);
+  bobAuth = await getTestAuthHeaders(bobWallet);
 });
 
 afterAll(async () => {
@@ -213,7 +217,32 @@ describe('arena play', () => {
     })).json();
     expect(body.status).toBe('COMPLETE');
     expect(body.resolved).toBe(true);
-    const scores = Object.fromEntries(body.players.map((p) => [p.walletAddress, p.correctCount]));
-    expect(Object.values(scores).sort()).toEqual([0, 7]);
+    // Rows are told apart by the server's isMe flag (Alice is viewing).
+    const scores = Object.fromEntries(body.players.map((p) => [p.isMe ? 'me' : 'them', p.correctCount]));
+    expect(scores).toEqual({ me: 7, them: 0 });
+  });
+
+  it('never sends either player a full wallet address', async () => {
+    // In queue matches the opponent is a stranger, so the match state carries
+    // labels and an isMe flag, never creator/opponent or player addresses.
+    const matchId = await makeActiveMatch();
+    const read = async (headers) => (await app.inject({
+      method: 'GET', url: `/v1/arena/matches/${matchId}`, headers,
+    })).json();
+    const check = (body) => {
+      expect(body).not.toHaveProperty('creator');
+      expect(body).not.toHaveProperty('opponent');
+      expect(JSON.stringify(body)).not.toContain(aliceWallet);
+      expect(JSON.stringify(body)).not.toContain(bobWallet);
+      expect(body.players.filter((p) => p.isMe)).toHaveLength(1);
+      for (const p of body.players) expect(p.walletLabel).toMatch(/^.{4}….{4}$/);
+    };
+    check(await read(aliceAuth));
+    check(await read(bobAuth));
+    await playAll(matchId, aliceAuth);
+    await playAll(matchId, bobAuth);
+    const resolved = await read(bobAuth);
+    expect(resolved.resolved).toBe(true);
+    check(resolved);
   });
 });
