@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useLogin } from '@privy-io/react-auth';
 import { BookOpen, Coins, Trophy, LayoutDashboard, ChevronRight, Wallet, Swords, Zap } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { CozyCard, COZY_TEXT, COZY_TEXT_SHADOW } from '@/components/cozy';
+import { CozyButton, CozyCard, COZY_TEXT, COZY_TEXT_SHADOW } from '@/components/cozy';
 import { T } from '@/components/theme';
 import { Founding100Hero } from '@/components/Founding100Hero';
 
@@ -74,13 +74,10 @@ export function MobileHub() {
             The Village
           </p>
           {!isAuthenticated && (
-            <button
-              onClick={promptConnect}
-              className="flex min-h-11 items-center gap-1.5 rounded-lg border px-3 py-2 font-pixel-mono text-[11px] uppercase tracking-[1px]"
-              style={{ borderColor: 'rgba(255,213,128,0.5)', backgroundColor: 'rgba(255,213,128,0.14)', color: COZY_TEXT }}
-            >
+            // Solid gold, like the desktop village Connect button (was a faint tint here).
+            <CozyButton variant="solid" size="sm" onClick={promptConnect} className="min-h-11">
               <Wallet size={13} /> Connect
-            </button>
+            </CozyButton>
           )}
         </div>
       </div>

@@ -12,10 +12,9 @@ import { useCourseStore, useUserStore } from '@/stores';
 import type { Course, CourseCategory, CourseDifficulty } from '@/types';
 import {
   CornerMarks,
-  PrimaryButton,
   T,
 } from '@/components/theme';
-import { CozyCard, CozySectionLabel } from '@/components/cozy';
+import { CozyButton, CozyCard, CozySectionLabel, COZY_TEXT_SHADOW } from '@/components/cozy';
 import { HubButton } from '@/components/HubButton';
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -99,11 +98,11 @@ function StatsRow({ course, accentColor }: { course: Course; accentColor: string
       className="flex items-center gap-2 pt-3 mt-3"
       style={{ borderTop: `1px solid ${T.borderDormant}` }}
     >
-      <span className="font-pixel-mono text-[10px]" style={{ color: T.textMuted }}>
+      <span className="font-pixel-mono text-[10px]" style={{ color: T.textMutedStrong }}>
         {course.totalModules ?? 1} mod
       </span>
       <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.08)' }}>&middot;</span>
-      <span className="font-pixel-mono text-[10px]" style={{ color: T.textMuted }}>
+      <span className="font-pixel-mono text-[10px]" style={{ color: T.textMutedStrong }}>
         {course.totalLessons} lessons
       </span>
       <span className="flex-1" />
@@ -212,7 +211,7 @@ function CourseCard({
 
         <p
           className="text-xs leading-[18px] mb-3.5 line-clamp-3"
-          style={{ color: T.textSecondary }}
+          style={{ color: T.textMutedStrong, textShadow: COZY_TEXT_SHADOW }}
         >
           {course.description}
         </p>
@@ -235,9 +234,9 @@ function CourseCard({
         ) : (
           showEnrollButton && (
             <div onClick={(e) => e.stopPropagation()}>
-              <PrimaryButton onClick={onEnroll ?? onSelect}>
+              <CozyButton variant="solid" className="w-full" onClick={onEnroll ?? onSelect}>
                 {'◆'}  LOCK & START  {'◆'}
-              </PrimaryButton>
+              </CozyButton>
             </div>
           )
         )}
@@ -252,26 +251,9 @@ function CourseCard({
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <button
-              type="button"
-              onClick={onLock}
-              className="w-full py-3 rounded-[10px] cursor-pointer text-center"
-              style={{
-                backgroundColor: T.amber,
-                border: `1px solid ${T.amber}`,
-                boxShadow: `0 0 12px ${T.amber}80`,
-              }}
-            >
-              <span
-                className="text-[13px] font-bold uppercase tracking-[2.5px]"
-                style={{
-                  color: T.bg,
-                  fontFamily: 'var(--font-pixel), Georgia, serif',
-                }}
-              >
-                {'◆'}  LOCK FUNDS & CONTINUE  {'◆'}
-              </span>
-            </button>
+            <CozyButton variant="solid" className="w-full" onClick={onLock}>
+              {'◆'}  LOCK FUNDS & CONTINUE  {'◆'}
+            </CozyButton>
             <p
               className="text-center mt-2 font-pixel-mono text-[10px] uppercase tracking-[1px]"
               style={{ color: `${T.amber}80` }}
@@ -280,7 +262,7 @@ function CourseCard({
             </p>
           </div>
         ) : (
-          <StatsRow course={course} accentColor={accentColor} />
+          <StatsRow course={course} accentColor={catColor} />
         )}
       </CozyCard>
     </div>
@@ -336,7 +318,7 @@ function ActiveCourseCard({
                 />
                 {streak} streak
               </span>
-              <span className="font-pixel-mono text-[11px]" style={{ color: T.textMuted }}>
+              <span className="font-pixel-mono text-[11px]" style={{ color: T.textMutedStrong }}>
                 {completed}/{total} lessons
               </span>
             </div>
@@ -642,35 +624,13 @@ export default function CoursesPage() {
           {isOnboardingMode && (
             <div className="mt-4">
               {isAuthenticated ? (
-                <button
-                  onClick={disconnect}
-                  className="px-5 py-2 rounded-lg border text-[11px] font-pixel-mono font-bold uppercase tracking-[1.5px] transition-opacity hover:opacity-80 cursor-pointer"
-                  style={{
-                    color: T.crimson,
-                    borderColor: `${T.crimson}55`,
-                    backgroundColor: 'rgba(14,14,28,0.55)',
-                    backdropFilter: 'blur(6px)',
-                    WebkitBackdropFilter: 'blur(6px)',
-                    textShadow: '0 1px 2px rgba(0,0,0,0.85)',
-                  }}
-                >
+                <CozyButton tone="crimson" size="sm" onClick={disconnect}>
                   Disconnect Wallet
-                </button>
+                </CozyButton>
               ) : (
-                <button
-                  onClick={handleSignIn}
-                  className="px-5 py-2 rounded-lg border text-[11px] font-pixel-mono font-bold uppercase tracking-[1.5px] transition-opacity hover:opacity-80 cursor-pointer"
-                  style={{
-                    color: T.amber,
-                    borderColor: `${T.amber}55`,
-                    backgroundColor: 'rgba(14,14,28,0.55)',
-                    backdropFilter: 'blur(6px)',
-                    WebkitBackdropFilter: 'blur(6px)',
-                    textShadow: '0 1px 2px rgba(0,0,0,0.85)',
-                  }}
-                >
+                <CozyButton size="sm" onClick={handleSignIn}>
                   Sign In
-                </button>
+                </CozyButton>
               )}
             </div>
           )}
@@ -679,43 +639,23 @@ export default function CoursesPage() {
 
         {/* Loading */}
         {contentLoading && courses.length === 0 && (
-          <div
-            className="p-4 rounded-lg border mb-4"
-            style={{
-              borderColor: T.borderDormant,
-              backgroundColor: 'rgba(14,14,28,0.6)',
-            }}
-          >
-            <p className="text-xs text-center" style={{ color: T.textSecondary }}>
+          <CozyCard className="mb-4" style={{ padding: 16 }}>
+            <p className="font-pixel-mono text-[11px] text-center" style={{ color: T.textMutedStrong, textShadow: COZY_TEXT_SHADOW }}>
               Syncing course catalog...
             </p>
-          </div>
+          </CozyCard>
         )}
 
         {/* Error */}
         {contentError && (
-          <div
-            className="p-4 rounded-lg border mb-4"
-            style={{
-              borderColor: 'rgba(255,68,102,0.15)',
-              backgroundColor: 'rgba(14,14,28,0.6)',
-            }}
-          >
-            <p className="text-xs text-center" style={{ color: 'rgba(255,68,102,0.6)' }}>
+          <CozyCard className="mb-4 flex flex-col items-center" style={{ padding: 16, borderColor: `${T.crimson}55` }}>
+            <p className="text-xs text-center" style={{ color: T.crimson, textShadow: COZY_TEXT_SHADOW }}>
               {contentError}
             </p>
-            <button
-              onClick={() => void initializeContent(true)}
-              className="mt-3 mx-auto block px-4 py-2 rounded-md border text-[11px] font-semibold uppercase tracking-wide cursor-pointer"
-              style={{
-                borderColor: `${T.amber}30`,
-                backgroundColor: 'rgba(212,160,74,0.08)',
-                color: T.amber,
-              }}
-            >
+            <CozyButton size="sm" className="mt-3" onClick={() => void initializeContent(true)}>
               Retry
-            </button>
-          </div>
+            </CozyButton>
+          </CozyCard>
         )}
 
         {/* Active courses */}
@@ -766,7 +706,7 @@ export default function CoursesPage() {
         {/* Empty */}
         {courses.length === 0 && !contentLoading && !contentError && contentInitialized && (
           <div className="text-center py-16">
-            <p className="text-sm" style={{ color: T.textMuted }}>
+            <p className="font-pixel-mono text-[11px]" style={{ color: T.textMutedStrong, textShadow: COZY_TEXT_SHADOW }}>
               No courses available yet.
             </p>
           </div>

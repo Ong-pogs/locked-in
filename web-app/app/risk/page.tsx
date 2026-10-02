@@ -36,11 +36,14 @@ const h2: React.CSSProperties = {
   marginTop: 32,
   marginBottom: 10,
 };
+// Long-form copy uses Geist, the app's readable sans: Silkscreen has no
+// lowercase, so whole paragraphs in it read as a wall of caps. The color is
+// T.textMutedStrong (theme.tsx is a client module, so it is not imported here).
 const body: React.CSSProperties = {
-  fontFamily: 'var(--font-pixel-mono), monospace',
-  fontSize: 13,
+  fontFamily: 'var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif',
+  fontSize: 15,
   lineHeight: 1.7,
-  color: 'rgba(255,255,255,0.72)',
+  color: 'rgba(255,255,255,0.66)',
   marginBottom: 12,
 };
 const draft: React.CSSProperties = {
@@ -53,6 +56,13 @@ const draft: React.CSSProperties = {
   marginBottom: 28,
 };
 const link: React.CSSProperties = { color: '#FFD580', textDecoration: 'underline' };
+// The footer nav is short link labels, so it keeps the pixel HUD face.
+const footer: React.CSSProperties = {
+  ...body,
+  fontFamily: 'var(--font-pixel-mono), monospace',
+  fontSize: 13,
+  marginTop: 32,
+};
 
 export default function RiskPage() {
   return (
@@ -145,7 +155,7 @@ export default function RiskPage() {
           investment advice, and nothing in the app is a recommendation to deposit.
         </p>
 
-        <p style={{ ...body, marginTop: 32 }}>
+        <p style={footer}>
           <Link href="/terms" style={link}>
             Terms
           </Link>{' '}

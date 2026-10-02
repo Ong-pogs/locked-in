@@ -62,10 +62,12 @@ function RichParagraph({ block }: { block: LessonBlock }) {
 
         if (looksLikeHeading) {
           return (
+            // Pixelify Sans via the .font-pixel class (not an inline fontFamily)
+            // so headings like "DeFi" also get its broken-"fi"-ligature fix.
             <h3
               key={i}
+              className="font-pixel"
               style={{
-                fontFamily: 'Georgia, serif',
                 fontSize: 22,
                 fontWeight: 700,
                 color: T.textPrimary,
@@ -176,8 +178,8 @@ function RichParagraph({ block }: { block: LessonBlock }) {
             elements.push(
               <h3
                 key={`h-${j}`}
+                className="font-pixel"
                 style={{
-                  fontFamily: 'Georgia, serif',
                   fontSize: 22,
                   fontWeight: 700,
                   color: T.textPrimary,

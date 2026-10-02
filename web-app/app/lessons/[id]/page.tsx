@@ -15,7 +15,7 @@ import { ApiError } from '@/services/api/errors';
 import { buildLessonResultParams } from '@/services/lessons/resultParams';
 import type { Question, Lesson } from '@/types';
 import { T } from '@/components/theme';
-import { CozyCard } from '@/components/cozy';
+import { CozyButton, CozyCard, COZY_BORDER, COZY_TEXT_SHADOW } from '@/components/cozy';
 import { HubButton } from '@/components/HubButton';
 import { RecallQuestion } from '@/components/RecallQuestion';
 import { LessonBlockRenderer } from '@/components/LessonBlocks';
@@ -38,9 +38,8 @@ function safeRandomUUID(): string {
 }
 
 // ── Cozy palette constants (mirror /courses, /dashboard) ──
+// Border and text shadow come from components/cozy.tsx (this file had drifted copies).
 const AMBER = '#FFD580';
-const COZY_BORDER = 'rgba(58, 143, 168, 0.45)';
-const COZY_TEXT_SHADOW = '0 1px 2px rgba(0,0,0,0.85)';
 
 // ── Shared layout shell — academy backdrop + indigo gradient + Hub ──
 function CozyLessonShell({ children }: { children: React.ReactNode }) {
@@ -98,7 +97,8 @@ function CozyProgressBar({ progress, color }: { progress: number; color?: string
   );
 }
 
-// ── Cozy primary CTA (amber) — replaces wood-textured PrimaryButton on these pages ──
+// Cozy primary CTA: the shared solid CozyButton at full width (one gold, one font,
+// one radius across the app; it replaces this page's own amber button copy).
 function CozyPrimary({
   children,
   onClick,
@@ -109,27 +109,9 @@ function CozyPrimary({
   disabled?: boolean;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`w-full py-3.5 rounded-[10px] text-center transition-all duration-150 cursor-pointer ${
-        disabled ? 'opacity-40 cursor-not-allowed' : 'hover:brightness-110'
-      }`}
-      style={{
-        backgroundColor: AMBER,
-        border: `1px solid ${AMBER}80`,
-        boxShadow: disabled ? 'none' : `0 0 16px ${AMBER}33`,
-        fontFamily: 'var(--font-pixel), Georgia, serif',
-        fontSize: 13,
-        fontWeight: 800,
-        color: '#1A1000',
-        letterSpacing: 2.5,
-        textTransform: 'uppercase',
-      }}
-    >
+    <CozyButton variant="solid" className="w-full" onClick={onClick} disabled={disabled}>
       {children}
-    </button>
+    </CozyButton>
   );
 }
 
@@ -987,7 +969,7 @@ export default function LessonPage(props: {
                       setSelectedOption(optionText);
                     }}
                     disabled={locked}
-                    className="w-full text-left p-4 rounded-[10px] border transition-all duration-150 cursor-pointer hover:brightness-110"
+                    className="w-full text-left p-4 rounded-[10px] border transition-[border-color,background-color,box-shadow] duration-150 cursor-pointer enabled:hover:outline enabled:hover:outline-1 enabled:hover:-outline-offset-1 enabled:hover:outline-[rgba(255,213,128,0.55)]"
                     style={{
                       borderColor,
                       backgroundColor: bgColor,

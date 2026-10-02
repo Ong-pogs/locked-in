@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { T } from '../../components/theme';
+import {
+  CozyButton, CozyCard, CozySectionLabel, COZY_BORDER, COZY_TEXT, COZY_TEXT_SHADOW,
+} from '../../components/cozy';
 import { ArenaBackground } from './ArenaBackground';
 import { StakePanel } from './StakePanel';
 import { fetchWithAuth } from '../../services/api/httpClient';
@@ -17,6 +20,12 @@ import { MatchProposal, useCountdown } from './MatchProposal';
 // few seconds longer so a click already in flight still lands.
 const PROPOSAL_COUNTDOWN_MS = 10_000;
 import type { ArenaLadderRow, ArenaProfile, ArenaStakeEntry } from '../../types/arena';
+
+// Secondary copy on the frosted glass: the stronger muted white plus the cozy
+// shadow, which is what keeps small text legible over the tavern art.
+const MUTED_TEXT = { color: T.textMutedStrong, textShadow: COZY_TEXT_SHADOW };
+// Card eyebrow labels ("Your rating", "Your challenge code") in the cozy amber.
+const EYEBROW_TEXT = { color: COZY_TEXT, textShadow: COZY_TEXT_SHADOW };
 
 function shortWallet(address: string) {
   return `${address.slice(0, 4)}…${address.slice(-4)}`;
@@ -217,48 +226,49 @@ export default function ArenaPage() {
     <ArenaBackground>
       <div className="mx-auto w-full max-w-2xl px-4 pb-8 pt-20">
         {/* Backed rather than bare: the tavern art is at its busiest behind the
-            header, and small muted copy straight on top of it was hard to read. */}
-        <header
-          className="mb-6 rounded-lg px-4 py-3"
-          style={{ background: 'rgba(6,6,12,0.62)', border: `1px solid ${T.borderDormant}` }}
-        >
-          <h1
-            className="font-pixel text-xl tracking-wide"
-            style={{ color: T.amber }}
-            data-testid="arena-title"
-          >
-            The Arena
-          </h1>
-          <p className="mt-1 text-[12px]" style={{ color: T.textMutedStrong }}>
-            Head-to-head recall. Seven questions, twenty seconds each, fastest correct wins.
-            Stake a course to enter. A losing season costs that course one yield tier —
-            never your deposit, streak or shields.
-          </p>
+            header, and small muted copy straight on top of it was hard to read.
+            The backing is the shared frosted CozyCard, so the Arena matches the
+            rest of the app. <header> stays the outer element for its semantics. */}
+        <header className="mb-6">
+          <CozyCard>
+            <h1
+              className="font-pixel text-2xl font-bold tracking-wide"
+              style={{ color: COZY_TEXT, textShadow: COZY_TEXT_SHADOW }}
+              data-testid="arena-title"
+            >
+              The Arena
+            </h1>
+            <p className="mt-1.5 font-pixel-mono text-[12px] leading-relaxed" style={MUTED_TEXT}>
+              Head-to-head recall. Seven questions, twenty seconds each, fastest correct wins.
+              Stake a course to enter. A losing season costs that course one yield tier —
+              never your deposit, streak or shields.
+            </p>
+          </CozyCard>
         </header>
 
-        {/* Your standing */}
-        <section
-          className="mb-5 rounded-lg p-4"
-          style={{ background: T.bgCard, border: `1px solid ${T.borderAlive}` }}
-          data-testid="arena-profile"
-        >
-          <div className="flex items-baseline justify-between">
-            <span className="font-pixel-mono text-[10px] uppercase tracking-[1px]" style={{ color: T.textMuted }}>
-              Your rating
-            </span>
-            <span
-              className="text-2xl font-bold"
-              style={{ color: T.teal, fontVariantNumeric: 'tabular-nums' }}
-              data-testid="arena-my-rating"
-            >
-              {profile?.rating ?? 1200}
-            </span>
-          </div>
-          <div className="mt-1 font-pixel-mono text-[11px]" style={{ color: T.textMuted }}>
-            {profile && profile.games > 0
-              ? `${profile.games} played · ${profile.wins}W ${profile.losses}L ${profile.draws}D`
-              : 'Unranked — play your first match to join the ladder'}
-          </div>
+        {/* Your standing. The <section> keeps its test id; the glass is the
+            CozyCard inside it (CozyCard always renders a <div>). */}
+        <section className="mb-5" data-testid="arena-profile">
+          <CozyCard>
+            <div className="flex items-baseline justify-between">
+              <span className="font-pixel-mono text-[10px] uppercase tracking-[1px]" style={EYEBROW_TEXT}>
+                Your rating
+              </span>
+              {/* Silkscreen, like every stat number on the cozy pages. */}
+              <span
+                className="font-pixel-mono text-2xl font-bold"
+                style={{ color: T.teal, textShadow: COZY_TEXT_SHADOW, fontVariantNumeric: 'tabular-nums' }}
+                data-testid="arena-my-rating"
+              >
+                {profile?.rating ?? 1200}
+              </span>
+            </div>
+            <div className="mt-1 font-pixel-mono text-[11px]" style={MUTED_TEXT}>
+              {profile && profile.games > 0
+                ? `${profile.games} played · ${profile.wins}W ${profile.losses}L ${profile.draws}D`
+                : 'Unranked — play your first match to join the ladder'}
+            </div>
+          </CozyCard>
         </section>
 
         <StakePanel onLiveStakeChange={setLiveStake} />
@@ -276,21 +286,23 @@ export default function ArenaPage() {
 
         {/* Actions. The header is load-bearing: these two buttons used to sit
             here with nothing saying what pressing one cost. Both are shut
-            until a stake is riding, so the badge has to say which it is. */}
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <span
-            className="font-pixel-mono text-[10px] uppercase tracking-[1px]"
-            style={{ color: T.textMuted }}
-          >
-            Play a match
-          </span>
+            until a stake is riding, so the badge has to say which it is.
+            Baseline-aligned so the badge text sits on the label's line; the
+            label's own bottom margin spaces the row from what follows. */}
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <CozySectionLabel>Play a match</CozySectionLabel>
+          {/* Sits straight on the art, so it gets the same dark glass base as a
+              tinted CozyButton, with the tone mixed in when a stake is riding. */}
           <span
             data-testid="arena-match-mode"
-            className="rounded-full px-2.5 py-1 text-[10px] font-semibold"
+            className="rounded-full px-2.5 py-1 font-pixel-mono text-[10px] uppercase tracking-[1px]"
             style={{
-              background: canPlay ? 'rgba(255,68,102,0.10)' : 'rgba(255,255,255,0.05)',
-              border: `1px solid ${canPlay ? 'rgba(255,68,102,0.35)' : T.borderDormant}`,
+              background: canPlay
+                ? `color-mix(in srgb, ${T.crimson} 14%, rgba(14, 14, 28, 0.82))`
+                : 'rgba(14, 14, 28, 0.82)',
+              border: `1px solid ${canPlay ? 'rgba(255,68,102,0.55)' : COZY_BORDER}`,
               color: canPlay ? T.crimson : T.textMutedStrong,
+              textShadow: COZY_TEXT_SHADOW,
             }}
           >
             {!stakeKnown
@@ -302,173 +314,182 @@ export default function ArenaPage() {
         </div>
 
         {stakeKnown && !canPlay && (
-          <div
-            className="mb-3 rounded-lg p-3 text-[12px]"
+          // Notices are compact CozyCards with an amber edge, so they read as
+          // a note rather than another panel.
+          <CozyCard
+            className="mb-3 font-pixel-mono text-[12px] leading-relaxed"
             style={{
-              background: 'rgba(212,160,74,0.06)',
-              border: `1px solid ${T.borderAlive}`,
+              padding: 14,
+              borderColor: 'rgba(255,213,128,0.45)',
               color: T.textPrimary,
+              textShadow: COZY_TEXT_SHADOW,
             }}
             data-testid="arena-stake-required"
           >
             The Arena only takes challengers with something on the line. Stake a course
             above to unlock both.
-          </div>
+          </CozyCard>
         )}
 
+        {/* Two-line tiles on the shared CozyButton (tint: glass, safe on the
+            art). Its disabled state replaces the old inline 0.6 opacity, which
+            tracked `disabled` exactly. A single block child keeps the button's
+            centered row layout from pulling the title and hint apart. */}
         <section className="mb-6 grid gap-3 sm:grid-cols-2">
-          <button
-            type="button"
+          <CozyButton
+            tone="amber"
             onClick={onCreate}
             disabled={!canPlay}
             data-testid="arena-create-challenge"
-            className="rounded-lg px-4 py-3 text-left transition-colors disabled:cursor-not-allowed"
-            style={{
-              background: T.bgCardActive,
-              border: `1px solid ${canPlay ? T.borderAlive : T.borderDormant}`,
-              color: T.textPrimary,
-              opacity: canPlay ? 1 : 0.6,
-            }}
+            className="w-full"
           >
-            <span className="block font-pixel text-[13px]" style={{ color: T.amber }}>Challenge a friend</span>
-            <span className="mt-1 block text-[11px]" style={{ color: T.textMuted }}>
-              {canPlay
-                ? 'Get a link. Whoever opens it plays your exact questions.'
-                : 'Needs a staked course.'}
+            <span className="block w-full text-left">
+              <span className="block">Challenge a friend</span>
+              <span className="mt-1 block text-[10px] leading-relaxed tracking-normal" style={MUTED_TEXT}>
+                {canPlay
+                  ? 'Get a link. Whoever opens it plays your exact questions.'
+                  : 'Needs a staked course.'}
+              </span>
             </span>
-          </button>
+          </CozyButton>
 
-          <button
-            type="button"
+          <CozyButton
+            tone="teal"
             onClick={queueing ? onCancelQueue : onFindOpponent}
             disabled={!canPlay && !queueing}
             data-testid="arena-find-opponent"
-            className="rounded-lg px-4 py-3 text-left transition-colors disabled:cursor-not-allowed"
-            style={{
-              background: T.bgCardActive,
-              border: `1px solid ${T.borderDormant}`,
-              color: T.textPrimary,
-              opacity: canPlay || queueing ? 1 : 0.6,
-            }}
+            className="w-full"
           >
-            <span className="block font-pixel text-[13px]" style={{ color: T.teal }}>
-              {queueing ? 'Searching… tap to cancel' : 'Find an opponent'}
+            <span className="block w-full text-left">
+              <span className="block">
+                {queueing ? 'Searching… tap to cancel' : 'Find an opponent'}
+              </span>
+              <span className="mt-1 block text-[10px] leading-relaxed tracking-normal" style={MUTED_TEXT}>
+                {queueing
+                  ? 'Looking for someone else in the queue.'
+                  : canPlay
+                    ? 'Pairs you with anyone else waiting.'
+                    : 'Needs a staked course.'}
+              </span>
             </span>
-            <span className="mt-1 block text-[11px]" style={{ color: T.textMuted }}>
-              {queueing
-                ? 'Looking for someone else in the queue.'
-                : canPlay
-                  ? 'Pairs you with anyone else waiting.'
-                  : 'Needs a staked course.'}
-            </span>
-          </button>
+          </CozyButton>
         </section>
 
         {/* The queue is usually empty at this size — say so instead of spinning. */}
         {suggestLink && (
-          <div
-            className="mb-5 rounded-lg p-3 text-[12px]"
-            style={{ background: 'rgba(212,160,74,0.06)', border: `1px solid ${T.borderAlive}`, color: T.textPrimary }}
+          <CozyCard
+            className="mb-5 font-pixel-mono text-[12px] leading-relaxed"
+            style={{
+              padding: 14,
+              borderColor: 'rgba(255,213,128,0.45)',
+              color: T.textPrimary,
+              textShadow: COZY_TEXT_SHADOW,
+            }}
             data-testid="arena-queue-suggest-link"
           >
             Nobody else is in the queue right now. Challenging a friend by link works
             straight away — they do not need an account to open it.
-          </div>
+          </CozyCard>
         )}
 
         {joinCode && (
-          <div
-            className="mb-6 rounded-lg p-4"
-            style={{ background: T.bgCard, border: `1px solid ${T.borderAlive}` }}
-            data-testid="arena-challenge-created"
-          >
-            <div className="font-pixel-mono text-[10px] uppercase tracking-[1px]" style={{ color: T.textMuted }}>
+          <CozyCard className="mb-6" data-testid="arena-challenge-created">
+            <div className="font-pixel-mono text-[10px] uppercase tracking-[1px]" style={EYEBROW_TEXT}>
               Your challenge code
             </div>
+            {/* Geist Mono, like the wallet addresses: the code alphabet has both
+                S and 5, and both pixel faces draw them as the same glyph. A code
+                people retype has to be unambiguous. */}
             <div
-              className="mt-1 font-pixel text-2xl tracking-[3px]"
-              style={{ color: T.amber }}
+              className="mt-1 font-mono text-2xl font-bold tracking-[3px]"
+              style={{ color: COZY_TEXT, textShadow: COZY_TEXT_SHADOW }}
               data-testid="arena-join-code"
             >
               {joinCode}
             </div>
-            <button
-              type="button"
-              onClick={onCopy}
-              data-testid="arena-copy-link"
-              className="mt-3 rounded px-3 py-2 font-pixel-mono text-[11px]"
-              style={{ background: T.bgCardActive, border: `1px solid ${T.borderAlive}`, color: T.textPrimary }}
-            >
+            <CozyButton size="sm" onClick={onCopy} data-testid="arena-copy-link" className="mt-3">
               {copied ? 'Link copied' : 'Copy invite link'}
-            </button>
-            <div className="mt-2 text-[11px]" style={{ color: T.textMuted }}>
+            </CozyButton>
+            <div className="mt-2 font-pixel-mono text-[10px]" style={MUTED_TEXT}>
               Expires in 24 hours. You can play your half any time before then.
             </div>
-          </div>
+          </CozyCard>
         )}
 
         {error && (
-          <div className="mb-5 text-[12px]" style={{ color: T.crimson }} data-testid="arena-error">
+          <div
+            className="mb-5 font-pixel-mono text-[12px]"
+            style={{ color: T.crimson, textShadow: COZY_TEXT_SHADOW }}
+            data-testid="arena-error"
+          >
             {error}
           </div>
         )}
 
         {/* Ladder */}
         <section>
-          <h2 className="mb-2 font-pixel-mono text-[10px] uppercase tracking-[1px]" style={{ color: T.textMuted }}>
+          {/* Kept an <h2> for heading navigation, so CozySectionLabel (which
+              renders a <p>) is not used here; its look is mirrored instead. */}
+          <h2
+            className="mb-2.5 mt-1 font-pixel-mono text-[13px] font-bold uppercase tracking-[2px]"
+            style={{ color: COZY_TEXT, textShadow: COZY_TEXT_SHADOW, opacity: 0.85 }}
+          >
             Ladder
           </h2>
-          <div
-            className="overflow-hidden rounded-lg"
-            style={{ background: T.bgCard, border: `1px solid ${T.borderDormant}` }}
-          >
+          {/* Flush rows inside one glass card, as on /leaderboard. */}
+          <CozyCard style={{ padding: 0, overflow: 'hidden' }}>
             {ladder === null && (
-              <div className="p-4 text-[12px]" style={{ color: T.textMuted }}>Loading…</div>
+              <div className="p-4 font-pixel-mono text-[12px]" style={MUTED_TEXT}>Loading…</div>
             )}
             {ladder?.length === 0 && (
               <div className="p-5 text-center" data-testid="arena-ladder-empty">
-                <div className="font-pixel text-[13px]" style={{ color: T.textPrimary }}>
+                <div className="font-pixel text-[14px]" style={{ color: COZY_TEXT, textShadow: COZY_TEXT_SHADOW }}>
                   Nobody has played yet
                 </div>
-                <div className="mt-1 text-[11px]" style={{ color: T.textMuted }}>
+                <div className="mt-1 font-pixel-mono text-[11px]" style={MUTED_TEXT}>
                   Win the first match and the top of this board is yours.
                 </div>
               </div>
             )}
-            {ladder?.map((row) => (
+            {/* Dashed amber dividers like /leaderboard, with none above the
+                first row so it does not double up with the card's own edge. */}
+            {ladder?.map((row, i) => (
               <div
                 key={row.walletAddress}
                 data-testid="arena-ladder-row"
-                className="flex items-center justify-between px-4 py-2"
-                style={{ borderTop: `1px solid ${T.borderDormant}` }}
+                className="flex items-center justify-between px-4 py-2.5"
+                style={{ borderTop: i === 0 ? undefined : '1px dashed rgba(255,213,128,0.10)' }}
               >
                 <span
-                  className="font-mono text-[11px]"
-                  style={{ color: T.textMuted, fontVariantNumeric: 'tabular-nums' }}
+                  className="font-pixel-mono text-[12px] font-bold"
+                  style={{ color: COZY_TEXT, textShadow: COZY_TEXT_SHADOW, fontVariantNumeric: 'tabular-nums' }}
                 >
                   #{row.rank}
                 </span>
                 {/* Geist Mono, not Silkscreen: base58 is case-sensitive and
                     Silkscreen has no lowercase glyphs, so "7Vt9" rendered as
                     "7VT9" — a different address than the one it names. */}
-                <span className="flex-1 px-3 font-mono text-[11px]" style={{ color: T.textPrimary }}>
+                <span
+                  className="flex-1 px-3 font-mono text-[11px]"
+                  style={{ color: T.textPrimary, textShadow: COZY_TEXT_SHADOW }}
+                >
                   {shortWallet(row.walletAddress)}
                 </span>
                 <span
-                  className="font-mono text-[11px]"
-                  style={{ color: T.textMuted, fontVariantNumeric: 'tabular-nums' }}
+                  className="font-pixel-mono text-[11px]"
+                  style={{ ...MUTED_TEXT, fontVariantNumeric: 'tabular-nums' }}
                 >
                   {row.wins}W {row.losses}L
                 </span>
                 <span
-                  className="ml-3 text-[14px] font-bold"
-                  style={{ color: T.teal, fontVariantNumeric: 'tabular-nums' }}
+                  className="ml-3 font-pixel-mono text-[14px] font-bold"
+                  style={{ color: T.teal, textShadow: COZY_TEXT_SHADOW, fontVariantNumeric: 'tabular-nums' }}
                 >
                   {row.rating}
                 </span>
               </div>
             ))}
-          </div>
+          </CozyCard>
         </section>
       </div>
     </ArenaBackground>

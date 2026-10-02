@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CozyCard, CozySectionLabel, COZY_TEXT, COZY_TEXT_SHADOW } from '@/components/cozy';
+import { CozyButton, CozyCard, CozySectionLabel, COZY_TEXT, COZY_TEXT_SHADOW } from '@/components/cozy';
 import { T } from '@/components/theme';
 import { HubButton } from '@/components/HubButton';
 import { LiveApyChip } from '@/components/LiveApyChip';
@@ -247,12 +247,15 @@ export function DashboardV2() {
             mobile + a shrinkable chip wrapper keeps the row inside the page. */}
         <div className="flex items-center justify-between gap-3 mb-5">
           <h1
-            className="text-2xl md:text-3xl font-bold tracking-wide font-pixel min-w-0"
+            className="text-2xl md:text-3xl font-bold tracking-wide font-pixel shrink-0"
             style={{ color: COZY_TEXT, textShadow: COZY_TEXT_SHADOW }}
           >
             Dashboard
           </h1>
-          <div className="min-w-0 shrink">
+          {/* Title never shrinks (min-w-0 let the chip cover its last letter at 390px).
+              The chip shrinks instead: [&>*]:min-w-0 lifts its flex min-size so its
+              labels truncate rather than spilling left over the title. */}
+          <div className="min-w-0 flex-1 flex justify-end [&>*]:min-w-0">
             <LiveApyChip data={apy.data} hadError={apy.hadError} />
           </div>
         </div>
@@ -279,18 +282,7 @@ export function DashboardV2() {
             >
               Lock a small stake on a course. Learn daily, keep the flame lit, claim it back with yield.
             </p>
-            <button
-              onClick={() => router.push('/courses')}
-              className="px-6 py-3 rounded-lg border font-pixel text-sm uppercase tracking-[2px] font-bold min-h-[44px]"
-              style={{
-                backgroundColor: 'rgba(255,213,128,0.12)',
-                borderColor: 'rgba(255,213,128,0.4)',
-                color: COZY_TEXT,
-                textShadow: COZY_TEXT_SHADOW,
-              }}
-            >
-              Browse courses
-            </button>
+            <CozyButton onClick={() => router.push('/courses')}>Browse courses</CozyButton>
           </CozyCard>
         ) : (
           (() => {
@@ -366,17 +358,9 @@ export function DashboardV2() {
                           : 'Nothing claimed yet — finish a course and claim your stake back.'}
                       </p>
                       {positionsTab === 'active' && (
-                        <button
-                          onClick={() => router.push('/courses')}
-                          className="mt-3 px-5 py-2.5 rounded-lg border font-pixel-mono text-[11px] uppercase tracking-[1.5px] min-h-[40px]"
-                          style={{
-                            backgroundColor: 'rgba(255,213,128,0.12)',
-                            borderColor: 'rgba(255,213,128,0.4)',
-                            color: COZY_TEXT,
-                          }}
-                        >
+                        <CozyButton className="mt-3" onClick={() => router.push('/courses')}>
                           Browse courses
-                        </button>
+                        </CozyButton>
                       )}
                     </CozyCard>
                   ) : positionsTab === 'active' ? (
@@ -423,36 +407,19 @@ export function DashboardV2() {
 
         {/* Footer disconnect: muted-red bordered button so users can
             actually find logout (was previously only on the legacy dashboard).
-            It sits straight on the painted art, so it uses the HubButton's solid
-            glass under the red tint (a bare 8% tint was unreadable). Only shown
-            when signed in: /dashboard is a public route. */}
+            It sits straight on the painted art, so it uses CozyButton's tint
+            variant (solid glass under the red tint; a bare 8% tint was
+            unreadable). Only shown when signed in: /dashboard is a public route. */}
         {isAuthenticated && (
           <div className="pt-6">
-            <button
-              type="button"
+            <CozyButton
+              tone="crimson"
               data-testid="v2-disconnect"
               onClick={handleDisconnect}
-              className="w-full min-h-[44px] px-6 py-3 rounded-lg border font-pixel text-sm uppercase tracking-[2px] font-bold transition-colors cursor-pointer"
-              style={{
-                backgroundColor: 'rgba(14,14,28,0.82)',
-                backgroundImage: 'linear-gradient(rgba(255,68,102,0.12), rgba(255,68,102,0.12))',
-                borderColor: 'rgba(255,68,102,0.45)',
-                color: T.crimson,
-                textShadow: '0 1px 2px rgba(0,0,0,0.7)',
-                backdropFilter: 'blur(10px)',
-                WebkitBackdropFilter: 'blur(10px)',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(255,68,102,0.75)';
-                e.currentTarget.style.backgroundImage = 'linear-gradient(rgba(255,68,102,0.22), rgba(255,68,102,0.22))';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(255,68,102,0.45)';
-                e.currentTarget.style.backgroundImage = 'linear-gradient(rgba(255,68,102,0.12), rgba(255,68,102,0.12))';
-              }}
+              className="w-full"
             >
               Disconnect Wallet
-            </button>
+            </CozyButton>
           </div>
         )}
       </div>

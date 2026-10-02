@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
 import { T } from '../../components/theme';
+import { COZY_BORDER, COZY_TEXT, COZY_TEXT_SHADOW } from '../../components/cozy';
 
 export interface StakeableCourse {
   id: string;
@@ -83,15 +84,21 @@ export function CourseSelect({
         onClick={() => { setOpen((o) => !o); setActive(Math.max(0, courses.findIndex((c) => c.id === value))); }}
         onKeyDown={onKeyDown}
         className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left transition-colors disabled:opacity-40"
+        // A dark well inside the glass card, like the cozy deposit input: teal
+        // aurora edge while empty, amber once a course is picked.
         style={{
-          background: T.bgCardActive,
-          border: `1px solid ${selected ? T.borderAlive : T.borderDormant}`,
-          color: selected ? T.textPrimary : T.textMuted,
+          background: 'rgba(0,0,0,0.35)',
+          border: `1px solid ${selected ? 'rgba(255,213,128,0.5)' : COZY_BORDER}`,
+          color: selected ? T.textPrimary : T.textMutedStrong,
+          textShadow: COZY_TEXT_SHADOW,
         }}
       >
-        <span className="min-w-0 flex-1 truncate text-[13px]">
+        {/* Course titles stay in Pixelify Sans: it has lowercase, Silkscreen does not. */}
+        <span className="min-w-0 flex-1 truncate font-pixel text-[13px]">
           {selected ? selected.title : 'Choose a locked course…'}
         </span>
+        {/* Yield stays in the body face: both pixel faces draw 5 like S, and
+            "50%" is the money number (see YieldLadder). */}
         {selected && (
           <span
             className="shrink-0 text-[11px] font-semibold"
@@ -100,9 +107,11 @@ export function CourseSelect({
             {selected.keptPct}% yield
           </span>
         )}
-        <ChevronDown size={15} style={{ color: T.textMuted }} aria-hidden />
+        <ChevronDown size={15} style={{ color: T.textMutedStrong }} aria-hidden />
       </button>
 
+      {/* Solid, not glass: a backdrop blur nested in the CozyCard would only
+          see the card, so the part of the list hanging below it would go clear. */}
       {open && courses.length > 0 && (
         <ul
           role="listbox"
@@ -110,7 +119,7 @@ export function CourseSelect({
           className="absolute z-50 mt-1 w-full overflow-hidden rounded-lg py-1"
           style={{
             background: '#0E0E1C',
-            border: `1px solid ${T.borderAlive}`,
+            border: `1px solid ${COZY_BORDER}`,
             boxShadow: '0 12px 30px rgba(0,0,0,0.55)',
           }}
         >
@@ -124,17 +133,17 @@ export function CourseSelect({
                   onMouseEnter={() => setActive(i)}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors"
                   style={{
-                    background: i === active ? 'rgba(212,160,74,0.12)' : 'transparent',
+                    background: i === active ? 'rgba(255,213,128,0.12)' : 'transparent',
                     color: T.textPrimary,
                   }}
                 >
                   <Check
                     size={13}
                     aria-hidden
-                    style={{ color: T.amber, opacity: isSel ? 1 : 0 }}
+                    style={{ color: COZY_TEXT, opacity: isSel ? 1 : 0 }}
                     className="shrink-0"
                   />
-                  <span className="min-w-0 flex-1 truncate text-[13px]">{c.title}</span>
+                  <span className="min-w-0 flex-1 truncate font-pixel text-[13px]">{c.title}</span>
                   <span
                     className="shrink-0 text-[11px] font-semibold"
                     style={{ color: c.keptPct === 100 ? T.green : T.rust }}

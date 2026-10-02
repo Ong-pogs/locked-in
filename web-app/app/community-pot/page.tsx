@@ -6,7 +6,7 @@ import { getCommunityPotHistory } from '@/services/api/progress/progressApi';
 import { AuthExpiredError, fetchWithAuth } from '@/services/api/httpClient';
 import type { CommunityPotHistoryWindow } from '@/services/api/types';
 import { T } from '@/components/theme';
-import { CozyCard, CozySectionLabel } from '@/components/cozy';
+import { CozyButton, CozyCard, CozySectionLabel } from '@/components/cozy';
 import { HubButton } from '@/components/HubButton';
 
 const AMBER = '#FFD580';
@@ -31,8 +31,8 @@ const statusColor = (s: string) =>
     : s === 'Failed'
       ? T.crimson
       : s === 'Not eligible'
-        ? T.textMuted
-        : T.textSecondary;
+        ? T.textMutedStrong
+        : T.textMutedStrong;
 
 const statusBg = (s: string) =>
   s === 'Paid' || s === 'Distributed'
@@ -152,14 +152,14 @@ export default function CommunityPotPage() {
             <div>
               <p
                 className="font-pixel-mono text-[10px] uppercase tracking-[2px]"
-                style={{ color: T.textMuted }}
+                style={{ color: T.textMutedStrong }}
               >
                 Current Window Pot
               </p>
               {loading ? (
                 <p
                   className="text-[13px] mt-2"
-                  style={{ color: T.textSecondary }}
+                  style={{ color: T.textMutedStrong }}
                 >
                   Reading live pot state...
                 </p>
@@ -222,7 +222,7 @@ export default function CommunityPotPage() {
                   >
                     <span
                       className="font-pixel-mono text-[10px] uppercase tracking-[1px]"
-                      style={{ color: isActive ? T.amber : T.textSecondary }}
+                      style={{ color: isActive ? T.amber : T.textMutedStrong }}
                     >
                       {course.title}
                     </span>
@@ -234,7 +234,7 @@ export default function CommunityPotPage() {
                     </span>
                     <span
                       className="font-pixel-mono text-[10px]"
-                      style={{ color: T.textMuted }}
+                      style={{ color: T.textMutedStrong }}
                     >
                       {statusLabel}
                     </span>
@@ -249,20 +249,16 @@ export default function CommunityPotPage() {
               <p className="text-[11px]" style={{ color: T.amber }}>
                 {error}
               </p>
-              <button
+              <CozyButton
+                size="sm"
+                className="mt-2"
                 onClick={() => {
                   setError(null);
                   void fetchPotData();
                 }}
-                className="mt-2 px-4 py-2 rounded-md border text-[11px] font-semibold uppercase tracking-wide"
-                style={{
-                  borderColor: `${T.amber}30`,
-                  backgroundColor: 'rgba(212,160,74,0.08)',
-                  color: T.amber,
-                }}
               >
                 Retry
-              </button>
+              </CozyButton>
             </div>
           )}
         </CozyCard>
@@ -272,13 +268,13 @@ export default function CommunityPotPage() {
 
         {loading ? (
           <CozyCard>
-            <p className="text-[13px]" style={{ color: T.textSecondary }}>
+            <p className="text-[13px]" style={{ color: T.textMutedStrong }}>
               Loading...
             </p>
           </CozyCard>
         ) : events.length === 0 && !error ? (
           <CozyCard>
-            <p className="text-[13px]" style={{ color: T.textSecondary }}>
+            <p className="text-[13px]" style={{ color: T.textMutedStrong }}>
               No windows yet.
             </p>
           </CozyCard>
@@ -300,14 +296,14 @@ export default function CommunityPotPage() {
                 ? T.green
                 : w.status === 'OPEN'
                   ? T.amber
-                  : T.textMuted;
+                  : T.textMutedStrong;
 
               return (
                 <div key={`event-${w.windowId}`} className="relative mb-5">
                   {/* Date marker (left of rail) */}
                   <div
                     className="absolute -left-[80px] md:-left-[140px] top-2 w-[56px] md:w-[100px] text-right"
-                    style={{ color: T.textSecondary }}
+                    style={{ color: T.textMutedStrong }}
                   >
                     <p
                       className="font-pixel-mono text-[12px] font-bold uppercase tracking-[1px]"
@@ -317,7 +313,7 @@ export default function CommunityPotPage() {
                     </p>
                     <p
                       className="font-pixel-mono text-[9px] uppercase tracking-[1px] mt-0.5"
-                      style={{ color: T.textMuted }}
+                      style={{ color: T.textMutedStrong }}
                     >
                       {wStatus}
                     </p>
@@ -389,7 +385,7 @@ export default function CommunityPotPage() {
                       <div>
                         <p
                           className="font-pixel-mono text-[9px] uppercase tracking-[1px]"
-                          style={{ color: T.textMuted }}
+                          style={{ color: T.textMutedStrong }}
                         >
                           Total Pot
                         </p>
@@ -403,7 +399,7 @@ export default function CommunityPotPage() {
                       <div>
                         <p
                           className="font-pixel-mono text-[9px] uppercase tracking-[1px]"
-                          style={{ color: T.textMuted }}
+                          style={{ color: T.textMutedStrong }}
                         >
                           Distributed
                         </p>
@@ -417,13 +413,13 @@ export default function CommunityPotPage() {
                       <div>
                         <p
                           className="font-pixel-mono text-[9px] uppercase tracking-[1px]"
-                          style={{ color: T.textMuted }}
+                          style={{ color: T.textMutedStrong }}
                         >
                           Remaining
                         </p>
                         <p
                           className="text-[12px] font-bold font-pixel-mono mt-0.5"
-                          style={{ color: T.textMuted }}
+                          style={{ color: T.textMutedStrong }}
                         >
                           {w.remainingAmountUi}
                         </p>
@@ -433,7 +429,7 @@ export default function CommunityPotPage() {
                     <p
                       className="font-pixel-mono text-[9px] mt-3 pt-3"
                       style={{
-                        color: T.textMuted,
+                        color: T.textMutedStrong,
                         borderTop: '1px dashed rgba(255,255,255,0.06)',
                       }}
                     >
@@ -444,7 +440,7 @@ export default function CommunityPotPage() {
                     {userPaid && w.userDistributedAt && (
                       <p
                         className="font-pixel-mono text-[10px] mt-2"
-                        style={{ color: T.textMuted }}
+                        style={{ color: T.textMutedStrong }}
                       >
                         Paid{' '}
                         {new Date(w.userDistributedAt).toLocaleDateString(
@@ -485,14 +481,14 @@ export default function CommunityPotPage() {
             className="text-sm font-semibold mb-2"
             style={{
               fontFamily: 'var(--font-pixel), Georgia, serif',
-              color: T.textMuted,
+              color: T.textMutedStrong,
             }}
           >
             How Distribution Works
           </p>
           <p
             className="text-[13px] leading-7"
-            style={{ color: T.textSecondary }}
+            style={{ color: T.textMutedStrong }}
           >
             When learners lapse, a percentage of their yield is redirected to
             the Community Pot. The pool is distributed among learners with an

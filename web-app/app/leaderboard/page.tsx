@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Flame } from 'lucide-react';
 import { T } from '@/components/theme';
-import { CozyCard } from '@/components/cozy';
+import { CozyButton, CozyCard } from '@/components/cozy';
 import { HubButton } from '@/components/HubButton';
 import { fetchWithAuth, AuthExpiredError } from '@/services/api/httpClient';
 import { getLeaderboard } from '@/services/api/progress/progressApi';
@@ -25,6 +25,8 @@ export default function LeaderboardPage() {
   const [source, setSource] = useState<LeaderboardSource>('materialized');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Signed-out visitors get a prompt, not a Retry button that cannot succeed.
+  const [needsAuth, setNeedsAuth] = useState(false);
 
   const fetchBoard = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -38,9 +40,11 @@ export default function LeaderboardPage() {
       setSnapshotAt(resp.snapshotAt);
       setSource(resp.source);
       setError(null);
+      setNeedsAuth(false);
       setLoading(false);
     } catch (err) {
       if (signal?.aborted) return;
+      setNeedsAuth(err instanceof AuthExpiredError);
       if (err instanceof AuthExpiredError) {
         setError('Connect your wallet to see the leaderboard.');
       } else {
@@ -109,7 +113,7 @@ export default function LeaderboardPage() {
           </h1>
           <p
             className="font-pixel-mono text-[10px] uppercase tracking-[1px] sm:text-right"
-            style={{ color: T.textMuted, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
+            style={{ color: T.textMutedStrong, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
           >
             {refreshLabel}
           </p>
@@ -117,7 +121,7 @@ export default function LeaderboardPage() {
 
         {loading ? (
           <CozyCard>
-            <p className="font-pixel-mono text-[12px]" style={{ color: T.textSecondary }}>
+            <p className="font-pixel-mono text-[12px]" style={{ color: T.textMutedStrong }}>
               Reading the rolls of honor...
             </p>
           </CozyCard>
@@ -126,24 +130,22 @@ export default function LeaderboardPage() {
             <p className="font-pixel-mono text-[12px]" style={{ color: AMBER }}>
               {error}
             </p>
-            <button
-              onClick={() => {
-                setError(null);
-                void fetchBoard();
-              }}
-              className="mt-3 px-4 py-2 rounded-md border text-[11px] font-semibold uppercase tracking-wide font-pixel cursor-pointer"
-              style={{
-                borderColor: 'rgba(255,213,128,0.45)',
-                backgroundColor: 'rgba(255,213,128,0.10)',
-                color: AMBER,
-              }}
-            >
-              Retry
-            </button>
+            {!needsAuth && (
+              <CozyButton
+                size="sm"
+                className="mt-3"
+                onClick={() => {
+                  setError(null);
+                  void fetchBoard();
+                }}
+              >
+                Retry
+              </CozyButton>
+            )}
           </CozyCard>
         ) : entries.length === 0 ? (
           <CozyCard>
-            <p className="font-pixel-mono text-[12px]" style={{ color: T.textSecondary }}>
+            <p className="font-pixel-mono text-[12px]" style={{ color: T.textMutedStrong }}>
               No streaks recorded yet. Be the first.
             </p>
           </CozyCard>
@@ -229,7 +231,7 @@ export default function LeaderboardPage() {
                   </span>
                   <span
                     className="font-pixel-mono text-[10px] uppercase tracking-[1px]"
-                    style={{ color: T.textMuted }}
+                    style={{ color: T.textMutedStrong }}
                   >
                     {currentUser.streakStatus === 'broken' ? 'broken' : 'day streak'}
                   </span>
@@ -252,7 +254,7 @@ function SectionHeader({ children, muted }: { children: React.ReactNode; muted?:
     <p
       className="font-pixel-mono text-[12px] font-bold uppercase tracking-[2px] mb-3"
       style={{
-        color: muted ? T.textMuted : AMBER,
+        color: muted ? T.textMutedStrong : AMBER,
         textShadow: muted ? undefined : '0 1px 2px rgba(0,0,0,0.85)',
         opacity: muted ? 0.7 : 0.85,
       }}
@@ -357,7 +359,7 @@ function PodiumCard({
         <div className="mt-1 flex flex-col items-center">
           <span
             className="font-pixel-mono text-[9px] uppercase tracking-[1.5px]"
-            style={{ color: T.textMuted }}
+            style={{ color: T.textMutedStrong }}
           >
             {broken ? 'Streak broken' : 'Streak'}
           </span>

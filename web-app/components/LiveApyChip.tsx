@@ -86,15 +86,16 @@ export function LiveApyChip({
         >
           {data.apyPct.toFixed(2)}%
         </p>
+        {/* 9px labels on glass: textMutedStrong + shadow (0.45 alpha was unreadable). */}
         <p
           className="font-pixel-mono text-[9px] mt-0.5 truncate"
-          style={{ color: T.textMuted }}
+          style={{ color: T.textMutedStrong, textShadow: TEXT_SHADOW }}
         >
           {sourceLabel}
         </p>
         <p
           className="font-pixel-mono text-[9px] mt-px truncate"
-          style={{ color: T.textMuted, opacity: 0.85 }}
+          style={{ color: T.textMutedStrong, textShadow: TEXT_SHADOW }}
         >
           {qualifier}
         </p>
