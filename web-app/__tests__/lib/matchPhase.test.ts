@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveMatchPhase } from '../../lib/matchPhase';
+import { resolveMatchPhase, isMyPlayer, playerLabel } from '../../lib/matchPhase';
 
 const ME = 'MeWa11et1111111111111111111111111111111111';
 const THEM = 'ThemWa11et22222222222222222222222222222222';
@@ -90,5 +90,38 @@ describe('resolveMatchPhase', () => {
       players: [player(THEM, '2026-09-13T00:00:00Z')],
       myWallet: null,
     })).toBe('resolved');
+  });
+});
+
+// The server now sends a label and an isMe flag instead of full addresses, so
+// an opponent's wallet never reaches the browser. Older responses still carry
+// walletAddress, and both shapes must work during the rollout.
+describe('server-labelled players (no addresses)', () => {
+  const labelled = (isMe: boolean, submittedAt: string | null) =>
+    ({ walletLabel: isMe ? 'MeWa…1111' : 'Them…2222', isMe, startedAt: null, submittedAt });
+
+  it('finds my row by the server isMe flag', () => {
+    expect(resolveMatchPhase({
+      resolved: false,
+      players: [labelled(false, null), labelled(true, '2026-09-13T00:00:00Z')],
+      myWallet: ME,
+    })).toBe('waiting');
+  });
+
+  it('trusts isMe over a matching address', () => {
+    expect(isMyPlayer({ isMe: false, walletAddress: ME }, ME)).toBe(false);
+    expect(isMyPlayer({ isMe: true }, null)).toBe(true);
+  });
+
+  it('falls back to the address on older responses', () => {
+    expect(isMyPlayer({ walletAddress: ME }, ME)).toBe(true);
+    expect(isMyPlayer({ walletAddress: THEM }, ME)).toBe(false);
+    expect(isMyPlayer({ walletAddress: ME }, null)).toBe(false);
+  });
+
+  it('labels a player from the server label, else a shortened address', () => {
+    expect(playerLabel({ walletLabel: 'Them…2222' })).toBe('Them…2222');
+    expect(playerLabel({ walletAddress: THEM })).toBe('Them…2222');
+    expect(playerLabel({})).toBe('Player');
   });
 });
