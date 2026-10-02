@@ -108,14 +108,17 @@ export default function OnboardingTutorialPage() {
             style={{ backgroundColor: `${T.amber}30` }}
           />
         </div>
+        {/* Pixel type system: Pixelify (font-pixel) for headings and titles,
+            Silkscreen (font-pixel-mono) for short caps labels and buttons,
+            default Geist sans for the multi-sentence card body copy. */}
         <h1
-          className="text-2xl font-bold tracking-wide mb-1 text-center"
-          style={{ fontFamily: 'Georgia, serif', color: T.textPrimary }}
+          className="font-pixel text-2xl font-bold tracking-wide mb-1 text-center"
+          style={{ color: T.textPrimary }}
         >
           Before You <span style={{ color: T.amber }}>Begin</span>
         </h1>
         <p
-          className="font-mono text-[10px] uppercase tracking-[2px] mt-2 mb-8"
+          className="font-pixel-mono text-[10px] uppercase tracking-[2px] mt-2 mb-8"
           style={{ color: T.textMuted }}
         >
           Three things to know
@@ -135,16 +138,13 @@ export default function OnboardingTutorialPage() {
                 </div>
                 <div>
                   <p
-                    className="text-[16px] font-bold"
-                    style={{
-                      fontFamily: 'Georgia, serif',
-                      color: T.textPrimary,
-                    }}
+                    className="font-pixel text-[16px] font-bold"
+                    style={{ color: T.textPrimary }}
                   >
                     {q.title}
                   </p>
                   <p
-                    className="font-mono text-[9px] uppercase tracking-[1.5px] mt-0.5"
+                    className="font-pixel-mono text-[9px] uppercase tracking-[1.5px] mt-0.5"
                     style={{ color: q.tagColor }}
                   >
                     {q.tag}
@@ -193,8 +193,8 @@ export default function OnboardingTutorialPage() {
             }}
           >
             <span
-              className="text-[13px] font-bold uppercase tracking-[3px]"
-              style={{ color: T.bg, fontFamily: 'Georgia, serif' }}
+              className="font-pixel-mono text-[13px] font-bold uppercase tracking-[3px]"
+              style={{ color: T.bg }}
             >
               ◆ BEGIN YOUR JOURNEY ◆
             </span>
@@ -204,7 +204,7 @@ export default function OnboardingTutorialPage() {
             className="w-full mt-3 py-2 text-center"
           >
             <span
-              className="font-mono text-[10px] uppercase tracking-[1.5px]"
+              className="font-pixel-mono text-[10px] uppercase tracking-[1.5px]"
               style={{ color: T.textMuted }}
             >
               I already know this

@@ -6,11 +6,14 @@ export const metadata: Metadata = {
   description: 'Get help with Locked In while keeping wallet secrets private.',
 };
 
+// Paragraphs and list items use Geist, the app's readable sans (Silkscreen has
+// no lowercase). Same body style as the legal pages; the color is
+// T.textMutedStrong. Eyebrow, headings, buttons and nav keep the pixel fonts.
 const body = {
-  fontFamily: 'var(--font-pixel-mono), monospace',
-  fontSize: 13,
+  fontFamily: 'var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif',
+  fontSize: 15,
   lineHeight: 1.7,
-  color: 'rgba(255,255,255,0.74)',
+  color: 'rgba(255,255,255,0.66)',
 } as const;
 
 export default function SupportPage() {

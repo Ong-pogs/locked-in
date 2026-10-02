@@ -4,13 +4,12 @@ import { Suspense, use, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCourseStore } from '@/stores';
 import { T } from '@/components/theme';
-import { CozyCard } from '@/components/cozy';
+import { CozyButton, CozyCard, COZY_BORDER, COZY_TEXT_SHADOW } from '@/components/cozy';
 import { HubButton } from '@/components/HubButton';
 
 // ── Cozy palette constants (mirror /courses, /dashboard, lesson player) ──
+// Border and text shadow come from components/cozy.tsx (this file had drifted copies).
 const AMBER = '#FFD580';
-const COZY_BORDER = 'rgba(58, 143, 168, 0.45)';
-const COZY_TEXT_SHADOW = '0 1px 2px rgba(0,0,0,0.85)';
 
 interface QuizReviewData {
   questions: {
@@ -67,7 +66,7 @@ function CozyResultShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ── Cozy primary CTA — same treatment as lesson player ──
+// Cozy primary CTA: the shared solid CozyButton at full width (same as the lesson player).
 function CozyPrimary({
   children,
   onClick,
@@ -76,24 +75,9 @@ function CozyPrimary({
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="w-full py-3.5 rounded-[10px] text-center transition-all duration-150 cursor-pointer hover:brightness-110"
-      style={{
-        backgroundColor: AMBER,
-        border: `1px solid ${AMBER}80`,
-        boxShadow: `0 0 16px ${AMBER}33`,
-        fontFamily: 'var(--font-pixel), Georgia, serif',
-        fontSize: 13,
-        fontWeight: 800,
-        color: '#1A1000',
-        letterSpacing: 2.5,
-        textTransform: 'uppercase',
-      }}
-    >
+    <CozyButton variant="solid" className="w-full" onClick={onClick}>
       {children}
-    </button>
+    </CozyButton>
   );
 }
 
@@ -348,18 +332,9 @@ function ResultContent({ params }: { params: Promise<{ id: string }> }) {
         {/* Question Review toggle */}
         {reviewData && reviewData.questions.length > 0 && (
           <div className="mt-5 w-full">
-            <button
-              onClick={() => setShowReview(!showReview)}
-              className="w-full py-3 rounded-[10px] border text-center font-pixel-mono text-[11px] font-bold uppercase tracking-[1.5px] transition-all duration-150 cursor-pointer hover:brightness-110"
-              style={{
-                backgroundColor: 'rgba(14,14,28,0.5)',
-                borderColor: COZY_BORDER,
-                color: AMBER,
-                textShadow: COZY_TEXT_SHADOW,
-              }}
-            >
+            <CozyButton className="w-full" onClick={() => setShowReview(!showReview)}>
               {showReview ? 'Hide Review' : 'Review Answers'}
-            </button>
+            </CozyButton>
 
             {showReview && (
               <div className="mt-3 flex flex-col gap-3">

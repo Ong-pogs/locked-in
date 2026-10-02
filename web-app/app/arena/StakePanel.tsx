@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { T } from '../../components/theme';
+import { CozyButton, CozyCard, COZY_BORDER, COZY_TEXT, COZY_TEXT_SHADOW } from '../../components/cozy';
 import { fetchWithAuth } from '../../services/api/httpClient';
 import { ApiError } from '../../services/api/errors';
 import { getSeason, getMyStake, stakeSeason, getStakeableCourses } from '../../services/api/arena/arenaApi';
@@ -22,6 +23,14 @@ const TONE_COLOR: Record<StakeTone, string> = {
   good: T.green,
   danger: T.crimson,
 };
+
+// A losing stake swaps the card's teal edge for crimson at the same strength
+// as COZY_BORDER, so the warning is not fainter than a normal card.
+const DANGER_BORDER = 'rgba(255,68,102,0.55)';
+// Card eyebrow labels in the cozy amber; secondary copy in the stronger muted
+// white. Both carry the cozy shadow so small text holds up on the glass.
+const EYEBROW_TEXT = { color: COZY_TEXT, textShadow: COZY_TEXT_SHADOW };
+const MUTED_TEXT = { color: T.textMutedStrong, textShadow: COZY_TEXT_SHADOW };
 
 function messageFor(err: unknown): string {
   const code = err instanceof ApiError ? err.code : undefined;
@@ -138,62 +147,59 @@ export function StakePanel({
     const live = true;
     const stake = liveStake;
     return (
-      <section
-        className="mb-5 rounded-lg p-4"
-        style={{
-          background: T.bgCard,
-          border: `1px solid ${d.tone === 'danger' ? 'rgba(255,68,102,0.38)' : T.borderAlive}`,
-        }}
-        data-testid="arena-stake-standing"
-        aria-live="polite"
-      >
-        <div
-          className="font-pixel-mono text-[10px] uppercase tracking-[1px]"
-          style={{ color: T.textMuted }}
-        >
-          {live ? 'Your stake this season' : 'Your last staked season'}
-        </div>
-
-        <div
-          className="mt-1 font-pixel text-[15px]"
-          style={{ color: TONE_COLOR[d.tone] }}
-          data-testid="arena-stake-headline"
-        >
-          {d.headline}
-        </div>
-
-        <p className="mt-2 text-[12px] leading-relaxed" style={{ color: T.textMutedStrong }}>
-          {d.detail}
-        </p>
-
-        <dl className="mt-3 grid grid-cols-2 gap-3">
-          <div>
-            <dt
-              className="font-pixel-mono text-[9px] uppercase tracking-[1px]"
-              style={{ color: T.textMuted }}
-            >
-              Staked course
-            </dt>
-            <dd className="mt-0.5 text-[12px] break-words" style={{ color: T.textPrimary }}>
-              {titleOf(stake.courseId)}
-            </dd>
+      // The <section> keeps its test id and live region; the glass is the
+      // CozyCard inside it (CozyCard always renders a <div>).
+      <section className="mb-5" data-testid="arena-stake-standing" aria-live="polite">
+        <CozyCard style={{ borderColor: d.tone === 'danger' ? DANGER_BORDER : COZY_BORDER }}>
+          <div className="font-pixel-mono text-[10px] uppercase tracking-[1px]" style={EYEBROW_TEXT}>
+            {live ? 'Your stake this season' : 'Your last staked season'}
           </div>
-          <div>
-            <dt
-              className="font-pixel-mono text-[9px] uppercase tracking-[1px]"
-              style={{ color: T.textMuted }}
-            >
-              Staked rating
-            </dt>
-            <dd
-              className="mt-0.5 text-[15px] font-bold"
-              style={{ color: TONE_COLOR[d.tone], fontVariantNumeric: 'tabular-nums' }}
-              data-testid="arena-stake-delta"
-            >
-              {stake.stakedDelta > 0 ? `+${stake.stakedDelta}` : stake.stakedDelta}
-            </dd>
+
+          <div
+            className="mt-1 font-pixel text-[15px]"
+            style={{ color: TONE_COLOR[d.tone], textShadow: COZY_TEXT_SHADOW }}
+            data-testid="arena-stake-headline"
+          >
+            {d.headline}
           </div>
-        </dl>
+
+          {/* Body face on purpose: the detail quotes yield percentages ("keeps
+              50% ... instead of 100%"), and both pixel faces draw 5 like S. */}
+          <p className="mt-2 text-[12px] leading-relaxed" style={MUTED_TEXT}>
+            {d.detail}
+          </p>
+
+          <dl className="mt-3 grid grid-cols-2 gap-3">
+            <div>
+              <dt className="font-pixel-mono text-[9px] uppercase tracking-[1px]" style={MUTED_TEXT}>
+                Staked course
+              </dt>
+              {/* A course title, so Pixelify Sans (it has lowercase). */}
+              <dd
+                className="mt-0.5 font-pixel text-[13px] break-words"
+                style={{ color: T.textPrimary, textShadow: COZY_TEXT_SHADOW }}
+              >
+                {titleOf(stake.courseId)}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-pixel-mono text-[9px] uppercase tracking-[1px]" style={MUTED_TEXT}>
+                Staked rating
+              </dt>
+              <dd
+                className="mt-0.5 font-pixel-mono text-[15px] font-bold"
+                style={{
+                  color: TONE_COLOR[d.tone],
+                  textShadow: COZY_TEXT_SHADOW,
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+                data-testid="arena-stake-delta"
+              >
+                {stake.stakedDelta > 0 ? `+${stake.stakedDelta}` : stake.stakedDelta}
+              </dd>
+            </div>
+          </dl>
+        </CozyCard>
       </section>
     );
   }
@@ -211,133 +217,119 @@ export function StakePanel({
   return (
     <>
     {settled && settledStake && (
-      <section
-        className="mb-3 rounded-lg p-4"
-        style={{
-          background: T.bgCard,
-          border: `1px solid ${settled.tone === 'danger' ? 'rgba(255,68,102,0.38)' : T.borderAlive}`,
-        }}
-        data-testid="arena-stake-settled"
-      >
-        <div
-          className="font-pixel-mono text-[10px] uppercase tracking-[1px]"
-          style={{ color: T.textMuted }}
-        >
-          Your last staked season
-        </div>
-        <div className="mt-1 font-pixel text-[15px]" style={{ color: TONE_COLOR[settled.tone] }}>
-          {settled.headline}
-        </div>
-        <p className="mt-2 text-[12px] leading-relaxed" style={{ color: T.textMutedStrong }}>
-          {settled.detail}
-        </p>
-        <p className="mt-1 text-[11px]" style={{ color: T.textMuted }}>
-          Staked {titleOf(settledStake.courseId)}.
-        </p>
+      <section className="mb-3" data-testid="arena-stake-settled">
+        <CozyCard style={{ borderColor: settled.tone === 'danger' ? DANGER_BORDER : COZY_BORDER }}>
+          <div className="font-pixel-mono text-[10px] uppercase tracking-[1px]" style={EYEBROW_TEXT}>
+            Your last staked season
+          </div>
+          <div
+            className="mt-1 font-pixel text-[15px]"
+            style={{ color: TONE_COLOR[settled.tone], textShadow: COZY_TEXT_SHADOW }}
+          >
+            {settled.headline}
+          </div>
+          {/* Body face: quotes yield percentages, see the live card above. */}
+          <p className="mt-2 text-[12px] leading-relaxed" style={MUTED_TEXT}>
+            {settled.detail}
+          </p>
+          <p className="mt-1 font-pixel-mono text-[11px]" style={MUTED_TEXT}>
+            Staked {titleOf(settledStake.courseId)}.
+          </p>
+        </CozyCard>
       </section>
     )}
-    <section
-      className="mb-5 rounded-lg p-4"
-      style={{ background: T.bgCard, border: `1px solid ${T.borderDormant}` }}
-      data-testid="arena-stake-optin"
-    >
-      <div
-        className="font-pixel-mono text-[10px] uppercase tracking-[1px]"
-        style={{ color: T.textMuted }}
-      >
-        Stake a course
-      </div>
+    <section className="mb-5" data-testid="arena-stake-optin">
+      {/* z-20: backdrop-filter makes every CozyCard its own stacking context,
+          which would trap the course dropdown's z-50 inside this card and let
+          the glass cards and buttons below paint over the open list. */}
+      <CozyCard className="z-20">
+        <div className="font-pixel-mono text-[10px] uppercase tracking-[1px]" style={EYEBROW_TEXT}>
+          Stake a course
+        </div>
 
-      <p className="mt-1.5 text-[12px]" style={{ color: T.textMutedStrong }}>
-        Required to enter. Put a locked course on the line for this season.
-      </p>
-
-      <div className="mt-3">
-        <CourseSelect
-          courses={courses}
-          value={chosen}
-          onChange={(id) => { setChosen(id); setConfirming(false); setError(null); }}
-        />
-      </div>
-
-      {courses.length === 0 && (
-        <p className="mt-2 text-[11px]" style={{ color: T.textMuted }}>
-          Nothing to stake yet — you need a course with USDC still locked in it.
-          Practice-mode and finished courses cannot be staked.
+        <p className="mt-1.5 font-pixel-mono text-[12px] leading-relaxed" style={MUTED_TEXT}>
+          Required to enter. Put a locked course on the line for this season.
         </p>
-      )}
 
-      {/* The bet, in two numbers, read off the course actually selected. */}
-      {chosenCourse && (
         <div className="mt-3">
-          <YieldLadder lapseCount={chosenLapses} />
+          <CourseSelect
+            courses={courses}
+            value={chosen}
+            onChange={(id) => { setChosen(id); setConfirming(false); setError(null); }}
+          />
         </div>
-      )}
 
-      <p className="mt-2.5 text-[11px] leading-relaxed" style={{ color: T.textMuted }}>
-        {days > 0 ? `${days} ${days === 1 ? 'day' : 'days'} left · ` : ''}
-        no early exit once staked · worth cents today, not dollars
-      </p>
-
-      {error && (
-        <p className="mt-2 text-[12px]" style={{ color: T.crimson }} data-testid="arena-stake-error">
-          {error}
-        </p>
-      )}
-
-      {!confirming ? (
-        <button
-          type="button"
-          data-testid="arena-stake-submit"
-          className="mt-3 w-full rounded-lg px-4 py-2.5 font-pixel text-[13px] transition-colors disabled:opacity-40"
-          style={{
-            background: T.bgCardActive,
-            border: `1px solid ${T.borderAlive}`,
-            color: T.amber,
-          }}
-          disabled={!chosen || busy}
-          onClick={() => setConfirming(true)}
-        >
-          Stake this course
-        </button>
-      ) : (
-        <div className="mt-3" data-testid="arena-stake-confirm">
-          <p className="text-[12px] leading-relaxed" style={{ color: T.textPrimary }}>
-            Stake <strong style={{ color: T.amber }}>{titleOf(chosen)}</strong> for the whole season?
-            This cannot be undone.
+        {courses.length === 0 && (
+          <p className="mt-2 font-pixel-mono text-[11px] leading-relaxed" style={MUTED_TEXT}>
+            Nothing to stake yet — you need a course with USDC still locked in it.
+            Practice-mode and finished courses cannot be staked.
           </p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <button
-              type="button"
-              data-testid="arena-stake-confirm-yes"
-              className="flex-1 rounded-lg px-4 py-2.5 font-pixel text-[13px] transition-colors disabled:opacity-40"
-              style={{
-                background: 'rgba(212,160,74,0.10)',
-                border: `1px solid ${T.borderAlive}`,
-                color: T.amber,
-              }}
-              disabled={busy}
-              onClick={onStake}
-            >
-              {busy ? 'Staking…' : 'Yes, stake it'}
-            </button>
-            <button
-              type="button"
-              data-testid="arena-stake-confirm-no"
-              className="flex-1 rounded-lg px-4 py-2.5 font-pixel text-[13px] transition-colors disabled:opacity-40"
-              style={{
-                background: T.bgCardActive,
-                border: `1px solid ${T.borderDormant}`,
-                color: T.textMutedStrong,
-              }}
-              disabled={busy}
-              onClick={() => setConfirming(false)}
-            >
-              Cancel
-            </button>
+        )}
+
+        {/* The bet, in two numbers, read off the course actually selected. */}
+        {chosenCourse && (
+          <div className="mt-3">
+            <YieldLadder lapseCount={chosenLapses} />
           </div>
-        </div>
-      )}
+        )}
+
+        <p className="mt-2.5 font-pixel-mono text-[11px] leading-relaxed" style={MUTED_TEXT}>
+          {days > 0 ? `${days} ${days === 1 ? 'day' : 'days'} left · ` : ''}
+          no early exit once staked · worth cents today, not dollars
+        </p>
+
+        {error && (
+          <p
+            className="mt-2 font-pixel-mono text-[12px]"
+            style={{ color: T.crimson, textShadow: COZY_TEXT_SHADOW }}
+            data-testid="arena-stake-error"
+          >
+            {error}
+          </p>
+        )}
+
+        {/* Opening the confirm step is a tint; only the final, irreversible
+            "Yes" gets the solid call-to-action button. */}
+        {!confirming ? (
+          <CozyButton
+            data-testid="arena-stake-submit"
+            className="mt-3 w-full"
+            disabled={!chosen || busy}
+            onClick={() => setConfirming(true)}
+          >
+            Stake this course
+          </CozyButton>
+        ) : (
+          <div className="mt-3" data-testid="arena-stake-confirm">
+            <p
+              className="font-pixel-mono text-[12px] leading-relaxed"
+              style={{ color: T.textPrimary, textShadow: COZY_TEXT_SHADOW }}
+            >
+              Stake <strong style={{ color: COZY_TEXT }}>{titleOf(chosen)}</strong> for the whole season?
+              This cannot be undone.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <CozyButton
+                variant="solid"
+                data-testid="arena-stake-confirm-yes"
+                className="flex-1"
+                disabled={busy}
+                onClick={onStake}
+              >
+                {busy ? 'Staking…' : 'Yes, stake it'}
+              </CozyButton>
+              <CozyButton
+                data-testid="arena-stake-confirm-no"
+                className="flex-1"
+                disabled={busy}
+                onClick={() => setConfirming(false)}
+              >
+                Cancel
+              </CozyButton>
+            </div>
+          </div>
+        )}
+      </CozyCard>
     </section>
     </>
   );

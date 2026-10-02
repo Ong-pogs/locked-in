@@ -8,6 +8,8 @@ import { AnimatedSplash } from '@/components/AnimatedSplash';
 import { ProductAnalytics } from '@/components/ProductAnalytics';
 import { SITE_ORIGIN } from '@/lib/site';
 import './globals.css';
+// App-wide UI base rules, in their own file (see the note at the top of it).
+import './ui-base.css';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',

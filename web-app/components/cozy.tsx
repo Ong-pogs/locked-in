@@ -1,6 +1,6 @@
 'use client';
 
-import type { CSSProperties, HTMLAttributes, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, CSSProperties, HTMLAttributes, ReactNode } from 'react';
 
 // Cozy palette — same constants used in village hub + HubButton.
 // Indigo glass + teal-aurora border + amber window-glow accent.
@@ -91,6 +91,78 @@ export function CozyStatBox({
         )}
       </span>
     </CozyCard>
+  );
+}
+
+// Accent colors a CozyButton can take (same hues as the theme tokens).
+const COZY_TONES = {
+  amber: COZY_TEXT,
+  crimson: '#FF4466',
+  green: '#3EE68A',
+  teal: '#2AE8D4',
+  violet: '#9945FF',
+} as const;
+export type CozyTone = keyof typeof COZY_TONES;
+
+/**
+ * The one button for cozy pages, so every page shares one gold, one font,
+ * one radius and the same hover, focus and disabled states.
+ *
+ * - `solid`: filled call to action (dark text on the tone color).
+ * - `tint`:  readable glass button, safe straight on the painted art:
+ *            HubButton's solid base (0.82 alpha + blur) mixed with the tone.
+ *
+ * Silkscreen (font-pixel-mono) on purpose: Pixelify Sans bold at 13-17px draws
+ * "C" like "O" at 1x DPR. Focus uses the global :focus-visible ring (globals.css).
+ * Hover only changes colors (never opacity or filters, which flash on glass).
+ */
+export function CozyButton({
+  tone = 'amber',
+  variant = 'tint',
+  size = 'md',
+  className = '',
+  style,
+  children,
+  type = 'button',
+  ...rest
+}: {
+  tone?: CozyTone;
+  variant?: 'solid' | 'tint';
+  size?: 'sm' | 'md';
+  children: ReactNode;
+} & ButtonHTMLAttributes<HTMLButtonElement>) {
+  const color = COZY_TONES[tone];
+  const solid = variant === 'solid';
+  const sizing =
+    size === 'sm' ? 'min-h-[36px] px-3 py-1.5 text-[11px]' : 'min-h-[44px] px-5 py-2.5 text-xs';
+  return (
+    <button
+      type={type}
+      {...rest}
+      className={`inline-flex items-center justify-center gap-2 rounded-lg border font-pixel-mono uppercase tracking-[1.5px] cursor-pointer transition-[background-color,border-color,box-shadow] duration-150 disabled:cursor-not-allowed disabled:opacity-50 ${
+        solid
+          ? 'font-bold [--mix:100%] hover:[--mix:86%] disabled:hover:[--mix:100%]'
+          : '[--mix:12%] hover:[--mix:22%] disabled:hover:[--mix:12%]'
+      } ${sizing} ${className}`}
+      style={{
+        // Solid: the tone, lightened toward white on hover. Tint: the tone mixed
+        // into the dark glass base (stronger on hover).
+        backgroundColor: solid
+          ? `color-mix(in srgb, ${color} var(--mix), #FFFFFF)`
+          : `color-mix(in srgb, ${color} var(--mix), rgba(14, 14, 28, 0.82))`,
+        borderColor: solid ? color : `${color}73`,
+        color: solid ? '#1A1000' : color,
+        textShadow: solid ? undefined : COZY_TEXT_SHADOW,
+        boxShadow: solid
+          ? `0 0 12px ${color}55, inset 0 1px 0 rgba(255,255,255,0.35)`
+          : COZY_SHADOW,
+        backdropFilter: solid ? undefined : 'blur(10px)',
+        WebkitBackdropFilter: solid ? undefined : 'blur(10px)',
+        ...style,
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
