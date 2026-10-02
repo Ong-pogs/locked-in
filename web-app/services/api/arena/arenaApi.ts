@@ -60,8 +60,9 @@ export function answerQuestion(
   );
 }
 
-export function getLadder(limit = 100): Promise<ArenaLadderRow[]> {
-  return httpRequest<ArenaLadderRow[]>(`/v1/arena/ladder?limit=${limit}`);
+// Public endpoint. A token is optional: with one, the server flags the viewer's own row (isMe).
+export function getLadder(limit = 100, token?: string): Promise<ArenaLadderRow[]> {
+  return httpRequest<ArenaLadderRow[]>(`/v1/arena/ladder?limit=${limit}`, token ? { token } : {});
 }
 
 export function getMyArena(token: string): Promise<ArenaProfile> {

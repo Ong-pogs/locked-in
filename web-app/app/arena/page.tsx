@@ -8,7 +8,7 @@ import {
 } from '../../components/cozy';
 import { ArenaBackground } from './ArenaBackground';
 import { StakePanel } from './StakePanel';
-import { fetchWithAuth } from '../../services/api/httpClient';
+import { AuthExpiredError, fetchWithAuth } from '../../services/api/httpClient';
 import { ApiError } from '../../services/api/errors';
 import {
   createChallenge, getLadder, getMyArena, enterQueue, pollQueue, leaveQueue,
@@ -29,6 +29,12 @@ const EYEBROW_TEXT = { color: COZY_TEXT, textShadow: COZY_TEXT_SHADOW };
 
 function shortWallet(address: string) {
   return `${address.slice(0, 4)}…${address.slice(-4)}`;
+}
+
+// The server sends a ready-made label so full addresses never reach the browser;
+// older responses carried the full address instead (kept for the rollout window).
+function ladderLabel(row: ArenaLadderRow) {
+  return row.walletLabel ?? (row.walletAddress ? shortWallet(row.walletAddress) : 'Player');
 }
 
 export default function ArenaPage() {
@@ -52,7 +58,12 @@ export default function ArenaPage() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    getLadder().then(setLadder).catch(() => setLadder([]));
+    // Signed-in viewers send their token so the server can flag their own row;
+    // signed-out visitors (no session, so no request is made) get the public ladder.
+    fetchWithAuth((t) => getLadder(100, t))
+      .catch((err) => (err instanceof AuthExpiredError ? getLadder() : Promise.reject(err)))
+      .then(setLadder)
+      .catch(() => setLadder([]));
     fetchWithAuth((t) => getMyArena(t)).then(setProfile).catch(() => setProfile(null));
   }, []);
 
@@ -455,7 +466,7 @@ export default function ArenaPage() {
                 first row so it does not double up with the card's own edge. */}
             {ladder?.map((row, i) => (
               <div
-                key={row.walletAddress}
+                key={`${i}-${ladderLabel(row)}`}
                 data-testid="arena-ladder-row"
                 className="flex items-center justify-between px-4 py-2.5"
                 style={{ borderTop: i === 0 ? undefined : '1px dashed rgba(255,213,128,0.10)' }}
@@ -471,9 +482,10 @@ export default function ArenaPage() {
                     "7VT9" — a different address than the one it names. */}
                 <span
                   className="flex-1 px-3 font-mono text-[11px]"
-                  style={{ color: T.textPrimary, textShadow: COZY_TEXT_SHADOW }}
+                  style={{ color: row.isMe ? COZY_TEXT : T.textPrimary, textShadow: COZY_TEXT_SHADOW }}
                 >
-                  {shortWallet(row.walletAddress)}
+                  {ladderLabel(row)}
+                  {row.isMe && <span className="font-pixel-mono text-[10px] ml-1.5">(you)</span>}
                 </span>
                 <span
                   className="font-pixel-mono text-[11px]"
