@@ -141,19 +141,28 @@ describe('AnimatedSplash worker path', () => {
     vi.restoreAllMocks();
   });
 
-  it('hands the canvas to a worker instead of drawing on the main thread', () => {
-    renderSplash();
+  // The worker's layer is the second canvas in the overlay (the first is the main-thread one).
+  const workerLayer = () => screen.getByTestId('animated-splash').querySelectorAll('canvas')[1];
 
-    const worker = FakeWorker.last;
-    expect(worker).not.toBeNull();
-    expect(worker?.messages[0]).toMatchObject({ type: 'start', canvas: offscreen });
+  it('hands the canvas to the worker only once the worker code has loaded', () => {
+    renderSplash();
+    const worker = FakeWorker.last!;
+
+    // Nothing is sent before the worker says its handler is installed.
+    expect(worker.messages).toHaveLength(0);
+
+    worker.reply({ type: 'loaded' });
+    expect(worker.messages[0]).toMatchObject({ type: 'start', canvas: offscreen, t: 0 });
+    expect(workerLayer()).toHaveStyle({ opacity: '0' });
   });
 
-  it('removes the overlay when the worker reports the animation is done', () => {
+  it('shows the worker layer on ready and closes the overlay on done', () => {
     const { unmount } = renderSplash();
     const worker = FakeWorker.last!;
 
+    worker.reply({ type: 'loaded' });
     worker.reply({ type: 'ready' });
+    expect(workerLayer()).toHaveStyle({ opacity: '1' });
     expect(screen.getByTestId('animated-splash')).toHaveStyle({ background: 'transparent' });
 
     worker.reply({ type: 'done' });
@@ -162,7 +171,7 @@ describe('AnimatedSplash worker path', () => {
     unmount();
   });
 
-  it('falls back to the main thread if the worker fails to start', () => {
+  it('keeps the main-thread splash running if the worker fails', () => {
     renderSplash();
     const worker = FakeWorker.last!;
 
@@ -170,9 +179,22 @@ describe('AnimatedSplash worker path', () => {
     expect(worker.terminated).toBe(true);
     expect(screen.getByTestId('animated-splash')).toBeInTheDocument();
 
+    // The main-thread path still closes the overlay on its own schedule.
     act(() => {
       vi.advanceTimersByTime(3200);
     });
+    expect(screen.queryByTestId('animated-splash')).not.toBeInTheDocument();
+  });
+
+  it('never waits on a worker that does not load', () => {
+    renderSplash();
+    const worker = FakeWorker.last!;
+
+    // No "loaded" ever arrives: the overlay still closes on the normal schedule.
+    act(() => {
+      vi.advanceTimersByTime(3200);
+    });
+    expect(worker.messages).toHaveLength(0);
     expect(screen.queryByTestId('animated-splash')).not.toBeInTheDocument();
   });
 });
