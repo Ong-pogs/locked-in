@@ -119,7 +119,7 @@ export default function OnboardingTutorialPage() {
         </h1>
         <p
           className="font-pixel-mono text-[10px] uppercase tracking-[2px] mt-2 mb-8"
-          style={{ color: T.textMuted }}
+          style={{ color: T.textMutedStrong }}
         >
           Three things to know
         </p>
@@ -155,7 +155,7 @@ export default function OnboardingTutorialPage() {
               {/* Body */}
               <p
                 className="text-[13px] leading-[20px]"
-                style={{ color: T.textSecondary }}
+                style={{ color: T.textMutedStrong }}
               >
                 {q.body}
               </p>
@@ -205,7 +205,7 @@ export default function OnboardingTutorialPage() {
           >
             <span
               className="font-pixel-mono text-[10px] uppercase tracking-[1.5px]"
-              style={{ color: T.textMuted }}
+              style={{ color: T.textMutedStrong }}
             >
               I already know this
             </span>

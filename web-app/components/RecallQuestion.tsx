@@ -228,9 +228,9 @@ export function RecallQuestion({ question, lessonTitle, onComplete, checkAnswer 
           style={{
             border: `1px solid ${hasSelection && !checking ? AMBER : COZY_BORDER}`,
             background: hasSelection && !checking ? 'rgba(255,213,128,0.14)' : 'transparent',
-            color: hasSelection && !checking ? AMBER : T.textMuted,
+            color: hasSelection && !checking ? AMBER : T.textMutedStrong,
             boxShadow: hasSelection && !checking ? `0 0 14px ${AMBER}55` : 'none',
-            opacity: hasSelection && !checking ? 1 : 0.45,
+            opacity: hasSelection && !checking ? 1 : 0.6,
             cursor: hasSelection && !checking ? 'pointer' : 'not-allowed',
           }}
         >

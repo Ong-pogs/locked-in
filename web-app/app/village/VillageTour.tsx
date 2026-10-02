@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { COZY_TEXT_SHADOW } from '@/components/cozy';
 
 const TOUR_STORAGE_KEY = 'locked-in:village-tour-completed';
 
@@ -218,7 +219,7 @@ export function VillageTour({ bounds }: { bounds: BoundsMap }) {
         <div className="flex items-center justify-between mb-2">
           <span
             className="font-pixel-mono text-[10px] uppercase tracking-[1.5px]"
-            style={{ color: COZY_TEXT, opacity: 0.7 }}
+            style={{ color: 'rgba(255,213,128,0.85)' }}
           >
             Step {stepIdx + 1} of {total}
           </span>
@@ -264,7 +265,8 @@ export function VillageTour({ bounds }: { bounds: BoundsMap }) {
             onClick={finish}
             className="font-pixel-mono text-[11px] uppercase tracking-[1.5px] px-3 py-1.5 rounded transition-colors cursor-pointer"
             style={{
-              color: 'rgba(255,255,255,0.6)',
+              color: 'rgba(255,213,128,0.85)',
+              textShadow: COZY_TEXT_SHADOW,
               backgroundColor: 'transparent',
               border: 'none',
             }}

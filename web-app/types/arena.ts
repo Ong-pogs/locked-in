@@ -15,7 +15,12 @@ export interface ArenaQuestion {
 export type ArenaMatchStatus = 'OPEN' | 'ACTIVE' | 'COMPLETE' | 'EXPIRED';
 
 export interface ArenaMatchPlayer {
-  walletAddress: string;
+  /** Display label made by the server, e.g. "7Vt9…GDL6". Full addresses are never sent. */
+  walletLabel?: string;
+  /** True only on the signed-in viewer's own row (the server compares, not the browser). */
+  isMe?: boolean;
+  /** @deprecated Older API responses only; kept so the page works during the rollout. */
+  walletAddress?: string;
   startedAt: string | null;
   submittedAt: string | null;
   /** Only present once the match has resolved. */
@@ -29,8 +34,6 @@ export interface ArenaMatchState {
   status: ArenaMatchStatus;
   origin: 'link' | 'queue';
   joinCode: string | null;
-  creator: string;
-  opponent: string | null;
   season: number;
   expiresAt: string;
   resolvedAt: string | null;

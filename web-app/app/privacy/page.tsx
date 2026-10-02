@@ -21,7 +21,6 @@ const eyebrow: React.CSSProperties = {
   marginBottom: 10,
 };
 const h1: React.CSSProperties = {
-  fontFamily: 'var(--font-pixel), Georgia, serif',
   fontSize: 26,
   fontWeight: 700,
   color: '#FFD580',
@@ -29,7 +28,6 @@ const h1: React.CSSProperties = {
   marginBottom: 16,
 };
 const h2: React.CSSProperties = {
-  fontFamily: 'var(--font-pixel), Georgia, serif',
   fontSize: 16,
   fontWeight: 700,
   color: '#FFD580',
@@ -69,7 +67,7 @@ export default function PrivacyPage() {
     <div style={page}>
       <div style={wrap}>
         <p style={eyebrow}>Locked In</p>
-        <h1 style={h1}>Privacy Policy</h1>
+        <h1 className="font-pixel" style={h1}>Privacy Policy</h1>
 
         <p style={draft}>
           DRAFT — PENDING LEGAL REVIEW. This document has not been reviewed or approved by a
@@ -84,7 +82,7 @@ export default function PrivacyPage() {
           choices&rdquo; below for what you can actually control today.
         </p>
 
-        <h2 style={h2}>What we collect</h2>
+        <h2 className="font-pixel" style={h2}>What we collect</h2>
         <p style={body}>
           <strong style={{ color: 'rgba(255,255,255,0.9)' }}>Account.</strong> We use Privy for
           login. Privy collects your email address and your wallet address, and it may create and
@@ -118,39 +116,39 @@ export default function PrivacyPage() {
           product feedback fields or public issue reports.
         </p>
 
-        <h2 style={h2}>What we do not collect</h2>
+        <h2 className="font-pixel" style={h2}>What we do not collect</h2>
         <p style={body}>
           We never ask for and never store your seed phrase or private keys. We do not collect
           government ID, and we do not sell personal data.
         </p>
 
-        <h2 style={h2}>Why we hold it</h2>
+        <h2 className="font-pixel" style={h2}>Why we hold it</h2>
         <p style={body}>
           To run your account, to compute streaks and yield outcomes, to prevent cheating and abuse,
           and to keep a record that you were shown the risk disclosure before committing funds.
         </p>
 
-        <h2 style={h2}>Who it is shared with</h2>
+        <h2 className="font-pixel" style={h2}>Who it is shared with</h2>
         <p style={body}>
           Privy (authentication and embedded wallets), Vercel (hosting and product analytics), our
           database provider, and Solana RPC providers who see the transactions we submit on your
           behalf. Kamino is interacted with on-chain only — we send no personal data to it.
         </p>
 
-        <h2 style={h2}>Public by nature</h2>
+        <h2 className="font-pixel" style={h2}>Public by nature</h2>
         <p style={body}>
           Anything on-chain — your wallet address, deposits, claims, pot distributions — is
           permanently public and linkable. Leaderboards display your progress to other users.
         </p>
 
-        <h2 style={h2}>Local storage on your device</h2>
+        <h2 className="font-pixel" style={h2}>Local storage on your device</h2>
         <p style={body}>
           The app stores session tokens, cached progress and your terms acceptance in your
           browser&rsquo;s local storage. Clearing site data logs you out; it does not affect your
           on-chain lock.
         </p>
 
-        <h2 style={h2}>Retention and your choices</h2>
+        <h2 className="font-pixel" style={h2}>Retention and your choices</h2>
         <p style={body}>
           We keep account and learning data while your account exists and while any lock is open.
           On-chain records cannot be deleted by anyone, including us.

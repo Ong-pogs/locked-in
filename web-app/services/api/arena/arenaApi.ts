@@ -125,7 +125,6 @@ export interface ArenaProposal {
   msLeft: number;
   accepted: boolean;
   opponentAccepted: boolean;
-  opponent: string | null;
 }
 
 /** The offer currently in front of this wallet, or null. */

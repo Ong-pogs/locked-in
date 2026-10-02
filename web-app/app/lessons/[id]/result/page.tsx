@@ -91,7 +91,7 @@ export default function LessonResultPage(props: {
           <div className="flex items-center justify-center min-h-[60vh]">
             <p
               className="text-sm font-pixel"
-              style={{ color: T.textSecondary, textShadow: COZY_TEXT_SHADOW }}
+              style={{ color: T.textMutedStrong, textShadow: COZY_TEXT_SHADOW }}
             >
               Loading...
             </p>
@@ -190,7 +190,7 @@ function ResultContent({ params }: { params: Promise<{ id: string }> }) {
         </p>
         <p
           className="mt-2 text-[13px] font-pixel-mono uppercase tracking-[1.5px]"
-          style={{ color: T.textSecondary, textShadow: COZY_TEXT_SHADOW }}
+          style={{ color: T.textMutedStrong, textShadow: COZY_TEXT_SHADOW }}
         >
           {correctCount}/{totalQuestions} Questions Correct
         </p>
@@ -283,7 +283,7 @@ function ResultContent({ params }: { params: Promise<{ id: string }> }) {
                   </div>
                   <p
                     className="text-[9px] font-pixel-mono mt-1"
-                    style={{ color: T.textMuted }}
+                    style={{ color: T.textMutedStrong, textShadow: COZY_TEXT_SHADOW }}
                   >
                     {fuelTotal.toFixed(2)} / 1.00 today
                   </p>
@@ -319,7 +319,7 @@ function ResultContent({ params }: { params: Promise<{ id: string }> }) {
                   </p>
                   <p
                     className="text-[10px] font-pixel-mono"
-                    style={{ color: T.textMuted }}
+                    style={{ color: T.textMutedStrong, textShadow: COZY_TEXT_SHADOW }}
                   >
                     {xpTotal} XP total
                   </p>
@@ -384,7 +384,7 @@ function ResultContent({ params }: { params: Promise<{ id: string }> }) {
                       <div className="ml-8">
                         <p
                           className="text-[10px] font-pixel-mono uppercase tracking-[1.5px] mb-1"
-                          style={{ color: T.textMuted }}
+                          style={{ color: T.textMutedStrong, textShadow: COZY_TEXT_SHADOW }}
                         >
                           Your answer
                         </p>
@@ -408,7 +408,7 @@ function ResultContent({ params }: { params: Promise<{ id: string }> }) {
                           <>
                             <p
                               className="text-[10px] font-pixel-mono uppercase tracking-[1.5px] mb-1"
-                              style={{ color: T.textMuted }}
+                              style={{ color: T.textMutedStrong, textShadow: COZY_TEXT_SHADOW }}
                             >
                               Correct answer
                             </p>
@@ -425,7 +425,7 @@ function ResultContent({ params }: { params: Promise<{ id: string }> }) {
                         {backendResult?.feedbackSummary && (
                           <p
                             className="text-[12px] mt-2 leading-[17px] font-pixel"
-                            style={{ color: T.textSecondary }}
+                            style={{ color: T.textMutedStrong, textShadow: COZY_TEXT_SHADOW }}
                           >
                             {backendResult.feedbackSummary}
                           </p>

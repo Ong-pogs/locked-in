@@ -155,7 +155,8 @@ function CourseCard({
     <div
       className={`group w-full text-left ${
         isComingSoon
-          ? 'opacity-40 pointer-events-none'
+          ? // Omit opacity so the glass backdrop blur stays intact
+            'pointer-events-none'
           : // On hover: SOLIDIFY the panel (raise the CozyCard bg alpha var so the
             // dungeon art stops showing through) + a small lift. Do NOT brighten —
             // that washed the semi-transparent card out and made text unreadable.
@@ -200,10 +201,9 @@ function CourseCard({
         </div>
 
         <h3
-          className="text-[17px] font-bold tracking-wide leading-[22px] mb-[5px] line-clamp-2"
+          className="text-[17px] font-bold tracking-wide leading-[22px] mb-[5px] line-clamp-2 font-pixel"
           style={{
-            color: isComingSoon ? '#B8B0A4' : T.textPrimary,
-            fontFamily: 'var(--font-pixel), Georgia, serif',
+            color: T.textPrimary,
           }}
         >
           {course.title}
@@ -225,8 +225,8 @@ function CourseCard({
             }}
           >
             <span
-              className="text-[12px] font-bold uppercase tracking-[2px]"
-              style={{ color: T.textMuted, fontFamily: 'var(--font-pixel), Georgia, serif' }}
+              className="text-[12px] font-bold uppercase tracking-[2px] font-pixel"
+              style={{ color: T.textMutedStrong }}
             >
               Coming Soon
             </span>
@@ -300,10 +300,9 @@ function ActiveCourseCard({
         <div className="flex items-center gap-3">
           <div className="flex-1 min-w-0">
             <h3
-              className="text-[17px] font-bold tracking-wide leading-[22px] mb-1.5 truncate"
+              className="text-[17px] font-bold tracking-wide leading-[22px] mb-1.5 truncate font-pixel"
               style={{
                 color: T.textPrimary,
-                fontFamily: 'var(--font-pixel), Georgia, serif',
               }}
             >
               {course.title}

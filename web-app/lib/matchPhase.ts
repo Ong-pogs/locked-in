@@ -1,5 +1,22 @@
 import type { ArenaMatchPlayer } from '../types/arena';
 
+type PlayerIdentity = Pick<ArenaMatchPlayer, 'walletLabel' | 'isMe' | 'walletAddress'>;
+
+/**
+ * Is this row the signed-in player? The server's isMe flag wins; the address
+ * comparison only covers older responses that still carried full addresses.
+ */
+export function isMyPlayer(p: PlayerIdentity, myWallet: string | null): boolean {
+  if (typeof p.isMe === 'boolean') return p.isMe;
+  return Boolean(myWallet) && p.walletAddress === myWallet;
+}
+
+/** Short name for a player row: the server's label, else a shortened address. */
+export function playerLabel(p: PlayerIdentity): string {
+  if (p.walletLabel) return p.walletLabel;
+  return p.walletAddress ? `${p.walletAddress.slice(0, 4)}…${p.walletAddress.slice(-4)}` : 'Player';
+}
+
 export type MatchPhase = 'ready' | 'playing' | 'waiting' | 'resolved' | 'error' | 'loading';
 
 /**
@@ -19,7 +36,7 @@ export function resolveMatchPhase({
   myWallet,
 }: {
   resolved: boolean;
-  players: Pick<ArenaMatchPlayer, 'walletAddress' | 'submittedAt' | 'forfeited'>[];
+  players: (PlayerIdentity & Pick<ArenaMatchPlayer, 'submittedAt' | 'forfeited'>)[];
   myWallet: string | null;
 }): MatchPhase {
   const done = (p: { submittedAt: string | null; forfeited?: boolean }) =>
@@ -27,7 +44,7 @@ export function resolveMatchPhase({
 
   if (resolved || (players.length > 0 && players.every(done))) return 'resolved';
 
-  const mine = players.find((p) => p.walletAddress === myWallet);
+  const mine = players.find((p) => isMyPlayer(p, myWallet));
   if (mine && done(mine)) return 'waiting';
   return 'ready';
 }
