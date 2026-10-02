@@ -6,7 +6,7 @@ Owner: Marcus
 
 ## 1. Goal
 
-Run about 100 automated "simulated learners" against the live mainnet app so we can show, with
+Run about 50 automated "simulated learners" (see Decisions, section 14) against the live mainnet app so we can show, with
 real numbers, that the system and our automation hold up at roughly 30x today's usage.
 
 Simulated learners behave like real learners in every way that matters for the demo:
@@ -116,7 +116,7 @@ Each simulated wallet gets a persona, stored in `simulated_wallets.persona`:
 | `accuracy` | 0.6 to 0.95 | chance of picking the right multiple-choice option |
 | `readingSpeed` | seconds per question | pacing between `start`, `check` and `submit` |
 | `arenaAppetite` | 0 to 0.4 | chance of queueing for a match after a session |
-| `depositUsdc` | 10 to 50 | deposit size (within the on-chain per-lock limits) |
+| `depositUsdc` | 10 to 30, varied | deposit size, different per learner; cohort total about 950 USDC (section 14) |
 | `cohortJoinDay` | day 0 to 21 | staggered onboarding, not all on day one |
 
 **Scheduler:** a single worker loop. Every minute it picks the wallets whose next session time
@@ -152,7 +152,7 @@ an error for any registered simulated wallet as a guard.
 - On-chain, all locks share `VaultV2Config.global_tvl_cap` (`programs/locked_in/src/vault_v2.rs`).
   If bots used the existing 1,000 USDC cap, real Founding 100 visitors could not deposit.
 - So we raise the on-chain cap by the simulation budget with `set_config_v2` (signed by the
-  config authority), for example to 1,000 + 2,500 = 3,500 USDC, keeping min 10 and max 50 per
+  config authority), for example to 1,000 + 1,000 = 2,000 USDC, keeping min 10 and max 50 per
   lock.
 - The backend then enforces two sub-caps in the eligibility endpoint (it has no capacity check
   today; `assertCourseLockable` only checks the course):
@@ -215,8 +215,6 @@ then sweeps funds back to the treasury (section 12).
   separately: active learners (7-day), lessons completed per day, current streaks, locked
   principal, Arena matches, claims, pot redirected and paid.
 - A dashboard page (internal, or a docs page) with real and simulated shown side by side.
-- Optional public line on the leaderboard: "Includes N simulated learners run by the LockedIn
-  team to test the system, marked Simulated."
 
 ## 11. Disclosure and communication rules
 
@@ -236,11 +234,11 @@ service only), plus the simulation treasury key. Never in the web app, never in 
 course and claim (or uses `force_return_v2` after 180 days), and sweeps remaining USDC and SOL
 back to the treasury. `retired_at` is stamped; labels stay, so history stays honest.
 
-**Rough budget (100 learners):**
+**Rough budget (about 50 learners):**
 
 | Item | Estimate |
 |---|---|
-| USDC locked | 100 x 10 to 50, so 1,000 to 5,000 (returned on claim, plus Kamino yield) |
+| USDC locked | about 950 in total across about 50 learners (returned on claim, plus Kamino yield) |
 | SOL | rent for lock and collateral accounts, plus fees and priority fees, about 1 to 2 SOL total |
 | RPC | position polling and transactions on the backend Helius key; watch credits |
 | OpenAI | none (multiple choice only) |
@@ -258,12 +256,24 @@ the existing hourly canary stays real-only.
 2. **Phase 1, devnet rehearsal:** 10 simulated learners on devnet for 7 days.
 3. **Phase 2, mainnet pilot:** raise the on-chain cap by a small amount, 10 simulated learners
    for 7 days, review the dashboard and costs.
-4. **Phase 3, scale:** cap to the full simulation budget, 100 learners joining over about 3
+4. **Phase 3, scale:** cap to the full simulation budget, about 50 learners joining over about 3
    weeks.
 
-## 14. Open questions
+## 14. Decisions (2026-10-02)
 
-- Simulation budget: how much USDC (sets the on-chain cap increase)?
-- Leaderboard: simulated learners ranked alongside real ones with a badge, or on a separate tab?
-- How long does the cohort run, and do we retire it before raising real-user capacity?
-- Should the public line in section 10 be shown from day one?
+1. **Budget: about 950 USDC in total (900 to 1,000 accepted), varied per learner.**
+   - Each simulated learner deposits a different amount, drawn at random between 10 and 30 USDC,
+     so the cohort total lands near 950.
+   - The on-chain minimum is 10 USDC per lock, so 100 learners cannot total under 1,000. The
+     cohort is therefore about 50 learners. If 100 learners are needed later, the budget rises
+     to at least 1,000 (about 1,500 with varied amounts).
+   - Capacity stays additive: the on-chain cap rises by the simulation budget (for example to
+     2,000 USDC) and the backend keeps the real users' 1,000 USDC reserved (section 7).
+2. **Leaderboard: simulated learners rank on the main leaderboard, alongside real learners,**
+   each row carrying the "Simulated" badge (section 4). No separate tab.
+3. **Cohort length: open-ended.** The cohort runs until the owner stops it with the kill switch
+   (section 12). Each lock must be claimed before its 180-day force-return point, so a learner
+   that finishes a course claims and then locks a new course (keeping its total within budget).
+4. **No separate public announcement.** The optional public line in section 10 is dropped. The
+   per-row "Simulated" badges, the split metrics, and the communication rules in section 11
+   stay; they are the labeling this design depends on (section 2).
