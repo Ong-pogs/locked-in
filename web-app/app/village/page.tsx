@@ -1,3 +1,4 @@
+import { preload } from 'react-dom';
 import VillageScene from './VillageScene';
 import { MobileHub } from './MobileHub';
 
@@ -12,6 +13,12 @@ import { MobileHub } from './MobileHub';
  * suppressed via PUBLIC_ROUTES.
  */
 export default function VillagePage() {
+  // The painting is the page's largest element on phone and desktop, but the
+  // AppShell renders nothing until client stores hydrate, so the <img> is not
+  // in the server HTML. This head hint starts the download right away instead
+  // of after the JavaScript has run (Lighthouse "LCP load delay").
+  preload('/images/village/village-painted.png', { as: 'image', fetchPriority: 'high' });
+
   return (
     <>
       <h1 className="sr-only">Stop collecting courses. Finish one.</h1>

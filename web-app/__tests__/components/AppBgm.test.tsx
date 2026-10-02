@@ -21,13 +21,21 @@ const audioInstances: MockAudio[] = [];
 
 class MockAudio {
   src: string;
+  preload = 'auto';
   loop = false;
   volume = 1;
   currentTime = 0;
-  play = vi.fn<() => Promise<void>>(() => Promise.resolve());
-  pause = vi.fn();
+  // Like a real HTMLAudioElement: starts paused, play() un-pauses it.
+  paused = true;
+  play = vi.fn<() => Promise<void>>(() => {
+    this.paused = false;
+    return Promise.resolve();
+  });
+  pause = vi.fn(() => {
+    this.paused = true;
+  });
 
-  constructor(src: string) {
+  constructor(src = '') {
     this.src = src;
     audioInstances.push(this);
   }
@@ -54,6 +62,32 @@ describe('AppBgm', () => {
     expect(audio.loop).toBe(true);
     expect(audio.volume).toBe(APP_BGM_DEFAULT_VOLUME);
     expect(audio.volume).toBe(0.0875);
+    expect(audio.play).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not ask the browser to download the track ahead of playback', () => {
+    // A 3-4 MB mp3 used to start downloading on every first visit, before the
+    // browser had even allowed playback.
+    render(<AppBgm />);
+
+    expect(audioInstances[0].preload).toBe('none');
+    expect(audioInstances[0].src).toBe(APP_BGM_SRC);
+  });
+
+  it('stays silent and unloaded while muted, then plays once unmuted', () => {
+    localStorage.setItem(APP_BGM_VOLUME_STORAGE_KEY, '0');
+
+    render(<AppBgm />);
+    const audio = audioInstances[0];
+    expect(audio.play).not.toHaveBeenCalled();
+
+    window.dispatchEvent(
+      new CustomEvent(APP_BGM_VOLUME_EVENT, {
+        detail: { volume: 0.3 },
+      }),
+    );
+
+    expect(audio.volume).toBe(0.3);
     expect(audio.play).toHaveBeenCalledTimes(1);
   });
 
