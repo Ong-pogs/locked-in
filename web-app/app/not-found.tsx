@@ -33,8 +33,8 @@ export default function NotFound() {
           404
         </p>
         <h1
+          className="font-pixel"
           style={{
-            fontFamily: 'var(--font-pixel), Georgia, serif',
             fontSize: 24,
             fontWeight: 700,
             color: '#FFD580',
@@ -57,6 +57,7 @@ export default function NotFound() {
         </p>
         <Link
           href="/village"
+          className="font-pixel"
           style={{
             display: 'inline-block',
             minHeight: 44,
@@ -65,7 +66,6 @@ export default function NotFound() {
             border: '1px solid rgba(255,213,128,0.4)',
             backgroundColor: 'rgba(255,213,128,0.12)',
             color: '#FFD580',
-            fontFamily: 'var(--font-pixel), Georgia, serif',
             fontSize: 13,
             fontWeight: 700,
             letterSpacing: 2,

@@ -130,8 +130,9 @@ export default function PracticePage() {
           groups.map((g) => (
             <div key={g.courseId} className="mt-7">
               <CozySectionLabel>{g.title}</CozySectionLabel>
+              {/* Omit opacity on locked card to keep glass backdrop blur intact */}
               {!g.unlocked ? (
-                <CozyCard className="w-full" style={{ padding: 14, opacity: 0.75 }}>
+                <CozyCard className="w-full" style={{ padding: 14 }}>
                   <div className="flex items-center gap-3">
                     <Lock size={16} color={T.textMuted} className="shrink-0" />
                     <div className="flex-1 min-w-0">
@@ -141,7 +142,7 @@ export default function PracticePage() {
                       >
                         Finish the course to unlock practice
                       </p>
-                      <p className="font-pixel-mono text-[10px] mt-0.5" style={{ color: T.textMuted }}>
+                      <p className="font-pixel-mono text-[10px] mt-0.5" style={{ color: T.textMutedStrong }}>
                         {g.completedCount}/{g.totalCount} lessons done
                       </p>
                     </div>

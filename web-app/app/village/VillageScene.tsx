@@ -360,9 +360,8 @@ export default function VillageScene() {
           }}
         />
         <span
-          className="hidden sm:inline"
+          className="hidden sm:inline font-pixel"
           style={{
-            fontFamily: 'var(--font-pixel), Georgia, serif',
             fontSize: 14,
             fontWeight: 600,
             letterSpacing: 0.6,

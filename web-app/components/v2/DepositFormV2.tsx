@@ -206,7 +206,7 @@ export function DepositFormV2({
       <div className="relative mb-1">
         <span
           className="absolute left-3 top-1/2 -translate-y-1/2 font-pixel-mono text-sm"
-          style={{ color: T.textMuted }}
+          style={{ color: T.textMutedStrong }}
         >
           $
         </span>

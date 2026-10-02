@@ -7,7 +7,7 @@ import { ArenaBackground } from '../ArenaBackground';
 import { fetchWithAuth } from '../../../services/api/httpClient';
 import { answerQuestion, getMatch, getMyArena, startMatch } from '../../../services/api/arena/arenaApi';
 import { useUserStore } from '../../../stores/userStore';
-import { resolveMatchPhase, type MatchPhase } from '../../../lib/matchPhase';
+import { resolveMatchPhase, isMyPlayer, playerLabel, type MatchPhase } from '../../../lib/matchPhase';
 import type { ArenaMatchState, ArenaQuestion } from '../../../types/arena';
 
 export default function ArenaMatchPage() {
@@ -142,8 +142,10 @@ export default function ArenaMatchPage() {
     }
   }
 
-  const me = match?.players.find((p) => p.walletAddress === myWallet) ?? null;
-  const them = match?.players.find((p) => p.walletAddress !== myWallet) ?? null;
+  // Rows are matched by the server's isMe flag; the opponent's full address is
+  // no longer sent (older responses fall back to comparing addresses).
+  const me = match?.players.find((p) => isMyPlayer(p, myWallet)) ?? null;
+  const them = match?.players.find((p) => !isMyPlayer(p, myWallet)) ?? null;
   let outcome: 'won' | 'lost' | 'draw' = 'draw';
   if (me && them) {
     if ((me.correctCount ?? 0) !== (them.correctCount ?? 0)) {
@@ -153,13 +155,8 @@ export default function ArenaMatchPage() {
     }
   }
 
-  const winnerWallet = me && them
-    ? ((me.correctCount ?? 0) !== (them.correctCount ?? 0)
-        ? ((me.correctCount ?? 0) > (them.correctCount ?? 0) ? me.walletAddress : them.walletAddress)
-        : ((me.totalMs ?? 0) !== (them.totalMs ?? 0)
-            ? ((me.totalMs ?? 0) < (them.totalMs ?? 0) ? me.walletAddress : them.walletAddress)
-            : null))
-    : null;
+  // Same rule as `outcome`: true = I won, false = they won, null = draw or unknown.
+  const winnerIsMe = me && them && outcome !== 'draw' ? outcome === 'won' : null;
 
   const seconds = Math.ceil(remainingMs / 1000);
 
@@ -201,15 +198,17 @@ export default function ArenaMatchPage() {
               className="mb-4 flex items-center justify-between rounded-md px-3 py-2"
               style={{ background: 'rgba(6,6,12,0.75)', border: `1px solid ${T.borderDormant}` }}
             >
+              {/* Numbers stay in the body face here and below: both pixel faces
+                  draw "5" like "S" (same rule as the Arena hub). */}
               <span
-                className="font-pixel-mono text-[12px]"
+                className="text-[12px] font-semibold tabular-nums"
                 style={{ color: T.textPrimary }}
                 data-testid="arena-progress"
               >
                 Question {answered + 1} of {total}
               </span>
               <span
-                className="font-pixel text-xl"
+                className="text-xl font-bold tabular-nums"
                 style={{ color: seconds <= 5 ? T.crimson : T.teal }}
                 data-testid="arena-countdown"
               >
@@ -305,7 +304,7 @@ export default function ArenaMatchPage() {
               </div>
             )}
 
-            <div className="mt-3 font-pixel-mono text-[10px]" style={{ color: T.textMuted }}>
+            <div className="mt-3 font-pixel-mono text-[10px]" style={{ color: T.textMutedStrong }}>
               Tip: press A, B or C to answer.
             </div>
           </div>
@@ -345,8 +344,8 @@ export default function ArenaMatchPage() {
             </h1>
             {ratingDelta !== null && (
               <div
-                className="mt-1 font-pixel-mono text-[13px]"
-                style={{ color: ratingDelta > 0 ? T.green : ratingDelta < 0 ? T.crimson : T.textMuted }}
+                className="mt-1 text-[13px] font-semibold tabular-nums"
+                style={{ color: ratingDelta > 0 ? T.green : ratingDelta < 0 ? T.crimson : T.textMutedStrong }}
                 data-testid="arena-rating-delta"
               >
                 {ratingDelta > 0 ? '+' : ''}{ratingDelta} rating
@@ -357,25 +356,23 @@ export default function ArenaMatchPage() {
               className="mt-3 overflow-hidden rounded-lg"
               style={{ background: T.bgCard, border: `1px solid ${T.borderAlive}` }}
             >
-              {match.players.map((p) => (
+              {match.players.map((p, i) => (
                 <div
-                  key={p.walletAddress}
+                  key={`${i}-${playerLabel(p)}`}
                   className="flex items-center justify-between px-4 py-3"
                   style={{ borderTop: `1px solid ${T.borderDormant}` }}
                   data-testid="arena-result-row"
                 >
                   <span className="font-mono text-[11px]" style={{ color: T.textPrimary }}>
-                    {p.walletAddress === myWallet
-                      ? 'You'
-                      : `${p.walletAddress.slice(0, 4)}…${p.walletAddress.slice(-4)}`}
+                    {isMyPlayer(p, myWallet) ? 'You' : playerLabel(p)}
                     {p.forfeited ? ' (did not play)' : ''}
-                    {winnerWallet === p.walletAddress && (
+                    {winnerIsMe !== null && winnerIsMe === isMyPlayer(p, myWallet) && (
                       <span className="ml-2" style={{ color: T.green }}>winner</span>
                     )}
                   </span>
-                  <span className="font-pixel text-[14px]" style={{ color: T.teal }}>
+                  <span className="text-[14px] font-bold tabular-nums" style={{ color: T.teal }}>
                     {p.correctCount ?? 0}/{total}
-                    <span className="ml-2 font-pixel-mono text-[11px]" style={{ color: T.textMuted }}>
+                    <span className="ml-2 text-[11px] font-semibold" style={{ color: T.textMutedStrong }}>
                       {p.totalMs != null ? `${(p.totalMs / 1000).toFixed(2)}s` : '—'}
                     </span>
                   </span>

@@ -32,8 +32,8 @@ export function HubButton() {
     >
       <ArrowLeft size={16} color="#FFD580" strokeWidth={2.5} />
       <span
+        className="font-pixel"
         style={{
-          fontFamily: 'var(--font-pixel), Georgia, serif',
           fontSize: 13,
           fontWeight: 600,
           letterSpacing: 0.4,

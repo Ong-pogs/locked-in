@@ -446,7 +446,9 @@ export interface CommunityPotHistoryResponse {
 }
 
 export interface CommunityPotWindowRecipient {
-  walletAddress: string;
+  /** @deprecated Older API responses only. The server now sends displayIdentity alone. */
+  walletAddress?: string;
+  /** Short label made by the server, e.g. "7Vt9…GDL6". */
   displayIdentity: string;
   courseId: string;
   currentStreak: number;
@@ -457,7 +459,9 @@ export interface CommunityPotWindowRecipient {
   payoutAmountUi: string;
   status: CommunityPotRecipientStatus;
   distributedAt: string | null;
+  /** Only set on the viewer's own row: a signature names its recipient on-chain. */
   transactionSignature: string | null;
+  /** Only set on the viewer's own row: raw send errors can quote addresses. */
   lastError: string | null;
   isCurrentUser: boolean;
 }
