@@ -681,7 +681,7 @@ export default function LessonPage(props: {
         <div className="flex items-center justify-center min-h-[60vh]">
           <p
             className="text-sm font-pixel"
-            style={{ color: T.textSecondary, textShadow: COZY_TEXT_SHADOW }}
+            style={{ color: T.textMutedStrong, textShadow: COZY_TEXT_SHADOW }}
           >
             Lesson not found
           </p>
@@ -731,7 +731,8 @@ export default function LessonPage(props: {
         <div className="flex items-center justify-between mt-1">
           <p
             className="text-[11px] font-pixel-mono uppercase tracking-[1.5px]"
-            style={{ color: T.textMuted, textShadow: COZY_TEXT_SHADOW }}
+            // Readable muted gray: textMuted was too faint over the lesson art.
+            style={{ color: T.textMutedStrong, textShadow: COZY_TEXT_SHADOW }}
           >
             Lesson {lessonOrder} of {totalLessonsInCourse}
           </p>
@@ -897,7 +898,7 @@ export default function LessonPage(props: {
           {usesRemoteVerification && (
             <span
               className="text-[10px] font-pixel-mono"
-              style={{ color: T.textMuted, textShadow: COZY_TEXT_SHADOW }}
+              style={{ color: T.textMutedStrong, textShadow: COZY_TEXT_SHADOW }}
             >
               Scored on submit
             </span>
@@ -1021,13 +1022,13 @@ export default function LessonPage(props: {
                           ? AMBER
                           : COZY_BORDER,
                   color: T.textPrimary,
-                  fontFamily: 'var(--font-pixel-mono), monospace',
+                  fontFamily: 'var(--font-pixel-pct), var(--font-pixel-mono), monospace',
                   boxShadow: inputFocused ? `0 0 14px ${AMBER}33` : 'none',
                 }}
               />
               {((supportsLocalChecking && hasChecked && !isCorrect && currentQuestion.correctAnswer) ||
                 (serverVerdict && !serverVerdict.isCorrect && serverVerdict.correctAnswer)) && (
-                <p className="mt-2 text-[12px] font-pixel" style={{ color: T.textSecondary }}>
+                <p className="mt-2 text-[12px] font-pixel" style={{ color: T.textMutedStrong, textShadow: COZY_TEXT_SHADOW }}>
                   Correct answer:{' '}
                   <span className="font-bold" style={{ color: T.green }}>
                     {supportsLocalChecking && hasChecked
@@ -1060,7 +1061,7 @@ export default function LessonPage(props: {
           {usesRemoteVerification && (
             <p
               className="mt-4 text-[11px] font-pixel-mono"
-              style={{ color: T.textMuted }}
+              style={{ color: T.textMutedStrong, textShadow: COZY_TEXT_SHADOW }}
             >
               {instantCheck
                 ? 'Answers lock when you check — the final score is confirmed on submit.'

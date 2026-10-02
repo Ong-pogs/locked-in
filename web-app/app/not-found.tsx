@@ -22,7 +22,7 @@ export default function NotFound() {
       <div style={{ maxWidth: 420, textAlign: 'center' }}>
         <p
           style={{
-            fontFamily: 'var(--font-pixel-mono), monospace',
+            fontFamily: 'var(--font-pixel-pct), var(--font-pixel-mono), monospace',
             fontSize: 12,
             letterSpacing: 2,
             textTransform: 'uppercase',
@@ -46,7 +46,7 @@ export default function NotFound() {
         </h1>
         <p
           style={{
-            fontFamily: 'var(--font-pixel-mono), monospace',
+            fontFamily: 'var(--font-pixel-pct), var(--font-pixel-mono), monospace',
             fontSize: 13,
             lineHeight: 1.6,
             color: 'rgba(255,255,255,0.66)',

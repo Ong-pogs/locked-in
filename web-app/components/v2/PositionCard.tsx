@@ -181,12 +181,12 @@ export function PositionCard({ data, position, positionError, onRetryPosition, c
       {/* Header: title + flame */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h3
+          <h2
             className="font-pixel text-lg leading-tight truncate"
             style={{ color: COZY_TEXT, textShadow: COZY_TEXT_SHADOW }}
           >
             {data.title}
-          </h3>
+          </h2>
           {/* Position value */}
           <div data-testid="v2-position-value" className="mt-1.5">
             {position == null && positionError ? (

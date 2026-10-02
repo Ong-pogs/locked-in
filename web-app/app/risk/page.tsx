@@ -13,7 +13,7 @@ const page: React.CSSProperties = {
 };
 const wrap: React.CSSProperties = { maxWidth: 680, margin: '0 auto' };
 const eyebrow: React.CSSProperties = {
-  fontFamily: 'var(--font-pixel-mono), monospace',
+  fontFamily: 'var(--font-pixel-pct), var(--font-pixel-mono), monospace',
   fontSize: 12,
   letterSpacing: 2,
   textTransform: 'uppercase',
@@ -57,7 +57,7 @@ const link: React.CSSProperties = { color: '#FFD580', textDecoration: 'underline
 // The footer nav is short link labels, so it keeps the pixel HUD face.
 const footer: React.CSSProperties = {
   ...body,
-  fontFamily: 'var(--font-pixel-mono), monospace',
+  fontFamily: 'var(--font-pixel-pct), var(--font-pixel-mono), monospace',
   fontSize: 13,
   marginTop: 32,
 };

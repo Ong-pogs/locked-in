@@ -660,7 +660,7 @@ export default function CoursesPage() {
         {/* Active courses */}
         {activeCourses.length > 0 && (
           <div className="mb-5">
-            <CozySectionLabel>Active Courses</CozySectionLabel>
+            <CozySectionLabel as="h2">Active Courses</CozySectionLabel>
             <div className="flex flex-col gap-2.5">
               {activeCourses.map((course) => (
                 <ActiveCourseCard
@@ -678,7 +678,7 @@ export default function CoursesPage() {
         {/* Available courses */}
         {readyCourses.length > 0 && (
           <div className="mb-5">
-            <CozySectionLabel>Available Courses</CozySectionLabel>
+            <CozySectionLabel as="h2">Available Courses</CozySectionLabel>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {readyCourses.map((course) => (
                 <CourseCard

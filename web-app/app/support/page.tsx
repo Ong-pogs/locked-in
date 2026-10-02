@@ -18,7 +18,8 @@ const body = {
 
 export default function SupportPage() {
   return (
-    <main className="min-h-screen px-6 py-12" style={{ background: '#06060C' }}>
+    // A div, not <main>: AppShell already wraps every page in the one <main>.
+    <div className="min-h-screen px-6 py-12" style={{ background: '#06060C' }}>
       <div className="mx-auto max-w-[680px]">
         <p
           className="font-pixel-mono text-xs uppercase tracking-[2px]"
@@ -81,6 +82,6 @@ export default function SupportPage() {
           <Link className="underline underline-offset-4" style={{ color: '#FFD580' }} href="/village">Back to the village</Link>
         </nav>
       </div>
-    </main>
+    </div>
   );
 }
