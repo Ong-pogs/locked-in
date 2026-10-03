@@ -162,6 +162,10 @@ export default function RiskPage() {
             Privacy
           </Link>{' '}
           ·{' '}
+          <Link href="/stats" style={link}>
+            Stats
+          </Link>{' '}
+          ·{' '}
           <Link href="/village" style={link}>
             Back to the village
           </Link>

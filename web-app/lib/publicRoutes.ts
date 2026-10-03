@@ -12,6 +12,7 @@ export const PUBLIC_APP_ROUTES: readonly string[] = [
   '/community-pot',
   '/inventory',
   '/leaderboard',
+  '/stats',
   '/terms',
   '/privacy',
   '/risk',
