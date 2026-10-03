@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // The materialized leaderboard changes once a day, but every read used to cost
 // three database queries (latest snapshot, page rows, viewer row). The API runs
@@ -58,6 +58,10 @@ beforeEach(() => {
   clearLeaderboardSnapshotCache();
 });
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe('leaderboard snapshot cache', () => {
   it('serves repeated reads from memory without querying the database', async () => {
     mockSnapshot(1, [row(1, ALICE, '7Vt9…GDL6'), row(2, BOB, '9xQe…VFin')]);
@@ -113,5 +117,39 @@ describe('leaderboard snapshot cache', () => {
 
     // One snapshot query and one rows query, not three of each.
     expect(query.mock.calls.length).toBe(2);
+  });
+});
+
+describe('leaderboard snapshot cache: a stalled load', () => {
+  // One shared load serves every reader, so a query that never answers (a
+  // silently dead connection) must not hold every later request hostage.
+  it('lets later reads recover after the load deadline, and drops the late answer', async () => {
+    vi.useFakeTimers();
+    let releaseStuck;
+    const stuck = new Promise((resolve) => { releaseStuck = resolve; });
+    let calls = 0;
+    query.mockImplementation(async (sql) => {
+      calls += 1;
+      if (calls === 1) return stuck; // the first snapshot query hangs
+      if (sql.includes('from lesson.leaderboard_snapshots')) {
+        return { rows: [{ snapshotId: 2, snapshotAt: 'fresh', currentPotAmount: '0', nextDistributionWindowLabel: null, entryCount: 1 }] };
+      }
+      return { rows: [row(1, BOB, '9xQe…VFin')] };
+    });
+
+    const firstRead = getLeaderboardSnapshot(ALICE, 1, 200);
+    const firstOutcome = firstRead.then(() => 'ok', (err) => err.message);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(await firstOutcome).toMatch(/LEADERBOARD_LOAD_TIMEOUT/);
+
+    const recovered = await getLeaderboardSnapshot(ALICE, 1, 200);
+    expect(recovered.snapshotAt).toBe('fresh');
+
+    // The stuck query finally answers with an old snapshot: it must not
+    // overwrite the fresh cache.
+    releaseStuck({ rows: [{ snapshotId: 1, snapshotAt: 'stale', currentPotAmount: '0', nextDistributionWindowLabel: null, entryCount: 0 }] });
+    await vi.advanceTimersByTimeAsync(0);
+    const after = await getLeaderboardSnapshot(ALICE, 1, 200);
+    expect(after.snapshotAt).toBe('fresh');
   });
 });

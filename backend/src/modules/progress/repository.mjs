@@ -4147,6 +4147,25 @@ const LEADERBOARD_CACHE_TTL_MS = 5 * 60_000;
 let leaderboardCache = null; // { loadedAt, snapshot, rows }
 let leaderboardCacheLoad = null; // in-flight load shared by concurrent readers
 let leaderboardCacheGeneration = 0; // bumped on clear so a stale load is dropped
+// Every reader shares one load, so a query that never answers (a silently
+// dead connection) must not hold them all: past this deadline a reader gives
+// up, the load is abandoned, and the next request starts a fresh one.
+const LEADERBOARD_LOAD_DEADLINE_MS = 8_000;
+
+function waitForLeaderboardLoad(load) {
+  let timer;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      // Abandon it: its late answer must not land in the cache either.
+      if (leaderboardCacheLoad === load) {
+        leaderboardCacheLoad = null;
+        leaderboardCacheGeneration += 1;
+      }
+      reject(new Error('LEADERBOARD_LOAD_TIMEOUT'));
+    }, LEADERBOARD_LOAD_DEADLINE_MS);
+  });
+  return Promise.race([load, deadline]).finally(() => clearTimeout(timer));
+}
 
 export function clearLeaderboardSnapshotCache() {
   leaderboardCacheGeneration += 1;
@@ -4158,7 +4177,7 @@ async function loadLatestLeaderboardSnapshot() {
   if (leaderboardCache && Date.now() - leaderboardCache.loadedAt < LEADERBOARD_CACHE_TTL_MS) {
     return leaderboardCache;
   }
-  if (leaderboardCacheLoad) return leaderboardCacheLoad;
+  if (leaderboardCacheLoad) return waitForLeaderboardLoad(leaderboardCacheLoad);
 
   const generation = leaderboardCacheGeneration;
   const load = (async () => {
@@ -4202,11 +4221,13 @@ async function loadLatestLeaderboardSnapshot() {
     return loaded;
   })();
   leaderboardCacheLoad = load;
-  try {
-    return await load;
-  } finally {
-    if (leaderboardCacheLoad === load) leaderboardCacheLoad = null;
-  }
+  // Clear the in-flight marker however the load ends (an abandoned one may
+  // still settle later; by then a newer load may own the marker).
+  load.then(
+    () => { if (leaderboardCacheLoad === load) leaderboardCacheLoad = null; },
+    () => { if (leaderboardCacheLoad === load) leaderboardCacheLoad = null; },
+  );
+  return waitForLeaderboardLoad(load);
 }
 
 async function readLatestLeaderboardSnapshot(walletAddress, page = 1, pageSize = 25) {
