@@ -34,7 +34,11 @@ const TOTALS_SQL = `
     (select count(distinct wallet_address) from lesson.community_pot_distribution_snapshots
       where course_id <> 'test-kitchen' and status = 'distributed') as "potRecipients",
     (select count(*) from arena.matches where status = 'COMPLETE') as "matchesPlayed",
-    (select count(*) from arena.ratings where games > 0) as "players"
+    -- Players come from completed matches, the same set as matchesPlayed.
+    -- arena.ratings keeps rows from before the mainnet reset, so it overcounts.
+    (select count(distinct mp.wallet_address) from arena.match_players mp
+      join arena.matches m on m.id = mp.match_id
+      where m.status = 'COMPLETE') as "players"
 `;
 
 // course_complete uses source_id as the course ID; arena_win uses a match ID.
