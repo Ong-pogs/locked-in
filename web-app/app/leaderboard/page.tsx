@@ -29,11 +29,15 @@ export default function LeaderboardPage() {
   const [error, setError] = useState<string | null>(null);
   // Signed-out visitors get a prompt, not a Retry button that cannot succeed.
   const [needsAuth, setNeedsAuth] = useState(false);
+  // The saved board belongs to one session: a wallet switch reloads the page
+  // state (and aborts the old request), and signing out hides the board.
+  const walletAddress = useUserStore((s) => s.walletAddress);
+  const signedIn = useUserStore((s) => Boolean(s.authToken || s.refreshToken));
 
   const fetchBoard = useCallback(async (signal?: AbortSignal) => {
     // The board is a daily snapshot, so the copy this device saved last time
     // is painted at once and the request below just refreshes it quietly.
-    const wallet = useUserStore.getState().walletAddress;
+    const wallet = walletAddress;
     const cached = readCachedBoard(wallet);
     if (cached) {
       setEntries(cached.entries);
@@ -48,7 +52,9 @@ export default function LeaderboardPage() {
       const resp = await fetchWithAuth((token) =>
         getLeaderboard(token, { page: 1, pageSize: 200 }),
       );
-      if (signal?.aborted) return;
+      // Aborted (the wallet changed), or a token retry answered for a session
+      // other than the one this request started in: not this board.
+      if (signal?.aborted || useUserStore.getState().walletAddress !== wallet) return;
       setEntries(resp.entries);
       setCurrentUser(resp.currentUser);
       setSnapshotAt(resp.snapshotAt);
@@ -80,24 +86,33 @@ export default function LeaderboardPage() {
       setSource('materialized');
       setLoading(false);
     }
-  }, []);
+  }, [walletAddress]);
 
   useEffect(() => {
+    // Signed out: nothing to fetch; the prompt is derived during render.
+    if (!signedIn) return undefined;
     const controller = new AbortController();
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchBoard(controller.signal);
     return () => {
       controller.abort();
     };
-  }, [fetchBoard]);
+  }, [fetchBoard, signedIn]);
 
-  const top3 = entries.slice(0, 3);
-  const rest = entries.slice(3);
+  // Session ended (here or in another tab): never leave a saved board up.
+  const signedOut = !signedIn;
+  const shownError = signedOut ? 'Connect your wallet to see the leaderboard.' : error;
+  const shownNeedsAuth = signedOut || needsAuth;
+  const shownEntries = signedOut ? [] : entries;
+  const shownCurrentUser = signedOut ? null : currentUser;
+
+  const top3 = shownEntries.slice(0, 3);
+  const rest = shownEntries.slice(3);
   const [first, second, third] = top3;
   const refreshLabel = formatLeaderboardRefresh(snapshotAt, source);
   // Hide the sticky "Your Standing" card when the user is already visible
   // in the Pursuers list — no point showing them twice.
-  const userInVisibleList = entries.some((entry) => entry.isCurrentUser);
+  const userInVisibleList = shownEntries.some((entry) => entry.isCurrentUser);
 
   return (
     <div className="min-h-screen relative" style={{ backgroundColor: T.bg }}>
@@ -143,18 +158,18 @@ export default function LeaderboardPage() {
           </p>
         </div>
 
-        {loading ? (
+        {loading && !signedOut ? (
           <CozyCard>
             <p className="font-pixel-mono text-[12px]" style={{ color: T.textMutedStrong }}>
               Reading the rolls of honor...
             </p>
           </CozyCard>
-        ) : error ? (
+        ) : shownError ? (
           <CozyCard>
             <p className="font-pixel-mono text-[12px]" style={{ color: AMBER }}>
-              {error}
+              {shownError}
             </p>
-            {!needsAuth && (
+            {!shownNeedsAuth && (
               <CozyButton
                 size="sm"
                 className="mt-3"
@@ -167,7 +182,7 @@ export default function LeaderboardPage() {
               </CozyButton>
             )}
           </CozyCard>
-        ) : entries.length === 0 ? (
+        ) : shownEntries.length === 0 ? (
           <CozyCard>
             <p className="font-pixel-mono text-[12px]" style={{ color: T.textMutedStrong }}>
               No streaks recorded yet. Be the first.
@@ -213,7 +228,7 @@ export default function LeaderboardPage() {
 
         {/* Your Standing — only show when current user is NOT already in the
             visible Pursuers list above (avoid duplicating their row). */}
-        {currentUser && !userInVisibleList && (
+        {shownCurrentUser && !userInVisibleList && (
           <>
             <SectionHeader muted>Your Standing</SectionHeader>
             <CozyCard
@@ -230,7 +245,7 @@ export default function LeaderboardPage() {
                     className="font-pixel-mono text-[18px] font-bold shrink-0"
                     style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
                   >
-                    #{currentUser.rank}
+                    #{shownCurrentUser.rank}
                   </span>
                   {/* Names are random base58: Geist Mono, never a pixel face
                       (Pixelify draws B like G, Z like 2, C like O; Silkscreen
@@ -239,7 +254,7 @@ export default function LeaderboardPage() {
                     className="text-[13px] font-bold font-mono truncate"
                     style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
                   >
-                    {currentUser.displayIdentity}
+                    {shownCurrentUser.displayIdentity}
                   </p>
                   <span
                     className="font-pixel-mono text-[8px] uppercase tracking-[1px] px-1.5 py-0.5 rounded shrink-0"
@@ -254,13 +269,13 @@ export default function LeaderboardPage() {
                     className="font-pixel-mono text-[14px] font-bold"
                     style={{ color: '#E8845A', textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
                   >
-                    {currentUser.streakLength}
+                    {shownCurrentUser.streakLength}
                   </span>
                   <span
                     className="font-pixel-mono text-[10px] uppercase tracking-[1px]"
                     style={{ color: T.textMutedStrong }}
                   >
-                    {currentUser.streakStatus === 'broken' ? 'broken' : 'day streak'}
+                    {shownCurrentUser.streakStatus === 'broken' ? 'broken' : 'day streak'}
                   </span>
                 </div>
               </div>

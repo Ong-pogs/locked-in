@@ -403,58 +403,13 @@ async function refreshWithRotationRecovery(
   }
 }
 
-// Access tokens live 15 minutes. Sending one that has already run out costs a
-// rejected round trip (401) before the refresh, and the API is an ocean away,
-// so a token this close to expiry is refreshed BEFORE the request instead.
-const ACCESS_TOKEN_REFRESH_LEEWAY_MS = 30_000;
-// Set when a just-refreshed token still reads as expired: the device clock is
-// off, so early refresh would fire on every call. Fall back to the 401 path.
-let clockSkewSuspected = false;
-
-/** `exp` of a JWT in ms, or null when the token is not a readable JWT. */
-function accessTokenExpiryMs(token: string): number | null {
-  try {
-    const payload = token.split('.')[1];
-    if (!payload) return null;
-    const b64 = payload.replace(/-/g, '+').replace(/_/g, '/');
-    const json = atob(b64.padEnd(Math.ceil(b64.length / 4) * 4, '='));
-    const exp = (JSON.parse(json) as { exp?: unknown }).exp;
-    return typeof exp === 'number' ? exp * 1000 : null;
-  } catch {
-    return null;
-  }
-}
-
-function isExpiringSoon(token: string): boolean {
-  const expiry = accessTokenExpiryMs(token);
-  return expiry !== null && expiry - Date.now() < ACCESS_TOKEN_REFRESH_LEEWAY_MS;
-}
-
 export async function fetchWithAuth<T>(
   requestFn: (token: string) => Promise<T>,
 ): Promise<T> {
   const { authToken, refreshToken, setAuthSession } = useUserStore.getState();
 
-  let token = authToken;
-
-  // Expired (or about to): refresh first rather than spend a round trip on a
-  // request the server will reject. A transient refresh failure keeps the old
-  // behaviour (send the stored token, let the 401 path below retry).
-  if (token && refreshToken && !clockSkewSuspected && isExpiringSoon(token)) {
-    try {
-      const session = await refreshWithRotationRecovery(refreshToken);
-      setAuthSession(session.accessToken, session.refreshToken);
-      token = session.accessToken;
-      if (isExpiringSoon(token)) clockSkewSuspected = true;
-    } catch (err) {
-      if (isSessionDead(err)) {
-        setAuthSession(null, null);
-        throw new AuthExpiredError();
-      }
-    }
-  }
-
   // If we have no access token, try a proactive refresh before giving up.
+  let token = authToken;
   if (!token) {
     if (!refreshToken) throw new AuthExpiredError();
     try {
