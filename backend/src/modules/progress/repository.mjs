@@ -4136,9 +4136,34 @@ function mapLeaderboardSnapshotRow(row, walletAddress) {
   };
 }
 
-async function readLatestLeaderboardSnapshot(walletAddress, page = 1, pageSize = 25) {
-  const snapshotResult = await query(
-    `
+// The materialized leaderboard only changes when refreshLeaderboardSnapshot
+// writes a new snapshot (the daily cron). Reading it used to cost three
+// queries per request, and the API (Virginia) is an ocean away from the
+// database (Singapore), so each query is a ~0.2s round trip. The latest
+// snapshot and all of its rows are held in memory instead: a read then needs
+// no database at all. refreshLeaderboardSnapshot clears it; the TTL is the
+// safety net for writers in other processes (ops scripts, another instance).
+const LEADERBOARD_CACHE_TTL_MS = 5 * 60_000;
+let leaderboardCache = null; // { loadedAt, snapshot, rows }
+let leaderboardCacheLoad = null; // in-flight load shared by concurrent readers
+let leaderboardCacheGeneration = 0; // bumped on clear so a stale load is dropped
+
+export function clearLeaderboardSnapshotCache() {
+  leaderboardCacheGeneration += 1;
+  leaderboardCache = null;
+  leaderboardCacheLoad = null;
+}
+
+async function loadLatestLeaderboardSnapshot() {
+  if (leaderboardCache && Date.now() - leaderboardCache.loadedAt < LEADERBOARD_CACHE_TTL_MS) {
+    return leaderboardCache;
+  }
+  if (leaderboardCacheLoad) return leaderboardCacheLoad;
+
+  const generation = leaderboardCacheGeneration;
+  const load = (async () => {
+    const snapshotResult = await query(
+      `
       select
         snapshot_id as "snapshotId",
         snapshot_at as "snapshotAt",
@@ -4149,22 +4174,11 @@ async function readLatestLeaderboardSnapshot(walletAddress, page = 1, pageSize =
       order by snapshot_id desc
       limit 1
     `,
-  );
-
-  const snapshot = snapshotResult.rows[0] ?? null;
-  if (!snapshot) {
-    return null;
-  }
-
-  const safePageSize = Math.max(1, Number(pageSize) || 25);
-  const totalEntries = Number(snapshot.entryCount ?? 0);
-  const totalPages = Math.max(1, Math.ceil(totalEntries / safePageSize));
-  const safePage = Math.min(Math.max(1, Number(page) || 1), totalPages);
-  const offset = (safePage - 1) * safePageSize;
-
-  const [entriesResult, currentUserResult] = await Promise.all([
-    query(
-      `
+    );
+    const snapshot = snapshotResult.rows[0] ?? null;
+    const rowsResult = snapshot
+      ? await query(
+          `
         select
           rank,
           wallet_address as "walletAddress",
@@ -4178,33 +4192,37 @@ async function readLatestLeaderboardSnapshot(walletAddress, page = 1, pageSize =
         from lesson.leaderboard_snapshot_rows
         where snapshot_id = $1
         order by rank asc
-        limit $2
-        offset $3
       `,
-      [snapshot.snapshotId, safePageSize, offset],
-    ),
-    walletAddress
-      ? query(
-          `
-            select
-              rank,
-              wallet_address as "walletAddress",
-              display_identity as "displayIdentity",
-              streak_length as "streakLength",
-              streak_status as "streakStatus",
-              active_course_count as "activeCourseCount",
-              locked_principal_amount as "lockedPrincipalAmount",
-              projected_community_pot_share as "projectedCommunityPotShare",
-              recent_activity_date as "recentActivityDate"
-            from lesson.leaderboard_snapshot_rows
-            where snapshot_id = $1
-              and wallet_address = $2
-            limit 1
-          `,
-          [snapshot.snapshotId, walletAddress],
+          [snapshot.snapshotId],
         )
-      : Promise.resolve({ rows: [] }),
-  ]);
+      : { rows: [] };
+    const loaded = { loadedAt: Date.now(), snapshot, rows: rowsResult.rows };
+    // A refresh that landed while this load was in flight wins.
+    if (generation === leaderboardCacheGeneration) leaderboardCache = loaded;
+    return loaded;
+  })();
+  leaderboardCacheLoad = load;
+  try {
+    return await load;
+  } finally {
+    if (leaderboardCacheLoad === load) leaderboardCacheLoad = null;
+  }
+}
+
+async function readLatestLeaderboardSnapshot(walletAddress, page = 1, pageSize = 25) {
+  const { snapshot, rows } = await loadLatestLeaderboardSnapshot();
+  if (!snapshot) {
+    return null;
+  }
+
+  const safePageSize = Math.max(1, Number(pageSize) || 25);
+  const totalEntries = Number(snapshot.entryCount ?? 0);
+  const totalPages = Math.max(1, Math.ceil(totalEntries / safePageSize));
+  const safePage = Math.min(Math.max(1, Number(page) || 1), totalPages);
+  const offset = (safePage - 1) * safePageSize;
+  const currentUserRow = walletAddress
+    ? rows.find((row) => row.walletAddress === walletAddress) ?? null
+    : null;
 
   return {
     source: 'materialized',
@@ -4216,10 +4234,12 @@ async function readLatestLeaderboardSnapshot(walletAddress, page = 1, pageSize =
     currentPotSizeUi: formatAtomicUsdcUi(snapshot.currentPotAmount),
     nextDistributionWindowLabel: snapshot.nextDistributionWindowLabel ?? null,
     currentUser:
-      currentUserResult.rows[0] != null
-        ? mapLeaderboardSnapshotRow(currentUserResult.rows[0], walletAddress)
+      currentUserRow != null
+        ? mapLeaderboardSnapshotRow(currentUserRow, walletAddress)
         : null,
-    entries: entriesResult.rows.map((row) => mapLeaderboardSnapshotRow(row, walletAddress)),
+    entries: rows
+      .slice(offset, offset + safePageSize)
+      .map((row) => mapLeaderboardSnapshotRow(row, walletAddress)),
   };
 }
 
@@ -4233,7 +4253,7 @@ export async function refreshLeaderboardSnapshot(limit = 25) {
 
   const live = await computeLeaderboardRows();
 
-  return withTransaction(async (client) => {
+  const result = await withTransaction(async (client) => {
     const snapshotInsert = await client.query(
       `
         insert into lesson.leaderboard_snapshots (
@@ -4316,6 +4336,10 @@ export async function refreshLeaderboardSnapshot(limit = 25) {
       })),
     };
   });
+  // The new snapshot is committed: drop the in-memory copy so the next read
+  // serves it (see loadLatestLeaderboardSnapshot).
+  clearLeaderboardSnapshotCache();
+  return result;
 }
 
 export async function getLeaderboardSnapshot(walletAddress, page = 1, pageSize = 25) {

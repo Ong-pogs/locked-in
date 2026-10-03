@@ -26,6 +26,16 @@ export function getPool() {
       connectionString: dbUrl,
       max: 10,
       idleTimeoutMillis: 30_000,
+      // Keep up to 2 connections open past the idle timeout. The API runs in
+      // Virginia and the database in Singapore, so opening a fresh TLS
+      // connection costs ~1.4s; on a quiet site nearly every visit paid it.
+      // keepAlive stops idle sockets from being silently dropped in between.
+      min: 2,
+      keepAlive: true,
+      // Idle connections must not keep one-off scripts (ops, simulator)
+      // alive forever now that they are never closed: let Node exit when
+      // nothing else is pending. The server stays up via its HTTP listener.
+      allowExitOnIdle: true,
       statement_timeout: 10_000,
       ssl: isLocalDb ? false : { rejectUnauthorized: false },
     });
