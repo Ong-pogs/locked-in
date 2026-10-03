@@ -94,13 +94,17 @@ export function Founding100Hero({ variant }: { variant: Variant }) {
             Join the Founding 100
             <ArrowRight size={15} aria-hidden />
           </Link>
-          <div className="flex items-center justify-center gap-3 font-pixel-mono text-[11px] uppercase tracking-[1px]">
+          <div className="flex flex-wrap items-center justify-center gap-3 font-pixel-mono text-[11px] uppercase tracking-[1px]">
             <Link className={secondaryLinkClass} style={{ color: '#F0A878' }} href="/risk">
               Read the risks
             </Link>
             <span aria-hidden style={{ color: 'rgba(255,255,255,0.22)' }}>·</span>
             <Link className={secondaryLinkClass} style={{ color: '#F0A878' }} href="/support">
               Get help
+            </Link>
+            <span aria-hidden style={{ color: 'rgba(255,255,255,0.22)' }}>·</span>
+            <Link className={secondaryLinkClass} style={{ color: '#F0A878' }} href="/stats">
+              Stats
             </Link>
           </div>
         </div>
