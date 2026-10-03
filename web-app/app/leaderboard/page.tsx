@@ -8,6 +8,8 @@ import { HubButton } from '@/components/HubButton';
 import { fetchWithAuth, AuthExpiredError } from '@/services/api/httpClient';
 import { getLeaderboard } from '@/services/api/progress/progressApi';
 import type { LeaderboardEntry, LeaderboardSource } from '@/services/api/types';
+import { useUserStore } from '@/stores/userStore';
+import { clearCachedBoard, readCachedBoard, writeCachedBoard } from '@/lib/leaderboardCache';
 
 const AMBER = '#FFD580';
 
@@ -29,7 +31,19 @@ export default function LeaderboardPage() {
   const [needsAuth, setNeedsAuth] = useState(false);
 
   const fetchBoard = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
+    // The board is a daily snapshot, so the copy this device saved last time
+    // is painted at once and the request below just refreshes it quietly.
+    const wallet = useUserStore.getState().walletAddress;
+    const cached = readCachedBoard(wallet);
+    if (cached) {
+      setEntries(cached.entries);
+      setCurrentUser(cached.currentUser);
+      setSnapshotAt(cached.snapshotAt);
+      setSource(cached.source);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     try {
       const resp = await fetchWithAuth((token) =>
         getLeaderboard(token, { page: 1, pageSize: 200 }),
@@ -42,8 +56,18 @@ export default function LeaderboardPage() {
       setError(null);
       setNeedsAuth(false);
       setLoading(false);
+      writeCachedBoard(wallet, {
+        entries: resp.entries,
+        currentUser: resp.currentUser,
+        snapshotAt: resp.snapshotAt,
+        source: resp.source,
+      });
     } catch (err) {
       if (signal?.aborted) return;
+      // A failed background refresh keeps the saved board on screen; only a
+      // signed-out session (or nothing to show) falls through to the error.
+      if (cached && !(err instanceof AuthExpiredError)) return;
+      if (err instanceof AuthExpiredError) clearCachedBoard(wallet);
       setNeedsAuth(err instanceof AuthExpiredError);
       if (err instanceof AuthExpiredError) {
         setError('Connect your wallet to see the leaderboard.');
