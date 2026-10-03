@@ -54,10 +54,16 @@ describe('leaderboard device cache', () => {
   });
 
   it('survives storage that throws (private mode, blocked site data)', () => {
-    const get = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('denied'); });
-    const set = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('denied'); });
-    expect(() => writeCachedBoard('WalletA', board)).not.toThrow();
-    expect(readCachedBoard('WalletA')).toBeNull();
-    get.mockRestore(); set.mockRestore();
+    // Replace the global itself: the test setup installs a plain-object
+    // storage, so spies on Storage.prototype would never be reached.
+    const denied = () => { throw new Error('denied'); };
+    vi.stubGlobal('localStorage', { getItem: denied, setItem: denied, removeItem: denied, clear: denied, key: denied, length: 0 });
+    try {
+      expect(() => writeCachedBoard('WalletA', board)).not.toThrow();
+      expect(readCachedBoard('WalletA')).toBeNull();
+      expect(() => clearCachedBoard('WalletA')).not.toThrow();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
