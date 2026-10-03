@@ -26,6 +26,23 @@ export function getPool() {
       connectionString: dbUrl,
       max: 10,
       idleTimeoutMillis: 30_000,
+      // Keep up to 2 connections open past the idle timeout. The API runs in
+      // Virginia and the database in Singapore, so opening a fresh TLS
+      // connection costs ~1.4s; on a quiet site nearly every visit paid it.
+      // keepAlive stops idle sockets from being silently dropped in between.
+      min: 2,
+      keepAlive: true,
+      // Idle connections must not keep one-off scripts (ops, simulator)
+      // alive forever now that they are never closed: let Node exit when
+      // nothing else is pending. The server stays up via its HTTP listener.
+      allowExitOnIdle: true,
+      // Bound opening a connection or waiting for a free one: a request then
+      // fails before it checks out a client, never mid-transaction.
+      // Deliberately NO client-side query_timeout: code that runs its own
+      // transactions on a checked-out client (e.g. arena/repository.mjs) can
+      // return a timed-out client to the pool with its transaction still
+      // open, and the next request would COMMIT the failed one's writes.
+      connectionTimeoutMillis: 10_000,
       statement_timeout: 10_000,
       ssl: isLocalDb ? false : { rejectUnauthorized: false },
     });
