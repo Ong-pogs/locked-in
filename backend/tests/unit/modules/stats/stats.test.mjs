@@ -2,16 +2,17 @@ import Fastify from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { query, hasDatabase, getVaultV2Stats, getYieldStrategyInfo } = vi.hoisted(() => ({
+const { query, hasDatabase, getVaultV2Stats, getYieldStrategyInfo, readKaminoSupplyApyBpsSafe } = vi.hoisted(() => ({
   query: vi.fn(),
   hasDatabase: vi.fn(),
   getVaultV2Stats: vi.fn(),
   getYieldStrategyInfo: vi.fn(),
+  readKaminoSupplyApyBpsSafe: vi.fn(),
 }));
 
 vi.mock('../../../../src/lib/db.mjs', () => ({ query, hasDatabase }));
 vi.mock('../../../../src/lib/vaultV2Stats.mjs', () => ({ getVaultV2Stats }));
-vi.mock('../../../../src/lib/yieldStrategy.mjs', () => ({ getYieldStrategyInfo }));
+vi.mock('../../../../src/lib/yieldStrategy.mjs', () => ({ getYieldStrategyInfo, readKaminoSupplyApyBpsSafe }));
 vi.mock('@solana/web3.js', async (importOriginal) => ({
   ...(await importOriginal()),
   Connection: vi.fn(function () { throw new Error('Unexpected RPC connection'); }),
@@ -27,10 +28,10 @@ const TOTALS = {
   potForfeited: '9007199254740993123456', potPaidOut: '1500000', potRecipients: '2',
   matchesPlayed: '19', players: '8',
 };
-const ACTIVITY = ['joined', 'started_course', 'finished_course', 'arena_win', 'pot_payout'].map((type, index) => ({
+const ACTIVITY = ['joined', 'started_course', 'finished_course', 'arena_win'].map((type, index) => ({
   type,
   walletAddress: index % 2 ? BOB : ALICE,
-  courseTitle: ['started_course', 'finished_course', 'pot_payout'].includes(type) ? 'Solana basics' : null,
+  courseTitle: ['started_course', 'finished_course'].includes(type) ? 'Solana basics' : null,
   at: new Date(Date.parse(NOW) - index * 60_000),
   payoutAmount: '1500000', // Extra private columns must never be copied into the response.
 }));
@@ -56,7 +57,8 @@ beforeEach(async () => {
   query.mockReset();
   hasDatabase.mockReturnValue(true);
   getVaultV2Stats.mockReset().mockResolvedValue({ usdcLocked: 1500000n, activeLocks: 3, learnersEarningYield: 2 });
-  getYieldStrategyInfo.mockReturnValue({ kamino: { lastApyBps: 425 }, fixedApyBps: 100 });
+  getYieldStrategyInfo.mockReturnValue({ kind: 'kamino_klend_reserve_v1', kamino: { lastApyBps: 300 }, fixedApyBps: 100 });
+  readKaminoSupplyApyBpsSafe.mockReset().mockResolvedValue(425);
   mockRows();
 });
 
@@ -86,7 +88,6 @@ describe('public stats contract', () => {
         { type: 'started_course', wallet: '9wtY…WLxw', courseTitle: 'Solana basics', at: '2026-10-04T02:59:00.000Z' },
         { type: 'finished_course', wallet: '9xQe…VFin', courseTitle: 'Solana basics', at: '2026-10-04T02:58:00.000Z' },
         { type: 'arena_win', wallet: '9wtY…WLxw', courseTitle: null, at: '2026-10-04T02:57:00.000Z' },
-        { type: 'pot_payout', wallet: '9xQe…VFin', courseTitle: 'Solana basics', at: '2026-10-04T02:56:00.000Z' },
       ],
     });
     expect(JSON.stringify(result)).not.toMatch(/"[1-9A-HJ-NP-Za-km-z]{32,44}"/);
@@ -112,7 +113,7 @@ describe('public stats contract', () => {
     expect(activity).toContain('min(created_at)');
     expect(activity).toContain('c.title');
     expect(activity).toContain('order by at desc');
-    expect(activity).not.toMatch(/payout_amount|to_pot/);
+    expect(activity).not.toMatch(/pot_payout|community_pot_distribution_snapshots|payout_amount|to_pot/);
   });
 
   it('starts all reads in parallel even if the totals query stalls', async () => {
@@ -123,6 +124,7 @@ describe('public stats contract', () => {
     const reading = getStats();
     expect(query).toHaveBeenCalledTimes(3);
     expect(getVaultV2Stats).toHaveBeenCalledTimes(1);
+    expect(readKaminoSupplyApyBpsSafe).toHaveBeenCalledTimes(1);
     release({ rows: [TOTALS] });
     await reading;
   });
@@ -143,15 +145,30 @@ describe('public stats contract', () => {
   });
 
   it.each([
-    [{ kamino: { lastApyBps: 0 }, fixedApyBps: 100 }, 0],
-    [{ kamino: { lastApyBps: null }, fixedApyBps: 100 }, 100],
-    [{}, null],
-  ])('uses the APY fallback without treating zero as missing', async (info, expected) => {
+    [{ kind: 'fixed_apy_v1', fixedApyBps: 100 }, null, null],
+    [{ kind: 'fixed_apy_v1', fixedApyBps: 100 }, 425, null],
+    [{ kind: 'kamino_klend_reserve_v1', kamino: { lastApyBps: 300 } }, 425, 425],
+    [{ kind: 'kamino_klend_reserve_v1', fixedApyBps: 100 }, 0, 0],
+    [{ kind: 'kamino_klend_reserve_v1', kamino: { lastApyBps: 300 }, fixedApyBps: 100 }, null, null],
+    [{}, null, null],
+  ])('publishes only a live Kamino APY for profile %j and read %s', async (info, liveApy, expected) => {
     getYieldStrategyInfo.mockReturnValue(info);
+    readKaminoSupplyApyBpsSafe.mockResolvedValue(liveApy);
     mockRows(TOTALS, [], null);
     const result = await getStats();
     expect(result.money.currentApyBps).toBe(expected);
     expect(result.arena.season).toBeNull();
+  });
+
+  it('keeps healthy stats when the open-season read fails', async () => {
+    const normalQuery = query.getMockImplementation();
+    query.mockImplementation((sql) => sql.includes('from arena.seasons')
+      ? Promise.reject(new Error('Season unavailable')) : normalQuery(sql));
+    const result = await getStats();
+    expect(result.arena).toEqual({ matchesPlayed: 19, players: 8, season: null });
+    expect(result.people.totalUsers).toBe(11);
+    expect(await getStats()).toBe(result);
+    expect(query).toHaveBeenCalledTimes(3);
   });
 });
 
@@ -182,21 +199,63 @@ describe('stats cache', () => {
     expect(query).toHaveBeenCalledTimes(6);
   });
 
-  it('serves stale data on refresh failure and retries the next request', async () => {
+  it('caches healthy SQL for sixty seconds when both RPC calls stall', async () => {
     vi.useFakeTimers();
-    const first = await getStats();
-    await vi.advanceTimersByTimeAsync(300_000);
-    query.mockRejectedValue(new Error('Database unavailable'));
+    const { Connection } = await import('@solana/web3.js');
+    const getProgramAccounts = vi.fn(() => new Promise(() => {}));
+    const getAccountInfo = vi.fn(() => new Promise(() => {}));
+    Connection.mockImplementationOnce(function () { return { getProgramAccounts, getAccountInfo }; });
+    const realVault = await vi.importActual('../../../../src/lib/vaultV2Stats.mjs');
+    getVaultV2Stats.mockImplementation(realVault.getVaultV2Stats);
+    const settled = vi.fn();
+    const reading = getStats().then(settled);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(settled).toHaveBeenCalledWith(expect.objectContaining({
+      people: { totalUsers: 11, activeLast7Days: 7 },
+      money: expect.objectContaining(NULL_CHAIN),
+    }));
+    await reading;
+    const first = settled.mock.calls[0][0];
+    expect(getProgramAccounts).toHaveBeenCalledTimes(1);
+    expect(getAccountInfo).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(59_999);
     expect(await getStats()).toBe(first);
-    mockRows({ ...TOTALS, totalUsers: '12' });
-    expect((await getStats()).people.totalUsers).toBe(12);
+    expect(query).toHaveBeenCalledTimes(3);
+    getVaultV2Stats.mockResolvedValue({ usdcLocked: 1500000n, activeLocks: 3, learnersEarningYield: 2 });
+    await vi.advanceTimersByTimeAsync(1);
+    expect((await getStats()).money.activeLocks).toBe(3);
+    expect(query).toHaveBeenCalledTimes(6);
   });
 
-  it('does not cache a failed first load', async () => {
-    query.mockRejectedValue(new Error('Database unavailable'));
-    await expect(getStats()).rejects.toThrow('Database unavailable');
-    mockRows();
-    expect((await getStats()).people.totalUsers).toBe(11);
+  it.each([
+    ['rejection', false], ['rejection', true], ['timeout', false], ['timeout', true],
+  ])('cools down for thirty seconds after %s with stale cache %s', async (failure, hasStale) => {
+    vi.useFakeTimers();
+    const first = hasStale ? await getStats() : null;
+    if (hasStale) await vi.advanceTimersByTimeAsync(300_000);
+    if (failure === 'timeout') query.mockReturnValue(new Promise(() => {}));
+    else query.mockRejectedValue(new Error('Database unavailable'));
+    const expected = first ?? (failure === 'timeout' ? 'STATS_LOAD_TIMEOUT' : 'Database unavailable');
+    const read = () => getStats().catch((error) => error.message);
+    const failed = [read(), read()];
+    if (failure === 'timeout') await vi.advanceTimersByTimeAsync(8_000);
+    expect(await Promise.all(failed)).toEqual([expected, expected]);
+    const queriesAfterFailure = hasStale ? 6 : 3;
+    expect(query).toHaveBeenCalledTimes(queriesAfterFailure);
+    mockRows({ ...TOTALS, totalUsers: '12' });
+    for (let i = 0; i < 60; i += 1) {
+      expect(await read()).toBe(expected);
+    }
+    expect(query).toHaveBeenCalledTimes(queriesAfterFailure);
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(await read()).toBe(expected);
+    expect(query).toHaveBeenCalledTimes(queriesAfterFailure);
+    await vi.advanceTimersByTimeAsync(1);
+    const recovered = await getStats();
+    expect(recovered.people.totalUsers).toBe(12);
+    expect(query).toHaveBeenCalledTimes(queriesAfterFailure + 3);
+    expect(await getStats()).toBe(recovered);
   });
 
   it('abandons stalled loads at eight seconds and prevents their late result from replacing recovery', async () => {
@@ -207,6 +266,7 @@ describe('stats cache', () => {
     await vi.advanceTimersByTimeAsync(8_000);
     expect(await Promise.all(outcomes)).toEqual(['STATS_LOAD_TIMEOUT', 'STATS_LOAD_TIMEOUT']);
     mockRows({ ...TOTALS, totalUsers: '12' });
+    await vi.advanceTimersByTimeAsync(30_000);
     const recovered = await getStats();
     release({ rows: [] });
     await vi.advanceTimersByTimeAsync(0);
@@ -236,6 +296,19 @@ describe('stats cache', () => {
     release({ rows: [TOTALS] });
     await oldRead;
     expect(await getStats()).toBe(fresh);
+  });
+
+  it.each(['rejection', 'timeout'])('ignores a %s from a load abandoned by clearStatsCache', async (failure) => {
+    vi.useFakeTimers();
+    let reject;
+    query.mockReturnValue(new Promise((_, fail) => { reject = fail; }));
+    const oldRead = getStats().catch((error) => error.message);
+    clearStatsCache();
+    if (failure === 'timeout') await vi.advanceTimersByTimeAsync(8_000);
+    else reject(new Error('Old failure'));
+    expect(await oldRead).toBe(failure === 'timeout' ? 'STATS_LOAD_TIMEOUT' : 'Old failure');
+    mockRows();
+    expect((await getStats()).people.totalUsers).toBe(11);
   });
 });
 

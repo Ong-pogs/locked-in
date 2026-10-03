@@ -87,26 +87,30 @@ describe('v2 vault stats', () => {
     expect(getAccountInfo).not.toHaveBeenCalled();
   });
 
-  it('falls back after a six second scan deadline and ignores a late scan', async () => {
+  it('falls back after a 3.5 second scan deadline and ignores a late scan', async () => {
     vi.useFakeTimers();
     let release;
     getProgramAccounts.mockReturnValue(new Promise((resolve) => { release = resolve; }));
     getAccountInfo.mockResolvedValue(config(1500000n));
-    const read = getVaultV2Stats();
-    await vi.advanceTimersByTimeAsync(6_000);
-    expect(await read).toEqual({ usdcLocked: 1500000n, activeLocks: null, learnersEarningYield: null });
+    const settled = vi.fn();
+    const read = getVaultV2Stats().then(settled);
+    await vi.advanceTimersByTimeAsync(3_500);
+    expect(settled).toHaveBeenCalledWith({ usdcLocked: 1500000n, activeLocks: null, learnersEarningYield: null });
+    await read;
     release([lock(ALICE, 9000000n)]);
     await vi.advanceTimersByTimeAsync(0);
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('bounds a stalled fallback read to six seconds', async () => {
+  it('bounds a stalled fallback read to five seconds', async () => {
     vi.useFakeTimers();
     getProgramAccounts.mockRejectedValue(new Error('Unavailable'));
     getAccountInfo.mockReturnValue(new Promise(() => {}));
-    const read = getVaultV2Stats();
-    await vi.advanceTimersByTimeAsync(6_000);
-    expect(await read).toEqual(NULLS);
+    const settled = vi.fn();
+    const read = getVaultV2Stats().then(settled);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(settled).toHaveBeenCalledWith(NULLS);
+    await read;
     expect(vi.getTimerCount()).toBe(0);
   });
 

@@ -14,7 +14,8 @@ const STATUS_OFFSET = PRINCIPAL_OFFSET + 8 + 8;
 const ACTIVE = 0;
 // VaultV2Config has ten pubkeys and three u64 fields before current_tvl.
 const TVL_OFFSET = 8 + 10 * 32 + 3 * 8;
-const RPC_TIMEOUT_MS = 6_000;
+const SCAN_TIMEOUT_MS = 3_500;
+const CHAIN_DEADLINE_MS = 5_000;
 
 let connection = null;
 function getConnection() {
@@ -22,10 +23,11 @@ function getConnection() {
   return connection;
 }
 
-async function withRpcTimeout(read) {
+async function withRpcTimeout(read, timeoutMs) {
+  if (timeoutMs <= 0) throw new Error('STATS_RPC_TIMEOUT');
   let timer;
   const deadline = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error('STATS_RPC_TIMEOUT')), RPC_TIMEOUT_MS);
+    timer = setTimeout(() => reject(new Error('STATS_RPC_TIMEOUT')), timeoutMs);
   });
   try {
     return await Promise.race([read(), deadline]);
@@ -37,6 +39,7 @@ async function withRpcTimeout(read) {
 // usdcLocked stays in bigint base units until the repository formats the API.
 export async function getVaultV2Stats() {
   const unavailable = { usdcLocked: null, activeLocks: null, learnersEarningYield: null };
+  const deadline = Date.now() + CHAIN_DEADLINE_MS;
   try {
     if (!appConfig.vaultV2ProgramId) return unavailable;
     const programId = new PublicKey(appConfig.vaultV2ProgramId);
@@ -48,7 +51,7 @@ export async function getVaultV2Stats() {
           { memcmp: { offset: 0, bytes: bs58.encode(LOCK_DISCRIMINATOR) } },
           { memcmp: { offset: STATUS_OFFSET, bytes: bs58.encode(Buffer.from([ACTIVE])) } },
         ],
-      }));
+      }), Math.min(SCAN_TIMEOUT_MS, deadline - Date.now()));
       let usdcLocked = 0n;
       let activeLocks = 0;
       const owners = new Set();
@@ -66,7 +69,8 @@ export async function getVaultV2Stats() {
     } catch {
       // Some RPC providers disable account scans. Config still exposes TVL.
       const [configPda] = PublicKey.findProgramAddressSync([CONFIG_SEED], programId);
-      const account = await withRpcTimeout(() => conn.getAccountInfo(configPda));
+      // The fallback shares the budget so healthy SQL can still be cached.
+      const account = await withRpcTimeout(() => conn.getAccountInfo(configPda), deadline - Date.now());
       if (!account || account.data.length < TVL_OFFSET + 8 ||
           !account.data.subarray(0, 8).equals(CONFIG_DISCRIMINATOR) || !account.owner.equals(programId)) {
         return unavailable;

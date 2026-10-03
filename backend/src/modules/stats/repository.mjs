@@ -1,7 +1,7 @@
 import { hasDatabase, query } from '../../lib/db.mjs';
 import { walletLabel } from '../../lib/publicIdentity.mjs';
 import { getVaultV2Stats } from '../../lib/vaultV2Stats.mjs';
-import { getYieldStrategyInfo } from '../../lib/yieldStrategy.mjs';
+import { getYieldStrategyInfo, readKaminoSupplyApyBpsSafe } from '../../lib/yieldStrategy.mjs';
 import { getOpenSeason } from '../arena/seasonRepository.mjs';
 
 // Scalar subqueries avoid both cross-continent round trips and join fan-out.
@@ -38,6 +38,8 @@ const TOTALS_SQL = `
 `;
 
 // course_complete uses source_id as the course ID; arena_win uses a match ID.
+// Wallet-labelled payouts plus exact cumulative pot totals reveal individual
+// payouts with one recipient or one new payout between snapshots. Omit them.
 const ACTIVITY_SQL = `
   select type, wallet_address as "walletAddress", course_title as "courseTitle", at
   from (
@@ -58,11 +60,6 @@ const ACTIVITY_SQL = `
     select 'arena_win', wallet_address, null::text, created_at
     from lesson.user_xp_events
     where source = 'arena_win'
-    union all
-    select 'pot_payout', p.wallet_address, c.title, p.distributed_at
-    from lesson.community_pot_distribution_snapshots p
-    left join lesson.courses c on c.id = p.course_id
-    where p.course_id <> 'test-kitchen' and p.status = 'distributed'
   ) events
   where at is not null
   order by at desc
@@ -72,8 +69,10 @@ const ACTIVITY_SQL = `
 const CACHE_TTL_MS = 5 * 60_000;
 const PARTIAL_CHAIN_TTL_MS = 60_000;
 const LOAD_DEADLINE_MS = 8_000;
+const FAILURE_COOLDOWN_MS = 30_000;
 let statsCache = null; // { loadedAt, ttl, value }
 let statsCacheLoad = null; // { promise, abandoned }
+let statsCacheFailure = null; // { retryAt, error }
 let statsCacheGeneration = 0;
 
 function formatUsdc(baseUnits) {
@@ -82,13 +81,25 @@ function formatUsdc(baseUnits) {
   return `${amount < 0n ? '-' : ''}${magnitude / 1_000_000n}.${String(magnitude % 1_000_000n).padStart(6, '0')}`;
 }
 
+// The Kamino read has no timeout of its own, so cap it below the load
+// deadline. A slow read shows no APY instead of failing the whole page.
+const APY_READ_TIMEOUT_MS = 5_000;
+function readLiveApyBps() {
+  let timer;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(null), APY_READ_TIMEOUT_MS);
+  });
+  return Promise.race([readKaminoSupplyApyBpsSafe(), timeout]).finally(() => clearTimeout(timer));
+}
+
 async function loadStats() {
   const databaseConfigured = hasDatabase();
-  const [totalsResult, activityResult, season, chain] = await Promise.all([
+  const [totalsResult, activityResult, season, chain, apyBps] = await Promise.all([
     databaseConfigured ? query(TOTALS_SQL) : { rows: [] },
     databaseConfigured ? query(ACTIVITY_SQL) : { rows: [] },
-    databaseConfigured ? getOpenSeason() : null,
+    databaseConfigured ? getOpenSeason().catch(() => null) : null,
     getVaultV2Stats(),
+    readLiveApyBps(),
   ]);
   const totals = totalsResult.rows[0] ?? {};
   const info = getYieldStrategyInfo();
@@ -110,7 +121,7 @@ async function loadStats() {
       usdcLocked: chain.usdcLocked == null ? null : formatUsdc(chain.usdcLocked),
       activeLocks: chain.activeLocks,
       learnersEarningYield: chain.learnersEarningYield,
-      currentApyBps: info.kamino?.lastApyBps ?? info.fixedApyBps ?? null,
+      currentApyBps: info.kind === 'kamino_klend_reserve_v1' && apyBps != null ? apyBps : null,
       potForfeitedUsdc: formatUsdc(totals.potForfeited ?? '0'),
       potPaidOutUsdc: formatUsdc(totals.potPaidOut ?? '0'),
       potRecipients: Number(totals.potRecipients ?? 0),
@@ -145,20 +156,32 @@ export function clearStatsCache() {
   statsCacheGeneration += 1;
   statsCache = null;
   statsCacheLoad = null;
+  statsCacheFailure = null;
 }
 
 export async function getStats() {
   if (statsCache && Date.now() - statsCache.loadedAt < statsCache.ttl) return statsCache.value;
+  if (statsCacheFailure && Date.now() < statsCacheFailure.retryAt) {
+    if (statsCache) return statsCache.value;
+    throw statsCacheFailure.error;
+  }
   if (!statsCacheLoad) {
     const generation = statsCacheGeneration;
-    const inFlight = { promise: null, abandoned: false };
-    inFlight.promise = loadStats().then((value) => {
+    const inFlight = { promise: loadStats(), abandoned: false };
+    // Share one deadline and cooldown across all waiters for this load.
+    inFlight.promise = waitForStatsLoad(inFlight).then((value) => {
       // A timed-out or cleared load cannot overwrite a newer cache entry.
       if (!inFlight.abandoned && generation === statsCacheGeneration) {
         const partialChain = value.money.usdcLocked == null || value.money.activeLocks == null || value.money.learnersEarningYield == null;
         statsCache = { loadedAt: Date.now(), ttl: partialChain ? PARTIAL_CHAIN_TTL_MS : CACHE_TTL_MS, value };
+        statsCacheFailure = null;
       }
       return value;
+    }, (error) => {
+      if (generation === statsCacheGeneration) {
+        statsCacheFailure = { retryAt: Date.now() + FAILURE_COOLDOWN_MS, error };
+      }
+      throw error;
     });
     statsCacheLoad = inFlight;
     const clearMarker = () => {
@@ -167,9 +190,9 @@ export async function getStats() {
     inFlight.promise.then(clearMarker, clearMarker);
   }
   try {
-    return await waitForStatsLoad(statsCacheLoad);
+    return await statsCacheLoad.promise;
   } catch (error) {
-    // Preserve the last good snapshot, but leave a failed refresh retryable.
+    // Preserve the last good snapshot while failed refreshes cool down.
     if (statsCache) return statsCache.value;
     throw error;
   }
