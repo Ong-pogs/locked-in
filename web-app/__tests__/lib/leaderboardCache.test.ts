@@ -38,6 +38,15 @@ describe('leaderboard device cache', () => {
     expect(readCachedBoard('WalletA')).toBeNull();
   });
 
+  it('treats malformed rows as a miss and removes them', () => {
+    // A [null] row used to pass the array check and crash the page on every visit.
+    for (const bad of [{ entries: [null] }, { entries: [{ rank: 1 }] }, { entries: [entry(1)], currentUser: 'x' }]) {
+      localStorage.setItem('locked-in:leaderboard:v1:WalletA', JSON.stringify(bad));
+      expect(readCachedBoard('WalletA')).toBeNull();
+      expect(localStorage.getItem('locked-in:leaderboard:v1:WalletA')).toBeNull();
+    }
+  });
+
   it('clears the saved board', () => {
     writeCachedBoard('WalletA', board);
     clearCachedBoard('WalletA');

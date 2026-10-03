@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Flame } from 'lucide-react';
 import { T } from '@/components/theme';
 import { CozyButton, CozyCard } from '@/components/cozy';
@@ -34,11 +34,24 @@ export default function LeaderboardPage() {
   const walletAddress = useUserStore((s) => s.walletAddress);
   const signedIn = useUserStore((s) => Boolean(s.authToken || s.refreshToken));
 
+  // Every request, Retry included, takes a number; only the newest may change
+  // what is shown, so a late answer or error from an older one is ignored.
+  const requestSeq = useRef(0);
+
   const fetchBoard = useCallback(async (signal?: AbortSignal) => {
+    const seq = ++requestSeq.current;
+    const wallet = walletAddress;
+    const isStale = () =>
+      seq !== requestSeq.current ||
+      Boolean(signal?.aborted) ||
+      // A token retry can answer for a session other than the one this
+      // request started in.
+      useUserStore.getState().walletAddress !== wallet;
     // The board is a daily snapshot, so the copy this device saved last time
     // is painted at once and the request below just refreshes it quietly.
-    const wallet = walletAddress;
     const cached = readCachedBoard(wallet);
+    setError(null);
+    setNeedsAuth(false);
     if (cached) {
       setEntries(cached.entries);
       setCurrentUser(cached.currentUser);
@@ -46,15 +59,19 @@ export default function LeaderboardPage() {
       setSource(cached.source);
       setLoading(false);
     } else {
+      // Nothing saved for this wallet: clear the previous one's board and
+      // standing at once rather than leave them up while this loads.
+      setEntries([]);
+      setCurrentUser(null);
+      setSnapshotAt(null);
+      setSource('materialized');
       setLoading(true);
     }
     try {
       const resp = await fetchWithAuth((token) =>
         getLeaderboard(token, { page: 1, pageSize: 200 }),
       );
-      // Aborted (the wallet changed), or a token retry answered for a session
-      // other than the one this request started in: not this board.
-      if (signal?.aborted || useUserStore.getState().walletAddress !== wallet) return;
+      if (isStale()) return;
       setEntries(resp.entries);
       setCurrentUser(resp.currentUser);
       setSnapshotAt(resp.snapshotAt);
@@ -69,7 +86,7 @@ export default function LeaderboardPage() {
         source: resp.source,
       });
     } catch (err) {
-      if (signal?.aborted) return;
+      if (isStale()) return;
       // A failed background refresh keeps the saved board on screen; only a
       // signed-out session (or nothing to show) falls through to the error.
       if (cached && !(err instanceof AuthExpiredError)) return;

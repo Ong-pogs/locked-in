@@ -20,20 +20,44 @@ export interface CachedBoard {
 
 const keyFor = (wallet: string) => `locked-in:leaderboard:v1:${wallet}`;
 
+/** The fields the page renders. Anything else is not a row this page saved. */
+function isEntry(value: unknown): value is LeaderboardEntry {
+  if (!value || typeof value !== 'object') return false;
+  const e = value as Partial<LeaderboardEntry>;
+  return (
+    typeof e.rank === 'number' &&
+    typeof e.displayIdentity === 'string' &&
+    typeof e.streakLength === 'number' &&
+    typeof e.streakStatus === 'string' &&
+    typeof e.isCurrentUser === 'boolean'
+  );
+}
+
 export function readCachedBoard(wallet: string | null): CachedBoard | null {
   if (!wallet) return null;
   try {
     const raw = localStorage.getItem(keyFor(wallet));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<CachedBoard>;
-    if (!Array.isArray(parsed.entries)) return null;
+    const currentUser = parsed.currentUser ?? null;
+    // A malformed copy would crash the page on every visit until the refresh
+    // replaced it, so it is a miss and is removed.
+    if (
+      !Array.isArray(parsed.entries) ||
+      !parsed.entries.every(isEntry) ||
+      (currentUser !== null && !isEntry(currentUser))
+    ) {
+      clearCachedBoard(wallet);
+      return null;
+    }
     return {
       entries: parsed.entries,
-      currentUser: parsed.currentUser ?? null,
-      snapshotAt: parsed.snapshotAt ?? null,
+      currentUser,
+      snapshotAt: typeof parsed.snapshotAt === 'string' ? parsed.snapshotAt : null,
       source: parsed.source === 'live' ? 'live' : 'materialized',
     };
   } catch {
+    clearCachedBoard(wallet);
     return null;
   }
 }

@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LeaderboardEntry, LeaderboardResponse } from '@/services/api/types';
 
@@ -40,8 +40,9 @@ const response = (labels: string[]): LeaderboardResponse => ({
 /** A request whose answer the test releases by hand. */
 function pending<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((r) => { resolve = r; });
-  return { promise, resolve };
+  let reject!: (err: Error) => void;
+  const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
 }
 
 beforeEach(() => {
@@ -79,6 +80,37 @@ describe('leaderboard page with a saved board', () => {
     await act(async () => forB.resolve(response(['NewB…0002'])));
     expect(await screen.findAllByText('NewB…0002')).not.toHaveLength(0);
     expect(readCachedBoard('WalletB')?.entries[0].displayIdentity).toBe('NewB…0002');
+  });
+
+  it("clears the previous wallet's standing when the next wallet has no saved board", async () => {
+    // A's standing row sits outside the top entries, so it renders in the
+    // separate "your standing" card.
+    const withStanding = { ...response(['Top…0001']), currentUser: entry(9, 'MineA…0009', true) };
+    getLeaderboard.mockResolvedValueOnce(withStanding).mockReturnValueOnce(pending<LeaderboardResponse>().promise);
+
+    render(<LeaderboardPage />);
+    expect(await screen.findAllByText('MineA…0009')).not.toHaveLength(0);
+
+    await act(async () => useUserStore.setState({ walletAddress: 'WalletB' }));
+    expect(screen.queryAllByText('MineA…0009')).toHaveLength(0);
+  });
+
+  it('ignores a Retry that settles after a newer request', async () => {
+    const retry = pending<LeaderboardResponse>();
+    getLeaderboard
+      .mockRejectedValueOnce(new Error('Failed to load.'))
+      .mockReturnValueOnce(retry.promise)
+      .mockResolvedValueOnce(response(['NewB…0002']));
+
+    render(<LeaderboardPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+    await act(async () => useUserStore.setState({ walletAddress: 'WalletB' }));
+    expect(await screen.findAllByText('NewB…0002')).not.toHaveLength(0);
+
+    // The old Retry for A finally fails: its error must not replace B's board.
+    await act(async () => retry.reject(new Error('Old retry failed')));
+    expect(screen.queryByText('Old retry failed')).toBeNull();
+    expect(screen.getAllByText('NewB…0002')).not.toHaveLength(0);
   });
 
   it('hides the saved board when the session ends', async () => {
