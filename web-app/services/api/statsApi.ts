@@ -83,13 +83,32 @@ function isPublicStats(value: unknown): value is PublicStats {
 }
 
 export async function getPublicStats(): Promise<PublicStats> {
-  const response = await fetch(`${getLessonApiBaseUrl()}/v1/stats`, {
-    next: { revalidate: 300 },
-    signal: AbortSignal.timeout(10_000),
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  // Next.js can drop the fetch signal during stale cache revalidation.
+  const deadline = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => reject(new Error('Stats request timed out after 10 seconds.')), 10_000);
   });
-  if (!response.ok) throw new Error(`Stats request failed (${response.status}).`);
 
-  const body: unknown = await response.json();
-  if (!isPublicStats(body)) throw new Error('Invalid public stats response.');
-  return body;
+  try {
+    return await Promise.race([
+      (async () => {
+        const response = await fetch(`${getLessonApiBaseUrl()}/v1/stats`, {
+          next: { revalidate: 300 },
+          signal: AbortSignal.timeout(10_000),
+        });
+        if (!response.ok) throw new Error(`Stats request failed (${response.status}).`);
+
+        const body: unknown = await response.json();
+        if (!isPublicStats(body)) throw new Error('Invalid public stats response.');
+        return {
+          ...body,
+          activity: body.activity.filter(({ wallet }) => wallet === 'Player'
+            || /^[1-9A-HJ-NP-Za-km-z]{4}…[1-9A-HJ-NP-Za-km-z]{4}$/.test(wallet)),
+        };
+      })(),
+      deadline,
+    ]);
+  } finally {
+    clearTimeout(timeout);
+  }
 }

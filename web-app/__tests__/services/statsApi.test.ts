@@ -25,7 +25,10 @@ beforeEach(() => {
   fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
 });
-afterEach(() => { vi.unstubAllGlobals(); });
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 describe('getPublicStats', () => {
   it('fetches without auth with five-minute caching and a ten-second timeout', async () => {
@@ -50,6 +53,27 @@ describe('getPublicStats', () => {
     await expect(getPublicStats()).resolves.toEqual(body);
   });
 
+  it('removes a full 44-character wallet address while preserving valid activity and stats', async () => {
+    const body = statsFixture();
+    const masked = { type: 'joined' as const, wallet: '7xKX…a9Fq', courseTitle: null, at: body.generatedAt };
+    const player = { ...masked, wallet: 'Player' };
+    body.activity = [masked, { ...masked, wallet: '7xKX'.repeat(11) }, player];
+    fetchMock.mockResolvedValue(Response.json(body));
+
+    await expect(getPublicStats()).resolves.toEqual({ ...body, activity: [masked, player] });
+  });
+
+  it.each([
+    '', 'player', '7xK…a9Fq', '7xKXX…a9Fq', '7xKX…a9F', '7xKX…a9Fqq',
+    '7xKX...a9Fq', '0xKX…a9Fq', '7xKX…O9Fq', 'IxKX…a9Fq', '7xKX…l9Fq',
+  ])('removes activity with an invalid wallet mask: %j', async (wallet) => {
+    const body = statsFixture();
+    body.activity = [{ type: 'joined', wallet, courseTitle: null, at: body.generatedAt }];
+    fetchMock.mockResolvedValue(Response.json(body));
+
+    await expect(getPublicStats()).resolves.toEqual({ ...body, activity: [] });
+  });
+
   it('accepts populated season dates and decimal amounts beyond safe number precision', async () => {
     const body = statsFixture();
     body.arena.season = { name: 'Season 1', endsAt: '2026-10-31T18:00:00.000Z' };
@@ -72,6 +96,56 @@ describe('getPublicStats', () => {
   it('rejects invalid JSON', async () => {
     fetchMock.mockResolvedValue(new Response('not json'));
     await expect(getPublicStats()).rejects.toThrow();
+  });
+
+  describe('request deadline', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      // Simulate revalidation ignoring the fetch signal.
+      vi.spyOn(AbortSignal, 'timeout').mockReturnValue(new AbortController().signal);
+    });
+
+    it.each(['fetch', 'JSON parsing'])('rejects after ten seconds when %s never resolves', async (stage) => {
+      if (stage === 'fetch') {
+        fetchMock.mockReturnValue(new Promise<Response>(() => {}));
+      } else {
+        const response = Response.json(statsFixture());
+        vi.spyOn(response, 'json').mockReturnValue(new Promise(() => {}));
+        // JSON parsing gets only the time remaining after the headers arrive.
+        fetchMock.mockImplementation(() => new Promise((resolve) => {
+          setTimeout(() => resolve(response), 6_000);
+        }));
+      }
+
+      const onRejected = vi.fn();
+      const result = getPublicStats();
+      void result.catch(onRejected);
+
+      await vi.advanceTimersByTimeAsync(9_999);
+      expect(onRejected).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(onRejected).toHaveBeenCalledOnce();
+      await expect(result).rejects.toThrow('Stats request timed out after 10 seconds.');
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('clears the deadline after success', async () => {
+      const body = statsFixture();
+      fetchMock.mockResolvedValue(Response.json(body));
+
+      await expect(getPublicStats()).resolves.toEqual(body);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it.each(['network', 'HTTP', 'JSON', 'validation'])('clears the deadline after a %s failure', async (stage) => {
+      if (stage === 'network') fetchMock.mockRejectedValue(new Error('Network unavailable'));
+      else if (stage === 'HTTP') fetchMock.mockResolvedValue(new Response('', { status: 503 }));
+      else if (stage === 'JSON') fetchMock.mockResolvedValue(new Response('not json'));
+      else fetchMock.mockResolvedValue(Response.json(null));
+
+      await expect(getPublicStats()).rejects.toThrow();
+      expect(vi.getTimerCount()).toBe(0);
+    });
   });
 
   it.each([
