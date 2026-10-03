@@ -157,7 +157,7 @@ export default function CommunityPotPage() {
               </p>
               {loading ? (
                 <p
-                  className="text-[13px] mt-2"
+                  className="font-pixel-mono text-[12px] mt-2"
                   style={{ color: T.textMutedStrong }}
                 >
                   Reading live pot state...
@@ -267,13 +267,14 @@ export default function CommunityPotPage() {
 
         {loading ? (
           <CozyCard>
-            <p className="text-[13px]" style={{ color: T.textMutedStrong }}>
+            {/* Status lines in the pixel caps face, like the Arena's "Loading…". */}
+            <p className="font-pixel-mono text-[12px]" style={{ color: T.textMutedStrong }}>
               Loading...
             </p>
           </CozyCard>
         ) : events.length === 0 && !error ? (
           <CozyCard>
-            <p className="text-[13px]" style={{ color: T.textMutedStrong }}>
+            <p className="font-pixel-mono text-[12px]" style={{ color: T.textMutedStrong }}>
               No windows yet.
             </p>
           </CozyCard>

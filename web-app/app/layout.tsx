@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
-import { Geist, Geist_Mono, Pixelify_Sans, Silkscreen } from 'next/font/google';
+import { Geist, Geist_Mono, Pixelify_Sans } from 'next/font/google';
 import localFont from 'next/font/local';
 import { Providers } from './providers';
 import { SerwistProvider } from './serwist';
@@ -30,13 +30,20 @@ const pixelifySans = Pixelify_Sans({
 });
 
 // Tight HUD readout font for stat numbers — sharper than Pixelify, very legible at small sizes.
-const silkscreen = Silkscreen({
+// Self-hosted (Latin subset, about 8 KB per weight) instead of next/font/google
+// because the bold "4" is redrawn: stock Silkscreen Bold fills the gap between
+// the 4's two arms, so ratings like "1418" read as "1Ч18". The modified bold is
+// renamed "Silkscreen LI" inside the file (OFL; Silkscreen reserves no name).
+const silkscreen = localFont({
   variable: '--font-pixel-mono',
-  subsets: ['latin'],
-  weight: ['400', '700'],
+  src: [
+    { path: '../assets/fonts/Silkscreen-Regular-latin.woff2', weight: '400' },
+    { path: '../assets/fonts/SilkscreenLI-Bold-latin.woff2', weight: '700' },
+  ],
 });
 
-// Digits for Pixelify text. Pixelify Sans draws "5" like "S" (and, in bold,
+// Digits for Pixelify text (the bold file carries the same redrawn "4").
+// Pixelify Sans draws "5" like "S" (and, in bold,
 // "2" like "8", so "$20" read as "$80"). This face holds only Silkscreen's
 // digits (subset files, about 3 KB each) and unicode-range limits it to 0-9,
 // so .font-pixel keeps Pixelify letters with unambiguous numbers.
