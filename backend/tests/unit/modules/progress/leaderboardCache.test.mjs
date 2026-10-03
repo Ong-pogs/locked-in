@@ -145,10 +145,13 @@ describe('leaderboard snapshot cache: a stalled load', () => {
     const recovered = await getLeaderboardSnapshot(ALICE, 1, 200);
     expect(recovered.snapshotAt).toBe('fresh');
 
-    // The stuck query finally answers with an old snapshot: it must not
-    // overwrite the fresh cache.
+    // The stuck query finally answers with an old snapshot: the abandoned
+    // load sends no further SQL (its connection is not held for a rows query)
+    // and must not overwrite the fresh cache.
+    const callsBeforeRelease = calls;
     releaseStuck({ rows: [{ snapshotId: 1, snapshotAt: 'stale', currentPotAmount: '0', nextDistributionWindowLabel: null, entryCount: 0 }] });
     await vi.advanceTimersByTimeAsync(0);
+    expect(calls).toBe(callsBeforeRelease);
     const after = await getLeaderboardSnapshot(ALICE, 1, 200);
     expect(after.snapshotAt).toBe('fresh');
   });

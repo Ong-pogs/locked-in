@@ -4145,26 +4145,25 @@ function mapLeaderboardSnapshotRow(row, walletAddress) {
 // safety net for writers in other processes (ops scripts, another instance).
 const LEADERBOARD_CACHE_TTL_MS = 5 * 60_000;
 let leaderboardCache = null; // { loadedAt, snapshot, rows }
-let leaderboardCacheLoad = null; // in-flight load shared by concurrent readers
+let leaderboardCacheLoad = null; // { promise, abandoned }: the in-flight load all readers share
 let leaderboardCacheGeneration = 0; // bumped on clear so a stale load is dropped
 // Every reader shares one load, so a query that never answers (a silently
 // dead connection) must not hold them all: past this deadline a reader gives
 // up, the load is abandoned, and the next request starts a fresh one.
 const LEADERBOARD_LOAD_DEADLINE_MS = 8_000;
 
-function waitForLeaderboardLoad(load) {
+function waitForLeaderboardLoad(inFlight) {
   let timer;
   const deadline = new Promise((_, reject) => {
     timer = setTimeout(() => {
-      // Abandon it: its late answer must not land in the cache either.
-      if (leaderboardCacheLoad === load) {
-        leaderboardCacheLoad = null;
-        leaderboardCacheGeneration += 1;
-      }
+      // Abandon it: it sends no further SQL, its late answer never lands in
+      // the cache, and the next request starts a fresh load.
+      inFlight.abandoned = true;
+      if (leaderboardCacheLoad === inFlight) leaderboardCacheLoad = null;
       reject(new Error('LEADERBOARD_LOAD_TIMEOUT'));
     }, LEADERBOARD_LOAD_DEADLINE_MS);
   });
-  return Promise.race([load, deadline]).finally(() => clearTimeout(timer));
+  return Promise.race([inFlight.promise, deadline]).finally(() => clearTimeout(timer));
 }
 
 export function clearLeaderboardSnapshotCache() {
@@ -4180,7 +4179,8 @@ async function loadLatestLeaderboardSnapshot() {
   if (leaderboardCacheLoad) return waitForLeaderboardLoad(leaderboardCacheLoad);
 
   const generation = leaderboardCacheGeneration;
-  const load = (async () => {
+  const inFlight = { promise: null, abandoned: false };
+  inFlight.promise = (async () => {
     const snapshotResult = await query(
       `
       select
@@ -4194,6 +4194,7 @@ async function loadLatestLeaderboardSnapshot() {
       limit 1
     `,
     );
+    if (inFlight.abandoned) throw new Error('LEADERBOARD_LOAD_ABANDONED');
     const snapshot = snapshotResult.rows[0] ?? null;
     const rowsResult = snapshot
       ? await query(
@@ -4216,18 +4217,21 @@ async function loadLatestLeaderboardSnapshot() {
         )
       : { rows: [] };
     const loaded = { loadedAt: Date.now(), snapshot, rows: rowsResult.rows };
-    // A refresh that landed while this load was in flight wins.
-    if (generation === leaderboardCacheGeneration) leaderboardCache = loaded;
+    // A refresh that landed while this load was in flight wins, and an
+    // abandoned load never writes.
+    if (!inFlight.abandoned && generation === leaderboardCacheGeneration) {
+      leaderboardCache = loaded;
+    }
     return loaded;
   })();
-  leaderboardCacheLoad = load;
+  leaderboardCacheLoad = inFlight;
   // Clear the in-flight marker however the load ends (an abandoned one may
   // still settle later; by then a newer load may own the marker).
-  load.then(
-    () => { if (leaderboardCacheLoad === load) leaderboardCacheLoad = null; },
-    () => { if (leaderboardCacheLoad === load) leaderboardCacheLoad = null; },
-  );
-  return waitForLeaderboardLoad(load);
+  const clearMarker = () => {
+    if (leaderboardCacheLoad === inFlight) leaderboardCacheLoad = null;
+  };
+  inFlight.promise.then(clearMarker, clearMarker);
+  return waitForLeaderboardLoad(inFlight);
 }
 
 async function readLatestLeaderboardSnapshot(walletAddress, page = 1, pageSize = 25) {
