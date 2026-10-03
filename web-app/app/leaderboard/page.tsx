@@ -208,8 +208,11 @@ export default function LeaderboardPage() {
                   >
                     #{currentUser.rank}
                   </span>
+                  {/* Names are random base58: Geist Mono, never a pixel face
+                      (Pixelify draws B like G, Z like 2, C like O; Silkscreen
+                      has no lowercase). Same face as the Arena ladder. */}
                   <p
-                    className="text-[14px] font-bold font-pixel truncate"
+                    className="text-[13px] font-bold font-mono truncate"
                     style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
                   >
                     {currentUser.displayIdentity}
@@ -350,8 +353,9 @@ function PodiumCard({
         >
           #{entry.rank}
         </span>
+        {/* Monospace for the same reason as the "your rank" row above. */}
         <p
-          className="text-[13px] font-bold font-pixel truncate w-full"
+          className="text-[12px] font-bold font-mono truncate w-full"
           style={{ color: AMBER, textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
         >
           {entry.displayIdentity}
@@ -395,8 +399,9 @@ function PursuerRow({ entry, alt }: { entry: LeaderboardEntry; alt?: boolean }) 
       >
         #{entry.rank}
       </span>
+      {/* Monospace for the same reason as the "your rank" row above. */}
       <p
-        className="text-[12px] font-bold font-pixel truncate"
+        className="text-[12px] font-bold font-mono truncate"
         style={{
           color: entry.isCurrentUser ? AMBER : 'rgba(255,255,255,0.92)',
           textShadow: '0 1px 2px rgba(0,0,0,0.85)',

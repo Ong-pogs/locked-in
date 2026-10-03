@@ -477,9 +477,10 @@ export default function ArenaPage() {
                 >
                   #{row.rank}
                 </span>
-                {/* Geist Mono, not Silkscreen: base58 is case-sensitive and
-                    Silkscreen has no lowercase glyphs, so "7Vt9" rendered as
-                    "7VT9" — a different address than the one it names. */}
+                {/* Geist Mono, not a pixel face: Silkscreen has no lowercase
+                    ("7Vt9" became "7VT9"), and Pixelify draws B like G, Z like
+                    2 and C like O, which context cannot fix in a random
+                    base58 label. The leaderboard uses the same face. */}
                 <span
                   className="flex-1 px-3 font-mono text-[11px]"
                   style={{ color: row.isMe ? COZY_TEXT : T.textPrimary, textShadow: COZY_TEXT_SHADOW }}
