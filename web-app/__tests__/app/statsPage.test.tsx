@@ -12,6 +12,7 @@ import { proxy } from '../../proxy';
 import { getPublicStats, type PublicStats } from '@/services/api/statsApi';
 
 vi.mock('@/services/api/statsApi', () => ({ getPublicStats: vi.fn() }));
+vi.mock('@/components/HubButton', () => ({ HubButton: () => null }));
 
 function statsFixture(): PublicStats {
   return {
@@ -55,7 +56,7 @@ afterEach(() => {
 });
 
 function expectStat(label: string, value: string) {
-  expect(screen.getByText(label, { selector: 'dt' }).nextElementSibling).toHaveTextContent(value);
+  expect(screen.getByText(label, { selector: 'span' }).nextElementSibling).toHaveTextContent(value);
 }
 
 describe('public stats page', () => {
@@ -69,12 +70,12 @@ describe('public stats page', () => {
       ['Total users', '1,234'], ['Active this week', '345'],
       ['Course sign-ups', '2,345'], ['Lessons completed', '12,345'],
       ['Courses completed', '678'], ['Total XP', '1,234,567'],
-      ['Active streaks', '89'], ['Longest active streak', '42 days'],
-      ['USDC locked now', '$1,234.56'], ['Active locks', '123'],
-      ['Learners with active locks', '99'], ['Current APY', '4.25%'],
-      ['Forfeited to the community pot', '$1.01'], ['Paid out by the pot', '$1,000.00'],
+      ['Active streaks', '89'], ['Longest streak', '42 days'],
+      ['USDC locked', '$1,234.56'], ['Active locks', '123'],
+      ['Learners locked in', '99'], ['Current APY', '4.25%'],
+      ['Forfeited to pot', '$1.01'], ['Paid out by pot', '$1,000.00'],
       ['Pot recipients', '12'], ['Matches played', '3,456'], ['Players', '456'],
-      ['Current season', 'Season 1'], ['Season ends', 'Oct 31, 2026, 6:00 PM UTC'],
+      ['Season', 'Season 1'], ['Season ends', 'Oct 31, 2026, 6:00 PM UTC'],
     ]) expectStat(label, value);
     expect(screen.getByText('Updated', { exact: false })).toHaveTextContent('Updated 5 min ago');
     expect(screen.getByText('Updated', { exact: false }).querySelector('time')).toHaveAttribute('datetime', statsFixture().generatedAt);
@@ -90,13 +91,13 @@ describe('public stats page', () => {
     };
     vi.mocked(getPublicStats).mockResolvedValue(stats);
     render(await StatsPage());
-    expectStat('USDC locked now', '$9,007,199,254,740,993.13');
+    expectStat('USDC locked', '$9,007,199,254,740,993.13');
     expectStat('Total users', '0');
     expectStat('Active locks', '0');
-    expectStat('Learners with active locks', '0');
+    expectStat('Learners locked in', '0');
     expectStat('Current APY', '0.00%');
-    expectStat('Forfeited to the community pot', '$0.00');
-    expectStat('Paid out by the pot', '$0.00');
+    expectStat('Forfeited to pot', '$0.00');
+    expectStat('Paid out by pot', '$0.00');
     expectStat('Pot recipients', '0');
   });
 
@@ -123,7 +124,7 @@ describe('public stats page', () => {
     stats.arena.season = null;
     vi.mocked(getPublicStats).mockResolvedValue(stats);
     render(await StatsPage());
-    for (const label of ['USDC locked now', 'Active locks', 'Learners with active locks', 'Current APY', 'Current season', 'Season ends']) {
+    for (const label of ['USDC locked', 'Active locks', 'Learners locked in', 'Current APY', 'Season', 'Season ends']) {
       expectStat(label, 'Not available');
     }
     expect(screen.getAllByText('Not available')).toHaveLength(6);
@@ -135,7 +136,7 @@ describe('public stats page', () => {
     stats.activity = [];
     vi.mocked(getPublicStats).mockResolvedValue(stats);
     render(await StatsPage());
-    expectStat('Current season', 'Season 2');
+    expectStat('Season', 'Season 2');
     expectStat('Season ends', 'Not available');
     expect(screen.getByText('No activity yet.')).toBeInTheDocument();
   });
